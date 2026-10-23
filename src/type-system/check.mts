@@ -6422,7 +6422,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const propertyType = (shape: Known): Known => {
       if (shape?.Kind !== 'object') return null;
       const property = shape.Properties.find((candidate) => candidate.key === key);
-      if (property) return property.optional ? joinTypes(property.type, undefinedType) : property.type;
+      if (property) {
+        const read = inferredPropertyType(property);
+        return property.optional ? joinTypes(read, undefinedType) : read;
+      }
       return shape.IndexSignatures.find((signature) => keyAdmittedBy(key, signature.Key))?.Value ?? null;
     };
     if (receiver?.Kind === 'union') {
@@ -7969,8 +7972,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const selected = constructorSelectionOf(origin);
     if (!selected) return null;
     const parameters = origin.declaration.TypeParameters?.TypeParameterList ?? [];
-    const specialized = substituteTypeParameters(shape, new Map(parameters.map((parameter, i) =>
-      [parameter.BindingIdentifier.name, selected.arguments[i]])));
+    const specialized = substituteFreeTypeParameters(shape, new Map(parameters.map((parameter, i) =>
+      [parameter.BindingIdentifier.name, selected.arguments[i]])), parameters);
     if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === origin.declaration)
       && PublishedPartialContributions(origin.declaration, true).length === 0) return specialized;
     const instance = selectedConstructorInstance(origin);
@@ -8331,7 +8334,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? ({ Kind: 'object', Properties: merged, IndexSignatures: [], Base: baseObject } as unknown as Known)
       : null;
     classObjectTypeMemo.set(node, built);
-    inferClassMethods(acc, built);
+    inferClassMethods(acc, () => built);
     publishedClassObjectTypes.set(node, built);
     return built;
   };
@@ -8600,6 +8603,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const lexicalParameterCaptures = (node: ParseNode | undefined, excluded: readonly string[] = []) => {
+    const seen = new Set(excluded);
+    const captures: NonNullable<TypeParameterRecord['Captures']>[number][] = [];
+    for (let owner = node; owner; owner = owner.parent) {
+      for (const Declaration of (owner as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList ?? []) {
+        const Name = Declaration.BindingIdentifier.name;
+        if (seen.has(Name)) continue;
+        seen.add(Name);
+        captures.push({ Declaration, Type: { Kind: 'parameter', Name, CapturedDeclaration: Declaration,
+          Arity: Declaration.Arity ?? 0, ...(typeParameterConstraintOf(Name) ? { Constraint: typeParameterConstraintOf(Name)! } : {}) } });
+      }
+    }
+    return captures;
+  };
+  const captureGetterResult = (type: Known, owner: ParseNode): Known => {
+    const captures = lexicalParameterCaptures(owner);
+    return substituteFreeTypeParameters(type, new Map(captures.map((capture) => [capture.Declaration.BindingIdentifier.name, capture.Type])));
+  };
+
   const classMemberWalk = (n: ParseNode, want: 'instance' | 'static', privateNames = false) => {
     const cls = n as unknown as {
       BindingIdentifier?: { name: string } | null,
@@ -8741,6 +8763,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         if (md.PropertySetParameterList) {
+          methods.delete(key);
           // A setter gives the property its WRITE type, which is what a store
           // through the accessor must satisfy - the same check a store to a
           // field of the same name gets. It is kept apart from the read type
@@ -8774,27 +8797,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } finally {
             if (pushed) typeParameterScopes.pop();
           }
-          if (!t) {
-            const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
-            inferenceDepth += 1;
-            let inferred: Known;
-            try {
-              inferred = inferredReturnType(el as ParseNode, [], null, anchorage);
-            } finally {
-              inferenceDepth -= 1;
-            }
-            // A getter declares no parameters, so it can only participate by
-            // anchoring: what it returns must derive from a declared type.
-            if (inferred && anchorage.anchored && inferred.Kind !== 'void') {
-              t = inferred;
-              publishedReturnTypes.set(el as unknown as object, inferred);
-            }
-          }
           // Presence is independent of inference: an unannotated getter still
           // has no setter unless the same effective descriptor declares one.
-          Properties.push({ key, type: t ?? anyTypeRecord, optional: false });
+          // An accessor definition replaces the corresponding half of the
+          // descriptor. The last getter supplies the read contract.
+          const previous = Properties.findIndex((property) => property.key === key);
+          if (previous >= 0 && Properties[previous] !== fieldProperties.get(key)) Properties.splice(previous, 1);
+          methods.delete(key);
+          const property = { key, type: captureGetterResult(t, n) ?? anyTypeRecord, optional: false };
+          Properties.push(property);
+          if (!md.TypeAnnotation) {
+            const classScope = pushTypeParameterScopeOf(n, 'type-only');
+            try {
+              const signature = { Return: null };
+              inferredGetters.set(property, signature);
+              inferences.push({
+                signature, property, fn: el, parameterTypes: [], signatureTyped: false,
+                frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+              });
+            } finally {
+              if (classScope) typeParameterScopes.pop();
+            }
+          }
           getterKeys.add(key);
           continue;
+        }
+        if (getterKeys.has(key) || setterKeys.has(key)) {
+          for (let i = Properties.length - 1; i >= 0; i -= 1) {
+            if (Properties[i].key === key && Properties[i] !== fieldProperties.get(key)) Properties.splice(i, 1);
+          }
+          getterKeys.delete(key);
+          setterKeys.delete(key);
+          setterTypes.delete(key);
         }
         const Parameters: ParameterRecord[] = [];
         const annotated: Known[] = [];
@@ -9068,11 +9102,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const selfSignatures = Signatures.map((sig) => Object.assign(sig, { ThisType: SelfThisTypeRecord }));
       Properties.push({ key, type: { Kind: 'function', Signatures: selfSignatures } as unknown as TypeRecord, optional: false });
     }
-    // #sec-typed-classes: the accessor-pair law also applies to static and private names.
-    for (const [key, writeType] of setterTypes) {
-      const getter = getterKeys.has(key) ? Properties.find((property) => property.key === key) : undefined;
-      if (getter && !IsAssignable(getter.type, writeType)) report(getter.type, writeType);
-    }
     for (const property of Properties) {
       if (!fieldProperties.has(property.key) && acc.protectedKeys.has(property.key)) {
         property.protected = true;
@@ -9084,13 +9113,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classContributionReceivers = new Map<ParseNode, Known>();
   const contributionReceiverTypes = new WeakSet<object>();
 
-  const inferClassMethods = (members: ReturnType<typeof classMemberWalk>, receiver: Known): void => {
+  const inferClassMethods = (members: ReturnType<typeof classMemberWalk>, resolveReceiver: () => Known): void => {
+    // Resolving a private static receiver can construct the public class view,
+    // whose methods can read these private members. Register their tasks first;
+    // the public view installs its receiver before querying those bodies.
+    const context = { get type() { return resolveReceiver(); }, owner: members.owner };
+    for (const item of members.inferences) {
+      item.receiver = context;
+      pendingBySignature.set(item.signature, item);
+    }
+    const receiver = resolveReceiver();
     if (receiver?.Kind === 'nominal') {
       classContributionReceivers.set(members.owner, receiver);
       contributionReceiverTypes.add(receiver);
     }
     for (const item of members.inferences) item.receiver = { type: receiver, owner: members.owner };
     publishInferredReturns(members.inferences);
+    for (const [key, writeType] of members.setterTypes) {
+      const getter = members.getterKeys.has(key) ? members.Properties.find((property) => property.key === key) : undefined;
+      if (getter && !IsAssignable(getter.type, writeType)) report(getter.type, writeType);
+    }
   };
 
   type PrivateProperties = ReturnType<typeof classMemberWalk>['Properties'];
@@ -9117,11 +9159,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const members = classMemberWalk(owner, mode, true);
         classMemberFolds(members);
         cached[mode] = members.Properties;
-        inferClassMethods(members, mode === 'static' ? classObjectTypeOfNode(owner)
+        inferClassMethods(members, () => mode === 'static' ? classObjectTypeOfNode(owner)
           : classContributionReceivers.get(owner) ?? instanceTypeOf(owner));
       }
       const property = cached[mode]!.find((member) => member.key === key.name);
       if (!property) return undefined;
+      const read = inferredPropertyType(property);
       let receiver = staticType(node.MemberExpression);
       const seen = new Set<TypeRecord>();
       while (receiver?.Kind === 'nominal' && receiver.Declaration !== owner && !seen.has(receiver)) {
@@ -9131,11 +9174,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (receiver?.Kind === 'nominal' && receiver.Declaration === owner && receiver.Arguments.length > 0) {
         return {
           ...property,
-          type: SubstituteTypeArguments(property.type, owner, receiver.Arguments),
+          type: SubstituteTypeArguments(read, owner, receiver.Arguments),
           ...(property.writeType ? { writeType: SubstituteTypeArguments(property.writeType, owner, receiver.Arguments) } : {}),
         };
       }
-      return property;
+      return { ...property, type: read };
     }
     return undefined;
   };
@@ -9646,7 +9689,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : Properties, IndexSignatures: [] },
       Base: base ?? undefined,
     } as TypeRecord;
-    inferClassMethods(acc, receiver);
+    inferClassMethods(acc, () => receiver);
     const operators = new Map<string, TypeRecord>();
     const contribution = partialContribution(n);
     for (const member of classBodyOf(n)) {
@@ -10029,6 +10072,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // existing refusal: `sec-parameterized-types` makes that "a type error where a
       // parameter has none".
       Arguments: defaultArgumentsOf(n as unknown as ParseNode),
+      CapturedBindings: lexicalParameterCaptures(n.parent,
+        ((n as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? []).map((parameter) => parameter.BindingIdentifier.name)),
       Structure: { Kind: 'object', Properties: merged, IndexSignatures: [] },
       // The class this one extends, so the subtype relation has a chain to
       // walk. Nominal, not structural: two unrelated empty classes stay
@@ -14300,9 +14345,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const structureOf = (t: Known): Known => {
     t = withPartialStructure(t);
     if (t && t.Kind === 'nominal') {
-      const s = (t as unknown as { Structure?: TypeRecord }).Structure;
+      let s = t.Structure;
       if (!s) {
         return null;
+      }
+      if (t.CapturedBindings?.length) {
+        const captures = t.CapturedBindings;
+        s = substituteFreeTypeParameters(s,
+          new Map(captures.map((capture) => [capture.Declaration.BindingIdentifier.name, capture.Type])),
+          captures.map((capture) => capture.Declaration),
+          new Map(captures.map((capture) => [capture.Declaration, capture.Type])))!;
       }
       const args = (t as unknown as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
       const params = (((t as unknown as { Declaration?: { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } }).Declaration)
@@ -14326,7 +14378,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : a);
         }
       });
-      const substituted = mentionsTypeParameter(s) ? substituteTypeParameters(s, bindings) as TypeRecord | null : s;
+      const substituted = mentionsTypeParameter(s) ? substituteFreeTypeParameters(s, bindings,
+        params as readonly ParseNode.TypeParameter[]) : s;
       substitutedStructures.set(t as object, substituted);
       return substituted;
     }
@@ -27650,6 +27703,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     asyncFunction?: boolean,
     inputs?: Set<PreparedBinding>,
     receiver?: { type: Known, owner: ParseNode },
+    property?: { type: TypeRecord },
+  };
+
+  // A getter read is an invocation dependency, even though no call syntax is
+  // written. Keep its private approximation separate from the published read
+  // contract, just as for a method signature. No runtime getter is evaluated.
+  const inferredGetters = new WeakMap<object, ReturnInference['signature']>();
+  const inferredPropertyType = (property: { type: TypeRecord }): TypeRecord => {
+    const signature = inferredGetters.get(property);
+    if (!signature) return property.type;
+    if (signature.ProvisionalReturn === undefined && !inferencesInProgress.has(signature)) driveInference(signature);
+    observeInferenceInputs(signature);
+    const result = signature.InferredReturn ?? (inferenceDepth > 0
+      ? signature.ProvisionalReturn === undefined && inferencesInProgress.has(signature) ? neverType : signature.ProvisionalReturn
+      : null);
+    return result?.Kind === 'void' ? undefinedType : result ?? anyTypeRecord;
   };
 
   const pendingBySignature = new Map<object, ReturnInference>();
@@ -27700,6 +27769,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const previous = item.signature.InferredReturn;
     const fallback = item.generator ? generatorDeclaredType(null, item.generator.asyncGenerator) : undefined;
     item.signature.InferredReturn = fallback;
+    if (item.property) item.property.type = anyTypeRecord;
     if (item.generator) baselineGeneratorSignatures.add(item.signature);
     publishedReturnTypes.delete(item.fn);
     publishedAnchors.delete(item.signature);
@@ -27741,6 +27811,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // substitutes this invocation's bindings before conversion; omitting a
     // dependent result would let an untyped caller bypass its enforcement.
     publishedReturnTypes.set(item.fn as unknown as object, published);
+    if (item.property) item.property.type = published.Kind === 'void' ? undefinedType : published;
     return changed;
   };
 
@@ -28014,6 +28085,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const item of pendingBySignature.values()) {
       if (!item.inputs?.has(binding)) continue;
       item.signature.InferredReturn = undefined;
+      if (item.property) item.property.type = anyTypeRecord;
       item.signature.ProvisionalReturn = undefined;
       publishedReturnTypes.delete(item.fn);
       publishedAnchors.delete(item.signature);
@@ -28335,7 +28407,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let changed = false;
           if (!item.generator && !item.asyncFunction) {
             const anchorage: ReturnAnchorage = { anchored: false };
-            const result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
+            let result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
+            if (item.property && item.receiver) result = captureGetterResult(result, item.receiver.owner);
             if (inferenceResources.exhausted) return;
             changed = publishOrdinaryReturn(item, result, anchorage);
           } else {
@@ -38579,7 +38652,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const cached = privateMemberTypes.get(n) ?? {};
           cached[mode] = members.Properties;
           privateMemberTypes.set(n, cached);
-          inferClassMethods(members, mode === 'static' ? classObjectTypeOfNode(n) : instanceType);
+          inferClassMethods(members, () => mode === 'static' ? classObjectTypeOfNode(n) : instanceType);
         }
         const pushedClassScopeForBody = pushTypeParameterScopeOf(n, 'type-only');
         try {

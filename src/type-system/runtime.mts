@@ -48,10 +48,10 @@ import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-libra
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
-import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
+import type { ParameterRecord, SignatureRecord, TypeRecord } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { InjectedClassOf, instantiatePartialClassSelf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
+import { InjectedClassOf, instantiatePartialClassSelf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteFreeTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation, EnterTypeComputation, ExitTypeComputation, EvaluateWithTypeBudget,
 } from './budget.mts';
@@ -3883,7 +3883,7 @@ export function SubstituteTypeArguments(
       return already;
     }
     if (r.Kind === 'parameter') {
-      return substituteFreeTypeParameters(r, byName)!;
+      return substituteFreeTypeParameters(r, byName, params as readonly ParseNode.TypeParameter[])!;
     }
     // A DEFERRED operator - `keyof T`, `T[K]` - waits on the parameters it
     // names, and this walk had no arm for it: an interface instantiated at `P`
@@ -3893,7 +3893,7 @@ export function SubstituteTypeArguments(
     // substitutes into a deferred record's operands and evaluates once they
     // close; this walk hands the record to it.
     if (r.Kind === 'deferred') {
-      return substituteTypeParameters(r as Known, byName) as TypeRecord;
+      return substituteFreeTypeParameters(r, byName, params as readonly ParseNode.TypeParameter[])!;
     }
     if (r.Kind === 'reference' || r.Kind === 'shared') {
       if (!mentionsTypeParameter(r)) return r;
@@ -3929,7 +3929,7 @@ export function SubstituteTypeArguments(
     // Use the shared signature walk so its effective constraints, receiver,
     // published result and repeated parameter records agree with its fields.
     if (r.Kind === 'function') {
-      const out = substituteFreeTypeParameters(r, byName)!;
+      const out = substituteFreeTypeParameters(r, byName, params as readonly ParseNode.TypeParameter[])!;
       seen.set(r, out);
       return out;
     }

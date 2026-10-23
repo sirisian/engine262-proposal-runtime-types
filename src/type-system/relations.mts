@@ -540,7 +540,13 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
         return t.Kind === 'nominal' && s.LibraryName === t.LibraryName && SameArgumentList(s.Arguments, t.Arguments, next);
       }
       return t.Kind === 'nominal' && s.Declaration === t.Declaration
-        && s.DeclarationIdentity === t.DeclarationIdentity && SameArgumentList(s.Arguments, t.Arguments, next);
+        && s.DeclarationIdentity === t.DeclarationIdentity && SameArgumentList(s.Arguments, t.Arguments, next)
+        // Distinct open member environments must not collapse an inference
+        // join. Evaluated nominal identity remains DeclarationIdentity.
+        && (!s.CapturedBindings?.length || !t.CapturedBindings?.length
+          || s.CapturedBindings.length === t.CapturedBindings.length
+            && s.CapturedBindings.every((capture, index) => capture.Declaration === t.CapturedBindings![index].Declaration
+              && SameTypeWithAssumptions(capture.Type, t.CapturedBindings![index].Type, next)));
     case 'union':
     case 'intersection':
       // Matched as a SET, not a sequence. A union is its members and nothing

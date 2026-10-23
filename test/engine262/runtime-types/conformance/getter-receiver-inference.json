@@ -1,0 +1,2310 @@
+{
+  "cases": [
+    {
+      "name": "getter-local",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-named",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().value;",
+        "dep": "export class E{text:string=\"ok\";get value(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().value;",
+        "dep": "export class E{text:string=\"ok\";get value(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-default",
+      "modules": {
+        "main": "import E from \"dep\";const result:boolean=new E().value;",
+        "dep": "export default class E{text:string=\"ok\";get value(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-default-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default().value;",
+        "dep": "export default class E{text:string=\"ok\";get value(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "forward-string",
+      "modules": {
+        "main": "class E{get value(){return this.text;}text:string=\"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forward-boolean",
+      "modules": {
+        "main": "class E{get value(){return this.text;}text:string=\"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "method-to-getter-string",
+      "modules": {
+        "main": "class E{read(){return this.value;}get value(){return this.text;}text:string=\"ok\";}const result:string=new E().read();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-to-getter-boolean",
+      "modules": {
+        "main": "class E{read(){return this.value;}get value(){return this.text;}text:string=\"ok\";}const result:boolean=new E().read();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-to-method-string",
+      "modules": {
+        "main": "class E{get value(){return this.read();}read(){return this.text;}text:string=\"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-to-method-boolean",
+      "modules": {
+        "main": "class E{get value(){return this.read();}read(){return this.text;}text:string=\"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-chain-string",
+      "modules": {
+        "main": "class E{get value(){return this.other;}get other(){return this.text;}text:string=\"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-chain-boolean",
+      "modules": {
+        "main": "class E{get value(){return this.other;}get other(){return this.text;}text:string=\"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "static-string",
+      "modules": {
+        "main": "class E{static get value(){return this.text;}static text:string=\"ok\";}const result:string=E.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-boolean",
+      "modules": {
+        "main": "class E{static get value(){return this.text;}static text:string=\"ok\";}const result:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "static-chain-string",
+      "modules": {
+        "main": "class E{static get value(){return this.other;}static get other(){return this.text;}static text:string=\"ok\";}const result:string=E.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-chain-boolean",
+      "modules": {
+        "main": "class E{static get value(){return this.other;}static get other(){return this.text;}static text:string=\"ok\";}const result:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "private-string",
+      "modules": {
+        "main": "class E{get value(){return this.#other;}get #other(){return this.#text;}#text:string=\"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-boolean",
+      "modules": {
+        "main": "class E{get value(){return this.#other;}get #other(){return this.#text;}#text:string=\"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "private-static-string",
+      "modules": {
+        "main": "class E{static get value(){return this.#other;}static get #other(){return this.#text;}static #text:string=\"ok\";}const result:string=E.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-static-boolean",
+      "modules": {
+        "main": "class E{static get value(){return this.#other;}static get #other(){return this.#text;}static #text:string=\"ok\";}const result:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-string",
+      "modules": {
+        "main": "class E<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.text;}}const result:string=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-boolean",
+      "modules": {
+        "main": "class E<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.text;}}const result:boolean=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-chain-string",
+      "modules": {
+        "main": "class E<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.other;}get other(){return this.text;}}const result:string=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-chain-boolean",
+      "modules": {
+        "main": "class E<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.other;}get other(){return this.text;}}const result:boolean=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inherit-string",
+      "modules": {
+        "main": "class B{get value(){return this.text;}text:string=\"ok\";}class E extends B{}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherit-boolean",
+      "modules": {
+        "main": "class B{get value(){return this.text;}text:string=\"ok\";}class E extends B{}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "super-string",
+      "modules": {
+        "main": "class B{get value(){return this.text;}text:string=\"ok\";}class E extends B{get result(){return super.value;}}const result:string=new E().result;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "super-boolean",
+      "modules": {
+        "main": "class B{get value(){return this.text;}text:string=\"ok\";}class E extends B{get result(){return super.value;}}const result:boolean=new E().result;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inherit-generic-string",
+      "modules": {
+        "main": "class B<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.text;}}class E extends B.<string>{}const result:string=new E(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherit-generic-boolean",
+      "modules": {
+        "main": "class B<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.text;}}class E extends B.<string>{}const result:boolean=new E(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "class-expression-string",
+      "modules": {
+        "main": "const E=class{get value(){return this.text;}text:string=\"ok\";};const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-boolean",
+      "modules": {
+        "main": "const E=class{get value(){return this.text;}text:string=\"ok\";};const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "arrow-string",
+      "modules": {
+        "main": "class E{get value(){const f=()=>this.text;return f();}text:string=\"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-boolean",
+      "modules": {
+        "main": "class E{get value(){const f=()=>this.text;return f();}text:string=\"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nested-ordinary-string",
+      "modules": {
+        "main": "class E{get value(){function f(){return this.text;}return f.call({text:\"ok\"});}text:boolean=true;}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-ordinary-boolean",
+      "modules": {
+        "main": "class E{get value(){function f(){return this.text;}return f.call({text:\"ok\"});}text:boolean=true;}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "union-field-string",
+      "modules": {
+        "main": "class E{text:string|number=\"ok\";get value(){return this.text;}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "union-field-boolean",
+      "modules": {
+        "main": "class E{text:string|number=\"ok\";get value(){return this.text;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "literal-string",
+      "modules": {
+        "main": "class E{get value(){return \"ok\";}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-boolean",
+      "modules": {
+        "main": "class E{get value(){return \"ok\";}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-string",
+      "modules": {
+        "main": "class E{text:any=\"ok\";get value(){return this.text;}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-boolean",
+      "modules": {
+        "main": "class E{text:any=\"ok\";get value(){return this.text;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "annotated-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value():string{return this.text;}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotated-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value():string{return this.text;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "captured-string",
+      "modules": {
+        "main": "function make<T: type>(text:T){return class E{get value(){return text;}};}const E=make.<string>(\"ok\");const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-boolean",
+      "modules": {
+        "main": "function make<T: type>(text:T){return class E{get value(){return text;}};}const E=make.<string>(\"ok\");const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "object-string",
+      "modules": {
+        "main": "const e={text:\"ok\",get value(){return this.text;}};const result:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-boolean",
+      "modules": {
+        "main": "const e={text:\"ok\",get value(){return this.text;}};const result:boolean=e.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "contextual-object-string",
+      "modules": {
+        "main": "const e:{text:string,readonly value:string}={text:\"ok\",get value(){return this.text;}};const result:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "contextual-object-boolean",
+      "modules": {
+        "main": "const e:{text:string,readonly value:string}={text:\"ok\",get value(){return this.text;}};const result:boolean=e.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pair-instance-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}set value(v:string){}}\"done\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pair-instance-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}set value(v:boolean){}}\"done\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pair-static-string",
+      "modules": {
+        "main": "class E{static text:string=\"ok\";static get value(){return this.text;}static set value(v:string){}}\"done\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pair-static-boolean",
+      "modules": {
+        "main": "class E{static text:string=\"ok\";static get value(){return this.text;}static set value(v:boolean){}}\"done\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pair-private-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get #value(){return this.text;}set #value(v:string){}}\"done\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pair-private-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get #value(){return this.text;}set #value(v:boolean){}}\"done\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "field-shadow-first-string",
+      "modules": {
+        "main": "class E{value:string=\"ok\";get value(){return this.wrong;}wrong:boolean=true;}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-shadow-first-boolean",
+      "modules": {
+        "main": "class E{value:string=\"ok\";get value(){return this.wrong;}wrong:boolean=true;}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "field-shadow-last-string",
+      "modules": {
+        "main": "class E{get value(){return this.wrong;}wrong:boolean=true;value:string=\"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-shadow-last-boolean",
+      "modules": {
+        "main": "class E{get value(){return this.wrong;}wrong:boolean=true;value:string=\"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "cycle-string",
+      "modules": {
+        "main": "class E{flag:boolean=false;text:string=\"ok\";get a(){if(this.flag)return this.b;return this.text;}get b(){return this.a;}}const result:string=new E().a;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cycle-boolean",
+      "modules": {
+        "main": "class E{flag:boolean=false;text:string=\"ok\";get a(){if(this.flag)return this.b;return this.text;}get b(){return this.a;}}const result:boolean=new E().a;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed-cycle-string",
+      "modules": {
+        "main": "class E{flag:boolean=false;text:string=\"ok\";get a(){if(this.flag)return this.b();return this.text;}b(){return this.a;}}const result:string=new E().a;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mixed-cycle-boolean",
+      "modules": {
+        "main": "class E{flag:boolean=false;text:string=\"ok\";get a(){if(this.flag)return this.b();return this.text;}b(){return this.a;}}const result:boolean=new E().a;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unused-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}function unused(){const q:string=new E().value;}\"done\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}function unused(){const q:boolean=new E().value;}\"done\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-import-string",
+      "modules": {
+        "dep": "export class E<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.text;}}",
+        "main": "import {E} from \"dep\";const q:string=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-import-boolean",
+      "modules": {
+        "dep": "export class E<T: type>{text:T;constructor(text:T){this.text=text;}get value(){return this.text;}}",
+        "main": "import {E} from \"dep\";const q:boolean=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "static-private-field",
+      "modules": {
+        "main": "class E{static #text:string=\"ok\";static get value(){return this.#text;}}const q:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "static-private-method",
+      "modules": {
+        "main": "class E{static #text:string=\"ok\";static get value(){return this.#read();}static #read(){return this.#text;}}const q:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "static-private-public-field",
+      "modules": {
+        "main": "class E{static text:string=\"ok\";static get value(){return this.#read;}static get #read(){return this.text;}}const q:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "static-private-export",
+      "modules": {
+        "main": "class E{static #text:string=\"ok\";static get #read(){return this.#text;}static read(){return this.#read;}}const q:boolean=E.read();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture-instance-string",
+      "modules": {
+        "main": "function make<T: type>(text:T){class E{get value(){return text;}}return new E();}const result:string=make.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "capture-instance-boolean",
+      "modules": {
+        "main": "function make<T: type>(text:T){class E{get value(){return text;}}return new E();}const result:boolean=make.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture-field-string",
+      "modules": {
+        "main": "function make<T: type>(text:T){class E{field:T=text;get value(){return this.field;}}return new E();}const result:string=make.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "capture-field-boolean",
+      "modules": {
+        "main": "function make<T: type>(text:T){class E{field:T=text;get value(){return this.field;}}return new E();}const result:boolean=make.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "shadow-generic-string",
+      "modules": {
+        "main": "type T=boolean;class E<T: type>{text:T;constructor(x:T){this.text=x;}get value(){return this.text;}read<T: type>(x:T){return this.value;}}const result:string=new E.<string>(\"ok\").read.<boolean>(true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-generic-boolean",
+      "modules": {
+        "main": "type T=boolean;class E<T: type>{text:T;constructor(x:T){this.text=x;}get value(){return this.text;}read<T: type>(x:T){return this.value;}}const result:boolean=new E.<string>(\"ok\").read.<boolean>(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-private-string",
+      "modules": {
+        "main": "class E<T: type>{#text:T;constructor(x:T){this.#text=x;}get value(){return this.#other;}get #other(){return this.#text;}}const result:string=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-private-boolean",
+      "modules": {
+        "main": "class E<T: type>{#text:T;constructor(x:T){this.#text=x;}get value(){return this.#other;}get #other(){return this.#text;}}const result:boolean=new E.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-static-string",
+      "modules": {
+        "main": "class E<T: type>{static text:T;static get value(){return this.text;}}E.<string>.text=\"ok\";const result:string=E.<string>.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-static-boolean",
+      "modules": {
+        "main": "class E<T: type>{static text:T;static get value(){return this.text;}}E.<string>.text=\"ok\";const result:boolean=E.<string>.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-static-private-string",
+      "modules": {
+        "main": "class E<T: type>{static #text:T;static set value(x:T){this.#text=x;}static get value(){return this.#other;}static get #other(){return this.#text;}}E.<string>.value=\"ok\";const result:string=E.<string>.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-static-private-boolean",
+      "modules": {
+        "main": "class E<T: type>{static #text:T;static set value(x:T){this.#text=x;}static get value(){return this.#other;}static get #other(){return this.#text;}}E.<string>.value=\"ok\";const result:boolean=E.<string>.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "override-boolean",
+      "modules": {
+        "main": "class B{get value():string{return \"ok\";}}class E extends B{text:boolean=true;get value(){return this.text;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "override-string",
+      "modules": {
+        "main": "class B{get value():string{return \"ok\";}}class E extends B{text:boolean=true;get value(){return this.text;}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "literal-union-number",
+      "modules": {
+        "main": "class E{flag:boolean=false;get value(){if(this.flag)return \"x\";return 1;}}const result:number=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-union-boolean",
+      "modules": {
+        "main": "class E{flag:boolean=false;get value(){if(this.flag)return \"x\";return 1;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "later-capture-string",
+      "modules": {
+        "main": "class E{get value(){return text;}}const text:string=\"ok\";const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-capture-boolean",
+      "modules": {
+        "main": "class E{get value(){return text;}}const text:string=\"ok\";const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "later-inferred-capture-string",
+      "modules": {
+        "main": "class E{get value(){return text;}}const text=source();function source():string{return \"ok\";}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-inferred-capture-boolean",
+      "modules": {
+        "main": "class E{get value(){return text;}}const text=source();function source():string{return \"ok\";}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-duplicate-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;get value(){return this.flag;}get value(){return this.text;}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-duplicate-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;get value(){return this.flag;}get value(){return this.text;}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "symbol-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get [Symbol.iterator](){return this.text;}}const result:string=new E()[Symbol.iterator];"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "symbol-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get [Symbol.iterator](){return this.text;}}const result:boolean=new E()[Symbol.iterator];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "destructure-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const {value}=new E();const result:string=value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructure-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const {value}=new E();const result:boolean=value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "union-receiver-string",
+      "modules": {
+        "main": "class A{text:string=\"a\";get value(){return this.text;}}class B{text:string=\"b\";get value(){return this.text;}}const e:A|B=new A();const result:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "union-receiver-boolean",
+      "modules": {
+        "main": "class A{text:string=\"a\";get value(){return this.text;}}class B{text:string=\"b\";get value(){return this.text;}}const e:A|B=new A();const result:boolean=e.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "producer-capture-named-string",
+      "modules": {
+        "dep": "const text:string=\"ok\";export class E{get value(){return text;}}",
+        "main": "import {E} from \"dep\";const text:boolean=true;const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer-capture-namespace-string",
+      "modules": {
+        "dep": "const text:string=\"ok\";export class E{get value(){return text;}}",
+        "main": "import * as ns from \"dep\";const text:boolean=true;const result:string=new ns.E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer-capture-named-boolean",
+      "modules": {
+        "dep": "const text:string=\"ok\";export class E{get value(){return text;}}",
+        "main": "import {E} from \"dep\";const text:boolean=true;const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "producer-capture-namespace-boolean",
+      "modules": {
+        "dep": "const text:string=\"ok\";export class E{get value(){return text;}}",
+        "main": "import * as ns from \"dep\";const text:boolean=true;const result:boolean=new ns.E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "setter-write-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}set value(v:string|boolean){}}const e=new E();e.value='ok';"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-write-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}set value(v:string|boolean){}}const e=new E();e.value=true;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "effects-once",
+      "modules": {
+        "main": "const state:any={gets:0,fields:0};class E{text:string=(state.fields++,\"ok\");get value(){state.gets++;return this.text;}}if(JSON.stringify(state)!=='{\"gets\":0,\"fields\":0}')throw new Error(\"checking executed source\");const e=new E();if(JSON.stringify(state)!=='{\"gets\":0,\"fields\":1}')throw new Error(\"construction\");const q:string=e.value;if(JSON.stringify(state)!=='{\"gets\":1,\"fields\":1}')throw new Error(\"get\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "effects-before-early-error",
+      "modules": {
+        "main": "let gets=0;class E{text:string=\"ok\";get value(){gets++;return this.text;}}const q:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "erased-runtime-result",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const e:any=new E();const q:boolean=e.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "erased-runtime-return",
+      "modules": {
+        "main": "class A{}class B{}class E{text:A=new A();get value(){return this.text;}}const get:any=Object.getOwnPropertyDescriptor(E.prototype,\"value\").get;get.call({text:new B()});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-does-not-bind",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const get:any=Object.getOwnPropertyDescriptor(E.prototype,\"value\").get;const q:string=get.call({text:\"other\"});if(q!==\"other\")throw new Error(\"bound\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-union-compatible",
+      "modules": {
+        "main": "class E{text:string|number=\"ok\";get value(){return this.text;}}const q:string|number=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-inherit-compatible",
+      "modules": {
+        "main": "class B{static text:string=\"ok\";static get value(){return this.text;}}class E extends B{}const q:string=E.value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-inherit-incompatible",
+      "modules": {
+        "main": "class B{static text:string=\"ok\";static get value(){return this.text;}}class E extends B{}const q:boolean=E.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-unused-incompatible",
+      "modules": {
+        "main": "class E<T: type>{text:T;get value(){return this.text;}}function unused(e:E.<string>){const q:boolean=e.value;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture-join-string",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E{field:T=x;get value(){return this.field;}}return new E();}function choose(flag:boolean){return flag?make.<string>(\"ok\"):make.<boolean>(true);}const q:string=choose(true).value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture-join-boolean",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E{field:T=x;get value(){return this.field;}}return new E();}function choose(flag:boolean){return flag?make.<string>(\"ok\"):make.<boolean>(true);}const q:boolean=choose(true).value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture-join-string|boolean",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E{field:T=x;get value(){return this.field;}}return new E();}function choose(flag:boolean){return flag?make.<string>(\"ok\"):make.<boolean>(true);}const q:string|boolean=choose(true).value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-then-method-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;get value(){return this.flag;}value(){return this.text;}}const q:string=new E().value();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-then-method-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;get value(){return this.flag;}value(){return this.text;}}const q:boolean=new E().value();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "method-then-getter-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;value(){return this.flag;}get value(){return this.text;}}const q:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-then-getter-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;value(){return this.flag;}get value(){return this.text;}}const q:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-then-setter-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;get value(){return this.text;}set value(x:string){}}const q:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-then-setter-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;get value(){return this.text;}set value(x:string){}}const q:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "method-then-setter-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;value(){return this.text;}set value(x:string){}}const q:string=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "method-then-setter-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";flag:boolean=true;value(){return this.text;}set value(x:string){}}const q:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture-join-false",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E{field:T=x;get value(){return this.field;}}return new E();}function choose(flag:boolean){return flag?make.<string>(\"ok\"):make.<boolean>(true);}const q:string|boolean=choose(false).value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "capture-join-repeated",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E{field:T=x;get value(){return this.field;}}return new E();}function choose(flag:boolean){return flag?make.<string>(\"ok\"):make.<boolean>(true);}const q:string|boolean=choose(true).value;const other:string|boolean=choose(false).value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-class-own-parameter-string",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E<U: type>{field:T=x;own:U;constructor(u:U){this.own=u;}get value(){return this.field;}}return new E.<boolean>(true);}const q:string=make.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-readonly-store-string",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const e=new E();e.value=\"ok\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_READONLY_STORE",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "captured-class-own-parameter-boolean",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E<U: type>{field:T=x;own:U;constructor(u:U){this.own=u;}get value(){return this.field;}}return new E.<boolean>(true);}const q:boolean=make.<string>(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "getter-readonly-store-boolean",
+      "modules": {
+        "main": "class E{text:string=\"ok\";get value(){return this.text;}}const e=new E();e.value=true;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_READONLY_STORE",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "replaced-producer-rejects",
+      "modules": {
+        "main": "function make<T: type>(x:T){class E{field:T=x;get value(){return this.field;}}return new E();}function choose(flag:boolean){return flag?make.<string>(\"ok\"):make.<boolean>(true);}const replaced:any=function(){return {value:\"ok\"};};make=replaced;choose(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}

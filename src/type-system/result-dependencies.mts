@@ -35,7 +35,7 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
   const argumentSeen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
   const argumentSignatureSeen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
   const complete = (target: TypeRecord, evidence: TypeRecord | undefined, signature = false, argument = false): TypeRecord => {
-    if (!argument && target.Kind !== 'object' && target.Kind !== 'function' && !sourceNominal(target)) return target;
+    if (!argument && target.Kind !== 'object' && target.Kind !== 'function' && target.Kind !== 'union' && !sourceNominal(target)) return target;
     const memo = argument ? (signature ? argumentSignatureSeen : argumentSeen) : (signature ? signatureSeen : seen);
     let alternatives = memo.get(target);
     if (!alternatives) memo.set(target, alternatives = new Map());
@@ -43,6 +43,23 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
     if (prior) return prior;
     const copy = { ...target };
     alternatives.set(evidence, copy);
+    if (!argument && target.Kind === 'union' && sourceNominal(evidence)) {
+      // An admitted producer result can complete the selected contribution's
+      // local family. Other arms may belong to activations that never ran.
+      // This is evidence from a checked boundary, never from the returned value;
+      // the receiving boundary still checks the value against the completed arm.
+      for (const member of target.Members) {
+        const completed = complete(member, evidence, signature);
+        if (sourceNominal(completed) && completed.Constructor === evidence.Constructor
+          && completed.DeclarationIdentity === evidence.DeclarationIdentity
+          && SameArgumentList([completed], [evidence], [])) {
+          alternatives.set(evidence, completed);
+          return completed;
+        }
+      }
+      alternatives.set(evidence, target);
+      return target;
+    }
     if (sourceNominal(target) && sourceNominal(copy)) {
       const parameters = (target.Declaration as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
       if (!signature) {
@@ -94,6 +111,33 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
       if (!SameArgumentList(arguments_, evidence.Arguments, [])) {
         alternatives.set(evidence, unresolved);
         return unresolved;
+      }
+      if (target.CapturedBindings?.length) {
+        const captures = target.CapturedBindings.map((capture, i) => {
+          const supplied = evidence.CapturedBindings?.[i];
+          if (!supplied || capture.Declaration !== supplied.Declaration) return capture;
+          const type = complete(capture.Type, supplied.Type, signature, true);
+          // A captured value parameter has the same declared numeric domain
+          // as a directly written class argument. Reify an exact Number only
+          // from that declaration's independently checked captured input.
+          if (capture.Declaration.IsValueParameter && type.Kind === 'literal'
+            && type.Value instanceof NumberValue && !isTypedNumber(type.Value)
+            && supplied.Type.Kind === 'literal' && isTypedNumber(supplied.Type.Value)) {
+            // eslint-disable-next-line @engine262/mathematical-value -- compare the exact source Number
+            const number = type.Value.numberValue();
+            const value = supplied.Type.Value.value;
+            const same = typeof value === 'bigint' ? Number.isInteger(number) && BigInt(number) === value : Object.is(number, value);
+            if (same) return { ...capture, Type: supplied.Type };
+          }
+          return { ...capture, Type: type };
+        });
+        if (captures.length !== evidence.CapturedBindings?.length
+          || captures.some((capture, i) => capture.Declaration !== evidence.CapturedBindings![i].Declaration
+            || !SameArgumentList([capture.Type], [evidence.CapturedBindings![i].Type], []))) {
+          alternatives.set(evidence, unresolved);
+          return unresolved;
+        }
+        copy.CapturedBindings = captures;
       }
       copy.Arguments = arguments_;
       copy.Constructor = signature ? ClassFamilyOf(evidence.Constructor) : evidence.Constructor;

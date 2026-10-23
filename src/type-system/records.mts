@@ -666,6 +666,8 @@ export type TypeRecord =
     // Opaque identity; expanded transparent aliases do not carry this field.
     readonly DeclarationIdentity?: object,
     readonly Arguments: readonly (TypeRecord | number)[],
+    /** Free inputs of a local class's member template, owned by outer declarations. */
+    readonly CapturedBindings?: readonly GenericTypeCapture[],
     // proposal-runtime-types: evaluated enum member values, and the
     // resolved structural shape of an interface, attached at declaration
     // evaluation. Interface identity also includes [[DeclarationIdentity]].
@@ -2062,6 +2064,7 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   if (t.Kind === 'parameter') {
     return true;
   }
+  if (t.Kind === 'nominal' && t.CapturedBindings?.some((capture) => mentionsTypeParameter(capture.Type, seen))) return true;
   if ((t.Kind === 'reference' || t.Kind === 'shared') && mentionsTypeParameter(t.Target, seen)) return true;
   const withMembers = t as { Members?: readonly TypeRecord[] };
   if (withMembers.Members?.some((m) => mentionsTypeParameter(m, seen))) {
@@ -2289,6 +2292,8 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
   if (withArgs.Arguments && withArgs.Arguments.length > 0) {
     return {
       ...t,
+      ...(t.Kind === 'nominal' && t.CapturedBindings?.length
+        ? { CapturedBindings: t.CapturedBindings.map((capture) => ({ ...capture, Type: walk(capture.Type)! })) } : {}),
       // Library carriers attach an expanded receiving shape. Its free
       // arguments must close with the carrier (including a helper's
       // self-iteration result). User declarations instead retain a member
@@ -2304,6 +2309,9 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         return t.Kind === 'primitive' ? CanonicalWidthArgument(substituted) : substituted;
       }),
     } as Known;
+  }
+  if (t.Kind === 'nominal' && t.CapturedBindings?.length) {
+    return { ...t, CapturedBindings: t.CapturedBindings.map((capture) => ({ ...capture, Type: walk(capture.Type)! })) };
   }
   // A TUPLE's elements, beside the array's singular [[Element]] arm below.
   // `substituteTypeParameters` handled `Element` and not `Elements`,
