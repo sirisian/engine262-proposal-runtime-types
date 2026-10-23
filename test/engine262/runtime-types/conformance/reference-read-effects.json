@@ -1,0 +1,1185 @@
+{
+  "cases": [
+    {
+      "name": "accessor-effects",
+      "modules": {
+        "main": "let reads=0;const o={get x(){reads++;return reads;}};let ref r=o.x;if(reads!==0)throw new Error(\"eager\");const first=r;const second=r;if(first!==1||second!==2||reads!==2)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Reading r invokes the getter and invalidates the captured reads fact."
+    },
+    {
+      "name": "accessor-ref",
+      "modules": {
+        "main": "let reads=0;const o={get x(){reads++;return reads;}};let ref r=o.x;if(reads!==0)throw new Error(\"eager\");const a=r;const b=r;if(reads!==2)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A value read through r has the getter effects of reading o.x; forming the reference does not invoke it."
+    },
+    {
+      "name": "accessor-ref-chain",
+      "modules": {
+        "main": "let reads=0;const o={get x(){reads++;return reads;}};let ref a=o.x;let ref r=a;if(reads!==0)throw new Error(\"eager\");const v=r;if(reads!==1)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Getter effects propagate through a reference alias chain."
+    },
+    {
+      "name": "accessor-function-read",
+      "modules": {
+        "main": "let reads=0;const o={get x(){reads++;return reads;}};function f(ref r){if(reads!==0)throw new Error(\"eager\");const v=r;if(reads!==1)throw new Error(\"reads\");}f(ref o.x);"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "Error",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "reason": "The ordinary function creates an unmapped arguments snapshot, reading the accessor before its body. Its n===0 assertion is therefore a required runtime failure, not a valid fulfilled witness."
+    },
+    {
+      "name": "accessor-undefined",
+      "modules": {
+        "main": "let n=0;const o={get x(){return n++===0?undefined:\"s\";}};let ref r=o.x;if(r!==undefined||typeof r!==\"string\")throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "The second getter read is not the value captured by the left comparison."
+    },
+    {
+      "name": "let-copy",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-bare",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-typeof",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=typeof r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-void",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");void r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-array",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=[r];if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-shorthand",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v={r};if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-unary",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=!r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-arithmetic",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r+1;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-template",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=`${r}`;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-copy-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-bare-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-typeof-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=typeof r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-void-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");void r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-array-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=[r];if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-shorthand-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v={r};if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-unary-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=!r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-arithmetic-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=r+1;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "let-template-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=`${r}`;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-copy",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-bare",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-typeof",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v=typeof r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-void",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");void r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-array",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v=[r];if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-shorthand",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v={r};if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-unary",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v=!r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-arithmetic",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r+1;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-template",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref r=o.x;if(n!==0)throw new Error(\"before\");const v=`${r}`;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-copy-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-bare-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-typeof-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v=typeof r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-void-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");void r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-array-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v=[r];if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-shorthand-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v={r};if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-unary-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v=!r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-arithmetic-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v=r+1;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "const-template-chain",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const ref a=o.x;const ref r=a;if(n!==0)throw new Error(\"before\");const v=`${r}`;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "formation-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref a=x;if(n!==0)throw new Error(\"before\");let ref r=o.x;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Forming or rebinding the selected location does not invoke its getter, so the independent established n fact survives."
+    },
+    {
+      "name": "formation-parentheses-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref a=x;if(n!==0)throw new Error(\"before\");let ref r=(o.x);if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Forming or rebinding the selected location does not invoke its getter, so the independent established n fact survives."
+    },
+    {
+      "name": "chain-formation-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref a=x;if(n!==0)throw new Error(\"before\");let ref r=a;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Forming or rebinding the selected location does not invoke its getter, so the independent established n fact survives."
+    },
+    {
+      "name": "rebinding-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref a=x;if(n!==0)throw new Error(\"before\");ref a=o.x;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Forming or rebinding the selected location does not invoke its getter, so the independent established n fact survives."
+    },
+    {
+      "name": "getter-chain-formation-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref a=o.x;if(n!==0)throw new Error(\"before\");let ref r=a;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Aliasing an accessor reference forwards its location without reading it."
+    },
+    {
+      "name": "data-read-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref r=x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A proved ordinary lexical referent read cannot invoke the unrelated getter."
+    },
+    {
+      "name": "data-chain-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref a=x;let ref r=a;if(n!==0)throw new Error(\"before\");const v=r;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "The known lexical chain preserves unrelated facts."
+    },
+    {
+      "name": "stable-repeat-preserves",
+      "modules": {
+        "main": "let x;let ref r=x;if(r!==undefined||typeof r!==\"undefined\")throw new Error(\"unchanged\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "An unchanged ordinary lexical referent retains the required stable-undefined diagnostic."
+    },
+    {
+      "name": "ordinary-copy-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;const c:number=1;if(c!==1)throw new Error(\"before\");const v=r;if(c!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A getter read does not revoke a fact about an independent immutable copy."
+    },
+    {
+      "name": "varying-repeated-test",
+      "modules": {
+        "main": "let n=0;const o={get x(){return n++===0?1:2;}};let ref r=o.x;if(r===1){}if(r===1){}if(JSON.stringify([n])!==\"[2]\")throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "varying-stored-predicate",
+      "modules": {
+        "main": "let n=0;const o={get x(){return n++===0?undefined:\"s\";}};let ref r=o.x;const first=r===undefined;if(!first)throw new Error(\"first\");if(typeof r!==\"string\")throw new Error(\"second\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "varying-stored-copy",
+      "modules": {
+        "main": "let n=0;const o={get x(){return n++===0?undefined:\"s\";}};let ref r=o.x;const first=r;if(first!==undefined)throw new Error(\"first\");if(typeof r!==\"string\")throw new Error(\"second\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "read-before-sibling-guard",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");if((r,n)!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "short-circuit-skips",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");false&&r;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      },
+      "reason": "The literal false left operand makes the right operand unreachable; this required earlier diagnostic takes precedence over the later counter guard."
+    },
+    {
+      "name": "short-circuit-reads",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");true&&r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "conditional-skips",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");true?0:r;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Only the admitted conditional arm contributes effects."
+    },
+    {
+      "name": "conditional-reads",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");true?r:0;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "formation-receiver-read",
+      "modules": {
+        "main": "let n=0;const value={get x(){n++;return n;}};const holder={get base(){n++;return value;}};if(n!==0)throw new Error(\"before\");let ref r=holder.base.x;if(n!==1)throw new Error(\"receiver\");const v=r;if(n!==2)throw new Error(\"read\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "formation-key-read",
+      "modules": {
+        "main": "let n=0;const key={get x(){n++;return \"x\";}};const o={get x(){n++;return n;}};let ref k=key.x;if(n!==0)throw new Error(\"before\");let ref r=o[k];if(n!==1)throw new Error(\"key\");const v=r;if(n!==2)throw new Error(\"read\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "forwarding-runtime",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;function ignore(ref a){}ignore(ref r);if(JSON.stringify([n])!==\"[0]\")throw new Error(\"forwarded\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "Error",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "reason": "Ordinary function entry creates the specified arguments snapshot even if the body does not read arguments."
+    },
+    {
+      "name": "return-forwarding-runtime",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;function get():ref any{return ref r;}let ref s=get();if(JSON.stringify([n])!==\"[0]\")throw new Error(\"forwarded\");const v=s;if(JSON.stringify([n])!==\"[1]\")throw new Error(\"read\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "Error",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "reason": "The annotated reference return has a receiving membership boundary that reads the referent before the caller aliases the returned location."
+    },
+    {
+      "name": "arrow-forwarding-runtime",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;const ignore=(ref a)=>{};ignore(ref r);if(JSON.stringify([n])!==\"[0]\")throw new Error(\"forwarded\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "arguments-snapshot-runtime",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;function ignore(ref a){}ignore(ref r);if(JSON.stringify([n])!==\"[1]\")throw new Error(\"snapshot\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "return-admission-runtime",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;function get():ref any{return ref r;}let ref s=get();if(JSON.stringify([n])!==\"[1]\")throw new Error(\"admission\");const v=s;if(JSON.stringify([n])!==\"[2]\")throw new Error(\"read\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "callee-read",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return ()=>1;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");r();if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "object-receiver-read",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return {y:1};}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r.y;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "optional-receiver-read",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return {y:1};}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r?.y;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "destructuring-source",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return [1];}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const [v]=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "spread-source",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return [1];}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=[...r];if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "setter-assignment",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;r=2;if(JSON.stringify([reads,writes])!==\"[0,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "setter-destructure-array",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;[r]=[2];if(JSON.stringify([reads,writes])!==\"[0,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "setter-destructure-object",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;({x:r}={x:2});if(JSON.stringify([reads,writes])!==\"[0,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "setter-compound",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;r+=1;if(JSON.stringify([reads,writes])!==\"[1,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "setter-prefix",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;++r;if(JSON.stringify([reads,writes])!==\"[1,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "setter-postfix",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;r++;if(JSON.stringify([reads,writes])!==\"[1,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "setter-logical",
+      "modules": {
+        "main": "let reads=0,writes=0;const o={get x(){reads++;return 1;},set x(v){writes++;}};let ref r=o.x;r&&=2;if(JSON.stringify([reads,writes])!==\"[1,1]\")throw new Error(\"order\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Runtime read/store counts must retain ordinary location-consuming evaluation semantics."
+    },
+    {
+      "name": "loop-read-effects",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;let seen=0;if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){if(n===1)seen++;const v=r;}if(JSON.stringify([n,seen])!==\"[2,1]\")throw new Error(\"loop\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "direct-loop-read-control",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let seen=0;if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){if(n===1)seen++;const v=o.x;}if(JSON.stringify([n,seen])!==\"[2,1]\")throw new Error(\"loop\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "finally-read-effects",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");try{}finally{const v=r;}if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "catch-read-effects",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;throw new Error(\"getter\");}};let ref r=o.x;if(n!==0)throw new Error(\"before\");try{const v=r;}catch(e){if(n!==1)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "function-return-read",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;function f(){if(n!==0)throw new Error(\"before\");return (r,n);}if(f()!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "function-typed-copy",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;function f(){if(n!==0)throw new Error(\"before\");const v:number=r;if(n!==1)throw new Error(\"after\");return v;}f();"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "reference-parameter",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};function f(ref r){if(n!==1)throw new Error(\"snapshot\");const v=r;if(n!==2)throw new Error(\"after\");}f(ref o.x);"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "arrow-reference-parameter",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};const f=(ref r)=>{if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");};f(ref o.x);"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "shadowed-reference-control",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");{const r=1;const v=r;}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A shadowing ordinary binding does not invoke the outer reference getter."
+    },
+    {
+      "name": "rebind-to-data-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref r=o.x;ref r=x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "The source-position location proof after rebinding establishes an ordinary lexical read."
+    },
+    {
+      "name": "rebind-to-getter",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let x=1;let ref r=x;ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "join-data-or-getter",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};function f(flag){let x=1;let ref r=x;if(flag)ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");}f(true);"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "imported-reference",
+      "modules": {
+        "dep": "export let n=0;const o={get x(){n++;return n;}};export let ref r=o.x;",
+        "main": "import {n,r} from \"dep\";if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "imported-reference-alias",
+      "modules": {
+        "dep": "export let n=0;const o={get x(){n++;return n;}};export let ref r=o.x;",
+        "main": "import {n,r} from \"dep\";let ref a=r;if(n!==0)throw new Error(\"before\");const v=a;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "namespace-reference",
+      "modules": {
+        "dep": "export let n=0;const o={get x(){n++;return n;}};export let ref r=o.x;",
+        "main": "import * as ns from \"dep\";if(ns.n!==0)throw new Error(\"before\");const v=ns.r;if(ns.n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "import-callback-named",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "main": "import {r,hooks} from \"dep\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "import-callback-aliased",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "main": "import {r,hooks} from \"dep\";let ref a=r;let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const v=a;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "import-callback-namespace",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "main": "import * as ns from \"dep\";const hooks=ns.hooks;let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const v=ns.r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "direct-reexport",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "middle": "export {r,hooks} from \"dep\";",
+        "main": "import {r,hooks} from \"middle\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "local-reexport",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "middle": "import {r,hooks} from \"dep\";export {r,hooks};",
+        "main": "import {r,hooks} from \"middle\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "star-reexport",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "middle": "export * from \"dep\";",
+        "main": "import {r,hooks} from \"middle\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A reference value read has the ordinary getter effects, in evaluation order."
+    },
+    {
+      "name": "import-ordinary-alias-preserves",
+      "modules": {
+        "dep": "export const value:number=1;",
+        "main": "import {value} from \"dep\";let ref r=value;if(r!==1)throw new Error(\"before\");const v=r;if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "An alias of a resolved ordinary import is a data-cell read."
+    },
+    {
+      "name": "loop-callable-declaration-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");for(let i=0;i<1;i++){const f=()=>r;}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Declaring a callable containing a reference read does not execute that read on the loop back edge."
+    },
+    {
+      "name": "finally-callable-declaration-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return n;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");try{}finally{const f=()=>r;}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A finalizer that only creates a callable does not transfer effects of its unexecuted body."
+    },
+    {
+      "name": "getter-writes-alias",
+      "modules": {
+        "main": "let n=0;let ref a=n;const o={get x(){a++;return 1;}};let ref r=o.x;if(n!==0)throw new Error(\"before\");const v=r;if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A captured alias store revokes the fact about its referent."
+    },
+    {
+      "name": "getter-rebinds",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;const o={get x(){ref a=y;return 1;}};let ref r=o.x;if(a!==1)throw new Error(\"before\");const v=r;if(a!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A captured rebinding revokes the old location proof."
+    },
+    {
+      "name": "getter-contract",
+      "modules": {
+        "main": "const o={get x():number{return 1;}};let ref r=o.x;const s:string=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      },
+      "reason": "Read effects do not erase the written getter result contract."
+    },
+    {
+      "name": "getter-throw",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;throw new Error(\"getter\");}};let ref r=o.x;const v=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "Error",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "reason": "A throwing getter fails at value consumption during ordinary evaluation."
+    }
+  ]
+}

@@ -1334,6 +1334,21 @@ export function DeclaredClassContractOf(declaration: object): DeclaredClassContr
  * graph is resolved and an importer can be told what it is importing.
  */
 const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
+const moduleReferenceBindings = new WeakMap<ParseNode.Module, ReadonlySet<string>>();
+
+export function ExportedReferenceBindingsOf(module: ParseNode.Module): ReadonlySet<string> | undefined {
+  return moduleReferenceBindings.get(module);
+}
+
+function NamedImportBindings(module: ParseNode): string[] {
+  if (module.type !== 'Module') return [];
+  return (module.ModuleBody?.ModuleItemList ?? []).flatMap((item) => {
+    if (item.type !== 'ImportDeclaration' || item.Phase === 'source') return [];
+    const clause = item.ImportClause;
+    return [...(clause?.ImportedDefaultBinding ? [clause.ImportedDefaultBinding.ImportedBinding.name] : []),
+      ...(clause?.NamedImports?.ImportsList ?? []).map((entry) => entry.ImportedBinding.name)];
+  });
+}
 
 export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
   return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
@@ -2824,6 +2839,7 @@ const moduleCheckInputs = new WeakMap<object, {
   builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
   namespaces?: ReadonlyMap<string, AbstractModuleRecord>,
   constructors?: ReadonlyMap<string, ImportedConstructorOrigin>,
+  referenceImports?: ReadonlySet<string>,
 }>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
@@ -3143,6 +3159,10 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
   // a re-export or a renamed export resolves through the same lookup.
   const exported = new Map<string, Known>(session.frame.bindings);
   moduleExportedTypes.set(module as unknown as object, exported);
+  // A local import may forward an exported reference before linking supplies
+  // its producer's binding kind. No referent is read to obtain this evidence.
+  moduleReferenceBindings.set(module, new Set([...NamedImportBindings(module),
+    ...[...session.frame.bindingKinds].filter(([, kind]) => kind.endsWith('-ref')).map(([name]) => name)]));
   // The TYPE declarations, which live in a different map. `bindings` holds what a
   // name's VALUE is typed as - `const x: uint8` puts `x` here - and `aliases`
   // holds what a name IS as a type, which is where `type P = ...`, a class, an
@@ -3207,9 +3227,9 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, namespaces?: ReadonlyMap<string, AbstractModuleRecord>, constructors?: ReadonlyMap<string, ImportedConstructorOrigin>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules, namespaces, constructors });
-  if (imported.size === 0 && !aliases?.size && !namespaces?.size && !constructors?.size) {
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, namespaces?: ReadonlyMap<string, AbstractModuleRecord>, constructors?: ReadonlyMap<string, ImportedConstructorOrigin>, referenceImports?: ReadonlySet<string>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules, namespaces, constructors, referenceImports });
+  if (imported.size === 0 && !aliases?.size && !namespaces?.size && !constructors?.size && referenceImports === undefined) {
     return [];
   }
   const session = CreateCheckSession();
@@ -3241,6 +3261,8 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   importedBuilderNodes = builders;
   try {
     const errors = checkCompletedDeclarations(module.ModuleBody?.ModuleItemList ?? null, module, session);
+    moduleReferenceBindings.set(module, new Set([...referenceImports ?? [],
+      ...[...session.frame.bindingKinds].filter(([, kind]) => kind.endsWith('-ref')).map(([name]) => name)]));
     // Recorded HERE and not only on the plain path: this pass has the module's
     // imports, so it is the one that can resolve a type built over one, and its
     // answer is the complete one.
@@ -3545,15 +3567,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || key === 'strict' || key === 'sourceText' ? false : containsCall(n[key], immediate)));
   };
 
-  const containsPropertyRead = (node: unknown): boolean => {
+  const containsPropertyRead = (node: unknown, immediate = false): boolean => {
     if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some(containsPropertyRead);
+    if (Array.isArray(node)) return node.some((child) => containsPropertyRead(child, immediate));
     const value = node as Record<string, unknown>;
     if (typeof value.type !== 'string') return false;
-    if (value.type === 'MemberExpression' || value.type === 'SuperProperty'
-      || value.type === 'MatchObjectPattern' || value.type === 'MatchArrayPattern') return true;
+    if (immediate && functionBoundary(node as ParseNode)) {
+      return ['ClassElementName', 'PropertyName', 'Decorators'].some((key) => containsPropertyRead(value[key], true));
+    }
+    if (value.type === 'MatchObjectPattern' || value.type === 'MatchArrayPattern') return true;
+    if ((value.type === 'MemberExpression' || value.type === 'SuperProperty'
+      || value.type === 'IdentifierReference' && referenceReadMayInvoke(node as ParseNode.IdentifierReference))
+      && !locationOnlyExpression(node as ParseNode)) return true;
     return Object.entries(value).some(([key, child]) => !['parent', 'location', 'strict', 'sourceText'].includes(key)
-      && containsPropertyRead(child));
+      && containsPropertyRead(child, immediate));
   };
 
   /** Drop the narrowing of the PLACE an assignment target names, if it names one. */
@@ -3595,7 +3622,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // and the call-site widening below cannot help: it fires when the walk
     // REACHES the call, and a read placed before it has already been typed.
     // `for (…) { n = v.x; clob(); }` is exactly that order.
-    if (containsCall(node, true)) {
+    if (containsCall(node, true) || containsPropertyRead(node, true)) {
       for (const name of capturedMutationNames()) {
         assigned.add(name);
       }
@@ -4120,7 +4147,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const node = patternExpression(source);
     if (node?.type === 'IdentifierReference') {
       const owner = flowOwner(node.name);
-      if (!owner.dynamicBindings && owner.declaredNames.has(node.name)) return [{ owner, name: node.name }];
+      if (!owner.dynamicBindings && owner.declaredNames.has(node.name) && !importedReferenceMayInvoke(owner, node.name)) return [{ owner, name: node.name }];
     }
     // A property getter can depend on a lexical cell or reference binding.
     // Its location alone proves no independence from a later lexical write.
@@ -4138,6 +4165,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (seen.some((prior) => sameReferenceTarget(prior, target))) return ['unknown'];
     return (referenceOrigins.get(target.owner)?.get(target.name) ?? ['unknown'])
       .flatMap((next) => referenceLeaves(next, through, [...seen, target]));
+  };
+  const importedNames = new Set(NamedImportBindings(root));
+  const importedReferenceMayInvoke = (owner: Frame, name: string): boolean => owner === sourceFrame && importedNames.has(name)
+    && (moduleCheckInputs.get(root)?.referenceImports?.has(name) ?? true);
+  const referenceNameMayInvoke = (name: string): boolean => {
+    const owner = flowOwner(name);
+    return importedReferenceMayInvoke(owner, name) || bindingKindOf(name)?.endsWith('-ref') === true
+      && referenceLeaves({ owner, name }).some((target) => target === 'unknown'
+        || importedReferenceMayInvoke(target.owner, target.name));
+  };
+  const referenceReadMayInvoke = (node: ParseNode.IdentifierReference): boolean => referenceNameMayInvoke(node.name);
+  // Only the selected location is forwarded. Evaluating its receiver or key
+  // still consumes values, including any references used in those positions.
+  const locationOnlyExpression = (node: ParseNode): boolean => {
+    let selected = node;
+    while (selected.parent?.type === 'ParenthesizedExpression') selected = selected.parent;
+    const parent = selected.parent;
+    if (!parent) return false;
+    if (parent.type === 'RefExpression' || parent.type === 'RefRebindingStatement') return parent.Expression === selected;
+    if ((parent.type === 'LexicalBinding' || parent.type === 'VariableDeclaration')
+      && (parent as { Ref?: boolean }).Ref) return parent.Initializer === selected;
+    if (parent.type === 'AssignmentExpression') return parent.AssignmentOperator === '=' && parent.LeftHandSideExpression === selected;
+    if (parent.type === 'UnaryExpression') return parent.operator === 'delete' && parent.UnaryExpression === selected;
+    return false;
   };
   const referenceFacts = (): { owner: Frame, name: string }[] => {
     const result: { owner: Frame, name: string }[] = [];
@@ -4240,7 +4291,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (frame.declaredNames.has(rootName) || frame.dynamicBindings
         || (frame.bindings.has(rootName) && !frame.narrowed?.has(rootName))) return frame;
     }
-    return frames[0];
+    // An unresolved import still owns a module cell. This establishes flow
+    // identity without inventing a local binding kind before linking.
+    return importedNames.has(rootName) ? sourceFrame : frames[0];
   };
   const independentDomains = (proofs: Map<Frame, Set<string>>): FlowFacts => {
     const domains: FlowFacts = new Map();
@@ -24527,7 +24580,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       switch (core.type) {
         case 'IdentifierReference': {
           const name = (e.name as string | undefined) ?? null;
-          if (!name || narrowableName(core) !== name) return null;
+          if (!name || narrowableName(core) !== name || referenceReadMayInvoke(core)) return null;
           places.add(name);
           return name;
         }
@@ -25210,7 +25263,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // require a binding or an established data slot, not an open shape alone.
   const dataValuePlace = (expression: ParseNode): boolean => {
     const node = unparenthesized(expression);
-    if (['IdentifierReference', 'TopicReference', 'ThisExpression'].includes(node.type)) return true;
+    if (node.type === 'IdentifierReference') return !referenceReadMayInvoke(node);
+    if (node.type === 'TopicReference' || node.type === 'ThisExpression') return true;
     if (node.type !== 'MemberExpression' || !dataValuePlace(node.MemberExpression)) return false;
     const type = staticType(node.MemberExpression);
     if (!type) return false;
@@ -25273,7 +25327,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const invalidateCapturedReads = (): void => {
     invalidateCapturedReferenceOrigins();
-    for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
+    for (const name of importedNames) invalidateNarrowing(name, false, sourceFrame);
+    for (const name of capturedMutationNames()) {
+      invalidateReferenceWrite(flowOwner(name), name);
+      invalidateNarrowing(name, true);
+    }
     for (const origin of capturedPlaces) {
       if ([...assignedInsideFunction].some((name) => capturedMutationMayAffect(name, origin.owner)
         && (origin.name === name || origin.name.startsWith(`${name}.`)))) {
@@ -25555,6 +25613,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const factFlow = (fact: NarrowingFact, sense: boolean): FlowFacts => {
     for (const entry of [fact, ...(fact.additional ?? [])]) {
+      const rootName = entry.name.split('.')[0];
+      if (referenceNameMayInvoke(rootName)) continue;
       const narrowed = branchTypes(entry)[sense ? 'whenTrue' : 'whenFalse'];
       recordScalarExclusion(entry, sense);
       if (entry.numericSelection !== undefined) recordCategories(entry.name, sense !== entry.negated ? entry.numericSelection : allCategories & ~entry.numericSelection);
@@ -25594,7 +25654,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
       invalidateCapturedAliases();
     }
-    if (node.type === 'MemberExpression' || node.type === 'SuperProperty') invalidateCapturedReads();
+    if (containsPropertyRead(node, true)) invalidateCapturedReads();
   };
 
   type CompletionTest = { deciding: boolean, truthiness: boolean, results: (TestFlow & { truth?: boolean })[] };
@@ -35411,7 +35471,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       invalidateCapturedReads();
       invalidateCapturedAliases();
     }
-    if (single?.type === 'MemberExpression' || single?.type === 'SuperProperty') invalidateCapturedReads();
+    if (single && !locationOnlyExpression(single)) {
+      if (single.type === 'MemberExpression' || single.type === 'SuperProperty') invalidateCapturedReads();
+      if (single.type === 'IdentifierReference' && referenceReadMayInvoke(single)) {
+        invalidateCapturedReads();
+        invalidateCapturedAliases();
+      }
+    }
     if (capturedPlaces.size && single?.type === 'AssignmentExpression' && !handledStoreEffects.has(single)) {
       const target = patternExpression(single.LeftHandSideExpression);
       if (target) assignmentStoreEffects(target);
@@ -36761,6 +36827,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         widenReferenceRebindings(n.Block);
         if (containsCall(n.Block)) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
+        if (containsPropertyRead(n.Block, true)) invalidateCapturedReads();
         const exceptional = captureFlow();
         const thrown = flowExits.filter((exit) => exit.kind === 'throw');
         if (handlers.some((clause) => !clause.TypeAnnotation)) flowExits = flowExits.filter((exit) => exit.kind !== 'throw');
@@ -36804,6 +36871,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           widenReferenceRebindings(n.Finally);
           if (containsCall(n.Finally)) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
+          if (containsPropertyRead(n.Finally, true)) invalidateCapturedReads();
           const result = captureFlow();
           // Only the finalizer's changes transfer to each incoming completion.
           // Its joined entry must not replace an unchanged normal predecessor
