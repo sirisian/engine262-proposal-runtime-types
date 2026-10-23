@@ -1,0 +1,2442 @@
+{
+  "cases": [
+    {
+      "name": "direct-local",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"reference\");x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "returned-nominal",
+      "modules": {
+        "main": "class E{}function first():ref E{let x:E=new E();return ref x;}let ref r=first();const y:E=r;if(!(y instanceof E))throw new Error(\"nominal\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 140,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 97,
+            "end": 111,
+            "nodeType": "RelationalExpression"
+          },
+          "arguments": [
+            "\"instanceof\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "undefined-referent",
+      "modules": {
+        "main": "let x;let ref r=x;if(r!==undefined||typeof r!==\"undefined\")throw new Error(\"undefined\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 88,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 36,
+            "end": 58,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"typeof \\\"undefined\\\"\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "let-ref-assign",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "let-ref-prefix",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");++x;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "let-ref-postfix",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");x++;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "let-ref-compound",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");x+=1;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-ref-assign",
+      "modules": {
+        "main": "let x=1;const ref r=x;if(r!==1)throw new Error(\"initial\");x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-ref-prefix",
+      "modules": {
+        "main": "let x=1;const ref r=x;if(r!==1)throw new Error(\"initial\");++x;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-ref-postfix",
+      "modules": {
+        "main": "let x=1;const ref r=x;if(r!==1)throw new Error(\"initial\");x++;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-ref-compound",
+      "modules": {
+        "main": "let x=1;const ref r=x;if(r!==1)throw new Error(\"initial\");x+=1;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "chain-write",
+      "modules": {
+        "main": "let x=1;let ref a=x;let ref r=a;if(r!==1)throw new Error(\"initial\");x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"initial\");ref r=y;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "chain-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;if(r!==1)throw new Error(\"initial\");ref a=y;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "write-through-alias",
+      "modules": {
+        "main": "let x=1;let ref r=x;let ref a=x;if(r!==1)throw new Error(\"initial\");a=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "update-through-alias",
+      "modules": {
+        "main": "let x=1;let ref r=x;let ref a=x;if(r!==1)throw new Error(\"initial\");a++;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-write",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");if((x=2,r!==2))throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "block-write",
+      "modules": {
+        "main": "let x=1;{let ref r=x;if(r!==1)throw new Error(\"initial\");x=2;if(r!==2)throw new Error(\"live\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-write",
+      "modules": {
+        "main": "function f(){let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");x=2;if(r!==2)throw new Error(\"live\");}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-cell-write",
+      "modules": {
+        "main": "let x:number=1;let ref r=x;if(r!==1)throw new Error(\"initial\");x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-no-first",
+      "modules": {
+        "main": "let x=1;let ref r=x;x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-value-query",
+      "modules": {
+        "main": "let x=1;let ref r=x;const initial=r!==1;x=2;if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-cell-write",
+      "modules": {
+        "main": "let x=1;if(x!==1)throw new Error(\"initial\");x=2;if(x!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "stable-repeat",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");if(r!==1)throw new Error(\"repeat\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 91,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 59,
+            "end": 64,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "unrelated-store",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");let y=0;y=2;if(r!==1)throw new Error(\"repeat\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 103,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 71,
+            "end": 76,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "shadowed-store",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"initial\");{let x=0;x=2;}if(r!==1)throw new Error(\"repeat\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 105,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 73,
+            "end": 78,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "undefined-no-first",
+      "modules": {
+        "main": "let x;let ref r=x;if(typeof r!==\"undefined\")throw new Error(\"undefined\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-query",
+      "modules": {
+        "main": "let x;let ref r=x;const answer=r!==undefined||typeof r!==\"undefined\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-after-store",
+      "modules": {
+        "main": "let x;let ref r=x;if(r!==undefined)throw new Error(\"initial\");x=\"s\";if(typeof r!==\"string\")throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-after-rebind",
+      "modules": {
+        "main": "let x,y=\"s\";let ref r=x;if(r!==undefined)throw new Error(\"initial\");ref r=y;if(typeof r!==\"string\")throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-query",
+      "modules": {
+        "main": "class E{}function first():ref E{let x:E=new E();return ref x;}let ref r=first();const y:E=r;const answer=!(y instanceof E);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-erased",
+      "modules": {
+        "main": "class E{}function first():ref E{let x:E=new E();return ref x;}let ref r=first();const y:any=r;if(!(y instanceof E))throw new Error(\"nominal\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-ordinary-copy",
+      "modules": {
+        "main": "class E{}const y:E=new E();if(!(y instanceof E))throw new Error(\"nominal\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 75,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 32,
+            "end": 46,
+            "nodeType": "RelationalExpression"
+          },
+          "arguments": [
+            "\"instanceof\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "nominal-union",
+      "modules": {
+        "main": "class E{}function f(y:E|null){if(y instanceof E)return true;return false;}f(new E());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-ref-does-not-call",
+      "modules": {
+        "main": "let reads=0;function change(){reads++;}let x=1;let ref r=x;if(reads!==0)throw new Error(\"initial\");const value=r;if(reads!==0)throw new Error(\"repeat\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 152,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 116,
+            "end": 125,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"0\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "imported-live",
+      "modules": {
+        "dep": "let x=1;export let ref r=x;export function set(){x=2;}",
+        "main": "import {r,set} from \"dep\";if(r!==1)throw new Error(\"initial\");set();if(r!==2)throw new Error(\"live\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "join-write",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");if(globalThis.choice)x=2;if(r===3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "join-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");if(globalThis.choice){ref r=y;}else{ref r=y;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "join-two-locations",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");if(globalThis.choice){ref r=y;}y=3;x=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-write",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");for(let i=0;i<1;i++){x=2;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-update",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");for(let i=0;i<1;i++){x++;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");for(let i=0;i<1;i++){ref r=y;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-reference-update",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");for(let i=0;i<1;i++){r++;}if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "do-write",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");do{x=2;}while(false);if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "do-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");do{ref r=y;}while(false);if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "break-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");while(true){ref r=y;break;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finally-write",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");try{}finally{x=2;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finally-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");try{}finally{ref r=y;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "catch-write",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");try{x=2;throw 0;}catch{}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "catch-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");try{ref r=y;throw 0;}catch{}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-reference",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");{let x=10;let ref a=x;a=20;}if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 121,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 90,
+            "end": 95,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "nested-declaration",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");function f(){ref r=y;}if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 115,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 84,
+            "end": 89,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "unreachable-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");if(false){ref r=y;}if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 112,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 81,
+            "end": 86,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "alias-store-preserves-other",
+      "modules": {
+        "main": "let x=1,y=1;let ref r=x;if(y!==1)throw new Error(\"before\");r=2;if(y!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 97,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 66,
+            "end": 71,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "alias-update-preserves-other",
+      "modules": {
+        "main": "let x=1,y=1;let ref r=x;if(y!==1)throw new Error(\"before\");r++;if(y!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 97,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 66,
+            "end": 71,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "rebind-preserves-old-cell",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(x!==1)throw new Error(\"before\");ref r=y;if(x!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 101,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 70,
+            "end": 75,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "rebind-preserves-other-alias",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;let ref a=x;if(a!==1)throw new Error(\"before\");ref r=y;if(a!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 113,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 82,
+            "end": 87,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "rebind-source-independent",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;ref r=y;if(r!==2)throw new Error(\"before\");x=3;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 105,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 74,
+            "end": 79,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"2\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "future-rebind-is-not-current",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");y=3;if(r!==1)throw new Error(\"after\");ref r=y;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 105,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 66,
+            "end": 71,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "rebind-before-fact",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;ref r=y;if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "chain-before-fact",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;ref a=y;if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "chain-captured-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;function move(){ref a=y;}move();if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-write",
+      "modules": {
+        "main": "let x=1;let ref r=x;function change(){x=2;}if(r!==1)throw new Error(\"before\");change();if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-shadow-control",
+      "modules": {
+        "main": "let x=1;let ref r=x;function f(){let x=2;x++;}if(r!==1)throw new Error(\"before\");f();if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "outer-alias-under-shadow",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");{let x=10;r=2;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "outer-cell-under-shadow",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(x!==1)throw new Error(\"before\");{let x=10;r=2;}if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "saved-predicate-write",
+      "modules": {
+        "main": "let x=1;let ref r=x;const b:boolean=r===1;x=2;if(b){if(r!==2)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "saved-copy-write",
+      "modules": {
+        "main": "let x=1;let ref r=x;const copy=r;if(copy===1){x=2;if(r!==2)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "saved-typeof-write",
+      "modules": {
+        "main": "let x=\"s\";let ref r=x;const tag:string=typeof r;x=2;if(tag===\"string\"){if(typeof r!==\"number\")throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-and",
+      "modules": {
+        "main": "let x=true;let ref r=x;if(r!==true)throw new Error(\"before\");x&&=false;if(r!==false)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-or",
+      "modules": {
+        "main": "let x=false;let ref r=x;if(r!==false)throw new Error(\"before\");x||=true;if(r!==true)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-nullish",
+      "modules": {
+        "main": "let x=null;let ref r=x;if(r!==null)throw new Error(\"before\");x??=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructure-array",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");[x]=[2];if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructure-object",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");({x}={x:2});if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-dependent-consumer",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");x=2;if(r!==2)throw new Error(\"after\");function f(){return s;}const s:number=1;const n:number=f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-store-alias",
+      "modules": {
+        "main": "let count=0;const o={set x(v){count=v;},get x(){return count;}};let ref r=o.x;if(count!==0)throw new Error(\"before\");r=2;if(count!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-alias-write",
+      "modules": {
+        "main": "function f(ref x,ref r){if(r!==1)throw new Error(\"before\");x=2;if(r!==2)throw new Error(\"after\");}let n=1;f(ref n,ref n);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-alias-update",
+      "modules": {
+        "main": "function f(ref x,ref r){if(r!==1)throw new Error(\"before\");x++;if(r!==2)throw new Error(\"after\");}let n=1;f(ref n,ref n);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-rebind-invocation",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;function f(){if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");}ref r=y;f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-does-not-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;function f(){ref r=y;}if(r!==1)throw new Error(\"before\");x=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "rebind-through-three",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref b=a;const ref r=b;if(r!==1)throw new Error(\"before\");ref a=y;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "chain-store-under-shadow",
+      "modules": {
+        "main": "let x=1;let ref a=x;let ref r=a;if(x!==1)throw new Error(\"before\");{let x=10;let a=20;r++;}if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "join-independent-alias",
+      "modules": {
+        "main": "let x=1,y=1,z=2;let ref r=x;let ref a=y;if(a!==1)throw new Error(\"before\");if(globalThis.choice){ref r=z;}else{ref r=x;}r=3;if(a!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 158,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 127,
+            "end": 132,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "join-alias-chain",
+      "modules": {
+        "main": "let x=1,y=1;let ref a=x;let ref r=a;if(globalThis.choice){ref a=y;}if(r!==1)throw new Error(\"before\");y=2;x=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "try-finally-return",
+      "modules": {
+        "main": "function f(){let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");try{return r;}finally{x=2;if(r!==2)throw new Error(\"after\");}}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finally-break",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");while(true){try{break;}finally{x=2;}}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finally-rebind-then-store",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;try{}finally{ref r=y;}if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finally-unrelated-rebinding",
+      "modules": {
+        "main": "let x=1,y=2,z=3;let ref r=x;let ref a=z;if(r!==1)throw new Error(\"before\");try{}finally{ref a=y;}if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 131,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 100,
+            "end": 105,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "catch-rebind-then-store",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;try{ref r=y;throw 0;}catch{}if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-continue",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");for(let i=0;i<1;i++){x=2;continue;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-backedge-read",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");let i=0;while(i<2){if(r===3)throw new Error(\"unexpected\");ref r=y;i++;}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-alias-write-head",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");for(let i=0;i<1;x=2,i++){}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "for-of-store",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");for(x of [2]){}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "for-of-alias-store",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(x!==1)throw new Error(\"before\");for(r of [2]){}if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "for-of-destructuring",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");for([x] of [[2]]){}if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructure-ref-target",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(x!==1)throw new Error(\"before\");[r]=[2];if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructure-shorthand-ref",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(x!==1)throw new Error(\"before\");({r}={r:2});if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructure-later-default",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");let y;[x,y=JSON.stringify(r)]=[2];if(JSON.stringify([r,y])!=='[2,\"2\"]')throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-skipped-preserves",
+      "modules": {
+        "main": "let x=false,y=1;let ref r=y;if(r!==1)throw new Error(\"before\");x&&=(y=2);if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-selected-store",
+      "modules": {
+        "main": "let x=true,y=1;let ref r=y;if(r!==1)throw new Error(\"before\");x&&=(y=2);if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compound-alias-result",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");const answer=(x+=1);if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-alias-target",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(x!==1)throw new Error(\"before\");(r)=2;if(x!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-binding-store",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");(x)=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "branch-abrupt-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;function f(flag){if(flag){ref r=y;return;}if(r!==1)throw new Error(\"before\");x=3;if(r!==3)throw new Error(\"after\");}f(false);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-position-before-later-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;if(r!==1)throw new Error(\"before\");x=3;if(r!==3)throw new Error(\"after\");ref a=y;function g(){return s;}const s:string=\"s\";const q:string=g();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-helper-replay",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(r!==1)throw new Error(\"before\");x=2;function g(){return s;}const s:string=\"s\";const q:string=g();if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cell-contract-remains",
+      "modules": {
+        "main": "let x:number=1;let ref r=x;x=2;r=\"s\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 37,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 33,
+            "end": 36,
+            "nodeType": "StringLiteral"
+          },
+          "arguments": [
+            "\"'s'\"",
+            "\"number\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "const-reference-rebind-refused",
+      "modules": {
+        "main": "let x=1,y=2;const ref r=x;ref r=y;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_REFERENCE_REBINDING",
+          "rule": "rt-reference-rebinding",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 34,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 26,
+            "end": 34,
+            "nodeType": "RefRebindingStatement"
+          },
+          "arguments": [
+            "\"r\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-reference-rebind-refused",
+      "modules": {
+        "main": "let x:number=1;let y:string=\"s\";let ref r=x;ref r=y;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 52,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 0,
+            "end": 52,
+            "nodeType": "Module"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"number\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reference-cycle",
+      "modules": {
+        "main": "let x=1;let ref a=x;let ref b=a;ref a=b;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-skipped-preserves",
+      "modules": {
+        "main": "let y=1;let ref r=y;if(r!==1)throw new Error(\"before\");false&&(y=2);if(r!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "rule": "rt-unreachable-operand",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 102,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 55,
+            "end": 67,
+            "nodeType": "LogicalANDExpression"
+          },
+          "arguments": [
+            "\"&&\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "captured-rebind-under-shadow",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;function move(){ref a=y;}{let a=0;move();if(r!==2)throw new Error(\"before\");y=3;if(r!==3)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;const o={get move(){ref a=y;return 0;}};if(r!==1)throw new Error(\"before\");o.move;if(r!==2)throw new Error(\"after\");y=3;if(r!==3)throw new Error(\"store\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;const o={set move(v){ref a=y;}};if(r!==1)throw new Error(\"before\");o.move=0;if(r!==2)throw new Error(\"after\");y=3;if(r!==3)throw new Error(\"store\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;class E{constructor(){ref a=y;}}if(r!==1)throw new Error(\"before\");new E();if(r!==2)throw new Error(\"after\");y=3;if(r!==3)throw new Error(\"store\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;let ref r=a;class E{value=do{ref a=y;0;};}if(r!==1)throw new Error(\"before\");new E();if(r!==2)throw new Error(\"after\");y=3;if(r!==3)throw new Error(\"store\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finalizer-preserves-normal-origin",
+      "modules": {
+        "main": "function f(flag){let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");try{if(flag){ref r=y;return;}}finally{}y=3;if(r!==1)throw new Error(\"after\");}f(false);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "checked",
+          "unit": {
+            "start": 0,
+            "end": 154,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 122,
+            "end": 127,
+            "nodeType": "EqualityExpression"
+          },
+          "arguments": [
+            "\"1\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "cycle-unrelated-store",
+      "modules": {
+        "main": "let x=1;let ref a=x;let ref b=a;ref a=b;x=2;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "long-alias-chain",
+      "modules": {
+        "main": "let x=1;let ref r0=x;let ref r1=r0;let ref r2=r1;let ref r3=r2;let ref r4=r3;let ref r5=r4;let ref r6=r5;let ref r7=r6;let ref r8=r7;let ref r9=r8;let ref r10=r9;let ref r11=r10;let ref r12=r11;let ref r13=r12;let ref r14=r13;let ref r15=r14;let ref r16=r15;let ref r17=r16;let ref r18=r17;let ref r19=r18;let ref r20=r19;let ref r21=r20;let ref r22=r21;let ref r23=r22;let ref r24=r23;let ref r25=r24;let ref r26=r25;let ref r27=r26;let ref r28=r27;let ref r29=r28;let ref r30=r29;let ref r31=r30;if(r31!==1)throw new Error(\"before\");x=2;if(r31!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "block-local-fact-on-outer-cell",
+      "modules": {
+        "main": "let x=1;let ref r=x;{if(x!==1)throw new Error(\"before\");r=2;if(x!==2)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "block-local-fact-on-outer-alias",
+      "modules": {
+        "main": "let x=1;let ref r=x;{if(r!==1)throw new Error(\"before\");x=2;if(r!==2)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-branch-fact-on-outer-cell",
+      "modules": {
+        "main": "let x=1;let ref r=x;if(globalThis.choice!==true){if(x!==1)throw new Error(\"before\");r=2;if(x!==2)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-store",
+      "modules": {
+        "main": "let x=1;const o={get value(){return x;}};let ref r=o.value;if(r!==1)throw new Error(\"before\");x=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-store-chain",
+      "modules": {
+        "main": "let x=1;const o={get value(){return x;}};let ref a0=o.value;let ref r=a0;if(r!==1)throw new Error(\"before\");x=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-update",
+      "modules": {
+        "main": "let x=1;const o={get value(){return x;}};let ref r=o.value;if(r!==1)throw new Error(\"before\");x++;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-update-chain",
+      "modules": {
+        "main": "let x=1;const o={get value(){return x;}};let ref a0=o.value;let ref r=a0;if(r!==1)throw new Error(\"before\");x++;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-alias-store",
+      "modules": {
+        "main": "let x=1;const o={get value(){return x;}};let ref r=o.value;if(r!==1)throw new Error(\"before\");let ref a=x;a=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-alias-store-chain",
+      "modules": {
+        "main": "let x=1;const o={get value(){return x;}};let ref a0=o.value;let ref r=a0;if(r!==1)throw new Error(\"before\");let ref a=x;a=2;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-rebind",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;const o={get value(){return a;}};let ref r=o.value;if(r!==1)throw new Error(\"before\");ref a=y;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "property-dependent-rebind-chain",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;const o={get value(){return a;}};let ref a0=o.value;let ref r=a0;if(r!==1)throw new Error(\"before\");ref a=y;if(r!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

@@ -3362,6 +3362,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * without a lexical assignment. This set supplies candidates for call effects.
    */
   const assignedInsideFunction = new Set<string>(lexicalMutations.exposedParameters);
+  const referenceRebindings: ParseNode.RefRebindingStatement[] = [];
   let functionDepth = 0;
 
   let hasDirectEval = false;
@@ -3422,6 +3423,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ?? (target.Expression?.type === 'StringLiteral' ? target.Expression.value : undefined);
         if (key !== undefined) assignedGlobalProperties.add(key);
       }
+    } else if (n.type === 'RefRebindingStatement') {
+      referenceRebindings.push(node as ParseNode.RefRebindingStatement);
     } else if (n.type === 'UpdateExpression') {
       targetName(n.LeftHandSideExpression ?? n.UnaryExpression);
     } else if (n.type === 'ForInStatement' || n.type === 'ForOfStatement' || n.type === 'ForAwaitStatement') {
@@ -3601,7 +3604,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // entry, independently of an unfinished first-iteration value.
     for (const name of assigned) {
       invalidateNarrowing(name, true);
+      if (!name.includes('.')) invalidateReferenceWrite(flowOwner(name), name);
     }
+    widenReferenceRebindings(node as ParseNode);
   };
 
   // ---- speculation and the contextual-type journals -----------------
@@ -4021,7 +4026,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Drop any narrowing of a name, which an assignment to it invalidates. */
-  const invalidateNarrowing = (name: string, completedWidening = false) => {
+  const invalidateNarrowing = (name: string, completedWidening = false, owner?: Frame) => {
     typeRevision += 1;
     // A PREFIX SWEEP, not an exact match: a narrowing is keyed by place, so
     // assigning `b` unseats `b.a` and `b.a.c` with it. Assigning `b.a.c` leaves
@@ -4030,6 +4035,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const prefix = `${name}.`;
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const f = frames[i] as Frame & { narrowed?: Set<string> };
+      if (owner && flowOwner(name, i) !== owner) continue;
       for (const key of independentFlowFacts.get(f) ?? []) {
         if (key === name || key.startsWith(prefix)) independentFlowFacts.get(f)!.delete(key);
       }
@@ -4056,18 +4062,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // domain without waiting for the value or test it invalidates.
       // Keep that domain explicit on this edge; removing a fact alone would
       // let a saved pre-effect domain stand in for it at the test boundary.
-      const owner = flowOwner(name);
-      const type = owner.bindings.get(name);
+      const destination = owner ?? flowOwner(name);
+      const type = destination.bindings.get(name);
       const portable = (candidate: TypeRecord): boolean => candidate.Kind === 'primitive'
         && candidate.Name !== 'symbol' && candidate.Arguments.length === 0
         || candidate.Kind === 'union' && candidate.Members.every(portable);
-      const binding = preparedBindings.get(owner)?.get(name);
-      if (!name.includes('.') && type && portable(type) && owner.declaredNames.has(name)
-        && !owner.unresolvedAnnotations.has(name) && !owner.bindingKinds.get(name)?.endsWith('-ref')
-        && !uninitializedVars.get(owner)?.has(name) && (!binding || bindingReady(binding))) {
+      const binding = preparedBindings.get(destination)?.get(name);
+      if (destination === flowOwner(name) && !name.includes('.') && type && portable(type) && destination.declaredNames.has(name)
+        && !destination.unresolvedAnnotations.has(name) && !destination.bindingKinds.get(name)?.endsWith('-ref')
+        && !uninitializedVars.get(destination)?.has(name) && (!binding || bindingReady(binding))) {
         declareNarrowed(name, type);
-        if (!independentFlowFacts.has(owner)) independentFlowFacts.set(owner, new Set());
-        independentFlowFacts.get(owner)!.add(name);
+        if (!independentFlowFacts.has(destination)) independentFlowFacts.set(destination, new Set());
+        independentFlowFacts.get(destination)!.add(name);
       }
     }
   };
@@ -4076,6 +4082,133 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // block-local `x` must never replace a fact about an outer `x` at a join.
   const metadataFlowInputs = new WeakMap<TypeRecord, readonly NarrowingInput[]>();
   type FlowFacts = Map<Frame, Map<string, TypeRecord>>;
+  // A lexical reference retains an edge to the binding cell, including when
+  // that cell is itself a rebindable reference. Keep locations separate from
+  // value facts: an ordinary store changes values, not these edges.
+  type ReferenceTarget = { owner: Frame, name: string } | 'unknown';
+  type ReferenceOrigins = Map<Frame, Map<string, readonly ReferenceTarget[]>>;
+  let referenceOrigins: ReferenceOrigins = new Map();
+  const referenceOriginsOf = new WeakMap<FlowFacts, ReferenceOrigins>();
+  const copyReferenceOrigins = (origins: ReferenceOrigins): ReferenceOrigins => new Map([...origins]
+    .map(([owner, bindings]) => [owner, new Map(bindings)]));
+  const sameReferenceTarget = (a: ReferenceTarget, b: ReferenceTarget): boolean => a === b
+    || typeof a === 'object' && typeof b === 'object' && a.owner === b.owner && a.name === b.name;
+  const sameReferenceOrigins = (a: ReferenceOrigins, b: ReferenceOrigins): boolean => a.size === b.size
+    && [...a].every(([owner, bindings]) => {
+      const other = b.get(owner);
+      return other?.size === bindings.size && [...bindings].every(([name, targets]) => {
+        const alternatives = other.get(name);
+        return alternatives?.length === targets.length
+          && targets.every((target) => alternatives.some((candidate) => sameReferenceTarget(target, candidate)));
+      });
+    });
+  const joinReferenceOrigins = (edges: readonly FlowFacts[]): ReferenceOrigins => {
+    const states = edges.map((edge) => referenceOriginsOf.get(edge) ?? new Map());
+    const result: ReferenceOrigins = new Map();
+    for (const state of states) for (const [owner, bindings] of state) for (const name of bindings.keys()) {
+      if (!result.has(owner)) result.set(owner, new Map());
+      if (result.get(owner)!.has(name)) continue;
+      const targets: ReferenceTarget[] = [];
+      for (const incoming of states) for (const target of incoming.get(owner)?.get(name) ?? ['unknown']) {
+        if (!targets.some((existing) => sameReferenceTarget(existing, target))) targets.push(target);
+      }
+      result.get(owner)!.set(name, targets);
+    }
+    return result;
+  };
+  const referenceSource = (source: ParseNode): readonly ReferenceTarget[] => {
+    const node = patternExpression(source);
+    if (node?.type === 'IdentifierReference') {
+      const owner = flowOwner(node.name);
+      if (!owner.dynamicBindings && owner.declaredNames.has(node.name)) return [{ owner, name: node.name }];
+    }
+    // A property getter can depend on a lexical cell or reference binding.
+    // Its location alone proves no independence from a later lexical write.
+    return ['unknown'];
+  };
+  const setReferenceOrigin = (owner: Frame, name: string, targets: readonly ReferenceTarget[]): void => {
+    if (!referenceOrigins.has(owner)) referenceOrigins.set(owner, new Map());
+    referenceOrigins.get(owner)!.set(name, targets);
+  };
+  const referenceLeaves = (target: ReferenceTarget, through?: { owner: Frame, name: string },
+    seen: ReferenceTarget[] = []): readonly ReferenceTarget[] => {
+    if (typeof target !== 'object') return [target];
+    if (through && sameReferenceTarget(target, through)) return [through];
+    if (!target.owner.bindingKinds.get(target.name)?.endsWith('-ref')) return [target];
+    if (seen.some((prior) => sameReferenceTarget(prior, target))) return ['unknown'];
+    return (referenceOrigins.get(target.owner)?.get(target.name) ?? ['unknown'])
+      .flatMap((next) => referenceLeaves(next, through, [...seen, target]));
+  };
+  const referenceFacts = (): { owner: Frame, name: string }[] => {
+    const result: { owner: Frame, name: string }[] = [];
+    for (const owner of frames) for (const [name, kind] of owner.bindingKinds) {
+      if (kind.endsWith('-ref')) result.push({ owner, name });
+    }
+    return result;
+  };
+  const invalidateReferenceWrite = (owner: Frame, name: string): void => {
+    const aliases = referenceFacts();
+    const reference = owner.bindingKinds.get(name)?.endsWith('-ref');
+    if (!reference && !aliases.length) return;
+    const destinations = referenceLeaves({ owner, name });
+    if (destinations.some((target) => typeof target === 'string')) {
+      // An unresolved reference can reach any cell. Clear value facts without
+      // forgetting the independently established reference-binding edges.
+      invalidateCapturedReferenceOrigins();
+      const cleared: FlowFacts = new Map();
+      referenceOriginsOf.set(cleared, copyReferenceOrigins(referenceOrigins));
+      for (const inputs of independentTestInputs) inputs.clear();
+      restoreFlow(cleared);
+      return;
+    }
+    if (reference) for (const target of destinations) {
+      if (typeof target === 'object') invalidateNarrowing(target.name, false, target.owner);
+    }
+    for (const alias of aliases) {
+      if (referenceLeaves(alias).some((target) => target === 'unknown'
+        || destinations.some((destination) => sameReferenceTarget(destination, target)))) {
+        invalidateNarrowing(alias.name, false, alias.owner);
+      }
+    }
+  };
+  const invalidateReferenceRebinding = (owner: Frame, name: string): void => {
+    const rebound = { owner, name };
+    for (const alias of referenceFacts()) {
+      if (referenceLeaves(alias, rebound).some((target) => target === 'unknown' || sameReferenceTarget(target, rebound))) {
+        invalidateNarrowing(alias.name, false, alias.owner);
+      }
+    }
+  };
+  const reboundPlace = (node: ParseNode.RefRebindingStatement): { owner: Frame, name: string } | undefined => {
+    const name = node.BindingIdentifier.name;
+    const declaration = ResolveBindingDeclaration(node, name)?.node;
+    if (!declaration) return undefined;
+    for (const owner of frames) {
+      const site = bindingSites.get(owner)?.get(name);
+      if (site && ResolveBindingDeclaration(site, name)?.node === declaration) return { owner, name };
+    }
+    return undefined;
+  };
+  const widenReferenceRebindings = (node: ParseNode | null | undefined): void => {
+    if (!node) return;
+    const visit = (part: ParseNode): void => {
+      if (functionBoundary(part)) return;
+      if (part.type === 'RefRebindingStatement') {
+        const place = reboundPlace(part);
+        if (place) {
+          invalidateReferenceRebinding(place.owner, place.name);
+          setReferenceOrigin(place.owner, place.name, ['unknown']);
+        }
+      }
+      for (const [key, child] of Object.entries(part)) {
+        if (['parent', 'location', 'sourceText', 'strict'].includes(key)) continue;
+        for (const value of Array.isArray(child) ? child : [child]) {
+          if (value && typeof value === 'object' && typeof value.type === 'string') visit(value);
+        }
+      }
+    };
+    visit(node);
+  };
   // A transfer evaluated with an unavailable inference input is not a final
   // proof. Completing the input alone does not recompute that transfer.
   const incompleteFlows = new WeakSet<FlowFacts>();
@@ -4129,6 +4262,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const captureFlow = (): FlowFacts => {
     const result: FlowFacts = new Map();
+    referenceOriginsOf.set(result, copyReferenceOrigins(referenceOrigins));
     frames.forEach((frame, index) => {
       for (const name of frame.narrowed ?? []) {
         const type = frame.bindings.get(name);
@@ -4148,6 +4282,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const restoreFlow = (facts: FlowFacts = new Map()): void => {
     const current = captureFlow();
+    const locationsChanged = !sameReferenceOrigins(referenceOrigins, referenceOriginsOf.get(facts) ?? new Map());
+    referenceOrigins = copyReferenceOrigins(referenceOriginsOf.get(facts) ?? new Map());
     flowNeedsReplay = incompleteFlows.has(facts);
     pendingTestEdges = new Set(pendingTestEdgesOf.get(facts));
     independentFlowFacts = new Map([...(independentFactsOf.get(facts) ?? [])].map(([owner, names]) => [owner, new Set(names)]));
@@ -4155,7 +4291,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (current.size === active.length && active.every(([frame, entries]) => {
       const existing = current.get(frame);
       return existing?.size === entries.size && [...entries].every(([name, type]) => existing.get(name) === type);
-    })) return;
+    })) {
+      if (locationsChanged) typeRevision += 1;
+      return;
+    }
     typeRevision += 1;
     for (const frame of frames) {
       for (const name of frame.narrowed ?? []) {
@@ -4182,6 +4321,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const live = incoming.filter((facts): facts is FlowFacts => facts !== undefined);
     if (!live.length) return undefined;
     const joined: FlowFacts = new Map();
+    referenceOriginsOf.set(joined, joinReferenceOrigins(live));
     // Different unfinished stores require the incoming-edge transfer as well
     // as a completed source contract. Do not join their placeholders as any.
     for (const facts of live) for (const [owner, entries] of facts) for (const [name, type] of entries) {
@@ -25110,7 +25250,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     origins.forEach((origin) => capturedPlaces.delete(origin));
     return outgoing;
   };
+  const invalidateCapturedReferenceOrigins = (): void => {
+    for (const rebinding of referenceRebindings) {
+      const place = reboundPlace(rebinding);
+      if (!place) continue;
+      const site = bindingSites.get(place.owner)!.get(place.name);
+      let instanceInitializer = false;
+      for (let ancestor = rebinding.parent; ancestor && ancestor !== site; ancestor = ancestor.parent) {
+        if (ancestor.type === 'FieldDefinition' && !ancestor.static) instanceInitializer = true;
+      }
+      if (instanceInitializer || ReferenceFunction(rebinding) !== ReferenceFunction(site)) {
+        invalidateReferenceRebinding(place.owner, place.name);
+        setReferenceOrigin(place.owner, place.name, ['unknown']);
+      }
+    }
+    if (hasDirectEval) for (const { owner, name } of referenceFacts()) {
+      if (owner.bindingKinds.get(name) === 'mutable-ref') {
+        invalidateReferenceRebinding(owner, name);
+        setReferenceOrigin(owner, name, ['unknown']);
+      }
+    }
+  };
   const invalidateCapturedReads = (): void => {
+    invalidateCapturedReferenceOrigins();
     for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
     for (const origin of capturedPlaces) {
       if ([...assignedInsideFunction].some((name) => capturedMutationMayAffect(name, origin.owner)
@@ -25120,6 +25282,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
   const invalidateCapturedAliases = (): void => {
+    invalidateCapturedReferenceOrigins();
     for (const [owner, entries] of captureFlow()) {
       for (const key of entries.keys()) {
         const name = key.split('.\u0000')[0];
@@ -25422,7 +25585,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Type queries use the same edge algebra without executing the checker
   // walk recursively. Effects may widen facts; queries never publish them.
   const previewFlowEffects = (node: ParseNode): void => {
-    for (const name of flowWrites(node)) invalidateNarrowing(name);
+    for (const name of flowWrites(node)) {
+      invalidateNarrowing(name);
+      if (!name.includes('.')) invalidateReferenceWrite(flowOwner(name), name);
+    }
+    widenReferenceRebindings(node);
     if (containsCall(node)) {
       for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
       invalidateCapturedAliases();
@@ -25754,6 +25921,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Selected, failed and fallthrough edges have different provenance even
     // when their current value facts happen to be identical.
     const edge = new Map([...facts].map(([owner, entries]) => [owner, new Map(entries)]));
+    referenceOriginsOf.set(edge, copyReferenceOrigins(referenceOriginsOf.get(facts) ?? new Map()));
     incompleteFlows.add(edge);
     const independent = independentFactsOf.get(facts);
     const domains = independentDomainsOf.get(facts);
@@ -25810,6 +25978,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Equal fact maps do not identify an unfinished test's alternatives.
       // Their bodies can later establish different independent domains.
       const other = new Map([...result.whenTrue].map(([owner, entries]) => [owner, new Map(entries)]));
+      referenceOriginsOf.set(other, copyReferenceOrigins(referenceOriginsOf.get(result.whenTrue) ?? new Map()));
       pendingTestEdgesOf.set(other, new Set(pendingTestEdgesOf.get(result.whenTrue)));
       result = { whenTrue: result.whenTrue, whenFalse: other };
     }
@@ -26232,11 +26401,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const assignmentStoreEffects = (target: ParseNode): void => {
     invalidatePlace(target);
     const kind = target.type === 'IdentifierReference' ? bindingKindOf(target.name) : undefined;
+    if (target.type === 'IdentifierReference') invalidateReferenceWrite(flowOwner(target.name), target.name);
     if (kind === 'mutable-ref' || kind === 'immutable-ref' || target.type === 'CallExpression') {
       // An unresolved reference destination can alias a different named place.
       // A result about its old value is not a fact about the overwritten value.
-      restoreFlow(new Map());
+      if (target.type === 'CallExpression') {
+        const cleared: FlowFacts = new Map();
+        referenceOriginsOf.set(cleared, copyReferenceOrigins(referenceOrigins));
+        for (const inputs of independentTestInputs) inputs.clear();
+        restoreFlow(cleared);
+      }
+      if (target.type === 'IdentifierReference'
+        && locationWriteTypes(target).some((type) => type.Kind === 'parameterized' || conversionHasEffect(type))) {
+        invalidateCapturedReads();
+        invalidateCapturedAliases();
+      }
     } else if (target.type !== 'IdentifierReference') {
+      invalidateCapturedReferenceOrigins();
       for (const [owner, entries] of captureFlow()) {
         for (const name of entries.keys()) {
           if ((name.includes('.') && !name.includes('\u0000')) || owner.bindingKinds.get(name)?.endsWith('-ref')) invalidateNarrowing(name);
@@ -31365,10 +31546,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (node.Initializer) {
         requireAssignable(staticTypeIn(node.Initializer, wanted), wanted);
       }
-      if (target.type === 'IdentifierReference') {
-        invalidateNarrowing(target.name);
-      }
       walk(target);
+      assignmentStoreEffects(target);
     }
   };
 
@@ -31726,6 +31905,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const outerFlow = captureFlow();
     const outerLive = flowLive;
     const outerExits = flowExits;
+    // A captured reference may have been rebound before this invocation.
+    // Its declaration-time location is not an input to the function body.
+    referenceOrigins = new Map();
     flowLive = true;
     flowExits = [];
     frames.push(emptyFrame());
@@ -36573,7 +36755,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Expressions and cleanup can throw before or after a write. Handler
         // entry cannot assume a particular explicit throw was the only source.
         restoreFlow(entry);
-        for (const name of flowWrites(n.Block)) invalidateNarrowing(name);
+        for (const name of flowWrites(n.Block)) {
+          invalidateNarrowing(name);
+          if (!name.includes('.')) invalidateReferenceWrite(flowOwner(name), name);
+        }
+        widenReferenceRebindings(n.Block);
         if (containsCall(n.Block)) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         const exceptional = captureFlow();
         const thrown = flowExits.filter((exit) => exit.kind === 'throw');
@@ -36612,9 +36798,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const transfer = (facts: FlowFacts): FlowFacts | undefined => {
           if (!finalNormal) return undefined;
           restoreFlow(facts);
-          for (const name of flowWrites(n.Finally)) invalidateNarrowing(name);
+          for (const name of flowWrites(n.Finally)) {
+            invalidateNarrowing(name);
+            if (!name.includes('.')) invalidateReferenceWrite(flowOwner(name), name);
+          }
+          widenReferenceRebindings(n.Finally);
           if (containsCall(n.Finally)) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
           const result = captureFlow();
+          // Only the finalizer's changes transfer to each incoming completion.
+          // Its joined entry must not replace an unchanged normal predecessor
+          // with locations belonging solely to a returning or throwing path.
+          const locations = referenceOriginsOf.get(result)!;
+          const beforeLocations = referenceOriginsOf.get(all);
+          for (const [owner, bindings] of referenceOriginsOf.get(finalNormal) ?? []) for (const [name, after] of bindings) {
+            const before = beforeLocations?.get(owner)?.get(name) ?? ['unknown'];
+            if (before.length === after.length && before.every((target) => after.some((other) => sameReferenceTarget(target, other)))) continue;
+            if (!locations.has(owner)) locations.set(owner, new Map());
+            locations.get(owner)!.set(name, after);
+          }
           for (const [owner, entries] of finalNormal) {
             if (!result.has(owner)) result.set(owner, new Map());
             for (const [name, type] of entries) {
@@ -37143,6 +37344,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               predicate = walkTest(n.Initializer, false, false);
               resumeFlow(joinFlow([predicate.whenTrue, predicate.whenFalse]));
             } else walk(n.Initializer);
+            if ((n as { Ref?: boolean }).Ref) {
+              setReferenceOrigin(bindingFrame, n.BindingIdentifier.name, referenceSource(n.Initializer));
+            }
           }
           // A `const` bound to a compile-time numeric constant behaves as if
           // its initializer were written at each use: `const K = 3.14` used in
@@ -37330,6 +37534,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           errors.push(completion.Value as ObjectValue);
         }
         walk(rb.Expression);
+        if (name && rb.Expression) {
+          const owner = flowOwner(name);
+          invalidateReferenceRebinding(owner, name);
+          setReferenceOrigin(owner, name, referenceSource(rb.Expression));
+        }
         return;
       }
       // Deletion has its own storage judgment: read bounds would reject the
@@ -37998,7 +38207,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // does, so facts about its previous value no longer apply.
         let updated = operand;
         while (updated?.type === 'ParenthesizedExpression') updated = updated.Expression;
-        invalidatePlace(updated);
+        if (updated) assignmentStoreEffects(updated);
         return;
       }
       case 'AssignmentExpression': {
