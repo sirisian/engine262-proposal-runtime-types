@@ -439,10 +439,16 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // one side, and consulting it here for `keyof T` against `keyof T` let it
       // DECIDE: its other side is `K`, not `keyof T`, so the pair said no. Two
       // references to one parameter relate whatever the assumptions say.
-      if (s.Name === t.Name && (s.Arity ?? 0) === (t.Arity ?? 0)) {
+      // Distinct producer captures cannot collapse in a result join just
+      // because both generic declarations spell their parameter T.
+      const sameCapturedDeclaration = !s.CapturedDeclaration || !t.CapturedDeclaration
+        || s.CapturedDeclaration === t.CapturedDeclaration;
+      if (sameCapturedDeclaration && s.Name === t.Name && (s.Arity ?? 0) === (t.Arity ?? 0)) {
         return true;
       }
-      const pairs = assumptions.filter((a) => a.First.Kind === 'parameter' && a.Second.Kind === 'parameter');
+      const pairs = assumptions.filter((a) => a.First.Kind === 'parameter' && a.Second.Kind === 'parameter'
+        && (!s.CapturedDeclaration || a.First.CapturedDeclaration === s.CapturedDeclaration)
+        && (!t.CapturedDeclaration || a.Second.CapturedDeclaration === t.CapturedDeclaration));
       if (pairs.some((a) => (a.First as typeof s).Name === s.Name || (a.Second as typeof t).Name === t.Name)) {
         return pairs.some((a) => (a.First as typeof s).Name === s.Name && (a.Second as typeof t).Name === t.Name
           && ((a.First as typeof s).Arity ?? 0) === (s.Arity ?? 0) && ((a.Second as typeof t).Arity ?? 0) === (t.Arity ?? 0));

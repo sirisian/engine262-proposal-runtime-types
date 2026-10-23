@@ -628,6 +628,8 @@ export type TypeRecord =
    */
   | {
     readonly Kind: 'parameter', readonly Name: string, readonly Constraint?: TypeRecord,
+    /** A free parameter retained by a producer-owned constructor selection. */
+    readonly CapturedDeclaration?: ParseNode.TypeParameter,
     /**
      * proposal-runtime-types #sec-higher-kinded-parameters: the count of `_`
      * holes the parameter declared. 0 stands for a type; n > 0 stands for a
@@ -2214,7 +2216,10 @@ const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known
     seen.set(type, shell);
     const result = substituteTypeParametersUncached(type, bindings, walk, root, captures);
     if (result !== type && result?.Kind === type.Kind && type.Kind !== 'deferred'
-      && (type.Kind !== 'parameter' || !bindings.has(type.Name))) {
+      && (type.Kind !== 'parameter' || !(type.CapturedDeclaration
+        ? captures.byDeclaration?.has(type.CapturedDeclaration)
+          || captures.declarations?.includes(type.CapturedDeclaration) && captures.bindings.has(type.Name)
+        : bindings.has(type.Name)))) {
       Object.assign(shell, result);
       return shell;
     }
@@ -2231,7 +2236,10 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
   }
   if (t.Kind === 'family-pattern') return { ...t, Template: walk(t.Template) as TypeRecord };
   if (t.Kind === 'parameter') {
-    const bound = bindings.get(t.Name);
+    const bound = t.CapturedDeclaration
+      ? captures.byDeclaration?.get(t.CapturedDeclaration)
+        ?? (captures.declarations?.includes(t.CapturedDeclaration) ? captures.bindings.get(t.Name) : undefined)
+      : bindings.get(t.Name);
     if (bound) return bound;
     const Constraint = t.Constraint ? walk(t.Constraint)! : t.Constraint;
     return Constraint === t.Constraint ? t : { ...t, Constraint };

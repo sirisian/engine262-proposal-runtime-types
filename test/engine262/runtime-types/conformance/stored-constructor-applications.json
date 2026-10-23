@@ -1,0 +1,2721 @@
+{
+  "cases": [
+    {
+      "name": "local-field-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:string=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-field-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:boolean=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-method-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-method-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-argument-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;new Selected(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-static-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:string=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-static-result-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:boolean=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-static-argument-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;Selected.id(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-heritage-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;class D extends Selected{}const result:string=new D(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-heritage-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;class D extends Selected{}const result:boolean=new D(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-erased-runtime",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "local-mutable-runtime",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "local-copy-field-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const result:string=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-copy-field-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const result:boolean=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-copy-method-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-copy-method-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-copy-argument-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);new Selected(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-copy-static-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const result:string=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-copy-static-result-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const result:boolean=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-copy-static-argument-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);Selected.id(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-copy-heritage-compatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);class D extends Selected{}const result:string=new D(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-copy-heritage-incompatible",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);class D extends Selected{}const result:boolean=new D(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-copy-erased-runtime",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "local-copy-mutable-runtime",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "class-expression-field-compatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const result:string=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-field-incompatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const result:boolean=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-method-compatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-method-incompatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-argument-incompatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;new Selected(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-static-compatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const result:string=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-static-result-incompatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const result:boolean=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-static-argument-incompatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;Selected.id(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-heritage-compatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;class D extends Selected{}const result:string=new D(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-heritage-incompatible",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;class D extends Selected{}const result:boolean=new D(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-erased-runtime",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "class-expression-mutable-runtime",
+      "modules": {
+        "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "named-field-compatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const result:string=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-field-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const result:boolean=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-method-compatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const result:string=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-method-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const result:boolean=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-argument-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";new Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-static-compatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const result:string=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-static-result-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const result:boolean=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-static-argument-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-heritage-compatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";class D extends Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-heritage-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"dep\";class D extends Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-erased-runtime",
+      "modules": {
+        "main": "import {Selected} from \"dep\";const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "named-mutable-runtime",
+      "modules": {
+        "main": "import {Selected} from \"dep\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-field-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-field-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-method-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-method-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-static-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=ns.Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-static-result-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns.Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-static-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";ns.Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-heritage-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-heritage-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-erased-runtime",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Hidden:any=ns.Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-mutable-runtime",
+      "modules": {
+        "main": "import * as ns from \"dep\";let Hidden=ns.Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-copy-field-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const result:string=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-copy-field-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const result:boolean=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-copy-method-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const result:string=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-copy-method-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const result:boolean=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-copy-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;new Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-copy-static-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const result:string=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-copy-static-result-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const result:boolean=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-copy-static-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-copy-heritage-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;class D extends Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-copy-heritage-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;class D extends Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-copy-erased-runtime",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-copy-mutable-runtime",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Selected=ns.Selected;let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-field-compatible",
+      "modules": {
+        "main": "import Selected from \"dep\";const result:string=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-field-incompatible",
+      "modules": {
+        "main": "import Selected from \"dep\";const result:boolean=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-method-compatible",
+      "modules": {
+        "main": "import Selected from \"dep\";const result:string=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-method-incompatible",
+      "modules": {
+        "main": "import Selected from \"dep\";const result:boolean=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-argument-incompatible",
+      "modules": {
+        "main": "import Selected from \"dep\";new Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-static-compatible",
+      "modules": {
+        "main": "import Selected from \"dep\";const result:string=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-static-result-incompatible",
+      "modules": {
+        "main": "import Selected from \"dep\";const result:boolean=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-static-argument-incompatible",
+      "modules": {
+        "main": "import Selected from \"dep\";Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-heritage-compatible",
+      "modules": {
+        "main": "import Selected from \"dep\";class D extends Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-heritage-incompatible",
+      "modules": {
+        "main": "import Selected from \"dep\";class D extends Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-erased-runtime",
+      "modules": {
+        "main": "import Selected from \"dep\";const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-mutable-runtime",
+      "modules": {
+        "main": "import Selected from \"dep\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-namespace-field-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-namespace-field-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-namespace-method-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-namespace-method-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-namespace-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.default(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-namespace-static-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=ns.default.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-namespace-static-result-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns.default.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-namespace-static-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";ns.default.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-namespace-heritage-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.default{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-namespace-heritage-incompatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.default{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-namespace-erased-runtime",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Hidden:any=ns.default;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-namespace-mutable-runtime",
+      "modules": {
+        "main": "import * as ns from \"dep\";let Hidden=ns.default;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reexport-field-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:string=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-field-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:boolean=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-method-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:string=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-method-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:boolean=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-argument-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";new Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-static-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:string=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-static-result-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:boolean=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-static-argument-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-heritage-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";class D extends Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-heritage-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";class D extends Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-erased-runtime",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reexport-mutable-runtime",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
+        "bridge": "export {Original as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-reexport-field-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:string=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-reexport-field-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:boolean=new Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-method-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:string=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-reexport-method-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:boolean=new Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-argument-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";new Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-static-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:string=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-reexport-static-result-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const result:boolean=Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-static-argument-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-heritage-compatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";class D extends Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-reexport-heritage-incompatible",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";class D extends Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-erased-runtime",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";const Hidden:any=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-reexport-mutable-runtime",
+      "modules": {
+        "main": "import {Selected} from \"bridge\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
+        "bridge": "export {default as Selected} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-namespace-field-compatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const result:string=new ns.nested.Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-namespace-field-incompatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const result:boolean=new ns.nested.Selected(\"ok\").value;",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-namespace-method-compatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const result:string=new ns.nested.Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-namespace-method-incompatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const result:boolean=new ns.nested.Selected(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-namespace-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";new ns.nested.Selected(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-namespace-static-compatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const result:string=ns.nested.Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-namespace-static-result-incompatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const result:boolean=ns.nested.Selected.id(\"ok\");",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-namespace-static-argument-incompatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";ns.nested.Selected.id(true);",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-namespace-heritage-compatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";class D extends ns.nested.Selected{}const result:string=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-namespace-heritage-incompatible",
+      "modules": {
+        "main": "import * as ns from \"bridge\";class D extends ns.nested.Selected{}const result:boolean=new D(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-namespace-erased-runtime",
+      "modules": {
+        "main": "import * as ns from \"bridge\";const Hidden:any=ns.nested.Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-namespace-mutable-runtime",
+      "modules": {
+        "main": "import * as ns from \"bridge\";let Hidden=ns.nested.Selected;const result:boolean=new Hidden(\"ok\").get();",
+        "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
+        "bridge": "export * as nested from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "selection-omitted-string",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selection-omitted-boolean",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "selection-explicit-string",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selection-explicit-boolean",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "selection-named-string",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<U:string,T:boolean>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selection-named-boolean",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<U:string,T:boolean>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "selection-spread-string",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<...[boolean,string]>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selection-spread-boolean",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<...[boolean,string]>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "selection-local-type-string",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<Source>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selection-local-type-boolean",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<Source>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "selection-dependent-default-string",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:string=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selection-dependent-default-boolean",
+      "modules": {
+        "main": "type Source=string;class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-shadow-compatible",
+      "modules": {
+        "main": "function make<T:type>(){class P<V:type>{}const Alias=P.<T>;function f<T:type>(value:T){return new Alias();}return f;}make.<uint8>().<string>(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-identity-extraction",
+      "modules": {
+        "main": "function make<T:type>(){class P<V:type>{}const Alias=P.<T>;function f<U:type>(value:U){return new Alias();}return f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<string>};function replace(o:any){o.f=b.<string>;}replace(h);const result=h.f;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-member-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const Alias=P.<T>;function f<T:type>(value:T){return new Alias(x).get();}return f;}const result:string=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-member-uint8",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const Alias=P.<T>;function f<T:type>(value:T){return new Alias(x).get();}return f;}const result:uint8=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-member-boolean",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const Alias=P.<T>;function f<T:type>(value:T){return new Alias(x).get();}return f;}const result:boolean=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-static",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{static get(x:V):V{return x;}}const Alias=P.<T>;function f<T:type>(value:T){return Alias.get(x);}return f;}const result:string=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "heritage-shadow",
+      "modules": {
+        "main": "class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}type T=string;const Alias=P.<T>;function f(){type T=uint8;class D extends Alias{}const result:string=new D(\"ok\").get();}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-value-extent",
+      "modules": {
+        "main": "function make<N:uint32>(){class P<M:uint32>{data:[M].<uint8>=new [M].<uint8>();}const Alias=P.<N>;function f<N:type>(x:N){return new Alias().data;}return f;}const result:[2].<uint8>=make.<2>().<string>(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-value-wrong-extent",
+      "modules": {
+        "main": "function make<N:uint32>(){class P<M:uint32>{data:[M].<uint8>=new [M].<uint8>();}const Alias=P.<N>;function f<N:type>(x:N){return new Alias().data;}return f;}const result:[3].<uint8>=make.<2>().<string>(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-default-shadow",
+      "modules": {
+        "main": "function make<T:type>(){class P<V:type,U:type=V>{x:U;constructor(x:U){this.x=x;}get(){return this.x;}}const Alias=P.<T>;function f<T:type>(x:any){return new Alias(x).get();}return f;}const result:string=make.<string>().<uint8>(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-named-order",
+      "modules": {
+        "main": "class P<A:type,B:type>{x:A;constructor(x:A){this.x=x;}}const Selected=P.<B:boolean,A:string>;const result:string=new Selected(\"ok\").x;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-type-default",
+      "modules": {
+        "main": "class P<T:type=string>{x:T;constructor(x:T){this.x=x;}}const Selected=P.<>;const result:string=new Selected(\"ok\").x;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-type-shadow",
+      "modules": {
+        "main": "class P<T:type>{x:T;constructor(x:T){this.x=x;}get(){return this.x;}}type T=string;const Selected=P.<T>;function f(){type T=uint8;return new Selected(\"ok\").get();}const result:string=f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pending-default-computed",
+      "modules": {
+        "main": "function identity(t:type):type{return t;}class P<T:type,U:type=identity(T)>{x:U;constructor(x:U){this.x=x;}get(){return this.x;}}const Selected=P.<string>;const result:boolean=new Selected(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "stored-static-bad",
+      "modules": {
+        "main": "class P<T:type>{static id(x:T):T{return x;}}const Selected=P.<string>;const result:boolean=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reapplication",
+      "modules": {
+        "main": "class P<T:type>{}const Selected=P.<string>;const Again=Selected.<boolean>;new Again();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-computed-default-good",
+      "modules": {
+        "main": "function identity(t:type):type{return t;}function fail(t:type):type{throw new Error(\"default\");}function make<T:type>(){class P<V:type=identity(T)>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const Selected=P.<>;function f<T:type>(x:any){return new Selected(x).get();}return f;}const result:string=make.<string>().<uint8>(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-computed-default-fail",
+      "modules": {
+        "main": "function identity(t:type):type{return t;}function fail(t:type):type{throw new Error(\"default\");}function make<T:type>(){class P<V:type=fail(T)>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const Selected=P.<>;function f<T:type>(x:any){return new Selected(x).get();}return f;}const result:string=make.<string>().<uint8>(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "captured-162-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){return new Selected(x).value;}return f;}const result:string=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-163-boolean",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){return new Selected(x).value;}return f;}const result:boolean=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-164-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){return new Selected(x).get();}return f;}const result:string=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-165-boolean",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){return new Selected(x).get();}return f;}const result:boolean=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-166-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){return Selected.id(x);}return f;}const result:string=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-167-boolean",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){return Selected.id(x);}return f;}const result:boolean=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-168-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){class D extends Selected{}return new D(x).get();}return f;}const result:string=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-169-boolean",
+      "modules": {
+        "main": "function make<T:type>(x:T){class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<T>;function f<T:type>(y:T){class D extends Selected{}return new D(x).get();}return f;}const result:boolean=make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nominal-False-string",
+      "modules": {
+        "main": "import {Selected,token} from \"dep\";class Token{value:boolean=false;}const result:string=new Selected(token).get().value;",
+        "dep": "class Token{value:string=\"ok\";}class C<T:type=Token>{value:T;constructor(x:T){this.value=x;}get(){return this.value;}}export const Selected=C.<>;export const token=new Token();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-False-boolean",
+      "modules": {
+        "main": "import {Selected,token} from \"dep\";class Token{value:boolean=false;}const result:boolean=new Selected(token).get().value;",
+        "dep": "class Token{value:string=\"ok\";}class C<T:type=Token>{value:T;constructor(x:T){this.value=x;}get(){return this.value;}}export const Selected=C.<>;export const token=new Token();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nominal-True-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";class Token{value:boolean=false;}const result:string=new ns.Selected(ns.token).get().value;",
+        "dep": "class Token{value:string=\"ok\";}class C<T:type=Token>{value:T;constructor(x:T){this.value=x;}get(){return this.value;}}export const Selected=C.<>;export const token=new Token();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-True-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";class Token{value:boolean=false;}const result:boolean=new ns.Selected(ns.token).get().value;",
+        "dep": "class Token{value:string=\"ok\";}class C<T:type=Token>{value:T;constructor(x:T){this.value=x;}get(){return this.value;}}export const Selected=C.<>;export const token=new Token();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reselection-string",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<boolean>;const Second=First.<string>;const result:string=new Second(\"ok\").get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reselection-boolean",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<boolean>;const Second=First.<string>;const result:boolean=new Second(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-bypass-C.<string>",
+      "modules": {
+        "main": "function fail(t:type):type{throw new Error(\"unused default\");}class C<T:type=fail(string)>{value:T;constructor(x:T){this.value=x;}}const Selected=C.<string>;const result:string=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-bypass-C.<>",
+      "modules": {
+        "main": "function fail(t:type):type{throw new Error(\"unused default\");}class C<T:type=fail(string)>{value:T;constructor(x:T){this.value=x;}}const Selected=C.<>;const result:string=new Selected(\"ok\").value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "distinct-capture-join-string | uint8",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const A=P.<T>;function f<T:type>(y:T,flag:boolean){const B=P.<T>;if(flag)return new A(x).get();return new B(y).get();}return f;}const result:string | uint8=make.<string>(\"ok\").<uint8>(1,false);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-capture-join-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const A=P.<T>;function f<T:type>(y:T,flag:boolean){const B=P.<T>;if(flag)return new A(x).get();return new B(y).get();}return f;}const result:string=make.<string>(\"ok\").<uint8>(1,false);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "distinct-capture-join-uint8",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}get(){return this.x;}}const A=P.<T>;function f<T:type>(y:T,flag:boolean){const B=P.<T>;if(flag)return new A(x).get();return new B(y).get();}return f;}const result:uint8=make.<string>(\"ok\").<uint8>(1,false);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-async-string",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}}const A=P.<T>;async function f<T:type>(y:T){await 0;return new A(x).x;}return f;}const result:string=await make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-async-boolean",
+      "modules": {
+        "main": "function make<T:type>(x:T){class P<V:type>{x:V;constructor(x:V){this.x=x;}}const A=P.<T>;async function f<T:type>(y:T){await 0;return new A(x).x;}return f;}const result:boolean=await make.<string>(\"ok\").<uint8>(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "partial-static-string",
+      "modules": {
+        "main": "class C<T:type>{}partial class C{static id(x:T):T{return x;}}const Selected=C.<string>;const result:string=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-static-boolean",
+      "modules": {
+        "main": "class C<T:type>{}partial class C{static id(x:T):T{return x;}}const Selected=C.<string>;const result:boolean=Selected.id(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}

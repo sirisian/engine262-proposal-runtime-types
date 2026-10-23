@@ -1460,8 +1460,13 @@ const moduleClassNodes = new WeakMap<object, Map<string, ParseNode>>();
 /** A value alias publishes its producer's proof, not a new type declaration. */
 export interface ImportedConstructorOrigin {
   readonly declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression;
+  readonly arguments?: ParseNode.TypeArguments;
+  readonly selection?: ConstructorSelection;
   readonly bounded?: boolean;
   readonly module?: AbstractModuleRecord;
+}
+interface ConstructorSelection {
+  readonly arguments: readonly TypeRecord[];
 }
 const moduleConstructorOrigins = new WeakMap<ParseNode.Module, ReadonlyMap<string, ImportedConstructorOrigin>>();
 const pendingModuleConstructorOrigins = new WeakMap<ParseNode, ReadonlyMap<string, ImportedConstructorOrigin>>();
@@ -3304,6 +3309,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const pendingStoredApplications = new WeakMap<ParseNode, readonly TypeArgumentApplicationCheck[]>();
   const activeAliasApplications = new Map<TypeArgumentApplicationCheck, ReadonlyMap<ParseNode.TypeParameter, TypeRecord>[]>();
   const genericApplicationInputs = new WeakMap<ParseNode, PreparedBinding>();
+  const observePendingApplication = (application: ParseNode.TypeArgumentsExpression): void => {
+    if (!genericDefaults.some((check) => check.application === application)) return;
+    let input = genericApplicationInputs.get(application);
+    if (!input) {
+      input = { frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+        node: application, expression: application, constant: true, owner: frames.at(-1)!, name: '', evaluationPending: true };
+      genericApplicationInputs.set(application, input);
+    }
+    observeBindingInput(input);
+  };
   const whereChecks = new Map<object, GenericWhereCheck[]>();
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], bindings: ReadonlyMap<string, TypeRecord>): void => {
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
@@ -4974,7 +4989,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const closed = new Map<string, TypeRecord>();
         for (const [name, bound] of describedBindings) {
-          const resolved = substituteFreeTypeParameters(bound, applicationScope);
+          const resolved = substituteFreeTypeParameters(bound, applicationScope, undefined, inputs);
           if (resolved) closed.set(name, resolved);
         }
         const signature = substituteFreeTypeParameters({ Kind: 'function', Signatures: [{
@@ -4993,7 +5008,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let target = substituteFreeTypeParameters(consumer.parameter.Type, closed);
           // An uncompleted callee default is not the consumer's same-named
           // parameter. Only genuinely free inputs use the enclosing scope.
-          target = substituteFreeTypeParameters(target, freeApplicationScope);
+          target = substituteFreeTypeParameters(target, freeApplicationScope, undefined, inputs);
           if (consumer.parameter.Rest && target) target = target.Kind === 'tuple'
             ? target.Elements[consumer.offset]?.Type ?? restElementType(target) : restElementType(target);
           if (!target || mentionsTypeParameter(target)) continue;
@@ -7920,7 +7935,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classBodyOf = (cls: ParseNode): readonly ParseNode[] => (cls as unknown as {
     ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
   }).ClassTail?.ClassBody ?? [];
-  type ClassOrigin = { declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression, arguments?: ParseNode.TypeArguments, bounded?: boolean };
+  type ClassOrigin = ImportedConstructorOrigin;
+  const constructorSelections = new WeakMap<ParseNode, ConstructorSelection>();
+  // Contribution queries can reach a const before its ordinary source walk.
+  // Re-enter that declaration's prepared scope, never the querying function's.
+  const constructorSelectionScopes = new WeakMap<ParseNode, InferenceScope>();
+  const describingConstructorSelections = new WeakSet<ParseNode>();
+  const constructorSelectionOf = (origin: ClassOrigin): ConstructorSelection | undefined => {
+    if (origin.selection) return origin.selection;
+    const application = origin.arguments?.parent;
+    if (!application || application.type !== 'TypeArgumentsExpression') return undefined;
+    const prior = constructorSelections.get(application);
+    if (prior || describingConstructorSelections.has(application)) return prior;
+    const scope = constructorSelectionScopes.get(application);
+    if (!scope) return undefined;
+    describingConstructorSelections.add(application);
+    try {
+      inDeclarationScope(scope, () => staticType(application));
+      return constructorSelections.get(application);
+    } finally {
+      describingConstructorSelections.delete(application);
+    }
+  };
+  const selectedConstructorInstance = (origin: ClassOrigin): Known => {
+    const selected = constructorSelectionOf(origin);
+    if (!selected) return null;
+    const instance = instanceTypeOf(origin.declaration);
+    return instance?.Kind === 'nominal' ? { ...instance, Arguments: selected.arguments } : null;
+  };
+  const selectedConstructorObject = (origin: ClassOrigin): Known => {
+    const shape = classObjectTypeOfNode(origin.declaration);
+    if (!origin.arguments) return shape;
+    const selected = constructorSelectionOf(origin);
+    if (!selected) return null;
+    const parameters = origin.declaration.TypeParameters?.TypeParameterList ?? [];
+    const specialized = substituteTypeParameters(shape, new Map(parameters.map((parameter, i) =>
+      [parameter.BindingIdentifier.name, selected.arguments[i]])));
+    if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === origin.declaration)
+      && PublishedPartialContributions(origin.declaration, true).length === 0) return specialized;
+    const instance = selectedConstructorInstance(origin);
+    const merged = instance?.Kind === 'nominal'
+      ? withPartialStructure({ ...instance, Structure: specialized ?? undefined }, true) : null;
+    return merged?.Kind === 'nominal' ? merged.Structure ?? null : specialized;
+  };
   /**
    * #sec-replacement-values: a class decorator may return a replacement, which
    * must be the class or a subclass of it. A decorator whose Static Type is
@@ -7977,7 +8034,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     while (owner.parent) owner = owner.parent;
     importedDeclarationSourceModules.set(owner, alias?.module ?? resolution.Module);
     retainImportedSources(owner);
-    return { declaration: declaration as ImportedConstructorOrigin['declaration'], bounded: !exact };
+    return { ...alias, declaration: declaration as ImportedConstructorOrigin['declaration'], bounded: !exact };
   };
   // #sec-typed-classes: follow transparent syntax and immutable lexical aliases.
   // Keep declaration identity: a same-spelled name in a caller's frame is not the base.
@@ -7994,7 +8051,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'TypeArgumentsExpression') {
       const origin = stableClassOrigin(node.Expression, seen, bounded);
-      return origin ? { ...origin, arguments: node.TypeArguments } : undefined;
+      return origin ? { ...origin, arguments: node.TypeArguments, selection: undefined } : undefined;
     }
     const publishedOrigin = (declaration: ParseNode | undefined): ClassOrigin | undefined => {
       const exact = declaration && checkedClassOrigins.get(declaration);
@@ -8200,6 +8257,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // parameter; runtime initialization remains governed by the ordinary TDZ.
     const binding = ResolveBindingDeclaration(reference, reference.name);
     const origin = binding ? stableClassOrigin(reference) : undefined;
+    if (origin?.arguments) return selectedConstructorObject(origin);
     const node = origin && !origin.arguments ? origin.declaration : !binding ? classNodes.get(reference.name) : undefined;
     if (!node || (!binding && shadowedByProgram(reference.name))) return null;
     if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === node)
@@ -8248,7 +8306,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the instance path says of a heritage clause naming no class.
     const origin = heritageOriginOf(node);
     let baseObject = origin ? classObjectTypeOfNode(origin.declaration) : null;
-    if (baseObject && origin?.arguments) {
+    const selectedBase = origin?.arguments ? constructorSelectionOf(origin) : undefined;
+    if (selectedBase && origin) baseObject = selectedConstructorObject(origin);
+    else if (baseObject && origin?.arguments && patternExpression((node as ParseNode.ClassDeclaration).ClassTail?.ClassHeritage ?? undefined)?.type === 'TypeArgumentsExpression') {
       const pushed = pushTypeParameterScopeOf(node, 'type-only');
       try {
         const bindings = new Map<string, TypeRecord>();
@@ -9532,7 +9592,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const arguments_ = bareHeritage.TypeArguments.TypeArgumentList.map((argument) => resolveType(argument));
         if (arguments_.every((argument): argument is TypeRecord => argument !== null)) base = { ...bareBase, Arguments: arguments_ };
       }
-      if (origin?.arguments && bareBase?.Kind === 'nominal') {
+      const selection = origin?.arguments ? constructorSelectionOf(origin) : undefined;
+      if (selection && bareBase?.Kind === 'nominal') base = { ...bareBase, Arguments: selection.arguments };
+      else if (origin?.arguments && bareBase?.Kind === 'nominal' && bareHeritage?.type === 'TypeArgumentsExpression') {
         const parameters = typeParameterRecordsOf(origin.declaration.TypeParameters?.TypeParameterList ?? []);
         const bindings = new Map<string, TypeRecord>();
         bindExplicitTypeArguments(parameters, origin.arguments.TypeArgumentList, bindings, { complete: true, application: origin.arguments.parent as ParseNode.TypeArgumentsExpression });
@@ -11587,6 +11649,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!origin) return staticType(expression);
     const shape = classObjectTypeOfNode(origin.declaration);
     if (!shape || !origin.arguments) return shape;
+    if (constructorSelectionOf(origin)) return selectedConstructorObject(origin);
+    if (patternExpression(expression)?.type !== 'TypeArgumentsExpression') return null;
     const parameters = typeParameterRecordsOf(origin.declaration.TypeParameters?.TypeParameterList ?? []);
     const bindings = new Map<string, TypeRecord>();
     bindExplicitTypeArguments(parameters, origin.arguments.TypeArgumentList, bindings,
@@ -19095,7 +19159,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const origin = stableClassOrigin(specialization.Expression)
           ?? (typeDeclaration?.type === 'ClassDeclaration' || typeDeclaration?.type === 'ClassExpression'
             ? { declaration: typeDeclaration } as ClassOrigin : undefined);
-        const classTarget = origin && !origin.arguments ? instanceTypeOf(origin.declaration)
+        const classTarget = origin ? instanceTypeOf(origin.declaration)
           : bare?.type === 'IdentifierReference' ? lexicalClassType(bare) : null;
         if (classTarget?.Kind === 'nominal') {
           const declaration = classTarget.Declaration;
@@ -19104,12 +19168,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (classArgumentOrderError(params, specialization.TypeArguments.TypeArgumentList as unknown as readonly ParseNode[], (bare as { name: string }).name)) return base;
             const bindings = new Map<string, TypeRecord>();
             const parameters = typeParameterRecordsOf(params);
-            const established = origin?.declaration === declaration && !origin.arguments;
+            const established = origin?.declaration === declaration;
             const pending = bindExplicitTypeArguments(parameters, specialization.TypeArguments.TypeArgumentList, bindings,
               established ? { complete: true, application: specialization } : undefined);
             // A mutable or replaceable constructor's source declaration alone
             // does not establish the value receiving these arguments.
             if (established) recordTypeArgumentApplication(specialization, parameters, bindings, pending);
+            if (established && parameters.every((parameter) => bindings.has(parameter.Name))) {
+              // Selected arguments keep free binder identities below member
+              // results too; a context attached only to the instance is lost
+              // when a member's constituent type becomes an inferred return.
+              const context = new Map<string, NonNullable<TypeParameterRecord['Captures']>[number]>();
+              for (let owner = specialization.parent; owner; owner = owner.parent) {
+                const list = (owner as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList ?? [];
+                for (const Declaration of list) {
+                  const name = Declaration.BindingIdentifier.name;
+                  if (!context.has(name)) context.set(name, { Declaration,
+                    Type: { Kind: 'parameter', Name: name, CapturedDeclaration: Declaration, Arity: Declaration.Arity ?? 0,
+                      ...(typeParameterConstraintOf(name) ? { Constraint: typeParameterConstraintOf(name)! } : {}) } });
+                }
+              }
+              const captured = new Map([...context].map(([name, capture]) => [name, capture.Type]));
+              constructorSelections.set(specialization, { arguments: parameters.map((parameter) =>
+                substituteTypeParameters(bindings.get(parameter.Name)!, captured)!) });
+            } else if (established) {
+              observePendingApplication(specialization);
+            }
             checkSpecializedDeclaration(declaration, bindings);
             if ([...partialDeclarations].some((part) => partialPrimaryOf(part) === declaration)
               || PublishedPartialContributions(declaration, true).length > 0) {
@@ -19129,7 +19213,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // first, since it is the nearer mistake.
             reportType('rt-generic-argument', node, '$1 is not generic and takes no type arguments', Value((bare as { name: string }).name));
           }
-          return base;
+          return origin && constructorSelections.has(specialization)
+            ? selectedConstructorObject({ ...origin, arguments: specialization.TypeArguments }) : base;
         }
         // The same rule for any other KNOWN, non-generic Static Type: a
         // primitive, an object type, a tuple, an array - `x.<uint8>` for a `let
@@ -19195,17 +19280,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // ask a later call to infer the explicit arguments a second time.
             if (!asCallee) {
               pending = true;
-              if (genericDefaults.some((check) => check.application === specialization)) {
-                let input = genericApplicationInputs.get(specialization);
-                if (!input) {
-                  input = { frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
-                    node: specialization, expression: specialization, constant: true, owner: frames.at(-1)!, name: '', evaluationPending: true };
-                  genericApplicationInputs.set(specialization, input);
-                }
-                // Evaluation completes this dependency in the next checking
-                // pass. An unavailable signature is not an inferred `any`.
-                observeBindingInput(input);
-              }
+              // Evaluation completes this dependency in the next checking
+              // pass. An unavailable signature is not an inferred `any`.
+              observePendingApplication(specialization);
             }
             return [signature];
           }
@@ -19977,7 +20054,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'MemberExpression': {
         const namespaceClass = namespaceClassOrigin(node);
-        if (namespaceClass && !namespaceClass.bounded) return classObjectTypeOfNode(namespaceClass.declaration);
+        if (namespaceClass && !namespaceClass.bounded) return selectedConstructorObject(namespaceClass);
         const capacity = capacityContract(node);
         if (capacity) return capacity;
         if (checkMemberReceiver(node)) return neverType;
@@ -20507,6 +20584,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // An unapplied immutable constructor alias retains its lexical class
         // declaration. Application bindings still belong to their source use.
         const application = target?.type === 'TypeArgumentsExpression' ? target : undefined;
+        if (origin?.arguments && !application) return selectedConstructorInstance(origin);
         // A class expression written inline where it is constructed is an
         // established class, and `new` of it has its instance type
         // (#sec-typed-classes).
@@ -29437,6 +29515,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && bindingContracts.available.get(publication) === null,
           };
           preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, prepared);
+          const selected = patternExpression(expression);
+          if (selected?.type === 'TypeArgumentsExpression') constructorSelectionScopes.set(selected, prepared);
           if (publication && flowIndependent === undefined && trialDepth === 0) sourceBindings.add(prepared);
         }
       }
@@ -37576,10 +37656,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // #sec-type-errors: an origin-preserving alias keeps the constructor
         // contract. Conditional alternatives are checked independently.
-        const constructorTargets = namedInstance ? [{ instance: namedInstance, arguments: undefined as ParseNode.TypeArguments | undefined }]
-          : origin ? [{ instance: instanceTypeOf(origin.declaration), arguments: origin.arguments }]
+        const constructorTargets = namedInstance ? [{ instance: namedInstance, arguments: undefined as ParseNode.TypeArguments | undefined, selection: undefined as ConstructorSelection | undefined }]
+          : origin ? [{ instance: instanceTypeOf(origin.declaration), arguments: origin.arguments, selection: constructorSelectionOf(origin) }]
           : (target ? invocationFact(target)?.classTargets ?? [] : []).map((origin) => ({
-            instance: instanceTypeOf(origin.declaration), arguments: origin.arguments,
+            instance: instanceTypeOf(origin.declaration), arguments: origin.arguments, selection: constructorSelectionOf(origin),
           }));
         for (const constructorTarget of constructorTargets) {
           if (!target || !constructorTarget.instance || !Array.isArray(ne.Arguments)) continue;
@@ -37593,12 +37673,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const own = specialized ? null : ownBodyConstruction(n, instance);
             const explicitBindings = new Map<string, TypeRecord>();
             const parameters = (decl as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
-            if (constructorTarget.arguments) bindExplicitTypeArguments(typeParameterRecordsOf(parameters),
+            if (constructorTarget.arguments && !constructorTarget.selection && target.type === 'TypeArgumentsExpression') bindExplicitTypeArguments(typeParameterRecordsOf(parameters),
               constructorTarget.arguments.TypeArgumentList, explicitBindings, { complete: true, application: n });
-            const constructed = constructorTarget.arguments ? parameters.map((parameter) => explicitBindings.get(parameter.BindingIdentifier.name)!)
+            const constructed = constructorTarget.selection?.arguments
+              ?? (constructorTarget.arguments ? parameters.map((parameter) => explicitBindings.get(parameter.BindingIdentifier.name)!)
               : specialized?.Kind === 'nominal' ? specialized.Arguments
               : own?.Kind === 'nominal' ? (own as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? null
-                : constructionArguments(n, instance);
+                : constructionArguments(n, instance));
             const bindings = new Map<string, TypeRecord>();
             if (constructed && decl) {
               const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null })
@@ -39152,10 +39233,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const publish = (name: string, expression: ParseNode): void => {
       if (hasDirectEval) return;
       const origin = stableClassOrigin(expression, new Set(), true);
-      // A stored application needs its completed producer bindings as well.
-      // Publishing only its declaration would reopen it in the importing scope.
-      if (origin && !origin.arguments) origins.set(name, { declaration: origin.declaration,
-        bounded: origin.bounded, module: importedDeclarationSourceModule(origin.declaration) });
+      // Only a completed selection may cross this publication boundary.
+      // Publishing just its declaration would reopen it in the importing scope.
+      const selection = origin?.arguments ? constructorSelectionOf(origin) : undefined;
+      if (origin && (!origin.arguments || selection)) origins.set(name, { ...origin, selection,
+        module: importedDeclarationSourceModule(origin.declaration) });
     };
     for (const item of root.ModuleBody?.ModuleItemList ?? []) {
       const declaration = item.type === 'ExportDeclaration' ? item.Declaration : item;

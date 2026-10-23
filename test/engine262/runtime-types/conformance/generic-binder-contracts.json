@@ -211,12 +211,12 @@
       }
     },
     {
-      "name": "replaced annotated callback has unknown result",
+      "name": "replaced annotated callback rejects incompatible declared return",
       "source": "function bad():any{return \"s\";}function id<T:type>(x:T){let typed:()=>T=()=>x;function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
       "expected": {
-        "completion": "normal",
+        "completion": "throw",
         "bodyEntered": true,
-        "value": "s"
+        "errorClass": "TypeError"
       }
     },
     {
@@ -611,7 +611,7 @@
     },
     {
       "name": "immutable dynamic callback declaration valid",
-      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;function produce(){return get();}return produce();}String(outer(1));",
+      "source": "function dynamic():number{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;function produce(){return get();}return produce();}String(outer(1));",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -620,7 +620,7 @@
     },
     {
       "name": "immutable dynamic callback expression valid",
-      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=function(){return get();};return produce();}String(outer(1));",
+      "source": "function dynamic():number{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=function(){return get();};return produce();}String(outer(1));",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -629,7 +629,7 @@
     },
     {
       "name": "immutable dynamic callback arrow valid",
-      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=()=>get();return produce();}String(outer(1));",
+      "source": "function dynamic():number{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=()=>get();return produce();}String(outer(1));",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -638,7 +638,7 @@
     },
     {
       "name": "unchanged callback parameter valid",
-      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T,get:()=>T){function produce(){return get();}return produce();}let unknown:any=dynamic;String(outer(1,unknown));",
+      "source": "function dynamic():number{return 2;}function outer<T:type>(x:T,get:()=>T){function produce(){return get();}return produce();}let unknown:any=dynamic;String(outer(1,unknown));",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
