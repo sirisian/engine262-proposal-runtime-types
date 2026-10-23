@@ -144,7 +144,7 @@ const InternalMethods = {
           Assert(target !== undefined);
           const value = Q(yield* DefaultValueOf(target));
           if (value === undefined) return Throw.TypeError('a new array position has no default value');
-          const copy = CopyValueClassInstance(value);
+          const copy = Q(yield* CopyValueClassInstance(value));
           if (TupleBackingLength(array) !== R(length) || backing.TypedTuple !== tuple
               || backing.TypedElement !== element || backing.TypedExtent !== extent
               || OrdinaryGetOwnProperty(array, P) !== Value.undefined) {
@@ -395,7 +395,7 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
       Assert(target !== undefined);
       value = Q(yield* DefaultValueOf(target));
       if (value === undefined) return Throw.TypeError('a new array position has no default value');
-      value = CopyValueClassInstance(value);
+      value = Q(yield* CopyValueClassInstance(value));
     }
     values.push(Descriptor(suppliedDescriptor === undefined
       ? { Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }

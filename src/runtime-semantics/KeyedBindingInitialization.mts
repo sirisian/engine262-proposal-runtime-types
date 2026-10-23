@@ -125,7 +125,7 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     v = inferred.value;
     // 5. If environment is undefined, return ? PutValue(lhs, v).
     if (environment === Value.undefined) {
-      return Q(yield* PutValue(lhs, CopyValueClassInstance(v)));
+      return Q(yield* PutValue(lhs, Q(yield* CopyValueClassInstance(v))));
     }
     // #sec-value-type-copying: a destructuring pattern BINDS a name to a value
     // read out of an object, and "a read of a field or an element into any of
@@ -137,7 +137,7 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     // read copies, a construction does not - which `defaultCopies` applies
     // above. There is no construction that reaches this line uncopied.
     // 6. Return InitializeReferencedBinding(lhs, v).
-    const initialized = Q(yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(v)));
+    const initialized = Q(yield* InitializeReferencedBinding(lhs, Q(yield* CopyValueClassInstance(v))));
     if (inferred.type) recordDeclaredType(lhs, inferred.type);
     if (node.TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
     return initialized;

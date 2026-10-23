@@ -1,4 +1,4 @@
-import { Q, X } from '../completion.mts';
+import { Q, X, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
   NumberValue, ObjectValue, TypedNumberValue, Value,
@@ -30,6 +30,8 @@ export interface PlacementBacking {
   /** The reserved extent, which is what a shrinking resizable buffer is measured against. */
   readonly ByteLength: number;
   readonly Layout: ClassLayout;
+  /** A nested borrowed column keeps the original container's liveness rule. */
+  readonly CheckLive?: () => ThrowCompletion | undefined;
 }
 
 const placements = new WeakMap<object, PlacementBacking>();
@@ -85,6 +87,7 @@ export function* PlacedInstance(
   buffer: ArrayBufferObject,
   byteOffset: number,
   byteLength: number,
+  checkLive?: () => ThrowCompletion | undefined,
 ): PlainEvaluator<ObjectValue | null> {
   if (type.Kind !== 'nominal') {
     return null;
@@ -98,7 +101,7 @@ export function* PlacedInstance(
   const proto = Q(yield* Get(ctor as unknown as ObjectValue, Value('prototype')));
   const instance = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
   SetPlacementBacking(instance as unknown as object, {
-    Buffer: buffer, ByteOffset: byteOffset, ByteLength: byteLength, Layout: layout,
+    Buffer: buffer, ByteOffset: byteOffset, ByteLength: byteLength, Layout: layout, CheckLive: checkLive,
   });
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (const field of layout.fields) {
@@ -172,7 +175,11 @@ export function BufferElementType(t: TypeRecord): TypedArrayTypes | null {
  * detaches the instance - so detachment is not only the ArrayBuffer's own
  * detach but any shrink that takes the bytes away.
  */
-function requireLive(backing: PlacementBacking): undefined | ReturnType<typeof Throw.TypeError> {
+export function RequirePlacementLive(backing: PlacementBacking): undefined | ReturnType<typeof Throw.TypeError> {
+  const sourceFailure = backing.CheckLive?.();
+  if (sourceFailure !== undefined) {
+    return sourceFailure;
+  }
   if (IsDetachedBuffer(backing.Buffer)) {
     return Throw.TypeError('this instance is placed on a detached buffer');
   }
@@ -189,7 +196,7 @@ function placementOf(backing: PlacementBacking, key: string): FieldPlacement | u
 
 /** A field read: decode the bytes at the field's laid-out position. */
 export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldType: TypeRecord): ValueEvaluator {
-  const live = requireLive(backing);
+  const live = RequirePlacementLive(backing);
   if (live) {
     return live;
   }
@@ -226,6 +233,7 @@ export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldTy
       backing.Buffer,
       backing.ByteOffset + placement.offset,
       placement.layout.byteLength,
+      backing.CheckLive,
     ));
     if (nested) {
       return nested;
@@ -247,7 +255,7 @@ export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldTy
 
 /** A field write: encode the value into the field's laid-out position. */
 export function* WritePlacedField(backing: PlacementBacking, key: string, fieldType: TypeRecord, value: Value): PlainEvaluator<boolean> {
-  const live = requireLive(backing);
+  const live = RequirePlacementLive(backing);
   if (live) {
     return live;
   }
@@ -278,6 +286,7 @@ export function* WritePlacedField(backing: PlacementBacking, key: string, fieldT
       backing.Buffer,
       backing.ByteOffset + placement.offset,
       placement.layout.byteLength,
+      backing.CheckLive,
     ));
     const source = value;
     if (!nested || !(source instanceof ObjectValue)) {

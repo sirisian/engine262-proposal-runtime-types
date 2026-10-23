@@ -330,7 +330,7 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // default, and a read into a binding is a copy position. `const [_q_] = _arr_`
   // and `function f(p: P = _a_)` copy for the reason `const _b_ = _a_` does.
   // 7. Return InitializeReferencedBinding(lhs, v).
-  const initialized = Q(yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(X(v))));
+  const initialized = Q(yield* InitializeReferencedBinding(lhs, Q(yield* CopyValueClassInstance(X(v)))));
   if (inferred.type) recordDeclaredType(lhs, inferred.type);
   if (node.TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
   return initialized;

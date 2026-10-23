@@ -177,7 +177,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     // The clause names the reads: "a read of a field or an element into any of
     // those positions is one of them".
     if (copiesOnBinding(Initializer)) {
-      value = CopyValueClassInstance(value);
+      value = Q(yield* CopyValueClassInstance(value));
     }
     // 5. Return InitializeReferencedBinding(lhs, value).
     const initialized = Q(yield* InitializeReferencedBinding(lhs, value));

@@ -108,7 +108,7 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
     // `const _b_ = _a_` copied, which is the kind of split a reader would never
     // guess.
     if (copiesOnBinding(Initializer)) {
-      value = CopyValueClassInstance(value);
+      value = Q(yield* CopyValueClassInstance(value));
     }
     // 5. Return ? PutValue(lhs, value).
     const put = Q(yield* PutValue(lhs, value));

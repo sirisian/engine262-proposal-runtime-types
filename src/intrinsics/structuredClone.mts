@@ -71,7 +71,7 @@ function* cloneValue(value: Value, memo: Map<ObjectValue, Value>): ValueEvaluato
   // already defines, which carries its type, its private state and its sealing.
   // Doing it any other way here would give a structured clone different
   // semantics from an assignment, for one kind of value, for no reason.
-  const asValueClass = CopyValueClassInstance(value);
+  const asValueClass = Q(yield* CopyValueClassInstance(value));
   if (asValueClass !== value) {
     memo.set(value, asValueClass);
     return asValueClass;

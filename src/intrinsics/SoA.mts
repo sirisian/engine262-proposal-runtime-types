@@ -17,7 +17,8 @@ import type { ArrayBufferObject } from '../abstract-ops/arraybuffer-objects.mts'
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
   AllocateArrayBuffer, ArrayCreate, CreateDataProperty, Get, GetValueFromBuffer, OrdinaryCreateFromConstructor,
-  OrdinaryObjectCreate, R, RequireType, SetValueInBuffer, Throw, ToIndex, surroundingAgent, BooleanValue } from '#self';
+  OrdinaryObjectCreate, R, RequireType, SetValueInBuffer, Throw, ToIndex, surroundingAgent, BooleanValue,
+  CopyValueClassInstance } from '#self';
 
 /**
  * proposal-runtime-types soa.md: the storage of an `SoA.<T, Length>`.
@@ -49,8 +50,8 @@ export interface SoAStorage {
   readonly ViewByteOffset?: number;
   readonly ViewByteLength?: number;
   /**
-   * Bumped whenever the columns are REALLOCATED. A `fields` projection captures
-   * it and refuses to read once it differs, so a projection cannot silently
+   * Bumped whenever the columns are REALLOCATED. A reference or `fields`
+   * projection captures it and refuses use once it differs, so it cannot silently
    * describe an allocation the SoA has abandoned. A fixed extent never grows,
    * so its generation never moves.
    */
@@ -288,7 +289,7 @@ function columnElementType(t: TypeRecord) {
  * decode identically, which they must, since both describe the same bytes by
  * the same layout.
  */
-function* readColumnElement(storage: SoAStorage, columnIndex: number, index: number): ValueEvaluator {
+function* readColumnElement(storage: SoAStorage, columnIndex: number, index: number, borrow?: SoAElementBacking): ValueEvaluator {
   const column = storage.Columns[columnIndex]!;
   const at = storage.ColumnOffsets[columnIndex]! + index * column.layout.byteLength;
   const primitive = BufferElementType(column.type);
@@ -316,6 +317,7 @@ function* readColumnElement(storage: SoAStorage, columnIndex: number, index: num
       const nested = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
       SetPlacementBacking(nested as unknown as object, {
         Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout,
+        CheckLive: borrow === undefined ? undefined : () => requireUnmoved(borrow),
       });
       const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
       for (const field of layout.fields) {
@@ -330,12 +332,18 @@ function* readColumnElement(storage: SoAStorage, columnIndex: number, index: num
 }
 
 /** Write one column element at a byte offset; the nested case scatters field-wise. */
-function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: number, value: Value): PlainEvaluator<boolean> {
+function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: number, value: Value, borrow?: SoAElementBacking): PlainEvaluator<boolean> {
+  if (borrow !== undefined) {
+    Q(requireUnmoved(borrow));
+  }
   const column = storage.Columns[columnIndex]!;
   const at = storage.ColumnOffsets[columnIndex]! + index * column.layout.byteLength;
   const primitive = BufferElementType(column.type);
   if (primitive !== null) {
     const converted = Q(yield* RequireType(value, column.type));
+    if (borrow !== undefined) {
+      Q(requireUnmoved(borrow));
+    }
     // `RequireType` answers a
     // BooleanValue for a boolean column, and the unwrapping below only handled
     // a TypedNumberValue - so a boolean reached SetValueInBuffer, which asserts
@@ -380,7 +388,10 @@ function* writeColumnElement(storage: SoAStorage, columnIndex: number, index: nu
       if (layout.fields.some((f) => typeof f.key !== 'string')) {
         return Throw.TypeError('a column of this type cannot be written');
       }
-      const backing = { Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout };
+      const backing = {
+        Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout,
+        CheckLive: borrow === undefined ? undefined : () => requireUnmoved(borrow),
+      };
       for (const field of layout.fields) {
         const fieldValue = Q(yield* Get(value, Value(field.key as string)));
         Q(yield* WritePlacedField(backing, field.key as string, field.type, Q(yield* RequireType(fieldValue, field.type))));
@@ -420,7 +431,9 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (let i = 0; i < storage.Columns.length; i += 1) {
     const column = storage.Columns[i]!;
-    const value = Q(yield* readColumnElement(storage, i, index));
+    // A nested column reads as a placed view. Gathering must detach its value
+    // as well as the outer element, including when a returned ref decays here.
+    const value = Q(yield* CopyValueClassInstance(Q(yield* readColumnElement(storage, i, index))));
     X(CreateDataProperty(instance, Value(column.key), value));
     typed.set(column.key, { TypeRecord: column.type });
   }
@@ -440,7 +453,10 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
  * Each field is checked against the column's declared type on the way, so the
  * store boundary of #table-check-sites applies per column.
  */
-export function* SoAScatter(storage: SoAStorage, index: number, value: Value): PlainEvaluator<boolean> {
+export function* SoAScatter(storage: SoAStorage, index: number, value: Value, borrow?: SoAElementBacking): PlainEvaluator<boolean> {
+  if (borrow !== undefined) {
+    Q(requireUnmoved(borrow));
+  }
   const live = requireViewLive(storage);
   if (live) {
     return live;
@@ -456,6 +472,9 @@ export function* SoAScatter(storage: SoAStorage, index: number, value: Value): P
       return Throw.TypeError('a column of this type cannot be written');
     }
     const converted = Q(yield* RequireType(value, only.type));
+    if (borrow !== undefined) {
+      Q(requireUnmoved(borrow));
+    }
     const numeric = converted instanceof TypedNumberValue
       ? Value(Number((converted as unknown as { value: number }).value))
       : converted;
@@ -489,7 +508,7 @@ export function* SoAScatter(storage: SoAStorage, index: number, value: Value): P
   for (let i = 0; i < storage.Columns.length; i += 1) {
     const column = storage.Columns[i]!;
     const field = Q(yield* Get(value, Value(column.key)));
-    Q(yield* writeColumnElement(storage, i, index, field));
+    Q(yield* writeColumnElement(storage, i, index, field, borrow));
   }
   return true;
 }
@@ -541,6 +560,8 @@ function* SoAProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): Va
     return Value.undefined;
   }
   const last = Q(yield* SoAGather(storage, storage.Length - 1));
+  // Removal ends this element's identity even if a later push reuses its index.
+  elementIdentities.get(storage)?.delete(storage.Length - 1);
   storage.Length -= 1;
   return last;
 }
@@ -632,35 +653,53 @@ export {
 export interface SoAElementBacking {
   readonly Storage: SoAStorage;
   readonly Index: number;
-  /** The capacity the columns had when this reference was taken. */
-  readonly PinnedCapacity: number;
+  readonly Generation: number;
+  readonly ElementIdentity: object;
 }
 
 const elementBackings = new WeakMap<object, SoAElementBacking>();
+// Lazy storage identities, not a registry of live references. Surviving indices
+// keep their token; removed indices never recover an old token on regrowth.
+const elementIdentities = new WeakMap<SoAStorage, Map<number, object>>();
+
+function elementIdentity(storage: SoAStorage, index: number): object {
+  let identities = elementIdentities.get(storage);
+  if (!identities) {
+    identities = new Map();
+    elementIdentities.set(storage, identities);
+  }
+  let identity = identities.get(index);
+  if (!identity) {
+    identity = {};
+    identities.set(index, identity);
+  }
+  return identity;
+}
 
 export function SoAElementBackingOf(instance: object): SoAElementBacking | undefined {
   return elementBackings.get(instance);
 }
 
-/**
- * "A reference into an `SoA` pins the container as well as the element: a
- * `push` that reallocates moves every column, so growing an `SoA` while a
- * reference into it is live is a TypeError, exactly as changing an array's
- * length during `ref` iteration is."
- */
+/** #sec-reference-liveness: validate the original location at every use. */
 function requireUnmoved(backing: SoAElementBacking) {
-  if (backing.Storage.Capacity !== backing.PinnedCapacity) {
+  if (backing.Storage.Generation !== backing.Generation) {
     return Throw.TypeError('this reference is into an SoA that has since grown');
   }
   // proposal-runtime-types #sec-reference-liveness: a reference names an
   // element, and an element that has been removed is not there to read or
-  // write. A shrink moves nothing, so the capacity test above cannot see it -
-  // the bytes are still in the allocation, which is precisely why the index
-  // has to be tested against the current length rather than trusted.
-  if (backing.Index >= backing.Storage.Length) {
+  // write. Shrinking need not relocate, and regrowth can restore the length.
+  // Check the original element identity as well as the current bounds.
+  if (backing.Index >= backing.Storage.Length
+      || elementIdentities.get(backing.Storage)?.get(backing.Index) !== backing.ElementIdentity) {
     return Throw.TypeError('this reference is into an SoA element that has since been removed');
   }
   return requireViewLive(backing.Storage);
+}
+
+/** Also used before copying a view, including a value with no public fields. */
+export function RequireSoAReferenceLive(value: Value) {
+  const backing = value instanceof ObjectValue ? SoAElementBackingOf(value) : undefined;
+  return backing === undefined ? undefined : requireUnmoved(backing);
 }
 
 /**
@@ -685,6 +724,7 @@ export function requireViewLive(storage: SoAStorage) {
 
 /** The object a `ref` into an SoA borrows: the column set and the index. */
 export function* SoAElementReference(storage: SoAStorage, index: number): ValueEvaluator {
+  Q(requireViewLive(storage));
   if (index < 0 || index >= storage.Length || !Number.isInteger(index)) {
     return Throw.TypeError('$1 is not an element of this SoA', Value(String(index)));
   }
@@ -692,7 +732,10 @@ export function* SoAElementReference(storage: SoAStorage, index: number): ValueE
   const ctor = element.Kind === 'nominal' ? (element as { Constructor?: ObjectValue }).Constructor : undefined;
   const proto = ctor ? Q(yield* Get(ctor, Value('prototype'))) : Value.null;
   const view = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
-  elementBackings.set(view as unknown as object, { Storage: storage, Index: index, PinnedCapacity: storage.Capacity });
+  elementBackings.set(view as unknown as object, {
+    Storage: storage, Index: index, Generation: storage.Generation,
+    ElementIdentity: elementIdentity(storage, index),
+  });
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (const column of storage.Columns) {
     typed.set(column.key, { TypeRecord: column.type });
@@ -715,7 +758,7 @@ export function* ReadSoAField(backing: SoAElementBacking, key: string): ValueEva
   }
   // Through the same helper the gather uses, so a nested class column reads
   // identically whether it is reached by index or by reference.
-  return Q(yield* readColumnElement(storage, i, backing.Index));
+  return Q(yield* readColumnElement(storage, i, backing.Index, backing));
 }
 
 /** A field write through a reference: one indexed store into that field's column. */
@@ -729,7 +772,7 @@ export function* WriteSoAField(backing: SoAElementBacking, key: string, value: V
   if (i < 0) {
     return false;
   }
-  return Q(yield* writeColumnElement(storage, i, backing.Index, value));
+  return Q(yield* writeColumnElement(storage, i, backing.Index, value, backing));
 }
 
 /**

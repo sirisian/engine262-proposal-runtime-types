@@ -311,7 +311,7 @@ export function* Evaluate_AssignmentExpression({
       // that object" behaving differently from the rest, which is where the
       // rule had been implemented rather than what it says.
       if (copiesOnBinding(AssignmentExpression) && isTypedStorageTarget(lref)) {
-        rval = CopyValueClassInstance(rval);
+        rval = Q(yield* CopyValueClassInstance(rval));
       }
       // e. Perform ? PutValue(lref, rval).
       Q(yield* PutValue(lref, rval));

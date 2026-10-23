@@ -17,6 +17,8 @@ import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsValueTypeClass, LayoutOf, type ClassLayout } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
+import { PlacementBackingOf, RequirePlacementLive } from './placement.mts';
 import { isRationalObject, rationalEquals, rationalSameWidth, rationalCompare } from '../intrinsics/Rational.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
@@ -334,12 +336,19 @@ export function SameValue(x: Value, y: Value): boolean {
  * construction from a read, and #sec-value-type-copying makes that difference
  * decisive - construction builds in place and must NOT copy.
  */
-export function CopyValueClassInstance(v: Value): Value {
+export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   if (!surroundingAgent.feature('runtime-types') || !(v instanceof ObjectValue)) {
     return v;
   }
+  // A storage-backed source can be stale even when its layout has no fields.
+  // Copying consumes the original borrow; it does not refresh its generation.
+  Q(RequireSoAReferenceLive(v));
+  const placed = PlacementBackingOf(v);
+  if (placed !== undefined) {
+    Q(RequirePlacementLive(placed));
+  }
   const t = RuntimeTypeOf(v);
-  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined) {
+  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined || !IsValueTypeClass(t)) {
     return v;
   }
   const layout = LayoutOf(t) as ClassLayout | null;
@@ -395,9 +404,15 @@ export function CopyValueClassInstance(v: Value): Value {
   if (sourcePrivate !== undefined && sourcePrivate.length > 0) {
     const targetPrivate = (copy as unknown as { PrivateElements: unknown[] }).PrivateElements;
     for (const element of sourcePrivate) {
-      targetPrivate.push(element.Kind === 'field'
-        ? Object.assign(Object.create(Object.getPrototypeOf(element) as object), element)
-        : element);
+      if (element.Kind === 'field') {
+        const field = Object.assign(Object.create(Object.getPrototypeOf(element) as object), element);
+        if (element.Value !== undefined) {
+          field.Value = Q(yield* CopyValueClassInstance(element.Value));
+        }
+        targetPrivate.push(field);
+      } else {
+        targetPrivate.push(element);
+      }
     }
   }
   for (const field of layout.fields) {
@@ -407,7 +422,7 @@ export function CopyValueClassInstance(v: Value): Value {
     }
     const key = Value(field.key);
     X(copy.DefineOwnProperty(key, Descriptor({
-      Value: X(Get(v, key)),
+      Value: Q(yield* CopyValueClassInstance(Q(yield* Get(v, key)))),
       Writable: Value.true,
       Enumerable: Value.true,
       Configurable: Value.false,

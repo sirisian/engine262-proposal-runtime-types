@@ -10,6 +10,7 @@ import { substituteTypeParameters, type TypeRecord } from '../type-system/record
 import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
+import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { signaturesInView, BindCallArgumentItems } from './ArgumentListEvaluation.mts';
 import {
@@ -22,7 +23,6 @@ import {
   EnvironmentRecord,
   surroundingAgent,
   Throw,
-  GetValue,
   R,
 } from '#self';
 import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
@@ -205,7 +205,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     if (callExpression?.type === 'CallExpression' && callExpression.LocationConsuming === true) {
       return callValue;
     }
-    return Q(yield* GetValue(callValue.Location));
+    return Q(yield* DecayReferenceValue(callValue));
   }
   // 10. Return result.
   return result;

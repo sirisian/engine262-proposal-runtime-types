@@ -1,6 +1,6 @@
 import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
+import { SoAGather, SoAScatter, SoAElementBackingOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { isValueParameterBinding, lookupTypeParameter, ValuePackView, MetadataCaptureView } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {
@@ -303,7 +303,7 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
   }
   if (V instanceof ReferenceRecord && V.SoAElement !== undefined) {
     const backing = SoAElementBackingOf(V.SoAElement as unknown as object)!;
-    Q(yield* SoAScatter(backing.Storage, backing.Index, W));
+    Q(yield* SoAScatter(backing.Storage, backing.Index, W, backing));
     return undefined;
   }
   // 1. If V is not a Reference Record, throw a ReferenceError exception.
@@ -488,6 +488,11 @@ export function MakePrivateReference(baseValue: Value, privateIdentifier: JSStri
  * sees exactly the event that invalidates.
  */
 export function RequireArrayBorrowLive(V: ReferenceRecord) {
+  // SoA element locations carry a view rather than an ArrayBorrow record.
+  // Check before exposing that view, gathering it, or scattering through it.
+  if (V.SoAElement !== undefined) {
+    return RequireSoAReferenceLive(V.SoAElement);
+  }
   const borrow = V.ArrayBorrow;
   if (borrow === undefined) {
     return undefined;
@@ -504,6 +509,7 @@ export function RequireArrayBorrowLive(V: ReferenceRecord) {
 
 export function* DecayReferenceValue(value: Value): ValueEvaluator {
   if (value instanceof ReferenceValue) {
+    Q(RequireArrayBorrowLive(value.Location));
     // An SoA element decays to the GATHERED value, the copy `s[i]` produces,
     // and not to the live view a dereference yields. Decay is where a borrow
     // stops being a borrow, so what it produces must be a value with no tie to

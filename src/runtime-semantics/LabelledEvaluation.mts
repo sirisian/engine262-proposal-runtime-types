@@ -629,7 +629,7 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
     }
     let result;
     if (initialize) {
-      result = Q(yield* InitializeReferencedBinding(reference as ReferenceRecord, CopyValueClassInstance(checked)));
+      result = Q(yield* InitializeReferencedBinding(reference as ReferenceRecord, Q(yield* CopyValueClassInstance(checked))));
     } else {
       result = Q(yield* PutValue(reference, checked));
     }

@@ -15,7 +15,7 @@ import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletio
 // `CopyValueClassInstance` is undefined at its use. The ordering rule and the
 // module graph disagree, and the graph wins.
 import { CopyValueClassInstance, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
-import { SoAStorageOf } from '../intrinsics/SoA.mts';
+import { SoAStorageOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterTypeComputation, ExitTypeComputation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
 import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
@@ -438,7 +438,14 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
         if (!position.own && (object as OrdinaryObject).Extensible === Value.false) {
           return Throw.TypeError('a nonextensible array cannot initialize missing own elements');
         }
-        plan.positions.set(key, { own: position.own, value: position.own ? position.value : CopyValueClassInstance(position.value) });
+        // Retained observations can contain a view that became stale before
+        // admission. Validate it before a value comparison or copy reads fields.
+        Q(RequireSoAReferenceLive(position.value));
+        let value = position.value;
+        if (!position.own) {
+          value = Q(yield* CopyValueClassInstance(value));
+        }
+        plan.positions.set(key, { own: position.own, value });
       }
     }
     for (const [key, position] of plan.positions) {
@@ -471,7 +478,9 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     let converted: Value;
     if (constructions) converted = Q(yield* CompleteTupleDefaultConstruction(constructions));
     else converted = Q(yield* MaterializeGenericCallable(value, group.target!));
-    if (group.copy) converted = CopyValueClassInstance(converted);
+    if (group.copy) {
+      converted = Q(yield* CopyValueClassInstance(converted));
+    }
     if (plan) Q(checkLength(object, plan));
     const position = typeof key === 'string' ? plan?.positions.get(key) : undefined;
     if (position) position.value = converted;
@@ -2074,7 +2083,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // An ORDINARY class instance has no layout and is untouched, keeping the
     // identity a return must preserve.
     if (value instanceof ObjectValue && IsValueTypeClass(elided)) {
-      value = CopyValueClassInstance(value);
+      value = Q(yield* CopyValueClassInstance(value));
     }
     Q(AcquireNominalPrototype(value, elided));
     RetainCheckedResult(completion, elided);

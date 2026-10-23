@@ -1,0 +1,1224 @@
+{
+  "description": "Original SoA locations stay live only until relocation or removal; copying and decay detach value layouts and propagate failures.",
+  "cases": [
+    {
+      "name": "relocated-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "relocated-copy",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);const copy:any=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "relocated-field",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);const value:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "relocated-whole-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);r={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "relocated-field-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "relocated-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];function stale(){a.reserve(64);return ref r;}const copy:any=stale();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "removed-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "removed-copy",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();const copy:any=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "removed-field",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();const value:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "removed-whole-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();r={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "removed-field-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "removed-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];function stale(){a.pop();return ref r;}const copy:any=stale();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "regrown-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "regrown-copy",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});const copy:any=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "regrown-field",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});const value:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "regrown-whole-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});r={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "regrown-field-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "regrown-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];function stale(){a.pop();a.push({x:2});return ref r;}const copy:any=stale();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "block-copy",
+      "modules": {
+        "main": "class P{x:uint8;}{const a=new SoA.<P>();a.push({x:1});let ref r=a[0];a.reserve(64);const value:any=r;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "returned-direct-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});function stale(){let ref r=a[0];a.reserve(64);return ref r;}const value:any=stale();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-chain",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];let ref s=r;a.reserve(64);const value:any=s;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];function read(){return r;}a.reserve(64);read();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "parameter-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];function read(ref p:P){a.reserve(64);const value:any=p;}read(ref r);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "parameter-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];function write(ref p:P){a.reserve(64);p=new P();}write(ref r);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "live-copy",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const copy=r;copy.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,1);equal(copy.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "live-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const a=new SoA.<P>(1);function borrow(){return ref a[0];}const copy=borrow();copy.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,0);equal(copy.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reserved-growth",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.push({x:2});function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,1);r.x=3;equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reserve-noop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(4);function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "survivor-pop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.push({x:2});a.pop();function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "survivor-regrow",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.push({x:2});a.pop();a.push({x:3});function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a[0]={x:2};function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fresh-borrow-after-regrow",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});let ref fresh=a[0];function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(fresh.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-rebind-after-relocation",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);ref r=a[0];function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-rebind-after-regrow",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});ref r=a[0];function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reborrow-preserves-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);function read(ref p:P){return p.x;}read(ref r);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "snapshot-survives",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const copy=r;a.reserve(64);copy.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(copy.x,2);equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-write-no-getter-effects",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);let effects=0;let failed=false;try{r={get x(){effects++;return 3;}};}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(effects,0);equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failure-does-not-initialize-destination",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);let target:P=new P();target.x=4;let failed=false;try{target=r;}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(target.x,4);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-read-then-rebind",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.reserve(64);let failures=0;for(let i=0;i<2;i++){try{const v:any=r;}catch(e){if(e instanceof TypeError)failures++;}}ref r=a[0];function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failures,2);equal(r.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "held-view-binding",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);const copy=holder.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-view-var",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);var copy=holder.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-view-assignment",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);let copy=new P();copy=holder.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-view-object-pattern",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);const {value:copy}=holder;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-view-array-pattern",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);const [copy]=[holder.value];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-view-clone",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);const copy=structuredClone(holder.value);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-view-typed-array",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const holder={value:r};a.reserve(64);const copy:[].<P>=[holder.value];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-binding",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);let ref r=a[0];const copy=r;copy.n.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].n.x,0);equal(copy.n.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-decay",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);function borrow(){return ref a[0];}const copy=borrow();copy.n.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].n.x,0);equal(copy.n.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-gather",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);const copy=a[0];copy.n.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].n.x,0);equal(copy.n.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-pop",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);const copy=a.pop();copy.n.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a.length,0);equal(copy.n.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "deep-nested-decay",
+      "modules": {
+        "main": "class N{x:uint8;}class M{n:N;}class P{m:M;}const a=new SoA.<P>(1);function borrow(){return ref a[0];}const copy=borrow();copy.m.n.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].m.n.x,0);equal(copy.m.n.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-snapshot-survives",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);function borrow(){return ref a[0];}const copy=borrow();a.reserve(64);copy.n.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(copy.n.x,2);equal(a[0].n.x,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-reference-writes",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);let ref r=a[0];r.n.x=3;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].n.x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "view-shrink-read",
+      "modules": {
+        "main": "class P{x:uint8;}const buffer=new ArrayBuffer(8,{maxByteLength:32});const a=SoA.<P,8>(buffer,0);let ref r=a[0];buffer.resize(0);const copy:any=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "view-shrink-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const buffer=new ArrayBuffer(8,{maxByteLength:32});const a=SoA.<P,8>(buffer,0);let ref r=a[0];function stale(){buffer.resize(0);return ref r;}const copy:any=stale();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "view-shrink-write",
+      "modules": {
+        "main": "class P{x:uint8;}const buffer=new ArrayBuffer(8,{maxByteLength:32});const a=SoA.<P,8>(buffer,0);let ref r=a[0];buffer.resize(0);r={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "view-growth-live",
+      "modules": {
+        "main": "class P{x:uint8;}const buffer=new ArrayBuffer(8,{maxByteLength:32});const a=SoA.<P,8>(buffer,0);let ref r=a[0];buffer.resize(32);r.x=3;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-live",
+      "modules": {
+        "main": "class P{x:uint8;}const a=new SoA.<P,1>();let ref r=a[0];r.x=3;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "module-import-stale",
+      "modules": {
+        "main": "import {r,relocate} from \"dep\";relocate();const copy:any=r;",
+        "dep": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});export let ref r=a[0];export function relocate(){a.reserve(64);}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-stale",
+      "modules": {
+        "main": "import * as ns from \"dep\";ns.relocate();const copy:any=ns.r;",
+        "dep": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});export let ref r=a[0];export function relocate(){a.reserve(64);}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "ordinary-value-copy",
+      "modules": {
+        "main": "class P{x:uint8;}let p=new P();p.x=1;const q=p;q.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(p.x,1);equal(q.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-array-slot",
+      "modules": {
+        "main": "const a=[1];let ref r=a[0];a.pop();a.push(2);function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(r,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-element-control",
+      "modules": {
+        "main": "class E{}const a=SoA.withCapacity.<E>(8);a.push(new E());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-proxy-refusal",
+      "modules": {
+        "main": "class P{x:uint8;}const token={};let p:any;p=new Proxy(new P(),{get(t,k){if(k===\"x\")throw token;return Reflect.get(t,k);}});let failed=false;try{const copy=p;}catch(e){failed=e===token;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-proxy-refusal-two-fields",
+      "modules": {
+        "main": "class P{x:uint8;y:uint8;}const token={};let reads=\"\";let p:any;p=new Proxy(new P(),{get(t,k){if(k===\"x\"){reads+=\"x\";return 1;}if(k===\"y\"){reads+=\"y\";throw token;}return Reflect.get(t,k);}});let failed=false;try{const copy=p;}catch(e){failed=e===token;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(reads,\"xy\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "scatter-getter-relocates",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];let failed=false;try{r={get x(){a.reserve(64);return 3;}};}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "scatter-getter-regrows",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];let failed=false;try{r={get x(){a.pop();a.push({x:2});return 3;}};}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(a[0].x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-scatter-effects",
+      "modules": {
+        "main": "class P{x:uint8;y:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1,y:2});let ref r=a[0];let failed=false;try{r={get x(){return 3;},get y(){a.reserve(64);return 4;}};}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(a[0].x,3);equal(a[0].y,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-abrupt-precedence",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];const token={};let failed=false;try{r={get x(){a.reserve(64);throw token;}};}catch(e){failed=e===token;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-scatter-relocates",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=SoA.withCapacity.<P>(8);a.push({n:{x:1}});let ref r=a[0];let failed=false;try{r={n:{get x(){a.reserve(64);return 3;}}};}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(a[0].n.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "deep-scatter-relocates",
+      "modules": {
+        "main": "class N{x:uint8;}class M{n:N;}class P{m:M;}const a=SoA.withCapacity.<P>(8);const seed=new P();seed.m.n.x=1;a.push(seed);let ref r=a[0];let failed=false;try{r={m:{get n(){a.reserve(64);return new N();}}};}catch(e){failed=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(failed,true);equal(a[0].m.n.x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "held-nested-relocated",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=SoA.withCapacity.<P>(8);a.push({n:{x:1}});let ref r=a[0];const holder={value:r.n};a.reserve(64);const copy=holder.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-nested-write-relocated",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=SoA.withCapacity.<P>(8);a.push({n:{x:1}});let ref r=a[0];const holder={value:r.n};a.reserve(64);holder.value.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-nested-regrown",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=SoA.withCapacity.<P>(8);a.push({n:{x:1}});let ref r=a[0];const holder={value:r.n};a.pop();a.push({n:{x:2}});const copy=holder.value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "held-nested-write-regrown",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=SoA.withCapacity.<P>(8);a.push({n:{x:1}});let ref r=a[0];const holder={value:r.n};a.pop();a.push({n:{x:2}});holder.value.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-ref-result-decay",
+      "modules": {
+        "main": "class P{x:uint8;}const a=new SoA.<P,1>();function borrow():ref P{return ref a[0];}const copy=borrow();copy.x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,0);equal(copy.x,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "call-result-member-copy",
+      "modules": {
+        "main": "class P{x:uint8;}const a=new SoA.<P,1>();function borrow(){return ref a[0];}borrow().x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-standalone-reference",
+      "modules": {
+        "main": "class P{x:uint8;}const a=new SoA.<P,1>();(ref a[0]).x=2;function equal(a,b){if(typeof b===\"number\"){a=Number(a);}if(a!==b)throw new Error(\"value\");}equal(a[0].x,2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "SyntaxError"
+      }
+    }
+  ]
+}

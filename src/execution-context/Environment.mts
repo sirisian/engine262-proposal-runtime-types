@@ -150,7 +150,7 @@ function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEva
   // A whole-element store through the borrow writes every column at the index.
   if (location.SoAElement !== undefined) {
     const backing = SoAElementBackingOf(location.SoAElement as unknown as object)!;
-    Q(yield* SoAScatter(backing.Storage, backing.Index, V));
+    Q(yield* SoAScatter(backing.Storage, backing.Index, V, backing));
     return undefined;
   }
   if (location.Base instanceof ObjectValue) {

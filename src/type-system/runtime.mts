@@ -3568,7 +3568,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // the memberwise zero working for almost every class.
       const zero = DeclaredZeroOf(t as { Declaration?: object });
       if (zero !== undefined) {
-        return CopyValueClassInstance(zero);
+        return yield* CopyValueClassInstance(zero);
       }
       // #sec-rational-types is a numeric type too, but it resolves through the
       // library type names rather than as a ~primitive~ record, so its zero is
