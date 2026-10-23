@@ -65,10 +65,13 @@ function bufferByteLength(buffer: ArrayBufferObject): number {
  * "A `[].<T>` view is LENGTH-TRACKING: its `length` derives from the buffer's
  * current byte length, growing and shrinking as the buffer is resized. A fixed
  * `[N].<T>` view has a fixed byte extent recorded at construction; if the buffer
- * shrinks below that extent the view is DETACHED and any access throws a
- * TypeError. Growth never invalidates a view."
+ * shrinks below that extent the view is out of bounds and access throws a
+ * TypeError until regrowth covers it. Buffer detachment is permanent."
  */
 export function ArrayViewLength(backing: ArrayViewBacking): number {
+  if (IsDetachedBuffer(backing.Buffer)) {
+    return 0;
+  }
   if (backing.Extent !== 'dynamic') {
     // #sec-array-views: a FIXED view whose bytes have ceased to exist reports a
     // length of +0F, as a `%TypedArray%` in the same position does. It reported
@@ -103,9 +106,8 @@ function requireLive(backing: ArrayViewBacking) {
   }
   if (backing.Extent !== 'dynamic'
       && backing.ByteOffset + backing.ByteExtent > bufferByteLength(backing.Buffer)) {
-    // A fixed view detaches when the buffer shrinks below its extent; a
-    // length-tracking one simply reports a shorter length, which is why only
-    // this branch tests the extent.
+    // A fixed view is temporarily out of bounds when its extent is missing.
+    // Regrowth restores it; actual detachment is checked separately above.
     return Throw.TypeError('this view is over a buffer that no longer covers it');
   }
   return undefined;
@@ -145,6 +147,7 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
       backing.Buffer,
       backing.ByteOffset + index * backing.Stride,
       backing.Stride,
+      () => requireLive(backing),
     ));
     if (placed) {
       return placed;
@@ -185,6 +188,7 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
       backing.Buffer,
       backing.ByteOffset + index * backing.Stride,
       backing.Stride,
+      () => requireLive(backing),
     ));
     if (!placed || !(source instanceof ObjectValue)) {
       return Throw.TypeError('an element of this type cannot be viewed in a buffer');
@@ -200,6 +204,12 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
     return true;
   }
   const converted = Q(yield* RequireType(value, backing.Element));
+  // Admission can execute user conversions. Recheck the view and index before
+  // touching bytes; a tracking view may have lost this element in the meantime.
+  Q(requireLive(backing));
+  if (index >= ArrayViewLength(backing)) {
+    return Throw.RangeError('$1 is out of range', Value(String(index)));
+  }
   // A 64-bit element kind is written as a BigInt, as ECMA-262's BigInt64 and
   // BigUint64 typed arrays are (SetValueInBuffer asserts it): a `uint64` held
   // as a typed number reached it as a Number (the binary packet
@@ -304,6 +314,9 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   // never be read does not construct and report a length first.
   if (!IsPlainData(element)) {
     return Throw.TypeError('an element of this type cannot be viewed in a buffer');
+  }
+  if (IsDetachedBuffer(buffer)) {
+    return Throw.TypeError('this view is over a detached buffer');
   }
   const offset = baseOffset + byteOffset;
   const byteExtent = resolvedExtent === 'dynamic' ? 0 : resolvedExtent * stride;

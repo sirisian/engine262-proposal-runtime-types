@@ -171,9 +171,9 @@ export function BufferElementType(t: TypeRecord): TypedArrayTypes | null {
 
 /**
  * "Touching a detached instance throws a *TypeError* exception." A placement
- * over a RESIZABLE buffer records its extent, and the buffer shrinking below it
- * detaches the instance - so detachment is not only the ArrayBuffer's own
- * detach but any shrink that takes the bytes away.
+ * over a resizable buffer records its extent. Shrinkage can make that extent
+ * temporarily out of bounds; regrowth restores access. Actual buffer detachment
+ * is permanent. Nested fields also retain the enclosing allocation checks.
  */
 export function RequirePlacementLive(backing: PlacementBacking): undefined | ReturnType<typeof Throw.TypeError> {
   const sourceFailure = backing.CheckLive?.();
@@ -233,7 +233,7 @@ export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldTy
       backing.Buffer,
       backing.ByteOffset + placement.offset,
       placement.layout.byteLength,
-      backing.CheckLive,
+      () => RequirePlacementLive(backing),
     ));
     if (nested) {
       return nested;
@@ -286,7 +286,7 @@ export function* WritePlacedField(backing: PlacementBacking, key: string, fieldT
       backing.Buffer,
       backing.ByteOffset + placement.offset,
       placement.layout.byteLength,
-      backing.CheckLive,
+      () => RequirePlacementLive(backing),
     ));
     const source = value;
     if (!nested || !(source instanceof ObjectValue)) {
@@ -323,6 +323,9 @@ export function* ValidatePlacement(constructor: ObjectValue, args: readonly Valu
   }
   const byteOffset = args.length > 1 ? Number(Q(yield* ToIndex(args[1]!))) : 0;
   const reserved = args.length > 2 ? Number(Q(yield* ToIndex(args[2]!))) : layout.byteLength;
+  if (IsDetachedBuffer(buffer as ArrayBufferObject)) {
+    return Throw.TypeError('this instance is placed on a detached buffer');
+  }
   const bytes = (buffer as { ArrayBufferData?: { byteLength: number } }).ArrayBufferData?.byteLength ?? 0;
   if (byteOffset + reserved > bytes) {
     return Throw.RangeError('the placement extent exceeds the buffer');

@@ -1,0 +1,1435 @@
+{
+  "description": "Buffer views use current bounds; retained nested values preserve source guards, and actual detachment is permanent.",
+  "cases": [
+    {
+      "name": "span-scalar-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.resize(4);const v:any=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-scalar-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.resize(4);r=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-scalar-detached-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.transfer();const v:any=r;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-scalar-detached-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.transfer();r=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-scalar-regrow-no-access",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.resize(0);b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(r,0);r=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-scalar-regrow-after-failure",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.resize(0);let caught=false;try{const v:any=r;}catch(e){caught=e instanceof TypeError;}b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r,0);r=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-scalar-growth",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];b.resize(32);r=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-scalar-failed-resize",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let ref r=a[0];let caught=false;try{b.resize(33);}catch(e){caught=e instanceof RangeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r,0);r=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-class-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.resize(4);const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-class-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.resize(4);r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-class-detached-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.transfer();const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-class-detached-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.transfer();r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-class-regrow-no-access",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.resize(0);b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-class-regrow-after-failure",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.resize(0);let caught=false;try{const v:any=r.x;}catch(e){caught=e instanceof TypeError;}b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-class-growth",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];b.resize(32);r.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-class-failed-resize",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);let ref r=a[0];let caught=false;try{b.resize(33);}catch(e){caught=e instanceof RangeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.resize(4);const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.resize(4);r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-detached-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.transfer();const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-detached-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.transfer();r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-regrow-no-access",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.resize(0);b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-regrow-after-failure",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.resize(0);let caught=false;try{const v:any=r.x;}catch(e){caught=e instanceof TypeError;}b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-growth",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];b.resize(32);r.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-failed-resize",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=SoA.<P,8>(b,0);let ref r=a[0];let caught=false;try{b.resize(33);}catch(e){caught=e instanceof RangeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "placement-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.resize(4);const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placement-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.resize(4);r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placement-detached-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.transfer();const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placement-detached-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.transfer();r.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placement-regrow-no-access",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.resize(0);b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "placement-regrow-after-failure",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.resize(0);let caught=false;try{const v:any=r.x;}catch(e){caught=e instanceof TypeError;}b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "placement-growth",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();b.resize(32);r.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "placement-failed-resize",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const r=new(b,0,8) P();let caught=false;try{b.resize(33);}catch(e){caught=e instanceof RangeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(r.x,0);r.x=3;equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-held-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);const holder={v:a[0]};b.resize(4);const v:any=holder.v.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-held-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);const holder={v:a[0]};b.resize(4);holder.v.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-held-short-copy",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);const holder={v:a[0]};b.resize(4);const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-held-recover",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b,0,8);const holder={v:a[0]};b.resize(0);b.resize(8);holder.v.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-nested-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=Span.<P>(b,0,4);const holder={v:a[0].n};b.resize(4);const v:any=holder.v.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-nested-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=Span.<P>(b,0,4);const holder={v:a[0].n};b.resize(4);holder.v.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-nested-short-copy",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=Span.<P>(b,0,4);const holder={v:a[0].n};b.resize(4);const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-nested-recover",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=Span.<P>(b,0,4);const holder={v:a[0].n};b.resize(0);b.resize(8);holder.v.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "placed-nested-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const r=new(b,0,8) P();const holder={v:r.n};b.resize(4);const v:any=holder.v.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placed-nested-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const r=new(b,0,8) P();const holder={v:r.n};b.resize(4);holder.v.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placed-nested-short-copy",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const r=new(b,0,8) P();const holder={v:r.n};b.resize(4);const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placed-nested-recover",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const r=new(b,0,8) P();const holder={v:r.n};b.resize(0);b.resize(8);holder.v.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-nested-short-read",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=SoA.<P,4>(b,0);let ref r=a[0];const holder={v:r.n};b.resize(4);const v:any=holder.v.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-nested-short-write",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=SoA.<P,4>(b,0);let ref r=a[0];const holder={v:r.n};b.resize(4);holder.v.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-nested-short-copy",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=SoA.<P,4>(b,0);let ref r=a[0];const holder={v:r.n};b.resize(4);const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-nested-recover",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class N{x:uint8;}class P{n:N;y:uint8;}const a=SoA.<P,4>(b,0);let ref r=a[0];const holder={v:r.n};b.resize(0);b.resize(8);holder.v.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-lengths",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a.length,4);b.resize(2);equal(a.length,0);b.resize(16);equal(a.length,12);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-lengths",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a.length,8);b.resize(4);equal(a.length,0);b.resize(8);equal(a.length,8);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-reference-regrow",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b);let ref r=a[7];b.resize(4);let caught=false;try{const v:any=r;}catch(e){caught=e instanceof RangeError;}b.resize(8);r=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(new Uint8Array(b)[7],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-class-held-removed",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b);const holder={v:a[7]};b.resize(4);const v:any=holder.v.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "tracking-class-held-survivor",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b);const holder={v:a[0]};b.resize(4);holder.v.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-class-held-regrow",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});class P{x:uint8;}const a=Span.<P>(b);const holder={v:a[7]};b.resize(4);b.resize(8);holder.v.x=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[7],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "construct-detached-zero-span",
+      "modules": {
+        "main": "class E{}class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});b.transfer();Span.<uint8>(b,0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "construct-detached-tracking-span",
+      "modules": {
+        "main": "class E{}class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});b.transfer();Span.<uint8>(b);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "construct-detached-zero-placement",
+      "modules": {
+        "main": "class E{}class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});b.transfer();new(b,0,0) E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "construct-detached-soa",
+      "modules": {
+        "main": "class E{}class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});b.transfer();SoA.<P,1>(b,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "zero-span-bounds",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,8,0);b.resize(4);const v:any=a[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "zero-span-recovered",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,8,0);b.resize(4);b.resize(8);const v:any=a[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "RangeError"
+      }
+    },
+    {
+      "name": "empty-placement-detached-copy",
+      "modules": {
+        "main": "class E{}const b=new ArrayBuffer(8,{maxByteLength:32});const holder={v:new(b,0,0) E()};b.transfer();const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-empty-layout-control",
+      "modules": {
+        "main": "class E{}const b=new ArrayBuffer(8,{maxByteLength:32});SoA.<E,1>(b,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "span-empty-layout-control",
+      "modules": {
+        "main": "class E{}const b=new ArrayBuffer(8,{maxByteLength:32});Span.<E>(b);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "fixed-scatter-shrink",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);a[0]=Object.create(P.prototype,{x:{get(){b.resize(0);return 3;}}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "fixed-scatter-regrow",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);a[0]=Object.create(P.prototype,{x:{get(){b.resize(0);b.resize(8);return 3;}}});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-scatter-abrupt",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);const token={};let caught=false;try{a[0]=Object.create(P.prototype,{x:{get(){b.resize(0);throw token;}}});}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-scatter-shrink",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b);a[0]=Object.create(P.prototype,{x:{get(){b.resize(0);return 3;}}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "tracking-scatter-regrow",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b);a[0]=Object.create(P.prototype,{x:{get(){b.resize(0);b.resize(8);return 3;}}});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-scatter-abrupt",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b);const token={};let caught=false;try{a[0]=Object.create(P.prototype,{x:{get(){b.resize(0);throw token;}}});}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "host-typedarray-regrowth",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=new Uint8Array(b,0,8);b.resize(0);b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a.length,8);equal(a[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-soa-removal-control",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];a.pop();a.push({x:2});const v:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-soa-relocation-control",
+      "modules": {
+        "main": "class P{x:uint8;}const a=new SoA.<P>(1);const column=a.fields.x;const holder={v:column};a.reserve(64);const v:any=holder.v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "non-nominal-scatter-control",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);let effects=0;let caught=false;try{a[0]={get x(){effects++;return 3;}};}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(effects,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-placement-control",
+      "modules": {
+        "main": "class E{}const b=new ArrayBuffer(8,{maxByteLength:32});new(b,0,0) E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "zero-reserved-placed-detached",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const holder={v:new(b,0,0) P()};b.transfer();const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "placement-nested-snapshot",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;y:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const r=new(b,0,8) P();r.n.x=3;const copy=r.n;b.resize(0);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(copy.x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "span-snapshot",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);a[0].x=3;const copy=a[0];b.resize(0);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(copy.x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-growth-surviving-prefix",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);a[0].x=3;b.resize(4);b.resize(8);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);equal(a[7].x,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "offset-extent-regrow",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,4,4);const holder={v:a[0]};b.resize(6);let caught=false;try{holder.v.x=3;}catch(e){caught=e instanceof TypeError;}b.resize(8);holder.v.x=4;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(new Uint8Array(b)[4],4);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "retained-column-relocation",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);const col=a.fields.n;const holder={v:col[0]};a.reserve(64);const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "retained-column-relocation-write",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);const col=a.fields.n;const holder={v:col[0]};a.reserve(64);holder.v.x=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "detached-construction-offset-error",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});b.transfer();const token={};let caught=false;try{Span.<uint8>(b,{valueOf(){throw token;}},0);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "resize-argument-effects",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);let caught=false;try{b.resize({valueOf(){b.resize(4);throw new Error(\"argument\");}});}catch(e){caught=true;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(a.length,0);b.resize(8);equal(a.length,8);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "placed-nested-admission-failure-no-write",
+      "modules": {
+        "main": "class N{x:uint8;y:uint8;}class P{n:N;z:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const r=new(b,0,8) P();const source=Object.create(N.prototype,{x:{get(){return 3;}},y:{get(){b.resize(4);return 4;}}});let caught=false;try{r.n=source;}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(new Uint8Array(b)[0],0);equal(new Uint8Array(b)[1],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-scatter-admission-failure-no-write",
+      "modules": {
+        "main": "class P{x:uint8;y:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,4);const source=Object.create(P.prototype,{x:{get(){return 3;}},y:{get(){b.resize(4);return 4;}}});let caught=false;try{a[0]=source;}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(new Uint8Array(b)[0],0);equal(new Uint8Array(b)[1],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-scalar-conversion-short",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);class Source{operator uint8(){b.resize(0);return 3;}}a[0]=new Source();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "fixed-scalar-conversion-detach",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);class Source{operator uint8(){b.transfer();return 3;}}a[0]=new Source();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "fixed-scalar-conversion-regrow",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);class Source{operator uint8(){b.resize(0);b.resize(8);return 3;}}a[0]=new Source();function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tracking-scalar-conversion-short",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b);class Source{operator uint8(){b.resize(0);return 3;}}a[0]=new Source();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "RangeError"
+      }
+    },
+    {
+      "name": "tracking-scalar-conversion-detach",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b);class Source{operator uint8(){b.transfer();return 3;}}a[0]=new Source();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "tracking-scalar-conversion-regrow",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b);class Source{operator uint8(){b.resize(0);b.resize(8);return 3;}}a[0]=new Source();function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(new Uint8Array(b)[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "scalar-conversion-abrupt",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<uint8>(b,0,8);const token={};class Source{operator uint8(){b.resize(0);throw token;}}let caught=false;try{a[0]=new Source();}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

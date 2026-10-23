@@ -18,7 +18,7 @@ import { bootstrapConstructor } from './bootstrap.mts';
 import {
   AllocateArrayBuffer, ArrayCreate, CreateDataProperty, Get, GetValueFromBuffer, OrdinaryCreateFromConstructor,
   OrdinaryObjectCreate, R, RequireType, SetValueInBuffer, Throw, ToIndex, surroundingAgent, BooleanValue,
-  CopyValueClassInstance } from '#self';
+  CopyValueClassInstance, IsDetachedBuffer } from '#self';
 
 /**
  * proposal-runtime-types soa.md: the storage of an `SoA.<T, Length>`.
@@ -702,18 +702,13 @@ export function RequireSoAReferenceLive(value: Value) {
   return backing === undefined ? undefined : requireUnmoved(backing);
 }
 
-/**
- * A VIEWED SoA follows the fixed array view's detachment: "shrinking a resizable
- * buffer below the view's extent detaches it and any access afterward is a
- * TypeError, while growth never invalidates it. A view over a
- * `SharedArrayBuffer` can never detach, since shared buffers never shrink."
- *
- * An ALLOCATED SoA owns its buffer and has nothing to detach from, which is why
- * this tests the view fields rather than every SoA.
- */
+/** A viewed SoA uses its current full extent; actual detachment is permanent. */
 export function requireViewLive(storage: SoAStorage) {
   if (storage.ViewByteLength === undefined) {
     return undefined;
+  }
+  if (IsDetachedBuffer(storage.Buffer)) {
+    return Throw.TypeError('this SoA view is over a buffer that no longer covers it');
   }
   const bytes = (storage.Buffer as unknown as { ArrayBufferData?: { byteLength: number } }).ArrayBufferData?.byteLength ?? 0;
   if ((storage.ViewByteOffset ?? 0) + storage.ViewByteLength > bytes) {
@@ -830,6 +825,9 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
   let requested = 0;
   if (args.length > 1) {
     requested = Number(Q(yield* ToIndex(args[1]!)));
+  }
+  if (IsDetachedBuffer(buffer)) {
+    return Throw.TypeError('the buffer does not hold this SoA view');
   }
   const byteOffset = baseOffset + requested;
   const placement = ColumnLayoutFor(columns, extent);
