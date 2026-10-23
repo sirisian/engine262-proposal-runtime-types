@@ -4307,10 +4307,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       aggregateValues = transferred;
       return;
     }
+    if (node.type === 'ObjectLiteral') {
+      for (const member of node.PropertyDefinitionList) {
+        if (member.type === 'IdentifierReference') transferAggregateEffects(member);
+        else if (member.type === 'PropertyDefinition') {
+          const key = member.PropertyName?.type === 'PropertyName' ? member.PropertyName.ComputedPropertyName : undefined;
+          if (key) transferAggregateKey(key);
+          if (member.AssignmentExpression) {
+            const source = staticType(member.AssignmentExpression);
+            transferAggregateEffects(member.AssignmentExpression);
+            if (!member.PropertyName && (!source || !knownNonObject(source))) invalidateAggregateValues();
+            const target = member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null;
+            if (target && conversionHasEffect(target)) invalidateAggregateValues();
+          }
+        } else if ('ClassElementName' in member) {
+          const key = member.ClassElementName?.type === 'PropertyName' ? member.ClassElementName.ComputedPropertyName : undefined;
+          if (key) transferAggregateKey(key);
+        }
+      }
+      return;
+    }
+    if (node.type === 'ArrayLiteral') {
+      for (const element of node.ElementList) {
+        if (element.type === 'Elision') continue;
+        transferAggregateEffects(element.type === 'SpreadElement' ? element.AssignmentExpression : element);
+        if (element.type === 'SpreadElement') invalidateAggregateValues();
+      }
+      return;
+    }
+    if (node.type === 'MemberExpression') {
+      const captured = staticType(node.MemberExpression);
+      transferAggregateEffects(node.MemberExpression);
+      const keys = memberKeys(node);
+      if (node.Expression) transferAggregateKey(node.Expression);
+      const receiver = constructionResult(captured);
+      if (!receiver || !keys?.length || !keys.every((key) => aggregateDataKeys.get(receiver)?.has(key))) invalidateAggregateValues();
+      return;
+    }
     if (node.type === 'AssignmentExpression' && node.AssignmentOperator === '=') {
       const target = patternExpression(node.LeftHandSideExpression)!;
       const receiver = target.type === 'MemberExpression' ? staticType(target.MemberExpression) : null;
-      if (target.type === 'MemberExpression' && target.Expression) transferAggregateEffects(target.Expression);
+      if (target.type === 'MemberExpression') {
+        transferAggregateEffects(target.MemberExpression);
+        if (target.Expression) transferAggregateKey(target.Expression);
+      }
       const source = expressionContributionType(node.AssignmentExpression, staticType(node.AssignmentExpression));
       transferAggregateEffects(node.AssignmentExpression);
       if (target.type === 'IdentifierReference') return;
@@ -4321,6 +4361,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || node.type === 'UnaryExpression' && node.operator === 'delete') {
       invalidateAggregateValues();
     }
+  };
+  const transferAggregateKey = (key: ParseNode): void => {
+    const type = staticType(key);
+    transferAggregateEffects(key);
+    if ((!type || !knownNonObject(type)) && !(memberKey({ Expression: key }) instanceof SymbolValue)) invalidateAggregateValues();
   };
   // A lexical reference retains an edge to the binding cell, including when
   // that cell is itself a rebindable reference. Keep locations separate from
@@ -6721,6 +6766,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (expression.type === 'ParenthesizedExpression') {
       return memberKey({ Expression: expression.Expression });
     }
+    if (expression.type === 'CommaOperator') return withValueQueryFlow(() => {
+      expression.ExpressionList.slice(0, -1).forEach(previewFlowEffects);
+      return memberKey({ Expression: expression.ExpressionList.at(-1) });
+    });
     if (expression.type === 'MemberExpression' && expression.MemberExpression.type === 'IdentifierReference'
         && expression.MemberExpression.name === 'Symbol'
         && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
@@ -16675,6 +16724,87 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // A type query borrows the flow environment without exporting evaluation.
+  const withValueQueryFlow = <T,>(query: () => T): T => {
+    const entry = captureFlow();
+    const live = flowLive;
+    const exits = flowExits;
+    flowExits = [];
+    try { return query(); } finally {
+      restoreFlow(entry);
+      flowLive = live;
+      flowExits = exits;
+    }
+  };
+
+  // New containers retain copied scalar values, but an aggregate stored in
+  // an earlier component still aliases its contents after later components.
+  const constructionResult = (type: Known, seen = new Map<TypeRecord, TypeRecord>()): Known => {
+    if (!type) return null;
+    const origin = aggregateOrigins.get(type) ?? aggregateResultOrigins.get(type);
+    if (origin) {
+      const live = { ...type };
+      copyAggregateEvidence(type, live);
+      aggregateOrigins.set(live, origin);
+      return aggregateValue(live, true);
+    }
+    const prior = seen.get(type);
+    if (prior) return prior;
+    if (!literalMemberReadAnchors.has(type) && !literalArrayReadAnchors.has(type)
+      && !contributionAlternatives.has(type)) return type;
+    const result = { ...type };
+    seen.set(type, result);
+    copyAggregateEvidence(type, result);
+    const literal = objectLiteralOfType.get(type);
+    if (literal) objectLiteralOfType.set(result, literal);
+    if (result.Kind === 'object') result.Properties = result.Properties.map((property) => ({ ...property,
+      type: constructionResult(property.type, seen) ?? anyTypeRecord }));
+    else if (result.Kind === 'array') result.Element = constructionResult(result.Element, seen) ?? anyTypeRecord;
+    else if (result.Kind === 'union') result.Members = result.Members.map((member) => constructionResult(member, seen) ?? anyTypeRecord);
+    const alternatives = contributionAlternatives.get(type);
+    if (alternatives) contributionAlternatives.set(result, alternatives.map((arm) => constructionResult(arm, seen) ?? anyTypeRecord));
+    const array = literalArrayReadAnchors.get(type);
+    if (array) {
+      const describe = (entry: LiteralArrayContribution): LiteralArrayContribution => ({ ...entry,
+        type: constructionResult(entry.type, seen) ?? anyTypeRecord });
+      literalArrayReadAnchors.set(result, { prefix: array.prefix.map(describe), tail: array.tail?.map(describe) });
+    }
+    return result;
+  };
+
+  const transferPropertyKey = (key: ParseNode): void => {
+    const type = staticType(key);
+    previewFlowEffects(key);
+    // ToPropertyKey on an Object can run user code after obtaining the key.
+    if ((!type || !knownNonObject(type)) && !(memberKey({ Expression: key }) instanceof SymbolValue)) {
+      invalidateCapturedReads();
+      invalidateCapturedAliases();
+    }
+  };
+  const computedMemberQueries = new WeakSet<ParseNode>();
+  const computedMemberType = (node: ParseNode.MemberExpression): Known => withValueQueryFlow(() => {
+    const receiver = node.MemberExpression;
+    const captured = staticType(receiver);
+    previewFlowEffects(receiver);
+    const key = node.Expression!;
+    const keyType = staticType(key);
+    transferPropertyKey(key);
+    const savedReceiver = expressionViewTypes.get(receiver);
+    const hadReceiver = expressionViewTypes.has(receiver);
+    const savedKey = expressionViewTypes.get(key);
+    const hadKey = expressionViewTypes.has(key);
+    expressionViewTypes.set(receiver, constructionResult(captured));
+    expressionViewTypes.set(key, keyType);
+    computedMemberQueries.add(node);
+    try { return constructionResult(inferStaticType(node)); } finally {
+      computedMemberQueries.delete(node);
+      if (hadReceiver) expressionViewTypes.set(receiver, savedReceiver!);
+      else expressionViewTypes.delete(receiver);
+      if (hadKey) expressionViewTypes.set(key, savedKey!);
+      else expressionViewTypes.delete(key);
+    }
+  });
+
   // Result queries restore all suspended flow after typing the last operand.
   const commaResultType = (node: ParseNode.CommaOperator, typeOf: (part: ParseNode) => Known): Known => {
     const entry = captureFlow();
@@ -19883,7 +20013,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (shape && typeof shape === 'object') objectLiteralOfType.set(shape, node);
           return shape;
         }
-      case 'ArrayLiteral': {
+      case 'ArrayLiteral': return withValueQueryFlow(() => {
         const elements = (node as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? [];
         if (elements.length === 0) {
           // An EMPTY array literal is left UNTYPED.
@@ -19933,6 +20063,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             t = staticType(el);
             elementAnchor = derivesFromDeclaration(el, t);
           }
+          if (el.type === 'SpreadElement') {
+            previewFlowEffects(el.AssignmentExpression);
+            invalidateCapturedReads();
+            invalidateCapturedAliases();
+          } else if (el.type !== 'Elision') previewFlowEffects(el);
           if (!t || t.Kind === 'any') {
             return null;
           }
@@ -19950,8 +20085,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const result: TypeRecord = { Kind: 'array', Element: element, Extent: 'dynamic' };
         literalArrayReadAnchors.set(result, { prefix, tail });
         if (anchored) literalContractAnchors.add(result);
-        return result;
-      }
+        return constructionResult(result);
+      });
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
       case 'AssignmentExpression': {
@@ -20609,6 +20744,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticType(templateCallView(node as ParseNode.TaggedTemplateExpression));
       }
       case 'MemberExpression': {
+        if (node.Expression && !computedMemberQueries.has(node)) return computedMemberType(node);
         const namespaceClass = namespaceClassOrigin(node);
         if (namespaceClass && !namespaceClass.bounded) return selectedConstructorObject(namespaceClass);
         // A namespace selects the exporting binding; its object spelling is
@@ -22712,7 +22848,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * rather than an object type that omits what it could not read and thereby
    * describes a value with fewer members than it has.
    */
-  const objectLiteralShape = (node: ParseNode | null | undefined): Known => {
+  const objectLiteralShape = (node: ParseNode | null | undefined): Known =>
+    withValueQueryFlow(() => constructionResult(buildObjectLiteralShape(node)));
+  const buildObjectLiteralShape = (node: ParseNode | null | undefined): Known => {
     if (!node || node.type !== 'ObjectLiteral') {
       return null;
     }
@@ -22899,6 +23037,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (member && (member.type === 'MethodDefinition' || member.type === 'GeneratorMethod'
         || member.type === 'AsyncMethod' || member.type === 'AsyncGeneratorMethod')) {
         const methodKey = classElementKey(member.ClassElementName);
+        const computed = member.ClassElementName?.type === 'PropertyName' ? member.ClassElementName.ComputedPropertyName : undefined;
+        if (computed) transferPropertyKey(computed);
         if (methodKey === undefined) return null;
         if (member.type === 'MethodDefinition' && !member.UniqueFormalParameters) {
           const getter = !member.PropertySetParameterList;
@@ -23054,6 +23194,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       if (!prop.PropertyName && prop.AssignmentExpression) {
         const spread = primitiveSpreadShape(prop.AssignmentExpression);
+        const spreadType = staticType(prop.AssignmentExpression);
+        previewFlowEffects(prop.AssignmentExpression);
+        if (!spreadType || !knownNonObject(spreadType)) {
+          invalidateCapturedReads();
+          invalidateCapturedAliases();
+        }
         if (spread?.Kind !== 'object') return null;
         for (const property of spread.Properties) {
           const prior = Properties.findIndex((p) => p.key === property.key);
@@ -23064,6 +23210,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const key = prop.PropertyName ? memberKeyOf(prop.PropertyName as ParseNode.PropertyName) : undefined;
+      const computed = (prop.PropertyName as ParseNode.PropertyName | undefined)?.ComputedPropertyName;
+      if (computed) transferPropertyKey(computed);
       if (key === undefined || !prop.AssignmentExpression) {
         return null;
       }
@@ -23271,6 +23419,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Properties.push({ key, type: adapted, optional: false, readonly: false });
       memberAnchors.set(key, { read: declaredMember ? declaredAnchor(declaredMember)
         : wantedMember ? declaredAnchor(wantedMember) : derivesFromDeclaration(prop.AssignmentExpression, memberType) });
+      previewFlowEffects(prop.AssignmentExpression);
+      if (declaredMember && conversionHasEffect(declaredMember)) {
+        invalidateCapturedReads();
+        invalidateCapturedAliases();
+      }
     }
     const result = { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
     literalMemberReadAnchors.set(result, new Map([...memberAnchors].map(([key, member]) => [key, member.read])));
@@ -30206,7 +30359,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
+  // Contribution scopes use the same declaration-owned Symbol identities as
+  // ordinary signature checking, without evaluating a Symbol call.
+  const prepareSymbolKeyIdentities = (list: readonly ParseNode[]): void => {
+    for (const n of list) {
+      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
+        continue;
+      }
+      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
+        const b = binding as unknown as {
+          BindingIdentifier?: { name?: string } | null,
+          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
+        };
+        const bound = b.BindingIdentifier?.name;
+        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
+        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
+            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
+          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
+        }
+      }
+    }
+  };
+
   const prepareLexicalBindingContracts = (list: readonly ParseNode[], flowIndependent?: boolean): void => {
+    prepareSymbolKeyIdentities(list);
     // Prepare contracts without evaluating initializers or initializing values.
     // Existing entries from the first source pass retain inferred const types.
     for (const declaration of list) {
@@ -30576,23 +30752,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // VALUES, so that identity is carried by the DECLARATION - two consts are
     // two types, and one const named twice is one type, which is exactly what
     // that identity rule means where no symbol can be held.
-    for (const n of list) {
-      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
-        continue;
-      }
-      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
-        const b = binding as unknown as {
-          BindingIdentifier?: { name?: string } | null,
-          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
-        };
-        const bound = b.BindingIdentifier?.name;
-        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
-        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
-            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
-          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
-        }
-      }
-    }
+    prepareSymbolKeyIdentities(list);
     // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
     // this proposal's function overloading - so the signatures are collected
     // per name and declared together: declared one at a time, the last

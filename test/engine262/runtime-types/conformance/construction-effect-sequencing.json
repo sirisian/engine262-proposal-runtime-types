@@ -1,0 +1,1225 @@
+{
+  "description": "Independent construction and computed-key sequencing requirements: receiver capture, component effects, scalar snapshots, aggregate aliases, contextual results, key provenance and uniform array domains.",
+  "cases": [
+    {
+      "name": "computed-read",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[(box.x=1,\"x\")]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-read-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[(box.x=1,\"x\")]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "object-fields",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({a:(box.x=1),b:box.x}.b);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-fields-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({a:(box.x=1),b:box.x}.b);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "array-elements",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ([(box.x=1),box.x][1]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-elements-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ([(box.x=1),box.x][1]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "computed-field",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({[(box.x=1,\"a\")]:box.x}.a);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-field-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({[(box.x=1,\"a\")]:box.x}.a);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "computed-next-field",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({[(box.x=1,\"a\")]:0,b:box.x}.b);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-next-field-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({[(box.x=1,\"a\")]:0,b:box.x}.b);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-object",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({a:(box.x=1),b:{c:box.x}}.b.c);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-object-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({a:(box.x=1),b:{c:box.x}}.b.c);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-array",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ([(box.x=1),[box.x][0]][1]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-array-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ([(box.x=1),[box.x][0]][1]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "object-in-array",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ([(box.x=1),{a:box.x}.a][1]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-in-array-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ([(box.x=1),{a:box.x}.a][1]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "array-in-object",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({a:(box.x=1),b:[box.x]}.b[0]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-in-object-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({a:(box.x=1),b:[box.x]}.b[0]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "comma-key",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[(box.x=1,box.x=2,\"x\")]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-key-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[(box.x=1,box.x=2,\"x\")]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "logical-key",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[((box.x=1)&&box.x,\"x\")]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-key-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[((box.x=1)&&box.x,\"x\")]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-key",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[(seed===0?(box.x=1):(box.x=2),\"x\")]);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-key-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box[(seed===0?(box.x=1):(box.x=2),\"x\")]);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "object-duplicate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({x:box.x,x:(box.x=1),y:box.x}.y);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-duplicate-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({x:box.x,x:(box.x=1),y:box.x}.y);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "method-key",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({[(box.x=1,\"m\")](){return 0;},x:box.x}.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-key-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({[(box.x=1,\"m\")](){return 0;},x:box.x}.x);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "getter-key",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({get [(box.x=1,\"m\")](){return 0;},x:box.x}.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-key-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({get [(box.x=1,\"m\")](){return 0;},x:box.x}.x);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "primitive-spread",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({...(box.x=1,0),x:box.x}.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "primitive-spread-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({...(box.x=1,0),x:box.x}.x);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "string-spread",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({...(box.x=1,\"ab\"),x:box.x}.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "string-spread-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ({...(box.x=1,\"ab\"),x:box.x}.x);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "scalar-object-capture",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {old:box.x,write:(box.x=1)}.old;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "scalar-object-capture-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {old:box.x,write:(box.x=1)}.old;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "array-uniform-domain",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return [box.x,(box.x=1)][1];}const n:string|number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-no-positional-refinement",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return [box.x,(box.x=1)][1];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "aggregate-object-capture",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {old:box,write:(box.x=1)}.old.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "aggregate-object-capture-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {old:box,write:(box.x=1)}.old.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-aggregate-capture",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {old:{inner:box},write:(box.x=1)}.old.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out={a:(box.x=1),b:box};out.b.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-alias-reverse",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out={a:(box.x=1),b:box};box.x=true;return out.b.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-aggregate-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const alias=box[(box.inner.x=1,\"inner\")];alias.x=true;return box.inner.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-after-construction",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out={a:(box.x=1),b:box.x};return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-after-construction",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out=[(box.x=1),box.x];return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-after-construction-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out={a:(box.x=1),b:box.x};return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "array-after-construction-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out=[(box.x=1),box.x];return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "receiver-before-key",
+      "modules": {
+        "main": "function make(seed:number){const root={inner:{x:\"s\"}};const old=root.inner;return root.inner[(root.inner={x:1},\"x\")];}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-before-key-wrong",
+      "modules": {
+        "main": "function make(seed:number){const root={inner:{x:\"s\"}};return root.inner[(root.inner={x:1},\"x\")];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "receiver-inner-write",
+      "modules": {
+        "main": "function make(seed:number){const root={inner:{x:\"s\"}};return root.inner[(root.inner.x=1,\"x\")];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-effects",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,box)[\"x\"];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "key-call-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function key(){box.x=1;return \"x\";}return box[key()];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "key-call-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function key(){box.x=1;return \"x\";}return box[key()];}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "key-coercion-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const key={toString(){box.x=1;return \"x\";}};return box[key];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-member-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const o={get value(){box.x=1;return 0;}};return {a:o.value,b:box.x}.b;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "call-element-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(){box.x=1;return 0;}return [change(),box.x][1];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-getter-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const o={get a(){box.x=1;return 0;}};return {...o,b:box.x}.b;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-iterator-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const o={[Symbol.iterator](){box.x=1;return [][Symbol.iterator]();}};return [...o,box.x][0];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-body-not-evaluated",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {m(){box.x=1;},x:box.x}.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-member-contract",
+      "modules": {
+        "main": "function make(seed:number){const box:{x:string}={x:\"s\"};function change(o:any){o.x=1;return \"x\";}return box[(change(box),\"x\")];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "declared-result-contract",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out:{a:number,b:number}={a:(box.x=1),b:box.x};return out.b;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "contextual-array",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out:[2].<number>=[(box.x=1),box.x];return out[1];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "contextual-arrow-object",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const f:()=>{a:number,b:number}=()=>({a:(box.x=1),b:box.x});return f().b;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-no-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};return {a:(box.x=1),b:box.x}.b;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "stored-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};return {a:(box.x=(1:=number)),b:box.x}.b;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "result-alias-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out={a:(box.x=1),b:box};out.b.x=true;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "result-alias-reverse-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const out={a:(box.x=1),b:box};box.x=true;return out.b.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "computed-aggregate-alias-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const alias=box[(box.inner.x=1,\"inner\")];alias.x=true;return box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-aggregate-capture-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {old:{inner:box},write:(box.x=1)}.old.inner.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "computed-symbol",
+      "modules": {
+        "main": "function make(seed:number){const k=Symbol(\"key\");const box={[k]:\"s\"};return box[(box[k]=1,k)];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-symbol-wrong",
+      "modules": {
+        "main": "function make(seed:number){const k=Symbol(\"key\");const box={[k]:\"s\"};return box[(box[k]=1,k)];}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "array-aggregate-capture",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return [box,(box.x=1,box)][0].x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-aggregate-capture-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return [box,(box.x=1,box)][0].x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "object-early-nested-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {a:(box.x=1,box),b:(box.x=true)}.a.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-early-nested-alias-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return {a:(box.x=1,box),b:(box.x=true)}.a.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "unknown-component-later-write",
+      "modules": {
+        "main": "function make(seed:number,value:any){const box={x:\"s\"};const out={a:value,b:(box.x=1)};return box.x;}const n:number=make(0,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-component-later-write-wrong",
+      "modules": {
+        "main": "function make(seed:number,value:any){const box={x:\"s\"};const out={a:value,b:(box.x=1)};return box.x;}const n:boolean=make(0,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "skipped-object-arm",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0||({a:(box.x=1),b:box.x});return box.x;}const n:string|number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-key-no-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};return {[(1:=number,\"x\")]:box.x}.x;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "computed-global-symbol",
+      "modules": {
+        "main": "const k=Symbol(\"key\");function make(seed:number){const box={[k]:\"s\"};return box[(box[k]=1,k)];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-global-symbol-wrong",
+      "modules": {
+        "main": "const k=Symbol(\"key\");function make(seed:number){const box={[k]:\"s\"};return box[(box[k]=1,k)];}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "local-symbol-identity",
+      "modules": {
+        "main": "function make(seed:number){const k=Symbol(\"key\");const box={[k]:\"s\"};return box[k];}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-symbol-identity-wrong",
+      "modules": {
+        "main": "function make(seed:number){const k=Symbol(\"key\");const box={[k]:\"s\"};return box[k];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "distinct-symbol-identities",
+      "modules": {
+        "main": "function make(seed:number){const a=Symbol(\"key\"),b=Symbol(\"key\");const box={[a]:\"s\",[b]:0};return box[(box[b]=true,a)];}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-symbol-identities-wrong",
+      "modules": {
+        "main": "function make(seed:number){const a=Symbol(\"key\"),b=Symbol(\"key\");const box={[a]:\"s\",[b]:0};return box[(box[b]=true,a)];}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "shadowed-symbol-call",
+      "modules": {
+        "main": "function make(seed:number){function Symbol(name:any){return \"x\";}const a=Symbol(\"a\"),b=Symbol(\"b\");const box={[a]:\"s\",[b]:0};return box[(box[b]=true,a)];}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadowed-symbol-call-wrong",
+      "modules": {
+        "main": "function make(seed:number){function Symbol(name:any){return \"x\";}const a=Symbol(\"a\"),b=Symbol(\"b\");const box={[a]:\"s\",[b]:0};return box[(box[b]=true,a)];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}
