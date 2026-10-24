@@ -10,6 +10,7 @@ import {
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { TupleStorageShapeOf, TupleStorageTypeAt, TupleConstructionTypeAt } from '../type-system/tuple-storage.mts';
 import { EnsureCompletion, EvaluateResultValue, RetainPropertyResult } from '#self';
 import {
   Set,
@@ -34,9 +35,14 @@ import {
 //    ElementList : ElementList `,` Elision SpreadElement
 //  SpreadElement :
 //    `...` AssignmentExpression
-function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectValue, nextIndex: number, elementContext: TypeRecord | null = null): PlainEvaluator<number> {
+function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectValue, nextIndex: number, context: TypeRecord | null = null): PlainEvaluator<number> {
+  const tuple = context?.Kind === 'tuple' ? TupleStorageShapeOf(context) : undefined;
+  const lastSpread = tuple ? ElementList.findLastIndex((element) => element.type === 'SpreadElement') : -1;
+  let remainingFixed = tuple ? ElementList.reduce((count, element) => count + (element.type === 'SpreadElement' ? 0 : 1), 0) : 0;
   let postIndex = nextIndex;
-  for (const element of ElementList) {
+  for (let sourceIndex = 0; sourceIndex < ElementList.length; sourceIndex += 1) {
+    const element = ElementList[sourceIndex];
+    if (tuple && element.type !== 'SpreadElement') remainingFixed -= 1;
     switch (element.type) {
       case 'Elision':
         postIndex += 1;
@@ -46,11 +52,20 @@ function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectVal
         postIndex = Q(yield* ArrayAccumulation_SpreadElement(element, array, postIndex));
         break;
       default:
-        // proposal-runtime-types #sec-contextual-types: "an element of an array
-        // literal at a position of known array type" takes the element type.
-        // Pushed FOR the element, so `[new Box(1)]` at `[].<Box.<uint8>>`
-        // constructs `Box.<uint8>` and nothing nested under it inherits it.
+        // A direct element consumes its own destination. After the last
+        // spread, the actual prefix count plus the unevaluated fixed tail
+        // determines the final supplied length without running later code.
+        // Before that, use only a type shared by every remaining alignment.
+        // Fixed following entries give a lower bound without running them.
         if (surroundingAgent.feature('runtime-types')) {
+          let elementContext = context?.Kind === 'array' ? context.Element : null;
+          if (tuple) {
+            if (sourceIndex > lastSpread) {
+              elementContext = TupleStorageTypeAt(tuple, postIndex, postIndex + ElementList.length - sourceIndex) ?? null;
+            } else {
+              elementContext = TupleConstructionTypeAt(tuple, postIndex, postIndex + 1 + remainingFixed) ?? null;
+            }
+          }
           pushContextualType(elementContext, element as object);
           try {
             postIndex = Q(yield* ArrayAccumulation_AssignmentExpression(element, array, postIndex));
@@ -64,18 +79,6 @@ function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectVal
     }
   }
   return postIndex;
-}
-
-/** The element type an array literal's own position declares, or null. */
-function elementContextOf(literal: object): TypeRecord | null {
-  const t = contextualTypeFor(literal);
-  if (!t) {
-    return null;
-  }
-  if (t.Kind === 'array') {
-    return (t as { Element?: TypeRecord }).Element ?? null;
-  }
-  return null;
 }
 
 // SpreadElement : `...` AssignmentExpression
@@ -130,7 +133,7 @@ export function* Evaluate_ArrayLiteral(node: ParseNode.ArrayLiteral): ValueEvalu
   // 2. Let len be the result of performing ArrayAccumulation for ElementList with arguments array and 0.
   BeginConstructionSelections(array);
   try {
-    Q(yield* ArrayAccumulation(ElementList, array, 0, surroundingAgent.feature('runtime-types') ? elementContextOf(node) : null));
+    Q(yield* ArrayAccumulation(ElementList, array, 0, surroundingAgent.feature('runtime-types') ? contextualTypeFor(node) ?? null : null));
     return CompleteConstructionSelections(array, NormalCompletion(array));
   } finally {
     EndConstructionSelections(array);

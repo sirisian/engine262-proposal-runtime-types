@@ -207,6 +207,26 @@ export function TupleStorageTypeAt(shape: TupleStorageShape, index: number, leng
   return shape.Rest;
 }
 
+/** Construction before an unobserved spread: offer a context only when all
+ * permitted lengths at or above the supplied lower bound give the same type.
+ * This consumes declaration-sized runs, including very large finite suffixes. */
+export function TupleConstructionTypeAt(shape: TupleStorageShape, index: number, minimumLength: number): TypeRecord | undefined {
+  // Construction uses declaration-proved prefix/rest/suffix shapes. Acquired
+  // intersections and value-dependent scalar partitions are not contexts.
+  if (shape.Conjuncts || shape.ScalarRuns || index < 0) return undefined;
+  const prefix = TuplePrefixLength(shape);
+  if (index < prefix) return runAt(runs(shape), index)?.Type;
+  if (!shape.Rest) return undefined;
+  const lastSuffix = index + TupleSuffixLength(shape) - Math.max(minimumLength, TupleLengthRange(shape).min);
+  let start = 0;
+  for (const run of runs(shape, true)) {
+    if (start > lastSuffix) break;
+    if (!SameType(run.Type, shape.Rest)) return undefined;
+    start += run.Count;
+  }
+  return shape.Rest;
+}
+
 /** Distance to the next declared contract boundary; skip repeated finite runs. */
 export function TupleStorageRun(shape: TupleStorageShape, index: number, length: number, direction = 1): number {
   if (shape.Conjuncts) return shape.Conjuncts.reduce((run, part) => Math.min(run, TupleStorageRun(part, index, length, direction)), Infinity);

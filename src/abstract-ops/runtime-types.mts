@@ -2045,6 +2045,13 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
     }
     return Q(yield* ConvertTupleElementwise(value, t, ConvertValue, sequenceObservation));
   }
+  // The explicit structural-object step of ConvertValue converts each member
+  // explicitly, in place. Reuse the observation/write/admission path while
+  // retaining that operation instead of falling into checked member admission.
+  if ((t.Kind === 'object' || (t.Kind === 'nominal' && t.Declaration.type === 'InterfaceDeclaration'))
+      && value instanceof ObjectValue && Q(IsArray(value)) === Value.false) {
+    return Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation, undefined, ConvertValue));
+  }
   return Q(yield* RequireType(value, t, sequenceObservation));
 }
 
@@ -2275,9 +2282,14 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObserv
   return result;
 }
 
-function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation, choices?: ConstructionSelections): ValueEvaluator {
+function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation,
+  choices?: ConstructionSelections, objectMemberConversion?: ElementConversion): ValueEvaluator {
   const convertChecked = (value: Value, target: TypeRecord, observed?: SequenceObservation): ValueEvaluator =>
     CheckedConvertValue(value, target, observed, choices);
+  // Composite members are receiving boundaries in their own right, including
+  // the carried-numeric and value-class guards before checked conversion.
+  const requireMember = objectMemberConversion
+    ?? ((value: Value, target: TypeRecord): ValueEvaluator => RequireType(value, target, undefined, choices));
   value = Q(yield* MaterializeGenericCallable(value, t));
   // Nominal conversion selection follows membership and considers the
   // target's constructor before the source and inbound declarations. Other
@@ -2920,7 +2932,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
       const current = Q(yield* Get(value, key));
-      const converted = Q(yield* convertChecked(current, prop.type));
+      const converted = Q(yield* requireMember(current, prop.type));
       if (converted !== current) {
         // CONVERTING IN
         // PLACE ASSUMES THE PROPERTY CAN BE WRITTEN, and nothing checked.
@@ -2985,7 +2997,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
           continue;
         }
         const current = Q(yield* Get(value, own));
-        const converted = Q(yield* convertChecked(current, signature.Value));
+        const converted = Q(yield* requireMember(current, signature.Value));
         if (converted !== current) {
           // The same refusal as the declared-member loop above. A property
           // admitted through an INDEX SIGNATURE crosses the same boundary and
@@ -3026,7 +3038,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // the caller's storage. A tuple literal builds a NEW array, so there is no
   // aliased storage to protect and the array rule applies unchanged.
   if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-    return Q(yield* ConvertTupleElementwise(value, t, convertChecked, sequenceObservation));
+    return Q(yield* ConvertTupleElementwise(value, t, requireMember, sequenceObservation));
   }
   if (t.Kind === 'array') {
     // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
@@ -3064,7 +3076,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
       }
       if (isArr === Value.true) {
-        return Q(yield* ConvertArrayElementwise(value, t, convertChecked, sequenceObservation));
+        return Q(yield* ConvertArrayElementwise(value, t, requireMember, sequenceObservation));
       }
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
@@ -6763,8 +6775,10 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     for (let i = 0; i < len; i += 1) {
       items.push({ value: Q(yield* ObserveSequenceElement(value, i, observation)).value, convert: true });
     }
-    const conversion = convertElement === CheckedConvertValue ? RequireType : convertElement;
-    const values = Q(yield* ConvertScalarRestItems([scalar], items, conversion));
+    // The caller supplies the semantic operation, including a checked member's
+    // RequireType guards. Its callback may carry construction choices, so do
+    // not infer admission mode by comparing function identities.
+    const values = Q(yield* ConvertScalarRestItems([scalar], items, convertElement));
     const out = X(ArrayCreate(len));
     for (let i = 0; i < len; i += 1) {
       X(CreateDataPropertyOrThrow(out, Value(String(i)), values[i]!));

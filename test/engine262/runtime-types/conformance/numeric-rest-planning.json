@@ -531,6 +531,286 @@
           }
         }
       ]
+    },
+    {
+      "name": "decimal32 checked rest callback preserves carried numeric type",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal32(7)];const holder:{items:T}={items:v};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 checked rest callback preserves carried numeric type",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal64(7)];const holder:{items:T}={items:v};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 checked rest callback preserves carried numeric type",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(7)];const holder:{items:T}={items:v};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 checked rest callback preserves carried numeric type",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[rational64(7)];const holder:{items:T}={items:v};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 checked rest callback preserves carried numeric type",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(7)];const holder:{items:T}={items:v};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member decimal128-fixed preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=decimal128(7);const raw:any=[value];const result:[number]=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member decimal128-array preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=decimal128(7);const raw:any=[value];const result:[].<number>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member decimal128-object preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=decimal128(7);const raw:any={n:value};const result:{n:number}=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member rational64-fixed preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=rational64(7);const raw:any=[value];const result:[number]=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member rational64-array preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=rational64(7);const raw:any=[value];const result:[].<number>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member rational64-object preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=rational64(7);const raw:any={n:value};const result:{n:number}=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member float128-fixed preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=float128(7);const raw:any=[value];const result:[number]=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member float128-array preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=float128(7);const raw:any=[value];const result:[].<number>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member float128-object preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=float128(7);const raw:any={n:value};const result:{n:number}=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member uint8-fixed preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=uint8(7);const raw:any=[value];const result:[number]=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member uint8-array preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=uint8(7);const raw:any=[value];const result:[].<number>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked member uint8-object preserves carried numeric type",
+      "steps": [
+        {
+          "source": "const value:any=uint8(7);const raw:any={n:value};const result:{n:number}=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit member fixed conversion remains available",
+      "steps": [
+        {
+          "source": "const value:any=decimal128(7);const raw:any=[value];const result:any=(raw := [number]);String(result[0] is number);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit member array conversion remains available",
+      "steps": [
+        {
+          "source": "const value:any=decimal128(7);const raw:any=[value];const result:any=(raw := [].<number>);String(result[0] is number);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit member object conversion remains available",
+      "steps": [
+        {
+          "source": "const value:any=decimal128(7);const raw:any={n:value};const result:any=(raw := {n:number});String(result.n is number);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
     }
   ]
 }

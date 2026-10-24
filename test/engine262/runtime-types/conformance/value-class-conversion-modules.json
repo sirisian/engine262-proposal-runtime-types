@@ -1,20 +1,17 @@
 {
   "cases": [
     {
-      "name": "retained imported nominal guard is intentionally rejected",
+      "name": "imported nominal guard remains dynamic after conversion and suspension",
       "modules": {
         "dep": "export let log=\"\";export class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}",
         "main": "import {C,log} from \"dep\";const raw:any=true;const c:C=raw;await 0;if(log!==\"b\"||!(c instanceof C))throw new Error(\"wrong conversion\");"
       },
       "expected": {
-        "status": "rejected",
-        "bodyEntries": [],
-        "errorClass": "StaticTypeError",
-        "diagnostic": {
-          "code": "RT_IMPOSSIBLE_TEST",
-          "phase": "static",
-          "errorClass": "StaticTypeError"
-        }
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
       }
     },
     {
@@ -154,6 +151,34 @@
         ]
       },
       "runtimeTypes": false
+    },
+    {
+      "name": "changed-imported-hook",
+      "modules": {
+        "dep": "export let log=\"\";export class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}export let checks=0;export function change(){Object.defineProperty(C,Symbol.hasInstance,{value(value:any){checks+=1;return false;}});}",
+        "main": "import {C,log,change,checks} from \"dep\";const raw:any=true;const c:C=raw;await 0;change();if(c instanceof C)throw new Error(\"wrong hook\");if(log!==\"b\"||checks!==1)throw new Error(\"effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conversion-without-await",
+      "modules": {
+        "dep": "export let log=\"\";export class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}",
+        "main": "import {C,log} from \"dep\";const raw:any=true;const c:C=raw;if(log!==\"b\"||!(c instanceof C))throw new Error(\"wrong conversion\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
     }
   ]
 }
