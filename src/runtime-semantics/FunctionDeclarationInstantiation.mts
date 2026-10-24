@@ -1,3 +1,4 @@
+import { MoveParameterConstruction } from '../type-system/result-dependencies.mts';
 import { NamedParameterCountsOf } from '../abstract-ops/named-call.mts';
 import { Value, type Arguments } from '../value.mts';
 import {
@@ -180,8 +181,8 @@ export function* FunctionDeclarationInstantiation(func: ECMAScriptFunctionObject
     // a. Let parameterBindings be parameterNames.
     parameterBindings = new JSStringSet(parameterNames);
   }
-  // 24. Let iteratorRecord be CreateListIteratorRecord(argumentsList).
-  const iteratorRecord = CreateListIteratorRecord(argumentsList.values());
+  // 24. Let iteratorRecord be CreateListIteratorRecord(argumentsList as Value[]).
+  const iteratorRecord = CreateListIteratorRecord(argumentsList as Value[]);
   let usedEnv;
   // 25. If hasDuplicates is true, then
   if (hasDuplicates) {
@@ -239,6 +240,9 @@ export function* FunctionDeclarationInstantiation(func: ECMAScriptFunctionObject
         }
         // 5. Call varEnv.InitializeBinding(n, initialValue).
         yield* varEnv.InitializeBinding(n, initialValue);
+        if (parameterBindings.has(n) && !functionNames.has(n) && env instanceof DeclarativeEnvironmentRecord) {
+          MoveParameterConstruction(env.bindings.get(n), varEnv.bindings.get(n));
+        }
         // 6. NOTE: vars whose names are the same as a formal parameter, initially have the same value as the corresponding initialized parameter.
       }
     }

@@ -1,3 +1,4 @@
+import { ArgumentResultOf, RetainIteratorArgument, TakeIteratorArgument } from '../type-system/result-dependencies.mts';
 import {
   BooleanValue,
   JSStringValue,
@@ -209,13 +210,14 @@ export function* IteratorStep(iteratorRecord: IteratorRecord): PlainEvaluator<Ob
 export function* IteratorStepValue(iteratorRecord: IteratorRecord): PlainEvaluator<Value | 'done'> {
   const result = Q(yield* IteratorStep(iteratorRecord));
   if (result === 'done') {
+    RetainIteratorArgument(iteratorRecord, undefined);
     return 'done';
   }
   const value = EnsureCompletion(yield* IteratorValue(result));
   if (value instanceof ThrowCompletion) {
     iteratorRecord.Done = Value.true;
   }
-  return value;
+  return TakeIteratorArgument(iteratorRecord, value);
 }
 
 /** https://tc39.es/ecma262/#sec-iteratorclose */
@@ -288,17 +290,21 @@ export function CreateIteratorResultObject(value: Value, done: BooleanValue) {
 /** https://tc39.es/ecma262/#sec-createlistiteratorRecord */
 export function CreateListIteratorRecord(list: Iterable<Value>): IteratorRecord {
   const closure = function* closure(): YieldEvaluator {
+    let index = 0;
     for (const E of list) {
+      RetainIteratorArgument(record, Array.isArray(list) ? ArgumentResultOf(list, index) : undefined);
+      index += 1;
       Q(yield* GeneratorYield(CreateIteratorResultObject(E, Value.false)));
     }
     return NormalCompletion(Value.undefined);
   };
   const iterator = CreateIteratorFromClosure(closure, undefined, surroundingAgent.intrinsic('%Iterator.prototype%'));
-  return {
+  const record: IteratorRecord = {
     Iterator: iterator,
     NextMethod: surroundingAgent.intrinsic('%GeneratorFunction.prototype.prototype.next%'),
     Done: Value.false,
   };
+  return record;
 }
 
 /** https://tc39.es/ecma262/#sec-iteratortolist */

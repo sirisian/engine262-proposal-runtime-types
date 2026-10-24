@@ -1,3 +1,4 @@
+import { RetainArgumentResult, CopyArgumentResults, RetainParameterConstruction } from '../type-system/result-dependencies.mts';
 import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { Value, ReferenceValue, ReferenceRunValue, ObjectValue, JSStringValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
@@ -18,7 +19,7 @@ import { __ts_cast__ } from '../utils/language.mts';
 import { CreateRefBinding, DeclarativeEnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
 import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
-import { TypeNodeToTypeRecord, RuntimeTypeOf } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, RuntimeTypeOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
 import { displayType } from '../type-system/records.mts';
 import { AssignRuntimeArguments, DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
@@ -99,11 +100,14 @@ export function* IteratorBindingInitialization_FormalParameters(FormalParameters
 function* IteratorBindingInitialization_AssignedParameters(FormalParameters: ParseNode.FormalParameters, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue, namedCounts?: readonly number[]) {
   const args: Value[] = [];
   while (iteratorRecord.Done === Value.false) {
-    const next = Q(yield* IteratorStepValue(iteratorRecord));
+    const result = EnsureCompletion(yield* IteratorStepValue(iteratorRecord));
+    if (result.Type !== 'normal') return result;
+    const next = result.Value;
     if (next === 'done') {
       break;
     }
     args.push(next);
+    RetainArgumentResult(args, args.length - 1, result);
   }
   // Resolve parameter contracts once, then distribute without replacing a
   // borrow by its value. Binding below still enforces the selected contract.
@@ -129,7 +133,8 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
   }
   let at = 0;
   for (let k = 0; k < FormalParameters.length; k += 1) {
-    const run = args.slice(at, at + counts[k]);
+    const run = CopyArgumentResults(args, args.slice(at, at + counts[k]),
+      Array.from({ length: counts[k] }, (_, index) => at + index));
     at += counts[k];
     const runIterator = CreateListIteratorRecord(run);
     const p = FormalParameters[k];
@@ -211,16 +216,26 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   const usedDefault = !!Initializer && v === Value.undefined;
   // 5. If Initializer is present and v is undefined, then
   if (Initializer && v === Value.undefined) {
-    if (IsAnonymousFunctionDefinition(Initializer)) {
-      const named = EnsureCompletion(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
-      if (named.Type !== 'normal') return named;
-      v = named.Value;
-      valueResult = named;
-    } else {
-      const defaultResult = EnsureCompletion(yield* EvaluateResultValue(Initializer));
-      if (defaultResult.Type !== 'normal') return defaultResult;
-      v = defaultResult.Value;
-      valueResult = defaultResult;
+    let context: TypeRecord | null = null;
+    if (node.TypeAnnotation) {
+      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type));
+      if (resolved.Type === 'normal') context = resolved.Value;
+    }
+    pushContextualType(context, Initializer);
+    try {
+      if (IsAnonymousFunctionDefinition(Initializer)) {
+        const named = EnsureCompletion(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
+        if (named.Type !== 'normal') return named;
+        v = named.Value;
+        valueResult = named;
+      } else {
+        const defaultResult = EnsureCompletion(yield* EvaluateResultValue(Initializer));
+        if (defaultResult.Type !== 'normal') return defaultResult;
+        v = defaultResult.Value;
+        valueResult = defaultResult;
+      }
+    } finally {
+      popContextualType();
     }
   }
   // proposal-runtime-types (references extension): a `ref` parameter binds an
@@ -333,6 +348,7 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   const initialized = Q(yield* InitializeReferencedBinding(lhs, Q(yield* CopyValueClassInstance(X(v)))));
   if (inferred.type) recordDeclaredType(lhs, inferred.type);
   if (node.TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
+  if (!isPatternElement(node)) RetainParameterConstruction(lhs, valueResult);
   return initialized;
 }
 

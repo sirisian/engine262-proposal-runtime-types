@@ -1,3 +1,4 @@
+import { ArgumentResultOf, CopyArgumentResults, RetainArgumentResult, TransferResultDependency } from '../type-system/result-dependencies.mts';
 import { Value, type Arguments } from '../value.mts';
 import type { ParameterRecord } from '../type-system/records.mts';
 import type { ArgumentItem } from '../type-system/named-arguments.mts';
@@ -22,12 +23,21 @@ export function BuiltinNamedParametersOf(func: Value): readonly BuiltinNamedPara
 
 export function NamedCallArguments(items: readonly ArgumentItem<Value>[]): Arguments {
   const args = items.map((item) => item.value);
+  items.forEach((item, index) => RetainArgumentResult(args, index, item));
   argumentItems.set(args, items);
   return args as Arguments;
 }
 
 export function NamedCallItemsOf(args: Arguments) {
   return argumentItems.get(args);
+}
+
+export function CallArgumentItems(args: Arguments): readonly ArgumentItem<Value>[] {
+  return NamedCallItemsOf(args) ?? args.map((value, index) => {
+    const item = { value };
+    const source = ArgumentResultOf(args, index);
+    return source ? TransferResultDependency(source, item) : item;
+  });
 }
 
 export function SetNamedParameterCounts(args: Arguments, target: Value, counts: readonly number[]): void {
@@ -45,7 +55,8 @@ export function SelectedNamedArguments(target: Value, parameters: readonly Param
   // The selected distribution contains only indices of supplied arguments.
   const values = groups.map((group, i) => group.length === 0 && !parameters[i].Rest && !positionalForwarding
     ? [Value.undefined] : group.map((index) => args[index]!));
-  const result = values.flat();
+  const indices = groups.flatMap((group, i) => group.length === 0 && values[i].length ? [-1] : group);
+  const result = CopyArgumentResults(args, values.flat(), indices);
   SetNamedParameterCounts(result, target, values.map((group) => group.length));
   return result;
 }

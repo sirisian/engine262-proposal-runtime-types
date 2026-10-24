@@ -35047,7 +35047,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (record.Kind === 'parameter') return !!record.Name && !inferable.has(record.Name) && typeParameterInScope(record.Name);
             return Object.entries(value).some(([key, child]) => !['Declaration', 'Constructor', 'parent'].includes(key) && hasFixedParameter(child));
           };
-          if (!hasFixedParameter(param)) return;
+          if (!hasFixedParameter(param)) {
+            // Deferring an open admission does not discard the source context.
+            // A nested generic signature introduces its own parameters and can
+            // already determine a fresh object's complete alternative.
+            argumentStaticType(arg, param);
+            return;
+          }
           const pending = new Map((generic ?? []).filter((p) => !bindings.has(p.Name))
             .map((p) => [p.Name, anyTypeRecord]));
           if (pending.size) param = substituteTypeParameters(param, pending);

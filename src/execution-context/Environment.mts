@@ -1,3 +1,4 @@
+import { InvalidateParameterConstruction } from '../type-system/result-dependencies.mts';
 import { AbstractModuleRecord } from '../modules.mts';
 import {
   Descriptor,
@@ -378,6 +379,7 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
     }
     // 5. Else if the binding for N in envRec is a mutable binding, change its bound value to V.
     if (binding.mutable === true) {
+      InvalidateParameterConstruction(binding);
       binding.value = V;
     } else {
       // a. Assert: This is an attempt to change the value of an immutable binding.

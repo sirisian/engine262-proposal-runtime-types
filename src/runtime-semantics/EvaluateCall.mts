@@ -9,10 +9,10 @@ import { isTypeObject } from '../type-system/intern.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
 import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
-import { NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
+import { CallArgumentItems, NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { ArgumentListEvaluation } from './all.mts';
-import { signaturesInView, BindCallArgumentItems } from './ArgumentListEvaluation.mts';
+import { signaturesInView, BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -25,8 +25,9 @@ import {
   Throw,
   R,
 } from '#self';
-import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
+import { contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
 import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
+import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
 export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression, evaluatedArguments?: readonly Value[]) {
@@ -87,38 +88,27 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   let argList;
   if (evaluatedArguments) {
     const items = NamedCallItemsOf(evaluatedArguments);
-    argList = items ? NamedCallArguments(items) : [...evaluatedArguments];
+    argList = items ? NamedCallArguments(items) : CopyArgumentResults(evaluatedArguments, [...evaluatedArguments]);
   } else if (conversionContext !== undefined && Array.isArray(args)) {
     // Keyed on the ARGUMENT EXPRESSION, because `contextualTypeFor` is asked for
     // a call node: the inner `f()` in `uint32(f())` looks itself up, not the
     // argument list that holds it.
     const only = (args as readonly ParseNode[])[0];
-    pushContextualType(conversionContext, only as unknown as object);
-    try {
-      argList = Q(yield* ArgumentListEvaluation(args as ParseNode.Arguments));
-    } finally {
-      popContextualType();
-    }
+    argList = Q(yield* ArgumentListEvaluation(args as ParseNode.Arguments, new Map([[only, conversionContext]])));
   } else {
-    // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
-    // type of a call is the type its position requires", and an argument
-    // position requires the callee's parameter type - "`g(f())` selects the
-    // first where `g` takes a `uint32`, because the parameter supplies the
-    // contextual type".
-    //
-    // soleSignatureParameterTypes answers null in the two cases where there is
-    // no context to give: an overloaded callee, which is the circularity the
-    // clause resolves by rejecting rather than guessing, and a parameter whose
-    // type is still a type PARAMETER, which a generic call is about to infer.
-    const soleParameterTypes = Q(yield* soleSignatureParameterTypes(func));
-    // Tagged with the FIRST argument's node, the one the type is for.
-    const firstArgument = ((args as { ArgumentList?: readonly object[] }).ArgumentList ?? [])[0];
-    pushContextualType(soleParameterTypes?.[0] ?? null, firstArgument);
-    try {
-      argList = Q(yield* ArgumentListEvaluation(args));
-    } finally {
-      popContextualType();
+    // Each source expression receives its own statically known parameter
+    // destination; no first-parameter context surrounds the entire argument list.
+    let contexts: ReadonlyMap<object, TypeRecord> = new Map();
+    if (surroundingAgent.feature('runtime-types') && Array.isArray(args)) {
+      if (signature?.length === 1) {
+        contexts = ArgumentContexts(args, signature[0].Parameters.map((p) => ({ ...p, Type: p.Type as TypeRecord | undefined })));
+      } else if (!signature) {
+        const types = Q(yield* soleSignatureParameterTypes(func));
+        const info = parameterInfo(func);
+        if (types) contexts = ArgumentContexts(args, info.names.map((Name, i) => ({ Name, Rest: info.rests[i], Type: types[i] })));
+      }
     }
+    argList = Q(yield* ArgumentListEvaluation(args, contexts));
     // proposal-runtime-types #sec-overload-resolution: the checking side
     // resolved this call to a numeric value family from its CONTEXT
     // (TakeStaticCallResolution records only calls whose every argument is a
@@ -129,9 +119,9 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     if (surroundingAgent.feature('runtime-types') && callExpression) {
       const resolved = TakeStaticCallResolution(callExpression);
       if (resolved) {
-        argList = argList.map((arg) => (arg instanceof NumberValue && !isTypedNumber(arg)
+        argList = CopyArgumentResults(argList, argList.map((arg) => (arg instanceof NumberValue && !isTypedNumber(arg)
           ? new TypedNumberValue(wrapToType(R(arg) as number, resolved), resolved)
-          : arg)) as typeof argList;
+          : arg))) as typeof argList;
       }
     }
   }
@@ -150,7 +140,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   if (signature && argList) {
     const items = NamedCallItemsOf(argList);
     if (items || needsViewDefaults) {
-      argList = Q(yield* BindCallArgumentItems(items ?? argList.map((value) => ({ value })), func, signature, callContext));
+      argList = Q(yield* BindCallArgumentItems(items ?? CallArgumentItems(argList), func, signature, callContext));
     }
   }
   // #sec-this-adoption: enforce a typed call's receiver view even when the

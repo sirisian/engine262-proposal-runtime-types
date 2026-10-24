@@ -12,14 +12,14 @@ import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { contextualTypeFor, pushContextualType, popContextualType, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord, spreadElementsOf } from '../type-system/runtime.mts';
+import { contextualTypeFor, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord, spreadElementsOf } from '../type-system/runtime.mts';
 import { StampTypedCollection, soleSignatureParameterTypes, RequireType } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { bindLibraryTypeArguments, TakeLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { ArgumentListEvaluation } from './all.mts';
-import { BindCallArgumentItems } from './ArgumentListEvaluation.mts';
+import { BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
@@ -105,32 +105,20 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   if (args === undefined) {
     argList = [];
   } else { // 6. Else,
-    // a. Let argList be ? ArgumentListEvaluation of arguments.
-    //
-    // proposal-runtime-types #sec-contextual-types: "An argument of a call whose
-    // callee has a single applicable signature" takes "the declared type of the
-    // corresponding parameter" as its contextual type, and a construction's
-    // arguments are such a position (a constructor "reflects exactly one
-    // signature", #sec-inference-and-function-forms). Pushed as EvaluateCall
-    // pushes it, and for the same reason: an inner form that reads its context
-    // - a nested `new.()`, a vector construction, an overloaded call - must see
-    // the constructor's parameter and not the type of the OUTER position. For a
-    // generic class the parameter is still a type parameter and
-    // soleSignatureParameterTypes answers null; without the push a nested bare
-    // construction in `const b: Box.<uint8> = new Box(new Box(1))` would seed
-    // its own `T` from the outer annotation.
+    // A constructor supplies its parameter contexts by the same established
+    // positional/named correspondence as a call. Its first parameter cannot
+    // supply context to every argument or to an enclosing construction.
+    let contexts: ReadonlyMap<object, TypeRecord> = new Map();
     if (surroundingAgent.feature('runtime-types') && constructor instanceof ObjectValue) {
-      const soleParameterTypes = Q(yield* soleSignatureParameterTypes(constructor));
-      const firstArgument = ((args as { ArgumentList?: readonly object[] }).ArgumentList ?? [])[0];
-      pushContextualType(libraryParameters?.[0]?.Type ?? soleParameterTypes?.[0] ?? null, firstArgument);
-      try {
-        argList = Q(yield* ArgumentListEvaluation(args));
-      } finally {
-        popContextualType();
+      if (libraryParameters) {
+        contexts = ArgumentContexts(args, libraryParameters);
+      } else {
+        const types = Q(yield* soleSignatureParameterTypes(constructor));
+        const info = parameterInfo(constructor);
+        if (types) contexts = ArgumentContexts(args, info.names.map((Name, i) => ({ Name, Rest: info.rests[i], Type: types[i] })));
       }
-    } else {
-      argList = Q(yield* ArgumentListEvaluation(args));
     }
+    argList = Q(yield* ArgumentListEvaluation(args, contexts));
   }
   if (libraryParameters) {
     const items = NamedCallItemsOf(argList);

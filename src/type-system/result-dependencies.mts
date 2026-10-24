@@ -64,6 +64,66 @@ export function CompleteConstructionSelections<T extends object>(object: ObjectV
   return result;
 }
 
+// Argument and parameter receipts belong to a particular invocation. Ordinary
+// reads of the same value never consult these tables.
+const argumentResults = new WeakMap<readonly (Value | undefined)[], Map<number, { value: Value, result: object }>>();
+const iteratorResults = new WeakMap<object, object>();
+const parameterResults = new WeakMap<object, { value: Value | undefined, result: object }>();
+
+export function RetainArgumentResult(args: readonly (Value | undefined)[], index: number, result: object | undefined): void {
+  const value = args[index];
+  if (!value || !result || !ConstructionSelectionsOf(result)?.length) return;
+  let entries = argumentResults.get(args);
+  if (!entries) argumentResults.set(args, entries = new Map());
+  entries.set(index, { value, result });
+}
+export function ArgumentResultOf(args: readonly (Value | undefined)[], index: number): object | undefined {
+  const entry = argumentResults.get(args)?.get(index);
+  return entry?.value === args[index] ? entry?.result : undefined;
+}
+export function CopyArgumentResults<T extends readonly (Value | undefined)[]>(from: readonly (Value | undefined)[], to: T,
+  indices?: readonly number[]): T {
+  for (let index = 0; index < to.length; index += 1) {
+    const source = indices?.[index] ?? index;
+    if (source >= 0 && from[source] === to[index]) RetainArgumentResult(to, index, ArgumentResultOf(from, source));
+  }
+  return to;
+}
+export function RetainIteratorArgument(record: object, result: object | undefined): void {
+  if (result) iteratorResults.set(record, result);
+  else iteratorResults.delete(record);
+}
+export function TakeIteratorArgument<T extends { Type: string }>(record: object, result: T): T {
+  const source = iteratorResults.get(record);
+  iteratorResults.delete(record);
+  return source && result.Type === 'normal'
+    ? TransferResultDependency(source, result) : result;
+}
+export function RetainParameterConstruction(reference: ReferenceRecord, result: object): void {
+  if (!(reference.Base instanceof EnvironmentRecord) || !(reference.ReferencedName instanceof JSStringValue)) return;
+  const binding = RefBindingHolder(reference.Base, reference.ReferencedName)?.bindings.get(reference.ReferencedName);
+  if (binding && !binding.refLocation && ConstructionSelectionsOf(result)?.length) {
+    parameterResults.set(binding, { value: binding.value, result });
+  }
+}
+// FunctionDeclarationInstantiation alone moves this initialization into its
+// separate body-variable binding; an ordinary read never performs this move.
+export function MoveParameterConstruction(from: object | undefined, to: object | undefined): void {
+  if (!from || !to) return;
+  const receipt = parameterResults.get(from);
+  parameterResults.delete(from);
+  if (receipt) parameterResults.set(to, receipt);
+}
+export function InvalidateParameterConstruction(binding: object): void {
+  parameterResults.delete(binding);
+}
+export function TakeParameterConstruction(binding: object | undefined, value: Value): object | undefined {
+  if (!binding) return undefined;
+  const receipt = parameterResults.get(binding);
+  parameterResults.delete(binding);
+  return receipt?.value === value ? receipt?.result : undefined;
+}
+
 function propertyIdentity(key: PropertyKeyValue): string | SymbolValue {
   return key instanceof JSStringValue ? key.stringValue() : key;
 }

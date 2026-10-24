@@ -3,7 +3,7 @@ import {
   ReferenceValue, ReferenceRunValue, UndefinedValue,
 } from '../value.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
-import { Q, X } from '../completion.mts';
+import { EnsureCompletion, Q, X } from '../completion.mts';
 import { ConvertValue, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { OutOfRange, isArray } from '../utils/language.mts';
 import { registerTemplateArgument } from '../type-system/template-argument.mts';
@@ -13,7 +13,8 @@ import { PrepareNamedArguments, CompleteNamedArguments, PositionalReferenceRuns,
 import { NamedCallArguments, NamedCallItemsOf, SetNamedParameterCounts, BuiltinNamedParametersOf } from '../abstract-ops/named-call.mts';
 import { assignArguments, resolveOverloadChecked } from '../type-system/overloads.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
-import { RuntimeTypeOf, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, SpecializedFunctionSignatureOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { EvaluateResultValue, RetainArgumentResult, TransferResultDependency } from '../type-system/result-dependencies.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
 import {
   surroundingAgent,
@@ -146,16 +147,18 @@ function* ArgumentListEvaluation_TemplateLiteral(TemplateLiteral: ParseNode.Temp
 //   Arguments :
 //     `(` ArgumentList `)`
 //     `(` ArgumentList `,` `)`
-function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): PlainEvaluator<Arguments> {
+function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments, contexts?: ReadonlyMap<object, TypeRecord>): PlainEvaluator<Arguments> {
   // Runtime spread mode depends on the evaluated value, including variables,
   // calls and properties. Keep the base-language/no-spread path allocation-light.
   if (surroundingAgent.feature('runtime-types')
       && Arguments.some((element) => element.type === 'AssignmentRestElement' || element.type === 'NamedArgument')) {
-    const items = Q(yield* ArgumentListEvaluationItems(Arguments));
+    const items = Q(yield* ArgumentListEvaluationItems(Arguments, contexts));
     if (items.some((item) => item.name !== undefined || item.referenceRun) || EmptyReferenceRunsOf(items).length) {
       return NamedCallArguments(items);
     }
-    return items.map((item) => item.value) as Arguments;
+    const values = items.map((item) => item.value);
+    items.forEach((item, index) => RetainArgumentResult(values, index, item));
+    return values as Arguments;
   }
   const precedingArgs: Value[] = [];
   let forwardedIndices: Set<number> | undefined;
@@ -199,12 +202,10 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
       Assert(false, 'named argument in positional argument evaluation');
     } else {
       const AssignmentExpression = element as ParseNode.AssignmentExpressionOrHigher;
-      // 2. Let ref be the result of evaluating AssignmentExpression.
-      const ref = Q(yield* Evaluate(AssignmentExpression));
-      // 3. Let arg be ? GetValue(ref).
-      const arg = Q(yield* GetValue(ref));
-      // 4. Append arg to the end of precedingArgs.
-      precedingArgs.push(arg);
+      const result = EnsureCompletion(yield* EvaluateArgument(AssignmentExpression, contexts));
+      if (result.Type !== 'normal') return result;
+      precedingArgs.push(result.Value);
+      RetainArgumentResult(precedingArgs, precedingArgs.length - 1, result);
       // 5. Return precedingArgs.
     }
   }
@@ -216,10 +217,10 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
   return precedingArgs as Arguments;
 }
 
-export function ArgumentListEvaluation(ArgumentsOrTemplateLiteral: ParseNode.TemplateLiteral | ParseNode.Arguments) {
+export function ArgumentListEvaluation(ArgumentsOrTemplateLiteral: ParseNode.TemplateLiteral | ParseNode.Arguments, contexts?: ReadonlyMap<object, TypeRecord>) {
   switch (true) {
     case isArray(ArgumentsOrTemplateLiteral):
-      return ArgumentListEvaluation_Arguments(ArgumentsOrTemplateLiteral);
+      return ArgumentListEvaluation_Arguments(ArgumentsOrTemplateLiteral, contexts);
     case ('type' in ArgumentsOrTemplateLiteral && ArgumentsOrTemplateLiteral.type === 'TemplateLiteral'):
       return ArgumentListEvaluation_TemplateLiteral(ArgumentsOrTemplateLiteral);
     default:
@@ -246,7 +247,7 @@ export function* PositionalArgumentListEvaluation(args: ParseNode.Arguments): Pl
  * a required parameter left unfilled is an error, since named arguments skip
  * defaulted parameters rather than required ones.
  */
-function parameterInfo(func: Value): { names: string[], omittable: boolean[], rests: boolean[], refs: boolean[], restIndex: number } {
+export function parameterInfo(func: Value): { names: string[], omittable: boolean[], rests: boolean[], refs: boolean[], restIndex: number } {
   // A specialization is a builtin wrapper, not an ECMAScript closure with
   // FormalParameters. Its completed signature preserves names and omissions;
   // the original callee still owns ordinary parameter-default evaluation.
@@ -344,8 +345,39 @@ export function signaturesInView(declaredType: unknown): readonly SignatureInVie
   return t?.Kind === 'function' && t.Signatures?.length ? t.Signatures : undefined;
 }
 
+/** Offer only destinations known before evaluating values. Rest distribution
+ * and spreads can require later evidence; they never borrow a neighbouring
+ * parameter's context. Explicit names of fixed parameters remain unambiguous. */
+export function ArgumentContexts(args: ParseNode.Arguments, parameters: readonly {
+  Name: string, Rest: boolean, Type?: TypeRecord | null,
+}[]): ReadonlyMap<object, TypeRecord> {
+  const contexts = new Map<object, TypeRecord>();
+  const named = new Set(args.flatMap((arg) => arg.type === 'NamedArgument' ? [arg.Name] : []));
+  const positional = parameters.filter((p) => !named.has(p.Name));
+  const fixed = !parameters.some((p) => p.Rest) && !args.some((arg) => arg.type === 'AssignmentRestElement');
+  let index = 0;
+  for (const arg of args) {
+    const parameter = arg.type === 'NamedArgument' ? parameters.find((p) => p.Name === arg.Name && !p.Rest)
+      : fixed ? positional[index++] : undefined;
+    if (parameter?.Type) contexts.set(arg.type === 'NamedArgument' ? arg.AssignmentExpression : arg, parameter.Type);
+  }
+  return contexts;
+}
+
+function* EvaluateArgument(node: ParseNode.AssignmentExpressionOrHigher, contexts?: ReadonlyMap<object, TypeRecord>) {
+  // Callers that already establish a context keep their ordinary behaviour.
+  // An explicit map owns every argument position, including absent entries.
+  if (contexts === undefined) return yield* EvaluateResultValue(node);
+  pushContextualType(contexts.get(node) ?? null, node);
+  try {
+    return yield* EvaluateResultValue(node);
+  } finally {
+    popContextualType();
+  }
+}
+
 /** Evaluate source-order argument items once, before an overload binds their names. */
-export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEvaluator<ArgumentItem<Value>[]> {
+export function* ArgumentListEvaluationItems(args: ParseNode.Arguments, contexts?: ReadonlyMap<object, TypeRecord>): PlainEvaluator<ArgumentItem<Value>[]> {
   const items: ArgumentItem<Value>[] = [];
   const emptyRuns: number[] = [];
   const placePositional = (value: Value): void => {
@@ -358,9 +390,9 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
   for (const element of args) {
     if ((element as { type?: string }).type === 'NamedArgument') {
       const named = element as ParseNode.NamedArgument;
-      const ref = Q(yield* Evaluate(named.AssignmentExpression));
-      const value = Q(yield* GetValue(ref));
-      placeNamed(named.Name, value);
+      const result = EnsureCompletion(yield* EvaluateArgument(named.AssignmentExpression, contexts));
+      if (result.Type !== 'normal') return result;
+      items.push(TransferResultDependency(result, { name: named.Name, value: result.Value }));
     } else if ((element as { type?: string }).type === 'AssignmentRestElement') {
       const { AssignmentExpression } = element as ParseNode.AssignmentRestElement;
       const spreadRef = Q(yield* Evaluate(AssignmentExpression));
@@ -399,9 +431,9 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
         }
       }
     } else {
-      const ref = Q(yield* Evaluate(element as ParseNode.AssignmentExpressionOrHigher));
-      const value = Q(yield* GetValue(ref));
-      placePositional(value);
+      const result = EnsureCompletion(yield* EvaluateArgument(element as ParseNode.AssignmentExpressionOrHigher, contexts));
+      if (result.Type !== 'normal') return result;
+      items.push(TransferResultDependency(result, { value: result.Value }));
     }
   }
 
@@ -477,13 +509,18 @@ export function* BindCallArgumentItems(items: readonly ArgumentItem<Value>[], fu
       // Its zero count reaches ordinary final binding without changing arity.
       if (signature || items.some((item) => item.name !== undefined)) values.push(initials[i] ?? Value.undefined);
     }
-    for (let value of values) {
+    for (let offset = 0; offset < values.length; offset += 1) {
+      let value = values[offset];
       const type = types[i] as TypeRecord | undefined;
       if (signature && !rests[i] && type && type.Kind !== 'any'
           && !(value instanceof ObjectValue) && !(value instanceof ReferenceValue) && value !== Value.undefined) {
         value = Q(yield* ConvertValue(value, type));
       }
       result.push(value);
+      const sourceIndex = indexGroups[i][offset];
+      if (sourceIndex !== undefined && items[sourceIndex].value === value) {
+        RetainArgumentResult(result, result.length - 1, items[sourceIndex]);
+      }
     }
   }
   if (!signature) SetNamedParameterCounts(result, func, placed.groups.map((group) => group.length));

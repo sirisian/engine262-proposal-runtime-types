@@ -1,4 +1,4 @@
-import { ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
+import { TakeParameterConstruction, ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { contextualParameters } from '../type-system/contextual-parameters.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
@@ -37,7 +37,7 @@ import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { CreateRationalValue, isRationalObject, ToRational } from '../intrinsics/Rational.mts';
-import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, TypeParameterBindingsFor, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { containsComputedType } from '../type-system/runtime.mts';
 import { TakeBodyContext } from '../type-system/runtime.mts';
@@ -5516,7 +5516,9 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
       yield* stamp();
       continue;
     }
-    const converted = Q(yield* EnforceAnnotation(sb.TypeAnnotation, current));
+    const binding = (holder as unknown as { bindings?: { get(n: unknown): object | undefined } }).bindings?.get(name);
+    const result = TakeParameterConstruction(binding, current);
+    const converted = Q(yield* EnforceAnnotation(sb.TypeAnnotation, current, result));
     Q(yield* holder.SetMutableBinding(name, converted, Value.false));
     yield* stamp();
   }
@@ -6607,6 +6609,7 @@ export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeR
   if (!formals || formals.length === 0) {
     return null;
   }
+  const bindings = TypeParameterBindingsFor(functionTypeParameters(func as never) ?? [], currentTypeParameterFrame());
   const types: (TypeRecord | null)[] = [];
   for (const p of formals) {
     const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
@@ -6620,7 +6623,12 @@ export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeR
     // must not escape, because this operation is offering a contextual type and
     // not checking anything. A first attempt let it propagate and turned every
     // generic call into an error.
-    const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(ann.Type));
+    // The supplying declaration owns aliases/captures. A same-spelled type in
+    // the caller is not a replacement for the callee's environment.
+    const captured = func as unknown as Partial<CapturedTypeContext>;
+    const attempted = EnsureCompletion(captured.Environment
+      ? yield* TypeNodeToTypeRecordInContext(ann.Type, captured as CapturedTypeContext, bindings)
+      : yield* TypeNodeToTypeRecord(ann.Type));
     if (attempted.Type !== 'normal') {
       types.push(null);
       continue;

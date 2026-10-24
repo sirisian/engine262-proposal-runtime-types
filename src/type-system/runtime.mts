@@ -397,6 +397,20 @@ export function copyTypeParameterFrame(frame: ReadonlyMap<string, TypeRecord>,
   return copy;
 }
 
+/** Keep only active arguments of these declarations, never same-named caller
+ * parameters. Offering a callee context must preserve its already bound own
+ * arguments without importing the rest of the caller's generic environment. */
+export function TypeParameterBindingsFor(parameters: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[],
+  frame: ReadonlyMap<string, TypeRecord> | undefined): Map<string, TypeRecord> {
+  const selected = new Map<string, TypeRecord>();
+  const identities = frame && declarationBindings.get(frame);
+  for (const parameter of parameters) {
+    const bound = identities?.get(parameter);
+    if (bound) bindTypeParameter(selected, parameter.BindingIdentifier.name, bound, parameter);
+  }
+  return selected;
+}
+
 /** Substitute an enclosing runtime frame while preserving nested callable binders.
  * Nominal member captures carry declaration identities, not just names. */
 export function instantiateTypeInFrame(type: TypeRecord, frame: ReadonlyMap<string, TypeRecord>): TypeRecord {
