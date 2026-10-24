@@ -1,4 +1,6 @@
-import { RetainArgumentResult, CopyArgumentResults, RetainParameterConstruction } from '../type-system/result-dependencies.mts';
+import { RetainArgumentResult, CopyArgumentResults, RetainParameterConstruction,
+  BeginConstructionSelections, EndConstructionSelections, CompleteConstructionSelections,
+  ConstructionSelectionsOf, RetainPropertyResult } from '../type-system/result-dependencies.mts';
 import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { Value, ReferenceValue, ReferenceRunValue, ObjectValue, JSStringValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
@@ -404,83 +406,99 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
   }
   // 2. Let A be ! ArrayCreate(0).
   const array = X(ArrayCreate(0));
-  // 3. Let n be 0.
-  let n = 0;
-  // 4. Repeat,
-  while (true) {
-    let next: 'done' | Value = 'done';
-    // a. If iteratorRecord.[[Done]] is false, then
-    if (iteratorRecord.Done === Value.false) {
-      // i. Let next be ? IteratorStepValue(iteratorRecord).
-      next = Q(yield* IteratorStepValue(iteratorRecord));
-    }
-    if (next === 'done') {
-      // #sec-type-annotations: "Where the annotation states an EXTENT -
-      // `[2].<uint8>`, or `[N].<uint8>` for a value parameter N - the extent is
-      // part of the type and the call must supply that many arguments".
-      //
-      // Checked once the rest has collected everything, since `n` is the count
-      // it received. A DYNAMIC extent admits any number and is the common case;
-      // a fixed extent, or a tuple with no rest of its own, fixes it - less any
-      // TRAILING DEFAULTS, which is the length range and is why the minimum
-      // and the maximum are computed apart.
-      //
-      // This is the half that makes the static
-      // check compatible: that check refuses these calls, and until now the run
-      // time accepted them, so the checker was refusing programs that worked.
-      if (restDeclared !== undefined) {
-        let least: number | null = null;
-        let most: number | null = null;
-        if (restDeclared.Kind === 'array' && typeof restDeclared.Extent === 'number') {
-          least = restDeclared.Extent;
-          most = restDeclared.Extent;
-        } else if (restDeclared.Kind === 'tuple' && !restDeclared.Elements.some((e) => e.Rest)) {
-          most = restDeclared.Elements.length;
-          least = most;
-          // `Initial`, not `DeclaredDefault`. This resolution EVALUATES the
-          // initializer, so a defaulted position carries its VALUE here;
-          // `DeclaredDefault` is the checker's flag, set where the resolution
-          // is synchronous and the value cannot be evaluated. Reading
-          // the checker's field on this path found nothing and refused
-          // `...a: [uint8, string = "d"]` given one argument - a program the
-          // clause's own length range admits.
-          while (least > 0
-            && (restDeclared.Elements[least - 1]!.Initial !== 'none'
-              || restDeclared.Elements[least - 1]!.DeclaredDefault === true)) {
-            least -= 1;
+  BeginConstructionSelections(array);
+  try {
+    // 3. Let n be 0.
+    let n = 0;
+    // 4. Repeat,
+    while (true) {
+      let next: 'done' | Value = 'done';
+      let nextResult;
+      // a. If iteratorRecord.[[Done]] is false, then
+      if (iteratorRecord.Done === Value.false) {
+        // i. Let next be ? IteratorStepValue(iteratorRecord).
+        nextResult = EnsureCompletion(yield* IteratorStepValue(iteratorRecord));
+        if (nextResult.Type !== 'normal') return nextResult;
+        next = nextResult.Value;
+      }
+      if (next === 'done') {
+        // #sec-type-annotations: "Where the annotation states an EXTENT -
+        // `[2].<uint8>`, or `[N].<uint8>` for a value parameter N - the extent is
+        // part of the type and the call must supply that many arguments".
+        //
+        // Checked once the rest has collected everything, since `n` is the count
+        // it received. A DYNAMIC extent admits any number and is the common case;
+        // a fixed extent, or a tuple with no rest of its own, fixes it - less any
+        // TRAILING DEFAULTS, which is the length range and is why the minimum
+        // and the maximum are computed apart.
+        //
+        // This is the half that makes the static
+        // check compatible: that check refuses these calls, and until now the run
+        // time accepted them, so the checker was refusing programs that worked.
+        if (restDeclared !== undefined) {
+          let least: number | null = null;
+          let most: number | null = null;
+          if (restDeclared.Kind === 'array' && typeof restDeclared.Extent === 'number') {
+            least = restDeclared.Extent;
+            most = restDeclared.Extent;
+          } else if (restDeclared.Kind === 'tuple' && !restDeclared.Elements.some((e) => e.Rest)) {
+            most = restDeclared.Elements.length;
+            least = most;
+            // `Initial`, not `DeclaredDefault`. This resolution EVALUATES the
+            // initializer, so a defaulted position carries its VALUE here;
+            // `DeclaredDefault` is the checker's flag, set where the resolution
+            // is synchronous and the value cannot be evaluated. Reading
+            // the checker's field on this path found nothing and refused
+            // `...a: [uint8, string = "d"]` given one argument - a program the
+            // clause's own length range admits.
+            while (least > 0
+              && (restDeclared.Elements[least - 1]!.Initial !== 'none'
+                || restDeclared.Elements[least - 1]!.DeclaredDefault === true)) {
+              least -= 1;
+            }
+          }
+          if (least !== null && most !== null && (n < least || n > most)) {
+            return Throw.TypeError(
+              '$1 is not assignable to $2',
+              array,
+              Value(displayType(restDeclared)),
+            );
           }
         }
-        if (least !== null && most !== null && (n < least || n > most)) {
-          return Throw.TypeError(
-            '$1 is not assignable to $2',
-            array,
-            Value(displayType(restDeclared)),
-          );
+        // i. If environment is undefined, return ? PutValue(lhs, A).
+        // Convert the collected type once, preserving tuple positions and
+        // installing the array's storage contract as well as its element type.
+        let collected: Value = array;
+        if (restDeclared) {
+          const result = CompleteConstructionSelections(array, NormalCompletion(array));
+          collected = Q(yield* CheckedConvertValue(array, restDeclared, undefined, ConstructionSelectionsOf(result)));
         }
+        if (BindingPattern) return yield* BindingInitialization(BindingPattern, collected, environment);
+        Assert(lhs !== undefined);
+        const inferred = Q(yield* EnforceInferredBinding(restNode, collected));
+        collected = inferred.value;
+        if (environment === Value.undefined) {
+          return Q(yield* PutValue(lhs, collected));
+        }
+        const initialized = Q(yield* InitializeReferencedBinding(lhs, collected));
+        if (inferred.type) recordDeclaredType(lhs, inferred.type);
+        return initialized;
       }
-      // i. If environment is undefined, return ? PutValue(lhs, A).
-      // Convert the collected type once, preserving tuple positions and
-      // installing the array's storage contract as well as its element type.
-      let collected: Value = array;
-      if (restDeclared) collected = Q(yield* CheckedConvertValue(array, restDeclared));
-      if (BindingPattern) return yield* BindingInitialization(BindingPattern, collected, environment);
-      Assert(lhs !== undefined);
-      const inferred = Q(yield* EnforceInferredBinding(restNode, collected));
-      collected = inferred.value;
-      if (environment === Value.undefined) {
-        return Q(yield* PutValue(lhs, collected));
-      }
-      const initialized = Q(yield* InitializeReferencedBinding(lhs, collected));
-      if (inferred.type) recordDeclaredType(lhs, inferred.type);
-      return initialized;
+      // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
+      // proposal-runtime-types (references extension): a rest parameter is an
+      // array, a store a reference cannot survive, so a ref argument gathered
+      // by a rest decays to its referent's value as it is collected.
+      const value = Q(yield* DecayReferenceValue(next));
+      const key = X(ToString(F(n)));
+      X(CreateDataPropertyOrThrow(array, key, value));
+      // Only this invocation's unchanged argument occurrence can contribute a
+      // choice. Decaying a reference does not turn a stored value into a creation.
+      if (nextResult && value === next) RetainPropertyResult(array, key, nextResult);
+      // g. Set n to n + 1.
+      n += 1;
     }
-    // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
-    // proposal-runtime-types (references extension): a rest parameter is an
-    // array, a store a reference cannot survive, so a ref argument gathered
-    // by a rest decays to its referent's value as it is collected.
-    X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(yield* DecayReferenceValue(next))));
-    // g. Set n to n + 1.
-    n += 1;
+  } finally {
+    EndConstructionSelections(array);
   }
 }
 

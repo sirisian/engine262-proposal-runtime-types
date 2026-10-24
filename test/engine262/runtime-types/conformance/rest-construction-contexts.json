@@ -1,0 +1,1454 @@
+{
+  "cases": [
+    {
+      "name": "function-0-array",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){verify(values[0]);}run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-two-elements",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){if(Number(values.length)!==2)throw new Error(\"count\");verify(values[0]);verify(values[1]);}run({fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-fixed-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"prefix\");verify(values[0]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-fixed-and-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(first:Item,...values:[].<Item>){verify(first);verify(values[0]);}run({fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item]){verify(values[0]);}run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-later",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"prefix\");verify(values[1]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-default",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item,number=3]){verify(values[0]);if(values[1]!==3)throw new Error(\"default\");}run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-finite",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[2].<Item>]){verify(values[0]);verify(values[1]);}run({fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-nested",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[number,Item]]){verify(values[1]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[].<number>,Item]){const a:any=values;verify(a[1]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-named-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number=3,...values:[].<Item>){if(n!==3)throw new Error(\"default\");verify(values[0]);verify(values[1]);}run(values:{fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-named-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"name\");verify(values[0]);}run({fn:function(value:U):U{return value;}},n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-named-middle-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>,n:number){if(n!==3)throw new Error(\"suffix\");verify(values[0]);}run(values:{fn:function(value:U):U{return value;}},3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-callable-view",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function implementation(...received:[].<any>){verify(received[0]);}const run:(...values:[].<Item>)=>void=implementation;run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-specialized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run<T:type>(...values:[].<T>){verify(values[0]);}run.<Item>({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-constructor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}class C{constructor(...values:[].<Item>){verify(values[0]);}}new C({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-array",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){verify(values[0]);}run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-two-elements",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){if(Number(values.length)!==2)throw new Error(\"count\");verify(values[0]);verify(values[1]);}run({fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-fixed-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"prefix\");verify(values[0]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-fixed-and-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(first:Item,...values:[].<Item>){verify(first);verify(values[0]);}run({fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item]){verify(values[0]);}run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-later",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"prefix\");verify(values[1]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-default",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item,number=3]){verify(values[0]);if(values[1]!==3)throw new Error(\"default\");}run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-finite",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[2].<Item>]){verify(values[0]);verify(values[1]);}run({fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-nested",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[number,Item]]){verify(values[1]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[].<number>,Item]){const a:any=values;verify(a[1]);}run(3,{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-named-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number=3,...values:[].<Item>){if(n!==3)throw new Error(\"default\");verify(values[0]);verify(values[1]);}run(values:{fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-named-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"name\");verify(values[0]);}run({fn:function(value:U):U{return value;}},n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-named-middle-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>,n:number){if(n!==3)throw new Error(\"suffix\");verify(values[0]);}run(values:{fn:function(value:U):U{return value;}},3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-callable-view",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function implementation(...received:[].<any>){verify(received[0]);}const run:(...values:[].<Item>)=>void=implementation;run({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-specialized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run<T:type>(...values:[].<T>){verify(values[0]);}run.<Item>({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-constructor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}class C{constructor(...values:[].<Item>){verify(values[0]);}}new C({fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-array",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){verify(values[0]);}run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-two-elements",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){if(Number(values.length)!==2)throw new Error(\"count\");verify(values[0]);verify(values[1]);}run({fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-fixed-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"prefix\");verify(values[0]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-fixed-and-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(first:Item,...values:[].<Item>){verify(first);verify(values[0]);}run({fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item]){verify(values[0]);}run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-later",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"prefix\");verify(values[1]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-default",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item,number=3]){verify(values[0]);if(values[1]!==3)throw new Error(\"default\");}run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-finite",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[2].<Item>]){verify(values[0]);verify(values[1]);}run({fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-nested",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[number,Item]]){verify(values[1]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[].<number>,Item]){const a:any=values;verify(a[1]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-named-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number=3,...values:[].<Item>){if(n!==3)throw new Error(\"default\");verify(values[0]);verify(values[1]);}run(values:{fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-named-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"name\");verify(values[0]);}run({fn:(value:U):U=>{return value;}},n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-named-middle-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>,n:number){if(n!==3)throw new Error(\"suffix\");verify(values[0]);}run(values:{fn:(value:U):U=>{return value;}},3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-callable-view",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function implementation(...received:[].<any>){verify(received[0]);}const run:(...values:[].<Item>)=>void=implementation;run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-specialized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run<T:type>(...values:[].<T>){verify(values[0]);}run.<Item>({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-constructor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}class C{constructor(...values:[].<Item>){verify(values[0]);}}new C({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-array",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){verify(values[0]);}run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-two-elements",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){if(Number(values.length)!==2)throw new Error(\"count\");verify(values[0]);verify(values[1]);}run({fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-fixed-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"prefix\");verify(values[0]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-fixed-and-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(first:Item,...values:[].<Item>){verify(first);verify(values[0]);}run({fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item]){verify(values[0]);}run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-later",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"prefix\");verify(values[1]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-default",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item,number=3]){verify(values[0]);if(values[1]!==3)throw new Error(\"default\");}run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-finite",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[2].<Item>]){verify(values[0]);verify(values[1]);}run({fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-nested",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[number,Item]]){verify(values[1]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[].<number>,Item]){const a:any=values;verify(a[1]);}run(3,{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-named-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number=3,...values:[].<Item>){if(n!==3)throw new Error(\"default\");verify(values[0]);verify(values[1]);}run(values:{fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-named-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"name\");verify(values[0]);}run({fn:(value:U):U=>{return value;}},n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-named-middle-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>,n:number){if(n!==3)throw new Error(\"suffix\");verify(values[0]);}run(values:{fn:(value:U):U=>{return value;}},3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-callable-view",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function implementation(...received:[].<any>){verify(received[0]);}const run:(...values:[].<Item>)=>void=implementation;run({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-specialized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run<T:type>(...values:[].<T>){verify(values[0]);}run.<Item>({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-constructor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}class C{constructor(...values:[].<Item>){verify(values[0]);}}new C({fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-array",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){verify(values[0]);}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-two-elements",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){if(Number(values.length)!==2)throw new Error(\"count\");verify(values[0]);verify(values[1]);}run({fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-fixed-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"prefix\");verify(values[0]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-fixed-and-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(first:Item,...values:[].<Item>){verify(first);verify(values[0]);}run({fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item]){verify(values[0]);}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-later",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"prefix\");verify(values[1]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-default",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item,number=3]){verify(values[0]);if(values[1]!==3)throw new Error(\"default\");}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-finite",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[2].<Item>]){verify(values[0]);verify(values[1]);}run({fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-nested",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[number,Item]]){verify(values[1]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[].<number>,Item]){const a:any=values;verify(a[1]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-named-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number=3,...values:[].<Item>){if(n!==3)throw new Error(\"default\");verify(values[0]);verify(values[1]);}run(values:{fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-named-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"name\");verify(values[0]);}run({fn(value:U):U{return value;}},n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-named-middle-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>,n:number){if(n!==3)throw new Error(\"suffix\");verify(values[0]);}run(values:{fn(value:U):U{return value;}},3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-callable-view",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function implementation(...received:[].<any>){verify(received[0]);}const run:(...values:[].<Item>)=>void=implementation;run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-specialized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run<T:type>(...values:[].<T>){verify(values[0]);}run.<Item>({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-constructor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}class C{constructor(...values:[].<Item>){verify(values[0]);}}new C({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-array",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){verify(values[0]);}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-two-elements",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){if(Number(values.length)!==2)throw new Error(\"count\");verify(values[0]);verify(values[1]);}run({fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-fixed-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"prefix\");verify(values[0]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-fixed-and-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(first:Item,...values:[].<Item>){verify(first);verify(values[0]);}run({fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item]){verify(values[0]);}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-later",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"prefix\");verify(values[1]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-default",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[Item,number=3]){verify(values[0]);if(values[1]!==3)throw new Error(\"default\");}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-finite",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[2].<Item>]){verify(values[0]);verify(values[1]);}run({fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-nested",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[number,Item]]){verify(values[1]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[...[].<number>,Item]){const a:any=values;verify(a[1]);}run(3,{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-named-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number=3,...values:[].<Item>){if(n!==3)throw new Error(\"default\");verify(values[0]);verify(values[1]);}run(values:{fn(value:U):U{return value;}},{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-named-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(n:number,...values:[].<Item>){if(n!==3)throw new Error(\"name\");verify(values[0]);}run({fn(value:U):U{return value;}},n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-named-middle-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>,n:number){if(n!==3)throw new Error(\"suffix\");verify(values[0]);}run(values:{fn(value:U):U{return value;}},3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-callable-view",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function implementation(...received:[].<any>){verify(received[0]);}const run:(...values:[].<Item>)=>void=implementation;run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-specialized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run<T:type>(...values:[].<T>){verify(values[0]);}run.<Item>({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-constructor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}class C{constructor(...values:[].<Item>){verify(values[0]);}}new C({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "effects-and-identity",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}let log=\"\";let saved:any;function remember(c:Reflect.Object){saved=c.objectContext;}function run(...values:[].<Item>){if(values[0]!==saved||log!==\"ab\")throw new Error(\"identity/order\");verify(values[0]);}run((log+=\"a\",@remember {fn(value:U):U{return value;}}),(log+=\"b\",{fn(value:U):U{return value;}}));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-argument-before-admission",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string,readonly extra:number}|{fn:<U:type>(value:U)=>U,readonly extra:number};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}let log=\"\";function run(...values:[].<Item>){if(log!==\"ag\")throw new Error(\"order\");verify(values[0]);}run({fn(value:U):U{return value;},get extra():number{log+=\"g\";return 1;}},(log+=\"a\",{fn(value:U):U{return value;},extra:1}));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-failure-no-fallback",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string,readonly tag:string}|{fn:<U:type>(value:U)=>U,readonly tag:number};let entered=false;let reads=0;let later=false;const raw:any=\"wrong\";function mutate(c:Reflect.Object){Object.defineProperty(c.objectContext,\"tag\",{get(){if(!later)throw new Error(\"early\");reads++;return raw;}});}function run(...values:[].<Item>){entered=true;}try{run(@mutate{fn(value:U):U{return value;},tag:1},(later=true,{fn(value:U):U{return value;},tag:1}));throw new Error(\"accepted\");}catch(e){if(!(e instanceof TypeError)||entered||!later||reads===0)throw e;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-read-has-no-choice",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}let saved:any;function remember(c:Reflect.Object){saved=c.objectContext;}let entered=false;function run(...values:[].<Item>){entered=true;const f:any=values[0].fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"ordinary read inherited choice\");}function outer(...values:[].<Item>){verify(values[0]);}let caught=false;try{outer(@remember {fn(value:U):U{return value;}},(run(saved),{fn(value:U):U{return value;}}));}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!entered||!caught)throw new Error(\"read call\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reentrant-independent-admission",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string,readonly extra:number}|{fn:<U:type>(value:U)=>U,readonly extra:number};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}let called=0;function inner(...values:[].<Item>){called++;verify(values[0]);}function run(...values:[].<Item>){verify(values[0]);if(called!==1)throw new Error(\"reentry\");}run({fn(value:U):U{return value;},get extra():number{inner({fn(value:U):U{return value;},extra:1});return 1;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "abrupt-argument-stops-admission",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string,readonly tag:number}|{fn:<U:type>(value:U)=>U,readonly tag:number};let reads=0;let entered=false;const sentinel={};function fail():any{throw sentinel;}function run(...values:[].<Item>){entered=true;}try{run({fn(value:U):U{return value;},get tag():number{reads++;return 1;}},fail());throw new Error(\"accepted\");}catch(e){if(e!==sentinel||reads!==0||entered)throw e;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-decay-does-not-create-choice",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}let saved:any={fn(value:any):any{return value;}};let entered=false;function run(...values:[].<Item>){entered=true;}let caught=false;try{run(ref saved);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||entered)throw new Error(\"reference became creation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-body-error",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[].<Item>){}run({fn(value:U):U{return \"wrong\";}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "fixed-rest-arity-error",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function run(...values:[2].<Item>){}run({fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "same-value-replacement-invalidates",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function replace(c:Reflect.Object){const wrapper:any=c.objectContext;Object.defineProperty(wrapper,\"child\",{value:wrapper.child,writable:true,enumerable:true,configurable:true});}function run(...values:[].<{child:Item}>){const fn:any=values[0].child.fn;if(Reflect.getReflection(Reflect.typeOf(fn)).signatures[0].typeParameters!==undefined)throw new Error(\"stale contribution\");}run(@replace{child:{fn(value:U):U{return value;}}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled-rest-failure",
+      "modules": {
+        "main": "const raw:any=\"wrong\";function mutate(c:Reflect.Object){Object.defineProperty(c.objectContext,\"tag\",{get(){return raw;}});}function run(...values:[].<{fn:(value:string)=>string,readonly tag:string}|{fn:<U:type>(value:U)=>U,readonly tag:number}>){throw new Error(\"entered\");}run(@mutate{fn(value:U):U{return value;},tag:1});"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "empty-rest",
+      "modules": {
+        "main": "function run(...values:[].<number>){if(Number(values.length)!==0)throw new Error(\"count\");}run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-rest-guard",
+      "modules": {
+        "main": "const value:any=(1 := decimal128);let entered=false;function run(...values:[].<number>){entered=true;}let caught=false;try{run(value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||entered)throw new Error(\"numeric admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-rest-context",
+      "modules": {
+        "dep": "export type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}export function run(...values:[].<Item>){verify(values[0]);}",
+        "main": "import {run} from \"dep\";run({fn(value:U):U{return value;}});"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-alias-context",
+      "modules": {
+        "main": "function check<T:type>(value:T){type Item={fn:(value:string,carry:T)=>string}|{fn:<U:type>(value:U,carry:T)=>U};function run(...values:[].<Item>){const f:any=values[0].fn;if(f.<number>(7,value)!==7||f.<string>(\"ok\",value)!==\"ok\")throw new Error(\"capture\");}run({fn(result:U,carry:T):U{return result;}});}check.<number>(3);check.<string>(\"x\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

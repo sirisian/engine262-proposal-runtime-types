@@ -16,6 +16,7 @@ import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mt
 import { RuntimeTypeOf, SpecializedFunctionSignatureOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { EvaluateResultValue, RetainArgumentResult, TransferResultDependency } from '../type-system/result-dependencies.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
+import { TupleStorageShapeOf, TupleStorageTypeAt } from '../type-system/tuple-storage.mts';
 import {
   surroundingAgent,
   Assert,
@@ -345,21 +346,46 @@ export function signaturesInView(declaredType: unknown): readonly SignatureInVie
   return t?.Kind === 'function' && t.Signatures?.length ? t.Signatures : undefined;
 }
 
-/** Offer only destinations known before evaluating values. Rest distribution
- * and spreads can require later evidence; they never borrow a neighbouring
- * parameter's context. Explicit names of fixed parameters remain unambiguous. */
+/** Offer only destinations known before evaluating values. Name pinning and a
+ * sole trailing positional rest need no value inspection. Other distributions
+ * do not borrow a neighbouring parameter's context. */
 export function ArgumentContexts(args: ParseNode.Arguments, parameters: readonly {
-  Name: string, Rest: boolean, Type?: TypeRecord | null,
+  Name: string, Rest: boolean, Ref?: boolean, Optional?: boolean, Type?: TypeRecord | null,
 }[]): ReadonlyMap<object, TypeRecord> {
   const contexts = new Map<object, TypeRecord>();
-  const named = new Set(args.flatMap((arg) => arg.type === 'NamedArgument' ? [arg.Name] : []));
-  const positional = parameters.filter((p) => !named.has(p.Name));
-  const fixed = !parameters.some((p) => p.Rest) && !args.some((arg) => arg.type === 'AssignmentRestElement');
-  let index = 0;
+  // Even an overwritten named expression is evaluated in its fixed contract.
   for (const arg of args) {
-    const parameter = arg.type === 'NamedArgument' ? parameters.find((p) => p.Name === arg.Name && !p.Rest)
-      : fixed ? positional[index++] : undefined;
-    if (parameter?.Type) contexts.set(arg.type === 'NamedArgument' ? arg.AssignmentExpression : arg, parameter.Type);
+    if (arg.type !== 'NamedArgument') continue;
+    const parameter = parameters.find((p) => p.Name === arg.Name && !p.Rest && !p.Ref);
+    if (parameter?.Type) contexts.set(arg.AssignmentExpression, parameter.Type);
+  }
+  if (args.some((arg) => arg.type === 'AssignmentRestElement')) return contexts;
+  const plan = PrepareNamedArguments(parameters.map((p) => ({ ...p, Optional: p.Optional ?? false })),
+    args.map((arg) => arg.type === 'NamedArgument'
+      ? { name: arg.Name, value: arg.AssignmentExpression } : { value: arg }));
+  if (plan.error) return contexts;
+  const restIndex = plan.remaining.findIndex(({ p }) => p.Rest);
+  const named = args.some((arg) => arg.type === 'NamedArgument');
+  const determined = (restIndex < 0 || restIndex === plan.remaining.length - 1)
+    && (!named || restIndex < 0 || !plan.remaining.slice(0, restIndex).some(({ p }) => p.Optional));
+  if (determined) {
+    let cursor = 0;
+    for (const { p, i } of plan.remaining) {
+      const count = p.Rest ? plan.positional.length - cursor : Math.min(1, plan.positional.length - cursor);
+      plan.groups[i].push(...plan.positional.slice(cursor, cursor + count));
+      cursor += count;
+    }
+  }
+  for (let i = 0; i < parameters.length; i += 1) {
+    const parameter = parameters[i];
+    if (!parameter.Type || parameter.Ref) continue;
+    const group = plan.groups[i];
+    const shape = parameter.Rest ? TupleStorageShapeOf(parameter.Type) : undefined;
+    group.forEach((arg, offset) => {
+      const type = !parameter.Rest ? parameter.Type : parameter.Type?.Kind === 'array' ? parameter.Type.Element
+        : shape ? TupleStorageTypeAt(shape, offset, group.length) : undefined;
+      if (type) contexts.set(arg, type);
+    });
   }
   return contexts;
 }

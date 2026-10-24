@@ -34950,37 +34950,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       mapped.entries.forEach(({ node: arg, slot: slotIndex, offset }) => {
-        const i = counts ? counts.slice(0, slotIndex).reduce((sum, count) => sum + count, 0) + offset : slotIndex;
         const slot = chosen.Parameters[slotIndex];
-        // A REST slot's argument is checked against its ELEMENT type: the
-        // annotation is what the rest COLLECTS, so each argument
-        // contributes one element. `restElementType` is the helper
-        // `assignArguments`' own predicate uses - an array's element, a
-        // tuple's union of positions, and an untyped slot's type unchanged.
-        let param = slot?.Rest
-          ? slot.Type.Kind === 'tuple' ? slot.Type.Elements[offset]?.Type ?? restElementType(slot.Type)
-            : restElementType(slot.Type as TypeRecord) as Known
-          : slot?.Type;
-        // #sec-generics: bind type arguments throughout the signature before
-        // checking value arguments against its parameter types.
-        if (param && generic && generic.length > 0) {
-          if (bindings.size > 0) {
-            effectiveBindings = bindings;
-            param = substituteTypeParameters(param, bindings) as TypeRecord;
-          if (slot?.Rest && slot.Type.Kind === 'parameter' && param?.Kind === 'array') {
-            param = param.Element;
-          }
-          if (slot?.Rest && param && param.Kind === 'tuple') {
-            // A rest bound to a TUPLE checks each argument
-            // against the element at its position in the run, not the
-            // whole tuple; `restElementType` above ran before the
-            // substitution and saw only the parameter.
-            const restStart = counts ? counts.slice(0, slotIndex).reduce((acc, n) => acc + n, 0) : slotIndex;
-            const elementAt = (param as { Elements: readonly { Type: TypeRecord }[] }).Elements[i - restStart];
-            param = elementAt ? elementAt.Type : restElementType(param as TypeRecord) as Known;
-          }
-          }
+        // Complete the collected contract before projecting a rest position.
+        // Written rest nodes are not positions: finite/nested runs and required
+        // suffixes use the same compact positional domain as runtime creation.
+        let target = slot?.Type;
+        if (target && generic?.length && bindings.size > 0) {
+          effectiveBindings = bindings;
+          target = substituteTypeParameters(target, bindings) as TypeRecord;
         }
+        const shape = slot?.Rest && target ? TupleStorageShapeOf(target) : undefined;
+        let param: Known = slot?.Rest && target
+          ? shape && counts ? TupleStorageTypeAt(shape, offset, counts[slotIndex]) ?? null
+            : restElementType(target) : target ?? null;
         // A FUNCTION LITERAL in a position whose type is a function type
         // takes that type's parameters as its own, which is how a
         // callback learns the element type. Recorded here and read

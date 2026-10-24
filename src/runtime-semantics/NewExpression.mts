@@ -115,7 +115,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       } else {
         const types = Q(yield* soleSignatureParameterTypes(constructor));
         const info = parameterInfo(constructor);
-        if (types) contexts = ArgumentContexts(args, info.names.map((Name, i) => ({ Name, Rest: info.rests[i], Type: types[i] })));
+        if (types) contexts = ArgumentContexts(args, info.names.map((Name, i) => ({ Name, Rest: info.rests[i], Ref: info.refs[i], Optional: info.omittable[i], Type: types[i] })));
       }
     }
     argList = Q(yield* ArgumentListEvaluation(args, contexts));

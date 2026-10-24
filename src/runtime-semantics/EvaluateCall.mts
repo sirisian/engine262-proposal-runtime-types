@@ -101,11 +101,11 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     let contexts: ReadonlyMap<object, TypeRecord> = new Map();
     if (surroundingAgent.feature('runtime-types') && Array.isArray(args)) {
       if (signature?.length === 1) {
-        contexts = ArgumentContexts(args, signature[0].Parameters.map((p) => ({ ...p, Type: p.Type as TypeRecord | undefined })));
+        contexts = ArgumentContexts(args, signature[0].Parameters.map((p) => ({ ...p, Optional: p.Optional || p.Initial !== undefined, Type: p.Type as TypeRecord | undefined })));
       } else if (!signature) {
         const types = Q(yield* soleSignatureParameterTypes(func));
         const info = parameterInfo(func);
-        if (types) contexts = ArgumentContexts(args, info.names.map((Name, i) => ({ Name, Rest: info.rests[i], Type: types[i] })));
+        if (types) contexts = ArgumentContexts(args, info.names.map((Name, i) => ({ Name, Rest: info.rests[i], Ref: info.refs[i], Optional: info.omittable[i], Type: types[i] })));
       }
     }
     argList = Q(yield* ArgumentListEvaluation(args, contexts));
