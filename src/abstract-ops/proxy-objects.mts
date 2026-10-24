@@ -60,7 +60,7 @@ function typedOwnPropertyType(target: ObjectValue, P: PropertyKeyValue): { TypeR
  * and the target is only where the value happens to live - a proxy may report a
  * type its target does not have, which is the whole point of giving it one.
  */
-function declaredMemberType(O: { RuntimeType?: TypeRecord }, target: ObjectValue, P: Value): TypeRecord | undefined {
+export function DeclaredProxyMemberType(O: { RuntimeType?: TypeRecord }, target: ObjectValue, P: Value): TypeRecord | undefined {
   const carried = O.RuntimeType;
   // A JSStringValue holds its characters in `value`. Reading `.string` - a field
   // it does not have - found no member and silently checked nothing.
@@ -302,7 +302,7 @@ const InternalMethods = {
     // `Object.getOwnPropertyDescriptor(p, 'a').value` is a value of the member's
     // declared type however it was obtained.
     if (surroundingAgent.feature('runtime-types') && IsDataDescriptor(resultDesc) === true) {
-      const declared = declaredMemberType(O as never, target, P);
+      const declared = DeclaredProxyMemberType(O as never, target, P);
       if (declared !== undefined && resultDesc.Value !== undefined) {
         Q(yield* RequireType(resultDesc.Value, declared as never));
       }
@@ -311,7 +311,7 @@ const InternalMethods = {
     return resultDesc;
   },
   /** https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-defineownproperty-p-desc */
-  * DefineOwnProperty(P, Desc) {
+  * DefineOwnProperty(P, Desc, choices) {
     const O = this;
 
     // 1. Assert: IsPropertyKey(P) is true.
@@ -331,16 +331,16 @@ const InternalMethods = {
     // 7. If trap is undefined, then
     if (trap === Value.undefined) {
       // a. Return ? target.[[DefineOwnProperty]](P, Desc).
-      return Q(yield* target.DefineOwnProperty(P, Desc));
+      return Q(yield* target.DefineOwnProperty(P, Desc, choices));
     }
     // The INCOMING descriptor, as for `set` and for the same reason: a define
     // carries a value of the member's declared type toward the proxy, and a trap
     // that accepts whatever it is handed would leave the proxy reporting a type
     // its own storage contradicts.
     if (surroundingAgent.feature('runtime-types') && IsDataDescriptor(Desc) === true) {
-      const declared = declaredMemberType(O as never, target, P);
+      const declared = DeclaredProxyMemberType(O as never, target, P);
       if (declared !== undefined && Desc.Value !== undefined) {
-        Q(yield* RequireType(Desc.Value, declared as never));
+        Q(yield* RequireType(Desc.Value, declared as never, undefined, choices));
       }
     }
     // 8. Let descObj be FromPropertyDescriptor(Desc).
@@ -470,7 +470,7 @@ const InternalMethods = {
     // Without this a Proxy is a hole in the guarantee, handing back a value the
     // property itself would have refused.
     if (surroundingAgent.feature('runtime-types')) {
-      const declared = declaredMemberType(O as never, target, P);
+      const declared = DeclaredProxyMemberType(O as never, target, P);
       if (declared !== undefined) {
         Q(yield* RequireType(trapResult, declared as never));
       }
@@ -478,7 +478,7 @@ const InternalMethods = {
     return trapResult;
   },
   /** https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-set-p-v-receiver */
-  * Set(P, V, Receiver) {
+  * Set(P, V, Receiver, choices) {
     const O = this;
 
     Assert(IsPropertyKey(P));
@@ -490,7 +490,7 @@ const InternalMethods = {
     const target = O.ProxyTarget as ObjectValue;
     const trap = Q(yield* GetMethod(handler, Value('set')));
     if (trap === Value.undefined) {
-      return Q(yield* target.Set(P, V, Receiver));
+      return Q(yield* target.Set(P, V, Receiver, choices));
     }
     // The INCOMING value, before the trap sees it. A `set` carries a value of
     // the member's declared type in the other direction, so the check belongs
@@ -498,9 +498,9 @@ const InternalMethods = {
     // leave the proxy reporting a type its own storage contradicts, and a later
     // `get` would be refused for a value the `set` accepted.
     if (surroundingAgent.feature('runtime-types')) {
-      const declared = declaredMemberType(O as never, target, P);
+      const declared = DeclaredProxyMemberType(O as never, target, P);
       if (declared !== undefined) {
-        Q(yield* RequireType(V, declared as never));
+        Q(yield* RequireType(V, declared as never, undefined, choices));
       }
     }
     const booleanTrapResult = ToBoolean(Q(yield* Call(trap, handler, [target, P, V, Receiver])));
@@ -525,7 +525,7 @@ const InternalMethods = {
     if (surroundingAgent.feature('runtime-types')) {
       const declared = typedOwnPropertyType(target, P);
       if (declared !== undefined) {
-        Q(yield* RequireType(V, declared.TypeRecord as never));
+        Q(yield* RequireType(V, declared.TypeRecord as never, undefined, choices));
       }
     }
     return Value.true;

@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from './type-system/result-dependencies.mts';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from './type-system/tuple-storage.mts';
 import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
@@ -1019,10 +1020,10 @@ export interface ObjectInternalMethods<Self> {
   IsExtensible(this: Self): ValueEvaluator<BooleanValue>;
   PreventExtensions(this: Self): ValueEvaluator<BooleanValue>;
   GetOwnProperty(this: Self, P: PropertyKeyValue): PlainEvaluator<Descriptor | UndefinedValue>;
-  DefineOwnProperty(this: Self, P: PropertyKeyValue, Desc: Descriptor): ValueEvaluator<BooleanValue>;
+  DefineOwnProperty(this: Self, P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections): ValueEvaluator<BooleanValue>;
   HasProperty(this: Self, P: PropertyKeyValue): ValueEvaluator<BooleanValue>;
   Get(this: Self, P: PropertyKeyValue, Receiver: Value): ValueEvaluator;
-  Set(this: Self, P: PropertyKeyValue, V: Value, Receiver: Value): ValueEvaluator<BooleanValue>;
+  Set(this: Self, P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections): ValueEvaluator<BooleanValue>;
   Delete(this: Self, P: PropertyKeyValue): ValueEvaluator<BooleanValue>;
   OwnPropertyKeys(this: Self): PlainEvaluator<PropertyKeyValue[]>;
   Call?(this: Self, thisArg: Value, args: Arguments): ValueEvaluator;
@@ -1118,9 +1119,9 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     return OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
   }
 
-  * DefineOwnProperty(P: PropertyKeyValue, Desc: Descriptor): ObjectSlotReturn['DefineOwnProperty'] {
+  * DefineOwnProperty(P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections): ObjectSlotReturn['DefineOwnProperty'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
-    return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc);
+    return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc, choices);
   }
 
   * HasProperty(P: PropertyKeyValue): ObjectSlotReturn['HasProperty'] {
@@ -1269,7 +1270,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     return completion;
   }
 
-  * Set(P: PropertyKeyValue, V: Value, Receiver: Value): ObjectSlotReturn['Set'] {
+  * Set(P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections): ObjectSlotReturn['Set'] {
     // TODO:
     Q(surroundingAgent.debugger_tryTouchDuringPreview(Receiver as ObjectValue));
     // proposal-runtime-types (spec sec-typed-classes): a write to a `readonly`
@@ -1316,11 +1317,11 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         if (!target || !TupleResizePreserves(tuple, length, nextLength)) {
           return Throw.TypeError('a tuple store cannot change a surviving position contract');
         }
-        V = Q(yield* RequireType(V, target));
+        V = Q(yield* RequireType(V, target, undefined, choices));
       }
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
-        V = Q(yield* RequireType(V, elementType as never));
+        V = Q(yield* RequireType(V, elementType as never, undefined, choices));
         const typed = Receiver as { TypedExtent?: number };
         const index = Number((P as JSStringValue).stringValue());
         // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
@@ -1343,7 +1344,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       if (spanBacking !== undefined && P instanceof JSStringValue) {
         const index = Number(P.stringValue());
         if (String(index) === P.stringValue()) {
-          Q(yield* WriteArraySpanElement(spanBacking, index, V));
+          Q(yield* WriteArraySpanElement(spanBacking, index, V, choices));
           return Value.true;
         }
       }
@@ -1378,7 +1379,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         if (declared) {
           // The store check runs first, exactly as it does for a property-backed
           // field, and the converted value is what reaches the bytes.
-          const converted = Q(yield* RequireType(V, declared.TypeRecord));
+          const converted = Q(yield* RequireType(V, declared.TypeRecord, undefined, choices));
           Q(yield* WritePlacedField(placedBacking, P.stringValue(), declared.TypeRecord, converted));
           return Value.true;
         }
@@ -1391,11 +1392,11 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
           // The store boundary of #table-check-sites, and it uses what
           // RequireType returns: `o.x = 7` on a uint8 property stores that
           // property's uint8 value, not the plain Number.
-          V = Q(yield* RequireType(V, typeObject.TypeRecord as never));
+          V = Q(yield* RequireType(V, typeObject.TypeRecord as never, undefined, choices));
         }
       }
     }
-    return yield* OrdinarySet(this as unknown as OrdinaryObject, P, V, Receiver);
+    return yield* OrdinarySet(this as unknown as OrdinaryObject, P, V, Receiver, choices);
   }
 
   * Delete(P: PropertyKeyValue): ObjectSlotReturn['Delete'] {

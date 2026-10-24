@@ -59,7 +59,7 @@ import { CaptureArrayIteratorValue } from '../type-system/iteration-construction
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
-  * DefineOwnProperty(P, Desc): ValueEvaluator<BooleanValue> {
+  * DefineOwnProperty(P, Desc, choices): ValueEvaluator<BooleanValue> {
     const array = this;
 
     Assert(IsPropertyKey(P));
@@ -109,9 +109,9 @@ const InternalMethods = {
         if (!target || !TupleResizePreserves(tuple, length, nextLength)) {
           return Throw.TypeError('a tuple definition cannot change a surviving position contract');
         }
-        if (Desc.Value !== undefined) Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, target)) });
+        if (Desc.Value !== undefined) Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, target, undefined, choices)) });
       } else if (typed.TypedElement !== undefined && Desc.Value !== undefined) {
-        Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, typed.TypedElement)) });
+        Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, typed.TypedElement, undefined, choices)) });
       }
     }
     // Conversion can reenter before this definition reaches its ordinary write.
@@ -165,7 +165,7 @@ const InternalMethods = {
       }
       // Independently acquired object-property contracts can refuse this
       // definition even on an otherwise untyped Array. Propagate that error.
-      let succeeded = Q(yield* OrdinaryDefineOwnProperty(array, P, Desc));
+      let succeeded = Q(yield* OrdinaryDefineOwnProperty(array, P, Desc, choices));
       if (succeeded === Value.false) {
         return Value.false;
       }
@@ -176,7 +176,7 @@ const InternalMethods = {
       }
       return Value.true;
     }
-    return yield* OrdinaryDefineOwnProperty(array, P, Desc);
+    return yield* OrdinaryDefineOwnProperty(array, P, Desc, choices);
   },
 
   * Delete(P): ValueEvaluator<BooleanValue> {

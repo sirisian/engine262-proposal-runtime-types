@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { InvalidateParameterConstruction } from '../type-system/result-dependencies.mts';
 import { AbstractModuleRecord } from '../modules.mts';
 import {
@@ -65,7 +66,7 @@ export abstract class EnvironmentRecord {
 
   abstract InitializeBinding(N: JSStringValue, V: Value): PlainEvaluator;
 
-  abstract SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue): PlainEvaluator;
+  abstract SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue, choices?: ConstructionSelections): PlainEvaluator;
 
   abstract GetBindingValue(N: JSStringValue, S: BooleanValue): ValueEvaluator;
 
@@ -140,13 +141,13 @@ function* ReadThroughRefLocation(location: ReferenceRecord): ValueEvaluator {
  * proposal-runtime-types (references extension): write a value through to the
  * storage location a ref binding aliases.
  */
-function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEvaluator {
+function* WriteThroughRefLocation(location: ReferenceRecord, V: Value, choices?: ConstructionSelections): PlainEvaluator {
   const staleWrite = RequireArrayBorrowLive(location);
   if (staleWrite !== undefined) {
     return staleWrite;
   }
   if (location.ArrayBorrow && ScalarRestOwner(location.ArrayBorrow.Source).ScalarRestGuards?.length) {
-    return yield* PutValue(location, V);
+    return yield* PutValue(location, V, choices);
   }
   // A whole-element store through the borrow writes every column at the index.
   if (location.SoAElement !== undefined) {
@@ -155,14 +156,14 @@ function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEva
     return undefined;
   }
   if (location.Base instanceof ObjectValue) {
-    const succeeded = Q(yield* location.Base.Set(location.ReferencedName as PropertyKeyValue, V, location.Base));
+    const succeeded = Q(yield* location.Base.Set(location.ReferencedName as PropertyKeyValue, V, location.Base, choices));
     if (succeeded === Value.false && location.Strict === Value.true) {
       return Throw.TypeError('Cannot assign to $1', location.ReferencedName as Value);
     }
     return NormalCompletion(undefined);
   }
   Assert(location.Base instanceof EnvironmentRecord);
-  return Q(yield* location.Base.SetMutableBinding(location.ReferencedName as JSStringValue, V, location.Strict));
+  return Q(yield* location.Base.SetMutableBinding(location.ReferencedName as JSStringValue, V, location.Strict, choices));
 }
 
 /**
@@ -335,7 +336,7 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
   }
 
   /** https://tc39.es/ecma262/#sec-declarative-environment-records-setmutablebinding-n-v-s */
-  * SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue): PlainEvaluator {
+  * SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue, choices?: ConstructionSelections): PlainEvaluator {
     Assert(IsPropertyKey(N));
     // 1. Let envRec be the declarative Environment Record for which the method was invoked.
     const envRec = this;
@@ -368,14 +369,14 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
     // propagated literal lost its type, and an `any` could put a value the
     // annotation forbids into the binding, which no other storage kind permits.
     if (binding.declaredType !== undefined) {
-      V = Q(yield* RequireType(V, binding.declaredType as never));
+      V = Q(yield* RequireType(V, binding.declaredType as never, undefined, choices));
     }
     // proposal-runtime-types (references extension): a write to a mutable ref
     // binding writes through to the storage location it aliases. The binding
     // itself is not rebound; a `const ref` binding is not writable through and
     // falls to the immutable-binding error below.
     if (binding.refLocation !== undefined && binding.refMutable === true) {
-      return yield* WriteThroughRefLocation(binding.refLocation, V);
+      return yield* WriteThroughRefLocation(binding.refLocation, V, choices);
     }
     // 5. Else if the binding for N in envRec is a mutable binding, change its bound value to V.
     if (binding.mutable === true) {
@@ -726,7 +727,7 @@ export class ObjectEnvironmentRecord extends EnvironmentRecord {
   }
 
   /** https://tc39.es/ecma262/#sec-object-environment-records-setmutablebinding-n-v-s */
-  * SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue): PlainEvaluator {
+  * SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue, choices?: ConstructionSelections): PlainEvaluator {
     // 1. Let envRec be the object Environment Record for which the method was invoked.
     const envRec = this;
     // 2. Let bindings be the binding object for envRec.
@@ -737,8 +738,8 @@ export class ObjectEnvironmentRecord extends EnvironmentRecord {
     if (stillExists === Value.false && S === Value.true) {
       return Throw.ReferenceError('$1 is not defined', N);
     }
-    // 5. Return ? Set(bindings, N, V, S).
-    Q(yield* Set(bindings, N, V, S));
+    // 5. Return ? Set(bindings, N, V, S, choices).
+    Q(yield* Set(bindings, N, V, S, choices));
     return undefined;
   }
 
@@ -889,20 +890,20 @@ export class GlobalEnvironmentRecord extends EnvironmentRecord {
   }
 
   /** https://tc39.es/ecma262/#sec-global-environment-records-setmutablebinding-n-v-s */
-  * SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue): PlainEvaluator {
+  * SetMutableBinding(N: JSStringValue, V: Value, S: BooleanValue, choices?: ConstructionSelections): PlainEvaluator {
     // 1. Let envRec be the global Environment Record for which the method was invoked.
     const envRec = this;
     // 2. Let DclRec be envRec.[[DeclarativeRecord]].
     const DclRec = envRec.DeclarativeRecord;
     // 3. If DclRec.HasBinding(N) is true, then
     if ((yield* DclRec.HasBinding(N)) === Value.true) {
-      // a. Return DclRec.SetMutableBinding(N, V, S).
-      return yield* DclRec.SetMutableBinding(N, V, S);
+      // a. Return DclRec.SetMutableBinding(N, V, S, choices).
+      return yield* DclRec.SetMutableBinding(N, V, S, choices);
     }
     // 4. Let ObjRec be envRec.[[ObjectRecord]].
     const ObjRec = envRec.ObjectRecord;
-    // 5. Return ? ObjRec.SetMutableBinding(N, V, S).
-    Q(yield* ObjRec.SetMutableBinding(N, V, S));
+    // 5. Return ? ObjRec.SetMutableBinding(N, V, S, choices).
+    Q(yield* ObjRec.SetMutableBinding(N, V, S, choices));
     return undefined;
   }
 

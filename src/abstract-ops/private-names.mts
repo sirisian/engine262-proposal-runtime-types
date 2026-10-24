@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { ObjectValue, PrivateName, Value } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { ClassElementDefinitionRecord, PrivateElementRecord } from '../runtime-semantics/all.mts';
@@ -44,7 +45,7 @@ export function* PrivateGet(O: ObjectValue, P: PrivateName) {
   return Q(yield* Call(getter, O));
 }
 
-export function* PrivateSet(O: ObjectValue, P: PrivateName, value: Value) {
+export function* PrivateSet(O: ObjectValue, P: PrivateName, value: Value, choices?: ConstructionSelections) {
   // 1. Let entry be ! PrivateElementFind(P, O).
   const entry = X(PrivateElementFind(P, O));
   // 2. If entry is empty, throw a TypeError exception.
@@ -58,7 +59,7 @@ export function* PrivateSet(O: ObjectValue, P: PrivateName, value: Value) {
     const typeObject = (P as { TypeObject?: { TypeRecord: unknown } }).TypeObject;
     if (surroundingAgent.feature('runtime-types') && typeObject !== undefined) {
       // a. Set entry.[[Value]] to the value of the type to be used.
-      entry.Value = Q(yield* RequireType(value, typeObject.TypeRecord as never));
+      entry.Value = Q(yield* RequireType(value, typeObject.TypeRecord as never, undefined, choices));
       return;
     }
     // a. Set entry.[[Value]] to value.

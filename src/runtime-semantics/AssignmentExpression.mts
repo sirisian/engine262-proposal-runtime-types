@@ -4,7 +4,7 @@ import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, ObjectEnvironmentRecord } from '../execution-context/Environment.mts';
-import { Q, X } from '../completion.mts';
+import { Q, X, EnsureCompletion } from '../completion.mts';
 import {
   IsAnonymousFunctionDefinition,
   IsIdentifierRef,
@@ -29,6 +29,11 @@ import {
   ToBoolean,
   surroundingAgent,
 } from '#self';
+import { ConstructionSelectionsOf, EvaluateResultValue } from '../type-system/result-dependencies.mts';
+import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { isArrayIndex } from '../abstract-ops/all.mts';
+import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
+import { ArraySpanBackingOf } from '../abstract-ops/array-view.mts';
 
 
 /** https://tc39.es/ecma262/#sec-destructuring-assignment */
@@ -215,15 +220,37 @@ function isTypedStorageTarget(reference: unknown): boolean {
  * binds its parameters from the context first (#sec-constructing-a-generic-class), and the checker
  * already reads the same row for the same node.
  */
-function declaredTypeOfTarget(lref: unknown): TypeRecord | null {
-  const ref = lref as { Base?: unknown, ReferencedName?: unknown } | undefined;
-  const base = ref?.Base;
+function declaredTypeOfTarget(lref: unknown, seen = new Set<unknown>()): TypeRecord | null {
+  if (seen.has(lref)) return null;
+  seen.add(lref);
+  const ref = lref as { Base?: unknown, ReferencedName?: unknown, ThisValue?: unknown } | undefined;
+  const base = ref?.ThisValue ?? ref?.Base;
   const name = ref?.ReferencedName;
-  const key = name instanceof JSStringValue ? name.stringValue() : name;
+  // Numeric primitive keys have a side-effect-free spelling. Do not invoke
+  // ToPropertyKey on an object here: the existing store owns that conversion.
+  const key = name instanceof JSStringValue ? name.stringValue()
+    : name instanceof NumberValue || name instanceof TypedNumberValue ? String((name as NumberValue | TypedNumberValue).value) : name;
   if (base instanceof ObjectValue) {
     const typed = (base as { TypedProperties?: Map<unknown, { TypeRecord?: TypeRecord }> }).TypedProperties?.get(key);
     if (typed?.TypeRecord) {
       return typed.TypeRecord;
+    }
+    if (typeof key === 'string' && isArrayIndex(Value(key))) {
+      const span = ArraySpanBackingOf(base);
+      if (span) return declaredTypeOfTarget({ Base: span.Source,
+        ReferencedName: Value(String(span.Offset + Number(key))) }, seen);
+      const storage = base as { TypedTuple?: TupleStorageShape, TypedElement?: TypeRecord };
+      if (storage.TypedTuple) {
+        const index = Number(key);
+        return TupleStorageTypeAt(storage.TypedTuple, index, Math.max(TupleBackingLength(base), index + 1)) ?? null;
+      }
+      if (storage.TypedElement) return storage.TypedElement;
+    }
+    const proxyTarget = (base as { ProxyTarget?: ObjectValue }).ProxyTarget;
+    if (proxyTarget && (typeof key === 'string' || name instanceof Value)) {
+      const declared = DeclaredProxyMemberType(base as { RuntimeType?: TypeRecord }, proxyTarget,
+        typeof key === 'string' ? Value(key) : name as Value);
+      if (declared) return declared;
     }
     const privateType = (name as { TypeObject?: { TypeRecord?: TypeRecord } } | undefined)?.TypeObject?.TypeRecord;
     return privateType ?? null;
@@ -232,8 +259,9 @@ function declaredTypeOfTarget(lref: unknown): TypeRecord | null {
     return null;
   }
   const fromDeclarative = (env: DeclarativeEnvironmentRecord): TypeRecord | null => {
-    const binding = env.bindings.get(Value(key) as JSStringValue) as { declaredType?: unknown } | undefined;
-    return (binding?.declaredType as TypeRecord | undefined) ?? null;
+    const binding = env.bindings.get(Value(key) as JSStringValue) as { declaredType?: unknown, refLocation?: ReferenceRecord } | undefined;
+    return (binding?.declaredType as TypeRecord | undefined)
+      ?? (binding?.refLocation ? declaredTypeOfTarget(binding.refLocation, seen) : null);
   };
   const fromObjectRecord = (env: ObjectEnvironmentRecord): TypeRecord | null => {
     const typed = (env.BindingObject as { TypedProperties?: Map<unknown, { TypeRecord?: TypeRecord }> }).TypedProperties?.get(key);
@@ -251,6 +279,19 @@ function declaredTypeOfTarget(lref: unknown): TypeRecord | null {
   return null;
 }
 
+/** Capture the producing completion without admitting before PutValue. */
+function* assignmentResult(target: unknown, left: ParseNode, right: ParseNode.AssignmentExpressionOrHigher): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) pushContextualType(declaredTypeOfTarget(target), right);
+  try {
+    if (IsAnonymousFunctionDefinition(right) && IsIdentifierRef(left)) {
+      return yield* NamedEvaluation(right as FunctionDeclaration, (target as ReferenceRecord).ReferencedName as JSStringValue);
+    }
+    return yield* EvaluateResultValue(right);
+  } finally {
+    if (surroundingAgent.feature('runtime-types')) popContextualType();
+  }
+}
+
 export function* Evaluate_AssignmentExpression({
   LeftHandSideExpression, AssignmentOperator, AssignmentExpression,
 }: ParseNode.AssignmentExpression): ValueEvaluator {
@@ -260,29 +301,9 @@ export function* Evaluate_AssignmentExpression({
       // a. Let lref be the result of evaluating LeftHandSideExpression.
       const lref = Q(LocationOfAssignmentTarget(LeftHandSideExpression, Q(yield* Evaluate(LeftHandSideExpression))));
       Q(lref);
-      // c. If IsAnonymousFunctionDefinition(AssignmentExpression) and IsIdentifierRef of LeftHandSideExpression are both true, then
-      let rval;
-      if (IsAnonymousFunctionDefinition(AssignmentExpression) && IsIdentifierRef(LeftHandSideExpression)) {
-        // i. Let rval be NamedEvaluation of AssignmentExpression with argument GetReferencedName(lref).
-        rval = Q(yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, (lref as ReferenceRecord).ReferencedName as JSStringValue));
-      } else { // d. Else,
-        // i. Let rref be the result of evaluating AssignmentExpression.
-        // proposal-runtime-types #sec-contextual-types: the target's declared
-        // type is the right operand's contextual type (declaredTypeOfTarget).
-        let rref;
-        if (surroundingAgent.feature('runtime-types')) {
-          pushContextualType(declaredTypeOfTarget(lref), AssignmentExpression as object);
-          try {
-            rref = Q(yield* Evaluate(AssignmentExpression));
-          } finally {
-            popContextualType();
-          }
-        } else {
-          rref = Q(yield* Evaluate(AssignmentExpression));
-        }
-        // ii. Let rval be ? GetValue(rref).
-        rval = Q(yield* GetValue(rref));
-      }
+      const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
+      if (result.Type !== 'normal') return result;
+      let rval = result.Value;
       // #sec-value-type-copying: "assigning to one" is a COPY site, by the same
       // rule as at a binding - a NAME or a READ on the right denotes an existing
       // value and copies; a construction or a call produces one and does not.
@@ -314,7 +335,7 @@ export function* Evaluate_AssignmentExpression({
         rval = Q(yield* CopyValueClassInstance(rval));
       }
       // e. Perform ? PutValue(lref, rval).
-      Q(yield* PutValue(lref, rval));
+      Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
       // f. Return rval.
       return rval;
     }
@@ -339,19 +360,11 @@ export function* Evaluate_AssignmentExpression({
     if (lbool === Value.false) {
       return lval;
     }
-    let rval;
-    // 5. If IsAnonymousFunctionDefinition(AssignmentExpression) is true and IsIdentifierRef of LeftHandSideExpression is true, then
-    if (IsAnonymousFunctionDefinition(AssignmentExpression) && IsIdentifierRef(LeftHandSideExpression)) {
-      // a. Let rval be NamedEvaluation of AssignmentExpression with argument GetReferencedName(lref).
-      rval = Q(yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, (lref as ReferenceRecord).ReferencedName as JSStringValue));
-    } else { // 6. Else,
-      // a. Let rref be the result of evaluating AssignmentExpression.
-      const rref = Q(yield* Evaluate(AssignmentExpression));
-      // b. Let rval be ? GetValue(rref).
-      rval = Q(yield* GetValue(rref));
-    }
-    // 7. Perform ? PutValue(lref, rval).
-    Q(yield* PutValue(lref, rval));
+    const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
+    if (result.Type !== 'normal') return result;
+    const rval = result.Value;
+    // Admission remains at the ordinary store, after the selected RHS.
+    Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
     // 8. Return rval.
     return rval;
   } else if (AssignmentOperator === '||=') {
@@ -365,19 +378,11 @@ export function* Evaluate_AssignmentExpression({
     if (lbool === Value.true) {
       return lval;
     }
-    let rval;
-    // 5. If IsAnonymousFunctionDefinition(AssignmentExpression) is true and IsIdentifierRef of LeftHandSideExpression is true, then
-    if (IsAnonymousFunctionDefinition(AssignmentExpression) && IsIdentifierRef(LeftHandSideExpression)) {
-      // a. Let rval be NamedEvaluation of AssignmentExpression with argument GetReferencedName(lref).
-      rval = Q(yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, (lref as ReferenceRecord).ReferencedName as JSStringValue));
-    } else { // 6. Else,
-      // a. Let rref be the result of evaluating AssignmentExpression.
-      const rref = Q(yield* Evaluate(AssignmentExpression));
-      // b. Let rval be ? GetValue(rref).
-      rval = Q(yield* GetValue(rref));
-    }
-    // 7. Perform ? PutValue(lref, rval).
-    Q(yield* PutValue(lref, rval));
+    const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
+    if (result.Type !== 'normal') return result;
+    const rval = result.Value;
+    // Admission remains at the ordinary store, after the selected RHS.
+    Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
     // 8. Return rval.
     return rval;
   } else if (AssignmentOperator === '??=') {
@@ -389,19 +394,11 @@ export function* Evaluate_AssignmentExpression({
     if (lval !== Value.undefined && lval !== Value.null) {
       return lval;
     }
-    let rval;
-    // 4. If IsAnonymousFunctionDefinition(AssignmentExpression) is true and IsIdentifierRef of LeftHandSideExpression is true, then
-    if (IsAnonymousFunctionDefinition(AssignmentExpression) && IsIdentifierRef(LeftHandSideExpression)) {
-      // a. Let rval be NamedEvaluation of AssignmentExpression with argument GetReferencedName(lref).
-      rval = Q(yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, (lref as ReferenceRecord).ReferencedName as JSStringValue));
-    } else { // 5. Else,
-      // a. Let rref be the result of evaluating AssignmentExpression.
-      const rref = Q(yield* Evaluate(AssignmentExpression));
-      // b. Let rval be ? GetValue(rref).
-      rval = Q(yield* GetValue(rref));
-    }
-    // 6. Perform ? PutValue(lref, rval).
-    Q(yield* PutValue(lref, rval));
+    const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
+    if (result.Type !== 'normal') return result;
+    const rval = result.Value;
+    // Admission remains at the ordinary store, after the selected RHS.
+    Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
     // 7. Return rval.
     return rval;
   } else {

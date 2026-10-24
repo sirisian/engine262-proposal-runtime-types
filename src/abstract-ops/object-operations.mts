@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { BindCallArgumentItems } from '../runtime-semantics/ArgumentListEvaluation.mts';
 import {
   Descriptor,
@@ -110,11 +111,11 @@ export function* GetV(V: Value, P: PropertyKeyValue): ValueEvaluator {
 }
 
 /** https://tc39.es/ecma262/#sec-set-o-p-v-throw */
-export function* Set(O: ObjectValue, P: PropertyKeyValue, V: Value, throws: BooleanValue) {
+export function* Set(O: ObjectValue, P: PropertyKeyValue, V: Value, throws: BooleanValue, choices?: ConstructionSelections) {
   Assert(O instanceof ObjectValue);
   Assert(IsPropertyKey(P));
   Assert(throws instanceof BooleanValue);
-  const success = Q(yield* O.Set(P, V, O));
+  const success = Q(yield* O.Set(P, V, O, choices));
   if (success === Value.false && throws === Value.true) {
     return Throw.TypeError('Cannot set property $1 on $2', P, O);
   }

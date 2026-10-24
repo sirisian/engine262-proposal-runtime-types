@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { Q, X } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
@@ -471,7 +472,7 @@ export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number):
  * element type by the array's own store path, so nothing is re-checked here:
  * a window does not get to choose the type of storage it does not own.
  */
-export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number, value: Value): PlainEvaluator<boolean> {
+export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number, value: Value, choices?: ConstructionSelections): PlainEvaluator<boolean> {
   const live = RequireArraySpanLive(backing);
   if (live) {
     return live;
@@ -479,7 +480,7 @@ export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number,
   if (!Number.isInteger(index) || index < 0 || index >= backing.Length) {
     return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
-  Q(yield* SetValueOnObject(backing.Source, Value(String(backing.Offset + index)), value, Value.true));
+  Q(yield* SetValueOnObject(backing.Source, Value(String(backing.Offset + index)), value, Value.true, choices));
   return true;
 }
 

@@ -7046,6 +7046,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const vector = vectorWriteType(receiver, node);
       if (vector) return [vector];
+      const span = spanElementOfReceiver(receiver);
+      if (span && (keys?.some((key) => typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key))
+          || node.Expression && keyType && IsNumericIndexType(keyType))) return [span];
       const shape = structureOf(receiver);
       if (shape?.Kind === 'array' || shape?.Kind === 'tuple') {
         if (keys) return keys.flatMap((key) => {
@@ -20160,12 +20163,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const declared = declaredOperator(staticType(node.LeftHandSideExpression), node.AssignmentOperator);
         if (declared) return operatorResult(declared, [node.AssignmentExpression], node);
         if (!['=', '||=', '&&=', '??='].includes(node.AssignmentOperator)) return compoundBinaryType(node);
+        // The expression's result is its RHS, whose construction context is
+        // supplied by the store even when an outer expression asks first.
+        // Never merge multiple destinations' write obligations into one union.
+        const target = patternExpression(node.LeftHandSideExpression)!;
+        const destinations = target.type === 'ObjectLiteral' || target.type === 'ArrayLiteral'
+          ? [] : locationWriteTypes(target);
+        const right = destinations.length === 1
+          ? staticTypeIn(node.AssignmentExpression, destinations[0]) : staticType(node.AssignmentExpression);
         if (node.AssignmentOperator !== '=') {
           const left = staticType(node.LeftHandSideExpression);
-          const right = staticType(node.AssignmentExpression);
           return left && right ? joinTypes(left, right) : null;
         }
-        return staticType(node.AssignmentExpression);
+        return right;
       }
 
       case 'CallExpression': {

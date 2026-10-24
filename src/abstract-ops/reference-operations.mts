@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
@@ -273,7 +274,7 @@ export function LocationOfAssignmentTarget(node: ParseNode, target: ReferenceRec
 }
 
 /** https://tc39.es/ecma262/#sec-putvalue */
-export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator {
+export function* PutValue(V: ReferenceRecord | Value, W: Value, choices?: ConstructionSelections): PlainEvaluator {
   // A write through `refs[k]` reaches the k-th location; the run itself
   // is never stored (the escape error a single ref parameter has).
   if (W instanceof ReferenceRunValue) {
@@ -284,13 +285,13 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     if (element === 'length') {
       return Throw.TypeError('$1', Value('the length of a ref rest is a constant'));
     }
-    return Q(yield* PutValue(element, W));
+    return Q(yield* PutValue(element, W, choices));
   }
   // proposal-runtime-types #sec-location-consuming-contexts: an assignment
   // whose target is a call stores THROUGH the location the call returned; the
   // borrow arrives here in place of a Reference Record.
   if (V instanceof ReferenceValue) {
-    return Q(yield* PutValue(V.Location, W));
+    return Q(yield* PutValue(V.Location, W, choices));
   }
   // proposal-runtime-types #sec-soa-references: a whole-element store through a
   // borrow of an SoA element writes every column at that index, which is what
@@ -319,7 +320,7 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     // b. Let globalObj be GetGlobalObject().
     const globalObj = GetGlobalObject();
     // c. Return ? Set(globalObj, V.[[ReferencedName]], W, false).
-    Q(yield* Set(globalObj, V.ReferencedName as JSStringValue, W, Value.false));
+    Q(yield* Set(globalObj, V.ReferencedName as JSStringValue, W, Value.false, choices));
     return undefined;
   }
   // proposal-runtime-types (operatoroverloading.md): a write through an index
@@ -348,7 +349,7 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     // reference carrying the borrow the read produced.
     const borrow = Q(yield* Call(V.IndexOperator, V.Base as Value, (V.IndexArguments ?? [V.ReferencedName as Value]) as Value[]));
     if (borrow instanceof ReferenceValue) {
-      return Q(yield* PutValue(borrow.Location, W));
+      return Q(yield* PutValue(borrow.Location, W, choices));
     }
     // A read direction that yields a value has no location for the write to
     // reach, so the write would not be read back and is reported instead.
@@ -373,7 +374,7 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     // b. If IsPrivateReference(V) is true, then
     if (IsPrivateReference(V)) {
       // i. Return ? PrivateSet(baseObj, V.[[ReferencedName]], W).
-      return Q(yield* PrivateSet(baseObj, V.ReferencedName, W));
+      return Q(yield* PrivateSet(baseObj, V.ReferencedName, W, choices));
     }
     if (!IsPropertyKey(V.ReferencedName)) {
       V.ReferencedName = Q(yield* ToPropertyKey(V.ReferencedName as Value));
@@ -382,10 +383,10 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     let succeeded;
     if (V.ArrayBorrow && ScalarRestOwner(V.ArrayBorrow.Source).ScalarRestGuards?.length && V.ReferencedName instanceof JSStringValue) {
       succeeded = Q(yield* WithArrayDefinitionCheck(V.ArrayBorrow.Source, V.ReferencedName,
-        () => RequireArrayBorrowLive(V), () => baseObj.Set(V.ReferencedName as PropertyKeyValue, W, GetThisValue(V))));
+        () => RequireArrayBorrowLive(V), () => baseObj.Set(V.ReferencedName as PropertyKeyValue, W, GetThisValue(V), choices)));
       Q(RequireArrayBorrowLive(V));
     } else {
-      succeeded = Q(yield* baseObj.Set(V.ReferencedName, W, GetThisValue(V)));
+      succeeded = Q(yield* baseObj.Set(V.ReferencedName, W, GetThisValue(V), choices));
     }
     // d. If succeeded is false and V.[[Strict]] is true, throw a TypeError exception.
     if (succeeded === Value.false && V.Strict === Value.true) {
@@ -399,7 +400,7 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     // b. Assert: base is an Environment Record.
     Assert(base instanceof EnvironmentRecord);
     // c. Return ? base.SetMutableBinding(V.[[ReferencedName]], W, V.[[Strict]]) (see 9.1).
-    return Q(yield* base.SetMutableBinding(V.ReferencedName as JSStringValue, W, V.Strict));
+    return Q(yield* base.SetMutableBinding(V.ReferencedName as JSStringValue, W, V.Strict, choices));
   }
 }
 

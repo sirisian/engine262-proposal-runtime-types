@@ -1,3 +1,4 @@
+import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import {
   Descriptor,
   ObjectValue,
@@ -135,7 +136,7 @@ export function OrdinaryGetOwnProperty(O: ObjectValue, P: PropertyKeyValue) {
 }
 
 // 9.1.6.1 OrdinaryDefineOwnProperty
-export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, Desc: Descriptor): ValueEvaluator<BooleanValue> {
+export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections): ValueEvaluator<BooleanValue> {
   // proposal-runtime-types (spec sec-object-types-semantics): a descriptor with a
   // declared type gives the property a type. A descriptor with a type and no value
   // takes the type's default; a descriptor with a type and a value has the value
@@ -156,7 +157,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
       // RequireType RETURNS the value of the type to be used: a plain 7
       // reaching a uint8 property becomes that property's uint8 value, and the
       // descriptor must carry the converted value rather than the raw one.
-      const converted = Q(yield* RequireType(Desc.Value, record));
+      const converted = Q(yield* RequireType(Desc.Value, record, undefined, choices));
       applied = Descriptor({ ...Desc, Value: converted });
     } else {
       let dflt = LookupTypeDefault(typeObject);
@@ -205,7 +206,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
         // RequireType returns the value OF THE TYPE to be used, so the
         // descriptor must carry what it returned rather than the raw value -
         // the same correction made to the typed branch above.
-        const converted = Q(yield* RequireType(Desc.Value, declared.TypeRecord));
+        const converted = Q(yield* RequireType(Desc.Value, declared.TypeRecord, undefined, choices));
         const current = Q(yield* O.GetOwnProperty(P));
         const extensible = Q(yield* IsExtensible(O));
         const applied = Descriptor({ ...Desc, Value: converted });
@@ -407,20 +408,20 @@ export function* OrdinaryGet(O: ObjectValue, P: PropertyKeyValue, Receiver: Valu
 }
 
 // 9.1.9.1 OrdinarySet
-export function* OrdinarySet(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value) {
+export function* OrdinarySet(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections) {
   Assert(IsPropertyKey(P));
   const ownDesc = Q(yield* O.GetOwnProperty(P));
-  return yield* OrdinarySetWithOwnDescriptor(O, P, V, Receiver, ownDesc);
+  return yield* OrdinarySetWithOwnDescriptor(O, P, V, Receiver, ownDesc, choices);
 }
 
 // 9.1.9.2 OrdinarySetWithOwnDescriptor
-export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, ownDesc: Descriptor | UndefinedValue): ValueEvaluator<BooleanValue> {
+export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, ownDesc: Descriptor | UndefinedValue, choices?: ConstructionSelections): ValueEvaluator<BooleanValue> {
   Assert(IsPropertyKey(P));
 
   if (ownDesc instanceof UndefinedValue) {
     const parent = Q(yield* O.GetPrototypeOf());
     if (!(parent instanceof NullValue)) {
-      return Q(yield* parent.Set(P, V, Receiver));
+      return Q(yield* parent.Set(P, V, Receiver, choices));
     }
     ownDesc = Descriptor({
       Value: Value.undefined,
@@ -447,9 +448,13 @@ export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValu
         return Value.false;
       }
       const valueDesc = Descriptor({ Value: V });
-      return Q(yield* Receiver.DefineOwnProperty(P, valueDesc));
+      return Q(yield* Receiver.DefineOwnProperty(P, valueDesc, choices));
     }
-    return yield* CreateDataProperty(Receiver, P, V);
+    // This is the ordinary CreateDataProperty descriptor, with the source
+    // occurrence carried only through this internal definition.
+    return yield* Receiver.DefineOwnProperty(P, Descriptor({
+      Value: V, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
+    }), choices);
   }
 
   Assert(IsAccessorDescriptor(ownDesc));
