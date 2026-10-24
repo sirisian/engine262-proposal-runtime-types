@@ -1,0 +1,1104 @@
+{
+  "description": "Adopted own binder identity versus captured outer binder; requirements precede observations. Remaining capture/default and reflection gaps are excluded and documented separately.",
+  "cases": [
+    {
+      "name": "local-U-direct",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){const captured=seed;const own=value;return {captured,own};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-U-arrow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){const read=()=>({captured:seed,own:value});return read();}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-U-function",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){function read(){return {captured:seed,own:value};}return read();}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-U-pattern",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){const {captured,own}={captured:seed,own:value};return {captured,own};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-U-direct",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){const captured=seed;const own=value;return {captured,own};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-U-arrow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){const read=()=>({captured:seed,own:value});return read();}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-U-function",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){function read(){return {captured:seed,own:value};}return read();}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-U-pattern",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){const {captured,own}={captured:seed,own:value};return {captured,own};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-U-direct",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){const captured=seed;const own=value;return {captured,own};}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-U-arrow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){const read=()=>({captured:seed,own:value});return read();}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-U-function",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){function read(){return {captured:seed,own:value};}return read();}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-U-pattern",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){const {captured,own}={captured:seed,own:value};return {captured,own};}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-T-direct",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){const captured=seed;const own=value;return {captured,own};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-T-arrow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){const read=()=>({captured:seed,own:value});return read();}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-T-function",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){function read(){return {captured:seed,own:value};}return read();}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-T-pattern",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){const {captured,own}={captured:seed,own:value};return {captured,own};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-T-direct",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){const captured=seed;const own=value;return {captured,own};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-T-arrow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){const read=()=>({captured:seed,own:value});return read();}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-T-function",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){function read(){return {captured:seed,own:value};}return read();}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-T-pattern",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){const {captured,own}={captured:seed,own:value};return {captured,own};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-T-direct",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){const captured=seed;const own=value;return {captured,own};}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-T-arrow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){const read=()=>({captured:seed,own:value});return read();}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-T-function",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){function read(){return {captured:seed,own:value};}return read();}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-T-pattern",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){const {captured,own}={captured:seed,own:value};return {captured,own};}});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-own-U",
+      "modules": {
+        "main": "function factory<T:type>(seed:T){return {map<U:type>(value:U){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-own-T",
+      "modules": {
+        "main": "function factory<T:type>(seed:T){return {map<T:type>(value:T){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-U-function-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-U-function-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){function read(){return {captured:seed,own:value};}return read();};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-U-function-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Mapper.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-U-function-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Mapper.<T>{return function(value){function read(){return {captured:seed,own:value};}return read();};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-U-function-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-U-function-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take(function(value){function read(){return {captured:seed,own:value};}return read();});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-U-arrow-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-U-arrow-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{function read(){return {captured:seed,own:value};}return read();};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-U-arrow-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Mapper.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-U-arrow-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Mapper.<T>{return (value)=>{function read(){return {captured:seed,own:value};}return read();};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-U-arrow-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-U-arrow-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<U:type>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take((value)=>{function read(){return {captured:seed,own:value};}return read();});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-T-function-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-T-function-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){function read(){return {captured:seed,own:value};}return read();};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-T-function-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Mapper.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-T-function-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Mapper.<T>{return function(value){function read(){return {captured:seed,own:value};}return read();};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-T-function-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-T-function-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take(function(value){function read(){return {captured:seed,own:value};}return read();});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-T-arrow-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-local-T-arrow-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{function read(){return {captured:seed,own:value};}return read();};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-T-arrow-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Mapper.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-return-T-arrow-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Mapper.<T>{return (value)=>{function read(){return {captured:seed,own:value};}return read();};}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-T-arrow-direct",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-argument-T-arrow-nested",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(f:Mapper.<T>){return f;}return take((value)=>{function read(){return {captured:seed,own:value};}return read();});}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bounded",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends string>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==\"s\")throw new Error(\"value\");}const p=factory.<number>(0).map.<string>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type=string>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==\"s\")throw new Error(\"value\");}const p=factory.<number>(0).map.<>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-default",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(first:T,second?:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(first,second=first){return {captured:seed,own:second};}};return a;}function verify(a:any,b:any){if(a!==0||b!==\"s\")throw new Error(\"value\");}const p=factory.<number>(0).map.<string>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pattern-parameter",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(input:{value:T}):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map({value}){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==\"s\")throw new Error(\"value\");}const p=factory.<number>(0).map.<string>({value:\"s\"});verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "body-pattern-default",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){const {own=value}={};return {captured:seed,own};}};return a;}function verify(a:any,b:any){if(a!==0||b!==\"s\")throw new Error(\"value\");}const p=factory.<number>(0).map.<string>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-inferred-outer",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-inferred-inner",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bad-captured-consumer",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);const wrong:string=pair.captured;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-bad-own-consumer",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);const wrong:number=pair.own;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-erased-result",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);const erased:any=pair;function need(value:number){if(value!==0)throw new Error(\"capture\");}need(erased.captured);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);const other=factory.<string>(\"s\");const otherPair=other.map.<number>(7);function checkOther(a:any,b:any){if(a!==\"s\"||b!==7)throw new Error(\"activation\");}checkOther(otherPair.captured,otherPair.own);verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-inferred-outer",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-inferred-inner",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bad-captured-consumer",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const wrong:string=pair.captured;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-bad-own-consumer",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const wrong:number=pair.own;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-erased-result",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const erased:any=pair;function need(value:number){if(value!==0)throw new Error(\"capture\");}need(erased.captured);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-two-activations",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const other=factory.<string>(\"s\");const otherPair=other.<number>(7);function checkOther(a:any,b:any){if(a!==\"s\"||b!==7)throw new Error(\"activation\");}checkOther(otherPair.captured,otherPair.own);verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-inferred-outer",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-inferred-inner",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bad-captured-consumer",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const wrong:string=pair.captured;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-bad-own-consumer",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const wrong:number=pair.own;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-erased-result",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const erased:any=pair;function need(value:number){if(value!==0)throw new Error(\"capture\");}need(erased.captured);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-two-activations",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const other=factory.<string>(\"s\");const otherPair=other.<number>(7);function checkOther(a:any,b:any){if(a!==\"s\"||b!==7)throw new Error(\"activation\");}checkOther(otherPair.captured,otherPair.own);verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-readmission-after-activation",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);const held:Adapter.<number>=factory.<number>(0);const again=held.map.<string>(\"s\");verify(again.captured,again.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-readmission-after-activation",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const held:Mapper.<number>=f;const again=held.<string>(\"s\");verify(again.captured,again.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-readmission-after-activation",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);const held:Mapper.<number>=f;const again=held.<string>(\"s\");verify(again.captured,again.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-adapter",
+      "modules": {
+        "types": "export type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};",
+        "main": "import {Adapter} from \"types\";function factory<T:type>(seed:T){const adapter:Adapter.<T>={map(value){return {captured:seed,own:value};}};return adapter;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const pair=factory.<number>(0).map.<string>(\"s\");verify(pair.captured,pair.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "types",
+          "main"
+        ]
+      }
+    }
+  ]
+}

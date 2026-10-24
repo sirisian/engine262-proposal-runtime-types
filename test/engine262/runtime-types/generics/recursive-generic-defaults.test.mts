@@ -50,14 +50,19 @@ for (const demanded of [false, true]) {
   });
 }
 
-test('finite imported default still checks its consumer', async () => {
-  const result = await observeModuleGraph({
-    dep: 'export type R<T:type=R.<string>>=T;',
-    main: 'import {R} from "dep";function f():R.<> {return 1;}',
+for (const computed of [false, true]) {
+  test(`finite imported default checks its consumer at the required phase (${computed})`, async () => {
+    const result = await observeModuleGraph({
+      dep: computed ? 'export function build(){return type string;}export type R<T:type=build()> = T;'
+        : 'export type R<T:type=R.<string>>=T;',
+      main: 'import {R} from "dep";function f():R.<> {return 1;}',
+    });
+    // Closed substitution needs no source evaluation. A builder application
+    // retains the module's pre-body boundary and dependency prerequisites.
+    expect(result).toMatchObject({ status: 'rejected', bodyEntries: computed ? ['dep'] : [], errorClass: 'StaticTypeError',
+      diagnostic: { code: 'RT_ASSIGNABILITY', phase: computed ? 'pre-evaluation' : 'static' } });
   });
-  expect(result).toMatchObject({ status: 'rejected', bodyEntries: ['dep'], errorClass: 'StaticTypeError',
-    diagnostic: { code: 'RT_ASSIGNABILITY', phase: 'pre-evaluation' } });
-});
+}
 
 for (const depth of [8, 32]) {
   test(`required recursive defaults use the host depth budget and restore it (${depth})`, () => {

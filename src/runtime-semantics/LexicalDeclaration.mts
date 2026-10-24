@@ -103,7 +103,19 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     // 3. If IsAnonymousFunctionDefinition(Initializer) is true, then
     if (IsAnonymousFunctionDefinition(Initializer)) {
       // a. Let value be NamedEvaluation of Initializer with argument bindingId.
-      value = Q(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
+      // Naming a literal does not remove its position's contextual signature.
+      // In particular, its created value must adopt the generic list before
+      // the binding boundary tests that signature.
+      let contextual: TypeRecord | null = null;
+      if (TypeAnnotation) {
+        contextual = Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
+      }
+      pushContextualType(contextual, Initializer);
+      try {
+        value = Q(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
+      } finally {
+        popContextualType();
+      }
     } else { // 4. Else,
       // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
       // type of a call is the type its position requires". An annotated binding

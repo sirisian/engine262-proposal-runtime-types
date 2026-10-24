@@ -3769,6 +3769,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * member `{ m: () => "s" }` and a standalone function are.
    */
   const contextualMethodReturns = new Journaled<Known>();
+  const contextualGenericParameters = new Journaled<readonly TypeParameterRecord[]>();
+  const adoptContextualSignature = (node: ParseNode, signature: SignatureRecord): SignatureRecord => {
+    if ((node as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList?.length) return signature;
+    const parameters = signature.TypeParameters ?? [];
+    const bindings = new Map<string, TypeRecord>(parameters.map((parameter) => [parameter.Name, {
+      Kind: 'parameter', Name: parameter.Name, CapturedDeclaration: parameter.Declaration,
+      Arity: parameter.Arity, ...(parameter.Constraint ? { Constraint: parameter.Constraint } : {}),
+    }]));
+    // Adopted own references and enclosing captures keep distinct declarations.
+    const adopted = substituteTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings) as Extract<TypeRecord, { Kind: 'function' }>;
+    contextualGenericParameters.set(node, adopted.Signatures[0].TypeParameters ?? []);
+    return adopted.Signatures[0];
+  };
 
   /**
    * A CALL's contextual type, recorded the way `contextualReturnTypes` records a
@@ -5122,6 +5135,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (!list || list.length === 0) {
+      const adopted = declaration && contextualGenericParameters.get(declaration);
+      if (adopted?.length) {
+        // The context already resolved these declarations and their bounds.
+        // Re-reading their syntax in the literal's outer scope can select a
+        // different same-named parameter or lose the context's substitutions.
+        const scope = new Map<string, Known | null>();
+        typeParameterDeclarations.set(scope, adopted.map((parameter) => parameter.Declaration));
+        for (const parameter of adopted) {
+          if (only === 'type-only' && parameter.Kind === 'value') continue;
+          scope.set(parameter.Name, parameter.Constraint ?? (parameter.Variadic
+            ? { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } : null));
+          if (parameter.ConstraintNode && !parameter.Constraint) computedConstraintNames.add(parameter.Name);
+          if (parameter.Kind === 'value' && !parameter.Variadic && parameter.Constraint) {
+            let domains = valueParameterDomains.get(scope);
+            if (!domains) { domains = new Map(); valueParameterDomains.set(scope, domains); }
+            domains.set(parameter.Name, parameter.Constraint);
+          }
+        }
+        typeParameterScopes.push(scope);
+        return true;
+      }
       return false;
     }
     if (declaration) variadicObligations.set(declaration, []);
@@ -9099,12 +9133,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const seen = new Set(excluded);
     const captures: NonNullable<TypeParameterRecord['Captures']>[number][] = [];
     for (let owner = node; owner; owner = owner.parent) {
-      for (const Declaration of (owner as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList ?? []) {
+      const written = (owner as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList;
+      const parameters = written?.length ? typeParameterRecordsOf(written) : contextualGenericParameters.get(owner) ?? [];
+      for (const parameter of parameters) {
+        const Declaration = parameter.Declaration;
         const Name = Declaration.BindingIdentifier.name;
         if (seen.has(Name)) continue;
         seen.add(Name);
+        const scope = [...typeParameterScopes].reverse().find((entry) => typeParameterDeclarations.get(entry)?.includes(Declaration));
+        const Constraint = scope ? scope.get(Name) : parameter.Constraint;
         captures.push({ Declaration, Type: { Kind: 'parameter', Name, CapturedDeclaration: Declaration,
-          Arity: Declaration.Arity ?? 0, ...(typeParameterConstraintOf(Name) ? { Constraint: typeParameterConstraintOf(Name)! } : {}) } });
+          Arity: Declaration.Arity ?? 0, ...(Constraint ? { Constraint } : {}) } });
       }
     }
     return captures;
@@ -15001,7 +15040,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const entries: Entry[] = [];
     for (const a of argNodes) {
       if ((a as { IsSpread?: boolean }).IsSpread) {
-        const t = resolveType(a as ParseNode.Type);
+        const t = captureLexicalTypeParameters(resolveType(a as ParseNode.Type), a);
         if (!t) {
           // A spread whose operand NAMES A VALUE binding
           // (`...xs` with `xs` a local) is refused statically - the checker's
@@ -15092,7 +15131,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (!bad) kinded.set(tp.Name, argument);
       }
-      const resolvedRun = run.map((e) => e.record ?? kinded.get(tp.Name) ?? resolveType(e.node as ParseNode.Type));
+      const resolvedRun = run.map((e) => e.record ?? kinded.get(tp.Name) ?? captureLexicalTypeParameters(resolveType(e.node as ParseNode.Type), e.node!));
       if (resolvedRun.some((r) => !r)) {
         pendingArguments.add(tp.Name);
         return;
@@ -17043,15 +17082,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // contextual type, and read by the literal's own arm in `staticType`.
     if (isFunctionLiteral(node) && contextual?.Kind === 'nominal') {
       const signature = callableForm(contextual);
-      // A generic signature owns its binders; this parameter-context path
-      // adopts only a concrete callable contract.
-      if (signature?.Kind === 'function' && signature.Signatures.every((s) => !s.TypeParameters?.length)) contextual = signature;
+      if (signature?.Kind === 'function') contextual = signature;
     }
     if (isFunctionLiteral(node)
       && contextual && contextual.Kind === 'function' && contextual.Signatures.length === 1) {
-      setContextualParameters(node, contextual.Signatures[0].Parameters);
-      setContextualNarrowing(node, contextual.Signatures[0]);
-      const wanted = contextual.Signatures[0].Return;
+      const signature = adoptContextualSignature(node, contextual.Signatures[0]);
+      setContextualParameters(node, signature.Parameters);
+      setContextualNarrowing(node, signature);
+      const wanted = signature.Return;
       if (wanted && wanted.Kind !== 'void') {
         contextualReturnTypes.set(node, wanted as Known);
       }
@@ -17068,8 +17106,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // The arrow is excluded at the recording rather than at the reading, so
       // that an arrow nested in an adopting literal sees the OUTER `this` by
       // finding no frame of its own - which is what closing over it means.
-      const wantedThis = (contextual.Signatures[0] as { ThisType?: TypeRecord }).ThisType;
-      if (wantedThis !== undefined && node.type !== 'ArrowFunction' && node.type !== 'AsyncArrowFunction') {
+      const wantedThis = signature.ThisType;
+      if (wantedThis !== undefined && wantedThis !== null && node.type !== 'ArrowFunction' && node.type !== 'AsyncArrowFunction') {
         contextualThisTypes.set(node, wantedThis as Known);
         adoptedReceiverTypes.set(node, wantedThis);
       }
@@ -19467,7 +19505,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ...methodPredicate(literal.TypeAnnotation, Parameters, Return),
               ...(!literal.TypeAnnotation ? contextualNarrowings.get(node) : {}),
               ...(literal.TypeParameters?.TypeParameterList?.length
-                ? { TypeParameters: typeParameterRecordsOf(literal.TypeParameters.TypeParameterList) } : {}),
+                ? { TypeParameters: typeParameterRecordsOf(literal.TypeParameters.TypeParameterList) }
+                : contextualGenericParameters.get(node)?.length ? { TypeParameters: contextualGenericParameters.get(node) } : {}),
               ...(adoptedThis ? { ThisType: adoptedThis } : {}),
             }],
           } as unknown as TypeRecord;
@@ -23084,7 +23123,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // declarations; context supplies only positions without annotations.
         const wantedMethod = wantedOf(methodKey);
         const expected = wantedMethod?.Kind === 'function' && wantedMethod.Signatures.length === 1
-          ? wantedMethod.Signatures[0] : null;
+          ? adoptContextualSignature(member, wantedMethod.Signatures[0]) : null;
+        if (!expected) contextualGenericParameters.set(member, []);
         setContextualParameters(member, expected?.Parameters ?? []);
         const contextual = contextualParameterTypes.get(member) ?? [];
         if (expected?.Return) contextualMethodReturns.set(member, expected.Return);
@@ -34851,8 +34891,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // when the walk reaches the literal.
         if (param && param.Kind === 'function' && param.Signatures.length === 1
             && isFunctionLiteral(arg)) {
-          setContextualParameters(arg, param.Signatures[0].Parameters);
-          setContextualNarrowing(arg, param.Signatures[0]);
+          const signature = adoptContextualSignature(arg, param.Signatures[0]);
+          setContextualParameters(arg, signature.Parameters);
+          setContextualNarrowing(arg, signature);
           // The position's RETURN as well as its parameters, so that a
           // block-bodied callback's `return` is read at the wanted type:
           // otherwise its literal widens, `h((x) => { return 1; })` at a
@@ -34860,7 +34901,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // callback is refused where the concise `(x) => 1` passes.
           // `staticTypeIn` does the same wherever a node meets its
           // contextual type; an ARGUMENT is such a position.
-          const wantedForBody = param.Signatures[0].Return;
+          const wantedForBody = signature.Return;
           if (wantedForBody) {
             contextualReturnTypes.set(arg, wantedForBody as Known);
           }
@@ -37554,8 +37595,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const functionUnderlying = callableForm(underlying);
           if (functionUnderlying?.Kind === 'function' && functionUnderlying.Signatures.length === 1
               && (init.type === 'ArrowFunction' || init.type === 'FunctionExpression')) {
-            setContextualParameters(init, functionUnderlying.Signatures[0].Parameters);
-            contextualReturnTypes.set(init, functionUnderlying.Signatures[0].Return);
+            const signature = adoptContextualSignature(init, functionUnderlying.Signatures[0]);
+            setContextualParameters(init, signature.Parameters);
+            contextualReturnTypes.set(init, signature.Return);
           }
           const produced = callableForm(staticTypeIn(init, underlying));
           const formals = (init as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters

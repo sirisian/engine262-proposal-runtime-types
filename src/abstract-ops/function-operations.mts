@@ -39,10 +39,10 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
   currentTypeParameterFrame, copyTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
-  pushContextualType, popContextualType, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
+  pushContextualType, popContextualType, contextualTypeFor, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
 } from '../type-system/runtime.mts';
 import { resolveOverloadChecked } from '../type-system/overloads.mts';
-import { functionTypeParameters, SignaturesOf } from './runtime-types.mts';
+import { functionTypeParameters, AdoptTypeParameters, SignaturesOf } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -806,6 +806,15 @@ export function OrdinaryFunctionCreate(functionPrototype: ObjectValue, sourceTex
   const len = ExpectedArgumentCount(ParameterList);
   // 21. Perform ! SetFunctionLength(F, len).
   X(SetFunctionLength(F, len));
+  if (surroundingAgent.feature('runtime-types') && Body.parent
+      && !(Body.parent as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList?.length) {
+    const context = contextualTypeFor(Body.parent);
+    const shape = context?.Kind === 'nominal' ? context.Structure : context;
+    if (shape?.Kind === 'function' && shape.Signatures.length === 1) {
+      const parameters = shape.Signatures[0].TypeParameters;
+      if (parameters?.length) AdoptTypeParameters(F, parameters.map((parameter) => parameter.Declaration));
+    }
+  }
   // #sec-this-adoption: retain the contextual receiver contract at entry,
   // including calls through an erased alias or Function.prototype.call.
   if (surroundingAgent.feature('runtime-types') && thisMode !== 'lexical-this' && Body.parent) {
