@@ -1,3 +1,4 @@
+import { PreferredConstructionAlternative, type ConstructionSelections } from './result-dependencies.mts';
 import type { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import { Assert } from '../abstract-ops/notational-conventions.mts';
 import { GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
@@ -176,18 +177,18 @@ function selectedLiteralContext(node: object | undefined, context: TypeRecord | 
   return matches.size === 1 ? [...matches][0] : context;
 }
 
-export function contextualTypeFor(node: object | undefined): TypeRecord | undefined {
+export function contextualTypeFor(node: object | undefined, selectLiteral = true): TypeRecord | undefined {
   const top = contextualTypes[contextualTypes.length - 1];
   if (!top) {
     return undefined;
   }
   if (top.node === undefined) {
-    return selectedLiteralContext(node, top.type);
+    return selectLiteral ? selectedLiteralContext(node, top.type) : top.type ?? undefined;
   }
   let n: object | undefined = node;
   while (n) {
     if (n === top.node) {
-      return selectedLiteralContext(node, top.type);
+      return selectLiteral ? selectedLiteralContext(node, top.type) : top.type ?? undefined;
     }
     const parent = (n as { parent?: object }).parent;
     if (!parent) {
@@ -202,7 +203,11 @@ export function contextualTypeFor(node: object | undefined): TypeRecord | undefi
       CaseClauses_a?: readonly object[], CaseClauses_b?: readonly object[], DefaultClause?: object, star?: boolean };
     const statements = completion.StatementList;
     const last = statements?.at(-1);
-    const tail = last?.type === 'BreakStatement' && !last.LabelIdentifier ? statements?.at(-2) : last;
+    const label = (parent as { parent?: ParseNode.LabelledStatement }).parent;
+    const consumedBreak = last?.type === 'BreakStatement'
+      && (!last.LabelIdentifier || label?.type === 'LabelledStatement' && label.LabelledItem === parent
+        && label.LabelIdentifier.name === last.LabelIdentifier.name);
+    const tail = consumedBreak ? statements?.at(-2) : last;
     const completionChild = pt === 'ExpressionStatement' && completion.Expression === n
       || (pt === 'Block' || pt === 'CaseClause' || pt === 'DefaultClause') && tail === n
       || pt === 'IfStatement' && (completion.Statement_a === n || completion.Statement_b === n)
@@ -4260,14 +4265,14 @@ export function* ObserveSequenceElement(object: ObjectValue, index: number, obse
   return entry;
 }
 
-export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation): PlainEvaluator<boolean> {
-  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t, storage, selection, sequence);
+export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections): PlainEvaluator<boolean> {
+  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices);
   const checkpoint = storage?.length;
   const previousMember = selection?.member;
   const previousConstruction = selection?.construction;
   let admitted = false;
   try {
-    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection, sequence));
+    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices));
     if (admitted && storage && selection?.construction) {
       // A copying value boundary owns its evidence. Do not acquire storage on
       // its source while the receiving operation is still choosing a result.
@@ -4287,7 +4292,10 @@ export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStora
   }
 }
 
-function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation): PlainEvaluator<boolean> {
+function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections): PlainEvaluator<boolean> {
+  const isMember = (value: Value, type: TypeRecord, retained?: StructuralStorageAdmission[],
+    selected?: UnionMemberAdmission, observed?: SequenceObservation): PlainEvaluator<boolean> =>
+    IsOfType(value, type, retained, selected, observed, choices);
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
   // reads through to the referent rather than testing the reference itself,
@@ -4306,13 +4314,13 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // reference-typed parameters and returns as well as `ref` parameters.
       const locationType = DeclaredReferenceLocationType(value.Location, true);
       if (locationType && locationType.Kind !== 'any' && t.Target.Kind !== 'any' && !SameType(locationType, t.Target)) return false;
-      return Q(yield* IsOfType(referent, t.Target));
+      return Q(yield* isMember(referent, t.Target));
     }
     // A value that reached here already decayed, and the absence of observable
     // identity means a program cannot ask whether something IS a reference,
     // only what it refers to - so a decayed value is tested against the
     // borrowed type, which is what this case did before a borrow could arrive.
-    return Q(yield* IsOfType(value, t.Target));
+    return Q(yield* isMember(value, t.Target));
   }
   // proposal-runtime-types #sec-threading-shared-modifier: "A value of type T is
   // assignable to storage of type `shared T` ... and a read of that storage yields
@@ -4320,7 +4328,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
   // membership is membership in the target, in BOTH directions: it is how a value
   // is published into shared storage, and how one read out of it is still a T.
   if (t.Kind === 'shared') {
-    return Q(yield* IsOfType(value, t.Target, storage, selection));
+    return Q(yield* isMember(value, t.Target, storage, selection));
   }
   // proposal-runtime-types `sec-composite-types`: the top composite type "is the
   // type of every composite", and a composite type over a shape is satisfied by
@@ -4376,7 +4384,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       return false;
     }
     for (const lane of (value as VectorValue).lanes) {
-      if (!Q(yield* IsOfType(lane as Value, targetLane))) {
+      if (!Q(yield* isMember(lane as Value, targetLane))) {
         return false;
       }
     }
@@ -4397,7 +4405,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // before that test would compare an int32 against an enum-tagged member
         // and answer false for the enumerator the type names.
         && !(t.Kind === 'literal' && t.Base !== undefined && UnderlyingOf(t.Base) !== t.Base)) {
-      return yield* IsOfType(new TypedNumberValue((value as TypedNumberValue).value, valueRecord.Underlying), t);
+      return yield* isMember(new TypedNumberValue((value as TypedNumberValue).value, valueRecord.Underlying), t);
     }
   }
   // A rational VALUE is a member of a rational type, on the same terms the decimal
@@ -4438,9 +4446,10 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
     case 'void':
       return false;
     case 'union': {
-      for (const m of t.Members) {
+      const preferred = (storage || selection) && PreferredConstructionAlternative(value, t, choices);
+      for (const m of preferred ? [preferred] : t.Members) {
         const nested: UnionMemberAdmission | undefined = selection ? {} : undefined;
-        if (Q(yield* IsOfType(value, m, storage, nested))) {
+        if (Q(yield* isMember(value, m, storage, nested))) {
           if (selection) {
             selection.member = nested?.member ?? m;
             selection.construction = nested?.construction;
@@ -4454,7 +4463,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       const constructions: TupleDefaultConstruction[] = [];
       for (const m of t.Members) {
         const nested: UnionMemberAdmission | undefined = selection ? {} : undefined;
-        if (!Q(yield* IsOfType(value, m, storage, nested))) return false;
+        if (!Q(yield* isMember(value, m, storage, nested))) return false;
         if (nested?.construction) constructions.push(nested.construction);
       }
       if (selection && constructions.length) selection.construction = {
@@ -4486,7 +4495,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // #sec-isoftype: a value belongs to a parameterized type when it belongs
       // to the base and the meta type's validate judgment holds of the
       // metadata. The base's Type Object carries the hook.
-      if (!Q(yield* IsOfType(value, t.Base, storage))) {
+      if (!Q(yield* isMember(value, t.Base, storage))) {
         return false;
       }
       // #sec-primitive-metadata: the metadata's own keys select the meta types
@@ -4639,7 +4648,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const el = Q(yield* observe(i));
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
           const childStart = storage?.length;
-          if (!Q(yield* IsOfType(el, t.Element, storage, admitted))) {
+          if (!Q(yield* isMember(el, t.Element, storage, admitted))) {
             return false;
           }
           storage?.push({ kind: 'element', object: value, key: String(i), type: t.Element,
@@ -4677,7 +4686,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const type = TupleStorageTypeAt(tupleShape, i, len)!;
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
           const childStart = storage?.length;
-          if (!Q(yield* IsOfType(el, type, storage, admitted))) return false;
+          if (!Q(yield* isMember(el, type, storage, admitted))) return false;
           storage?.push({ kind: 'element', object: value, key: String(i), type,
             value: el, admittedType: admitted?.member ?? type, construction: admitted?.construction, descendants: storage.slice(childStart) });
         }
@@ -4710,7 +4719,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const admitted: UnionMemberAdmission | undefined = storage && tupleShape ? {} : undefined;
           const type = i < fixed.length ? fixed[i].Type : tupleShape!.Rest!;
           const childStart = storage?.length;
-          if (!Q(yield* IsOfType(el, type, storage, admitted))) {
+          if (!Q(yield* isMember(el, type, storage, admitted))) {
             return false;
           }
           if (tupleShape) storage?.push({ kind: 'element', object: value, key: String(i), type,
@@ -4742,7 +4751,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const candidate: StructuralStorageAdmission[] | undefined = storage ? [] : undefined;
           const type = e.Rest ? restElementType(e.Type) : e.Type;
           const selection: UnionMemberAdmission | undefined = candidate && tupleShape ? {} : undefined;
-          const ok = Q(yield* IsOfType(items[i], type, candidate, selection));
+          const ok = Q(yield* isMember(items[i], type, candidate, selection));
           row.push(ok);
           if (ok && tupleShape) candidate?.push({ kind: 'element', object: value, key: String(i), type,
             value: items[i], admittedType: selection?.member ?? type, construction: selection?.construction, descendants: candidate.slice() });
@@ -4835,7 +4844,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // says why that matters: "Subtyping and membership are different
         // questions of the same record."
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
-        const structurallyMatches = Q(yield* IsOfType(value, substituted, storage, selection));
+        const structurallyMatches = Q(yield* isMember(value, substituted, storage, selection));
         if (!structurallyMatches) {
           return false;
         }
@@ -4989,7 +4998,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           for (const endpoint of [range.RangeStart, range.RangeEnd]) {
             if (endpoint === undefined) continue;
-            if (!Q(yield* IsOfType(endpoint, element))) return false;
+            if (!Q(yield* isMember(endpoint, element))) return false;
           }
           return true;
         }
@@ -5115,7 +5124,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         const pv = Q(yield* Get(value, key));
         const childStart = storage?.length;
         const admitted = storage ? {} as UnionMemberAdmission : undefined;
-        if (!Q(yield* IsOfType(pv, p.type, storage, admitted))) {
+        if (!Q(yield* isMember(pv, p.type, storage, admitted))) {
           return false;
         }
         storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type, construction: admitted?.construction, optional: p.optional, descendants: storage.slice(childStart) });
@@ -5133,11 +5142,11 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
             continue;
           }
           for (const ix of t.IndexSignatures) {
-            if (Q(yield* IsOfType(k, ix.Key))) {
+            if (Q(yield* isMember(k, ix.Key))) {
               const kv = Q(yield* Get(value, k));
               const childStart = storage?.length;
               const admitted = storage ? {} as UnionMemberAdmission : undefined;
-              if (!Q(yield* IsOfType(kv, ix.Value, storage, admitted))) {
+              if (!Q(yield* isMember(kv, ix.Value, storage, admitted))) {
                 return false;
               }
               storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value, construction: admitted?.construction, optional: true, descendants: storage.slice(childStart) });

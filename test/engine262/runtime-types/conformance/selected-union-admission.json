@@ -1,0 +1,2311 @@
+{
+  "cases": [
+    {
+      "name": "function-0-const",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-let",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-var",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}var a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-paren",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=({fn:function(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-comma",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=(count++,{fn:function(value:U):U{return value;}});verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-conditional",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=true;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=flag?({fn:function(value:U):U{return value;}}):({fn:function(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-logical",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=false;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=flag||{fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-do",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{ ({fn:function(value:U):U{return value;}}); };const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make():{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}{return {fn:function(value:U):U{return value;}};}const a=make();const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-return-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;function make():{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}{try{return {fn:function(value:U):U{return value;}};}finally{count++;}}const a=make();verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn:function(value:U):U{return value;}}};const a=box.child;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const box:[].<Choice>=[{fn:function(value:U):U{return value;}}];const a=box[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-const",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-let",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-var",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}var a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-paren",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=({fn:function(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-comma",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=(count++,{fn:function(value:U):U{return value;}});verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-conditional",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=true;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=flag?({fn:function(value:U):U{return value;}}):({fn:function(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-logical",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=false;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=flag||{fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-do",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{ ({fn:function(value:U):U{return value;}}); };const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make():{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}{return {fn:function(value:U):U{return value;}};}const a=make();const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-return-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;function make():{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}{try{return {fn:function(value:U):U{return value;}};}finally{count++;}}const a=make();verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn:function(value:U):U{return value;}}};const a=box.child;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const box:[].<Choice>=[{fn:function(value:U):U{return value;}}];const a=box[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-const",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-let",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-var",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}var a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-paren",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=({fn:(value:U):U=>{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-comma",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=(count++,{fn:(value:U):U=>{return value;}});verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-conditional",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=true;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=flag?({fn:(value:U):U=>{return value;}}):({fn:(value:U):U=>{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-logical",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=false;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=flag||{fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-do",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{ ({fn:(value:U):U=>{return value;}}); };const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make():{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}{return {fn:(value:U):U=>{return value;}};}const a=make();const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-return-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;function make():{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}{try{return {fn:(value:U):U=>{return value;}};}finally{count++;}}const a=make();verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn:(value:U):U=>{return value;}}};const a=box.child;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const box:[].<Choice>=[{fn:(value:U):U=>{return value;}}];const a=box[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-const",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-let",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-var",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}var a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-paren",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=({fn:(value:U):U=>{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-comma",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=(count++,{fn:(value:U):U=>{return value;}});verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-conditional",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=true;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=flag?({fn:(value:U):U=>{return value;}}):({fn:(value:U):U=>{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-logical",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=false;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=flag||{fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-do",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{ ({fn:(value:U):U=>{return value;}}); };const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make():{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}{return {fn:(value:U):U=>{return value;}};}const a=make();const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-return-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;function make():{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}{try{return {fn:(value:U):U=>{return value;}};}finally{count++;}}const a=make();verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn:(value:U):U=>{return value;}}};const a=box.child;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const box:[].<Choice>=[{fn:(value:U):U=>{return value;}}];const a=box[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-const",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-let",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-var",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}var a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-paren",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=({fn(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-comma",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=(count++,{fn(value:U):U{return value;}});verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-conditional",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=true;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=flag?({fn(value:U):U{return value;}}):({fn(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-logical",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=false;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=flag||{fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-do",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{ ({fn(value:U):U{return value;}}); };const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make():{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}{return {fn(value:U):U{return value;}};}const a=make();const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-return-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;function make():{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}{try{return {fn(value:U):U{return value;}};}finally{count++;}}const a=make();verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn(value:U):U{return value;}}};const a=box.child;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const box:[].<Choice>=[{fn(value:U):U{return value;}}];const a=box[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-const",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-let",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-var",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}var a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-paren",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=({fn(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-comma",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=(count++,{fn(value:U):U{return value;}});verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-conditional",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=true;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=flag?({fn(value:U):U{return value;}}):({fn(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-logical",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const flag:any=false;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=flag||{fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-do",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{ ({fn(value:U):U{return value;}}); };const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make():{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}{return {fn(value:U):U{return value;}};}const a=make();const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-return-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count=0;function make():{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}{try{return {fn(value:U):U{return value;}};}finally{count++;}}const a=make();verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn(value:U):U{return value;}}};const a=box.child;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const box:[].<Choice>=[{fn(value:U):U{return value;}}];const a=box[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters.length,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-erased-inference",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const a:Choice={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const box:{children:[].<Choice>}={children:[{fn:function(value:U):U{return value;}}]};const a=box.children[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-array-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function make():[].<Choice>{return [{fn:function(value:U):U{return value;}}];}const a=make()[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-getter-once",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}={get x():number{reads++;return 1;},fn:function(value:U):U{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-failure-no-fallback",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:function(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-abrupt-then-retry",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let bodies=0;function run(flag:any){const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{if(flag)throw new Error(\"first\");({fn:function(value:U):U{return value;}});};bodies++;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");}try{run(true);}catch(error){verify(error.message,\"first\");}run(false);verify(bodies,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-existing-value-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const saved:any=a;type Union={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function observe(x:any):string{try{const target:Union=x;return String(Reflect.typeOf(target.fn));}catch(error){if(!(error instanceof TypeError))throw error;return \"TypeError\";}}const control:{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};verify(observe(saved),observe(control));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-replacement-contract",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn:function(value:U):U{return value;}}};const replacement:{fn:(value:string)=>string}={fn(value:string):string{return value;}};box.child=replacement;verify(box.child,replacement);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-value-identity",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};const f:any=a.fn;const before=f;verify(f.<number>,f.<number>);verify(a.fn,before);verify(Object.keys(a).join(\",\"),\"fn\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-local-capture",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make<T:type>(tag:T):any{const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};return {a,tag};}const first=make.<number>(5);const second=make.<string>(\"x\");const a=first.a;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(first.tag,5);verify(second.tag,\"x\");const other:any=second.a.fn;verify(other.<number>(9),9);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters.length,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-erased-inference",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const a:Choice={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const box:{children:[].<Choice>}={children:[{fn:function(value:U):U{return value;}}]};const a=box.children[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-array-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function make():[].<Choice>{return [{fn:function(value:U):U{return value;}}];}const a=make()[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-getter-once",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:number,fn:(value:string)=>string}={get x():number{reads++;return 1;},fn:function(value:U):U{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-failure-no-fallback",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:function(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-abrupt-then-retry",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let bodies=0;function run(flag:any){const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{if(flag)throw new Error(\"first\");({fn:function(value:U):U{return value;}});};bodies++;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");}try{run(true);}catch(error){verify(error.message,\"first\");}run(false);verify(bodies,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-existing-value-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const saved:any=a;type Union={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function observe(x:any):string{try{const target:Union=x;return String(Reflect.typeOf(target.fn));}catch(error){if(!(error instanceof TypeError))throw error;return \"TypeError\";}}const control:{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};verify(observe(saved),observe(control));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-replacement-contract",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn:function(value:U):U{return value;}}};const replacement:{fn:(value:string)=>string}={fn(value:string):string{return value;}};box.child=replacement;verify(box.child,replacement);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-value-identity",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};const f:any=a.fn;const before=f;verify(f.<number>,f.<number>);verify(a.fn,before);verify(Object.keys(a).join(\",\"),\"fn\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-local-capture",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make<T:type>(tag:T):any{const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:function(value:U):U{return value;}};return {a,tag};}const first=make.<number>(5);const second=make.<string>(\"x\");const a=first.a;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(first.tag,5);verify(second.tag,\"x\");const other:any=second.a.fn;verify(other.<number>(9),9);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters.length,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-erased-inference",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const a:Choice={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const box:{children:[].<Choice>}={children:[{fn:(value:U):U=>{return value;}}]};const a=box.children[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-array-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function make():[].<Choice>{return [{fn:(value:U):U=>{return value;}}];}const a=make()[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-getter-once",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}={get x():number{reads++;return 1;},fn:(value:U):U=>{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-failure-no-fallback",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:(value:U):U=>{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-abrupt-then-retry",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let bodies=0;function run(flag:any){const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{if(flag)throw new Error(\"first\");({fn:(value:U):U=>{return value;}});};bodies++;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");}try{run(true);}catch(error){verify(error.message,\"first\");}run(false);verify(bodies,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-existing-value-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const saved:any=a;type Union={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function observe(x:any):string{try{const target:Union=x;return String(Reflect.typeOf(target.fn));}catch(error){if(!(error instanceof TypeError))throw error;return \"TypeError\";}}const control:{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};verify(observe(saved),observe(control));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-replacement-contract",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn:(value:U):U=>{return value;}}};const replacement:{fn:(value:string)=>string}={fn(value:string):string{return value;}};box.child=replacement;verify(box.child,replacement);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-value-identity",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};const f:any=a.fn;const before=f;verify(f.<number>,f.<number>);verify(a.fn,before);verify(Object.keys(a).join(\",\"),\"fn\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-local-capture",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make<T:type>(tag:T):any{const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};return {a,tag};}const first=make.<number>(5);const second=make.<string>(\"x\");const a=first.a;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(first.tag,5);verify(second.tag,\"x\");const other:any=second.a.fn;verify(other.<number>(9),9);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters.length,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-erased-inference",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const a:Choice={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const box:{children:[].<Choice>}={children:[{fn:(value:U):U=>{return value;}}]};const a=box.children[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-array-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function make():[].<Choice>{return [{fn:(value:U):U=>{return value;}}];}const a=make()[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-getter-once",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:number,fn:(value:string)=>string}={get x():number{reads++;return 1;},fn:(value:U):U=>{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-failure-no-fallback",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:(value:U):U=>{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-abrupt-then-retry",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let bodies=0;function run(flag:any){const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{if(flag)throw new Error(\"first\");({fn:(value:U):U=>{return value;}});};bodies++;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");}try{run(true);}catch(error){verify(error.message,\"first\");}run(false);verify(bodies,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-existing-value-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const saved:any=a;type Union={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function observe(x:any):string{try{const target:Union=x;return String(Reflect.typeOf(target.fn));}catch(error){if(!(error instanceof TypeError))throw error;return \"TypeError\";}}const control:{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;}};verify(observe(saved),observe(control));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-replacement-contract",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn:(value:U):U=>{return value;}}};const replacement:{fn:(value:string)=>string}={fn(value:string):string{return value;}};box.child=replacement;verify(box.child,replacement);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-value-identity",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};const f:any=a.fn;const before=f;verify(f.<number>,f.<number>);verify(a.fn,before);verify(Object.keys(a).join(\",\"),\"fn\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-local-capture",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make<T:type>(tag:T):any{const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn:(value:U):U=>{return value;}};return {a,tag};}const first=make.<number>(5);const second=make.<string>(\"x\");const a=first.a;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(first.tag,5);verify(second.tag,\"x\");const other:any=second.a.fn;verify(other.<number>(9),9);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters.length,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-erased-inference",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const a:Choice={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const box:{children:[].<Choice>}={children:[{fn(value:U):U{return value;}}]};const a=box.children[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-array-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function make():[].<Choice>{return [{fn(value:U):U{return value;}}];}const a=make()[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-getter-once",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}={get x():number{reads++;return 1;},fn(value:U):U{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-failure-no-fallback",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-abrupt-then-retry",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let bodies=0;function run(flag:any){const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{if(flag)throw new Error(\"first\");({fn(value:U):U{return value;}});};bodies++;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");}try{run(true);}catch(error){verify(error.message,\"first\");}run(false);verify(bodies,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-existing-value-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const saved:any=a;type Union={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function observe(x:any):string{try{const target:Union=x;return String(Reflect.typeOf(target.fn));}catch(error){if(!(error instanceof TypeError))throw error;return \"TypeError\";}}const control:{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};verify(observe(saved),observe(control));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-replacement-contract",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn(value:U):U{return value;}}};const replacement:{fn:(value:string)=>string}={fn(value:string):string{return value;}};box.child=replacement;verify(box.child,replacement);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-value-identity",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;const before=f;verify(f.<number>,f.<number>);verify(a.fn,before);verify(Object.keys(a).join(\",\"),\"fn\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-local-capture",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make<T:type>(tag:T):any{const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};return {a,tag};}const first=make.<number>(5);const second=make.<string>(\"x\");const a=first.a;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(first.tag,5);verify(second.tag,\"x\");const other:any=second.a.fn;verify(other.<number>(9),9);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters.length,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-erased-inference",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const a:Choice={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};const box:{children:[].<Choice>}={children:[{fn(value:U):U{return value;}}]};const a=box.children[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-array-return",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function make():[].<Choice>{return [{fn(value:U):U{return value;}}];}const a=make()[0];const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-getter-once",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:number,fn:(value:string)=>string}={get x():number{reads++;return 1;},fn(value:U):U{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-failure-no-fallback",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-abrupt-then-retry",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let bodies=0;function run(flag:any){const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{if(flag)throw new Error(\"first\");({fn(value:U):U{return value;}});};bodies++;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");}try{run(true);}catch(error){verify(error.message,\"first\");}run(false);verify(bodies,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-existing-value-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const saved:any=a;type Union={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function observe(x:any):string{try{const target:Union=x;return String(Reflect.typeOf(target.fn));}catch(error){if(!(error instanceof TypeError))throw error;return \"TypeError\";}}const control:{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};verify(observe(saved),observe(control));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-replacement-contract",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn(value:U):U{return value;}}};const replacement:{fn:(value:string)=>string}={fn(value:string):string{return value;}};box.child=replacement;verify(box.child,replacement);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-value-identity",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;const before=f;verify(f.<number>,f.<number>);verify(a.fn,before);verify(Object.keys(a).join(\",\"),\"fn\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-local-capture",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function make<T:type>(tag:T):any{const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};return {a,tag};}const first=make.<number>(5);const second=make.<string>(\"x\");const a=first.a;const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");verify(first.tag,5);verify(second.tag,\"x\");const other:any=second.a.fn;verify(other.<number>(9),9);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-do-break",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{done:{({fn(value:U):U{return value;}});break done;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-do-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let final=0;const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=do{try{({fn(value:U):U{return value;}});}finally{final++;}};verify(final,1);const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-replace-same-child",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function replace(c:Reflect.Object){const obj:any=c.objectContext;const child=obj.child;Object.defineProperty(obj,\"child\",{value:child,writable:true,enumerable:true,configurable:true});}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}=@replace{child:{fn(value:U):U{return value;}}};const f:any=box.child.fn;verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters,undefined);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-replace-deep-child",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function replace(c:Reflect.Object){const obj:any=c.objectContext.holder;const child=obj.child;Object.defineProperty(obj,\"child\",{value:child,writable:true,enumerable:true,configurable:true});}const box:{holder:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}}=@replace{holder:{child:{fn(value:U):U{return value;}}}};const f:any=box.holder.child.fn;verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters,undefined);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-last-writer",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}}={child:{fn(value:U):U{return value;}},child:{fn:function<V:type>(value:V):V{return value;}}};const f:any=box.child.fn;verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters,undefined);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-abrupt-escape",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let escaped:any;function fail(c:Reflect.Object){escaped=c.objectContext;throw new Error(\"abort\");}try{const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=@fail{fn(value:U):U{return value;}};}catch(error){verify(error.message,\"abort\");}const later:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}=escaped;const previous:any=later.fn;verify(Reflect.getReflection(Reflect.typeOf(previous)).signatures[0].typeParameters,undefined);verify(previous(\"ok\"),\"ok\");const a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-readonly-admission",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}={get x():number{reads++;return 1;},fn(value:U):U{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-do-break",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{done:{({fn(value:U):U{return value;}});break done;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-do-finally",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let final=0;const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=do{try{({fn(value:U):U{return value;}});}finally{final++;}};verify(final,1);const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-replace-same-child",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function replace(c:Reflect.Object){const obj:any=c.objectContext;const child=obj.child;Object.defineProperty(obj,\"child\",{value:child,writable:true,enumerable:true,configurable:true});}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}=@replace{child:{fn(value:U):U{return value;}}};const f:any=box.child.fn;verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters,undefined);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-replace-deep-child",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function replace(c:Reflect.Object){const obj:any=c.objectContext.holder;const child=obj.child;Object.defineProperty(obj,\"child\",{value:child,writable:true,enumerable:true,configurable:true});}const box:{holder:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}}=@replace{holder:{child:{fn(value:U):U{return value;}}}};const f:any=box.holder.child.fn;verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters,undefined);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-last-writer",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const box:{child:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}}={child:{fn(value:U):U{return value;}},child:{fn:function<V:type>(value:V):V{return value;}}};const f:any=box.child.fn;verify(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters,undefined);verify(f(\"ok\"),\"ok\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-abrupt-escape",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let escaped:any;function fail(c:Reflect.Object){escaped=c.objectContext;throw new Error(\"abort\");}try{const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=@fail{fn(value:U):U{return value;}};}catch(error){verify(error.message,\"abort\");}const later:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}=escaped;const previous:any=later.fn;verify(Reflect.getReflection(Reflect.typeOf(previous)).signatures[0].typeParameters,undefined);verify(previous(\"ok\"),\"ok\");const a:{fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string}={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-readonly-admission",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:number,fn:(value:string)=>string}={get x():number{reads++;return 1;},fn(value:U):U{return value;}};verify(reads,1);const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-explicit-failure-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate{x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-live-borrow",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const values:[].<number>=[1];let reads=0;let after=0;function resize(x:any){x.length=0;}let caught=false;try{for(const ref element of values){const a:{readonly x:number,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}={get x():number{reads++;resize(values);return 1;},fn(value:U):U{return value;}};const stale:any=element;after++;}}catch(error){if(!(error instanceof TypeError))throw error;caught=true;}verify(caught,true);verify(reads,1);verify(after,0);verify(String(values.length),\"0\");values.push(2);verify(String(values.length),\"1\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-live-borrow",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const values:[].<number>=[1];let reads=0;let after=0;function resize(x:any){x.length=0;}let caught=false;try{for(const ref element of values){const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:number,fn:(value:string)=>string}={get x():number{reads++;resize(values);return 1;},fn(value:U):U{return value;}};const stale:any=element;after++;}}catch(error){if(!(error instanceof TypeError))throw error;caught=true;}verify(caught,true);verify(reads,1);verify(after,0);verify(String(values.length),\"0\");values.push(2);verify(String(values.length),\"1\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-0-reentrant-crossing",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let escaped:any;let entered=false;function remember(c:Reflect.Object){escaped=c.objectContext;}type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function cross(value:any):number{const b:Choice=value;const fn:any=b.fn;verify(Reflect.getReflection(Reflect.typeOf(fn)).signatures[0].typeParameters,undefined);entered=true;return 1;}let caught=false;try{const box:{readonly x:number,child:Choice}={get x():number{return cross(escaped);},child:@remember{fn(value:U):U{return value;}}};}catch(error){if(!(error instanceof TypeError))throw error;caught=true;}verify(entered,true);verify(caught,true);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-1-reentrant-crossing",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let escaped:any;let entered=false;function remember(c:Reflect.Object){escaped=c.objectContext;}type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function cross(value:any):number{const b:Choice=value;const fn:any=b.fn;verify(Reflect.getReflection(Reflect.typeOf(fn)).signatures[0].typeParameters,undefined);entered=true;return 1;}let caught=false;try{const box:{readonly x:number,child:Choice}={get x():number{return cross(escaped);},child:@remember{fn(value:U):U{return value;}}};}catch(error){if(!(error instanceof TypeError))throw error;caught=true;}verify(entered,true);verify(caught,true);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");",
+        "dep": "export type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-runtime-failure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "function-1-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");",
+        "dep": "export type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-runtime-failure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "arrow-0-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");",
+        "dep": "export type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-runtime-failure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "arrow-1-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");",
+        "dep": "export type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-runtime-failure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "method-0-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");",
+        "dep": "export type Choice={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-runtime-failure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "method-1-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"ok\"),\"ok\");",
+        "dep": "export type Choice={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-runtime-failure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "boundary-abrupt-expression",
+      "modules": {
+        "main": "function fail():void{throw new Error(\"expected\");}fail();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "Error"
+      }
+    }
+  ]
+}

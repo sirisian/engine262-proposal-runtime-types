@@ -1,3 +1,4 @@
+import { ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { contextualParameters } from '../type-system/contextual-parameters.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
@@ -1048,7 +1049,7 @@ function TypedNumericMismatch(value: Value, record: TypeRecord): ThrowCompletion
   return undefined;
 }
 
-export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObservation): ValueEvaluator {
+export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObservation, choices?: ConstructionSelections): ValueEvaluator {
   // proposal-runtime-types: an UNSUBSTITUTED generic parameter admits any
   // value. At the point a field of type `T` is defined, the application has
   // bound `T` - `new B.<uint8>()` means uint8 - and substituting that binding
@@ -1114,7 +1115,7 @@ export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObs
       }
     }
   }
-  return Q(yield* CheckedConvertValue(value, t, sequence));
+  return Q(yield* CheckedConvertValue(value, t, sequence, choices));
 }
 
 /** #sec-the-conversion-rule */
@@ -2056,7 +2057,8 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // convert, so the check is not inserted. The value is returned as it
   // stands, which is what the boundary would have done anyway - the difference
   // is that no user code runs, which is how the elision is observable at all.
-  if (IsCheckElided(annotation)) {
+  const choices = ConstructionSelectionsOf(completion);
+  if (IsCheckElided(annotation) && !choices?.length) {
     // Elision needs both the storage contract and completed materialization.
     // Unstamped arrays take the retained-admission path, including value copies.
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
@@ -2098,7 +2100,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // Error caught by the checker before this runs.
   const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
   // All annotation boundaries retain RequireType's storage-admission rules.
-  const result = Q(yield* RequireType(value, record));
+  const result = Q(yield* RequireType(value, record, undefined, choices));
   RetainCheckedResult(completion, record);
   return result;
 }
@@ -2266,13 +2268,16 @@ function* BoundaryNumericConvert(value: Value, t: TypeRecord & { Kind: 'primitiv
   return converted;
 }
 
-export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation): ValueEvaluator {
-  const result = Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation));
+export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation, choices?: ConstructionSelections): ValueEvaluator {
+  t = PreferredConstructionAlternative(value, t, choices) ?? t;
+  const result = Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation, choices));
   Q(AcquireNominalPrototype(result, t));
   return result;
 }
 
-function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation): ValueEvaluator {
+function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation, choices?: ConstructionSelections): ValueEvaluator {
+  const convertChecked = (value: Value, target: TypeRecord, observed?: SequenceObservation): ValueEvaluator =>
+    CheckedConvertValue(value, target, observed, choices);
   value = Q(yield* MaterializeGenericCallable(value, t));
   // Nominal conversion selection follows membership and considers the
   // target's constructor before the source and inbound declarations. Other
@@ -2312,7 +2317,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // was rejected while `let a: uint32 = 5` was accepted, which no rule of the
   // clause asks for.
   if (t.Kind === 'shared') {
-    return Q(yield* CheckedConvertValue(value, t.Target));
+    return Q(yield* convertChecked(value, t.Target));
   }
   // #sec-literal-propagation, reaching one layer further in: a bare numeric
   // literal at a ~literal~ position whose [[Base]] is a numeric value type is
@@ -2340,7 +2345,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       && value instanceof NumberValue && !isTypedNumber(value)) {
     // The conversion is the BASE's, so a literal the base cannot represent is
     // refused by the base's own range rule rather than by one stated here.
-    const atBase = Q(yield* CheckedConvertValue(value, t.Base));
+    const atBase = Q(yield* convertChecked(value, t.Base));
     const ok = Q(yield* IsOfType(atBase, t));
     if (ok) {
       return atBase;
@@ -2383,7 +2388,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
           const set = ((value as VectorValue).lanes[i] as { numberValue?(): number }).numberValue?.() === 1;
           const bits: Value[] = [];
           for (let b = 0; b < innerCount; b += 1) {
-            bits.push(Q(yield* CheckedConvertValue(Value(set ? 1 : 0), innerLane)) as Value);
+            bits.push(Q(yield* convertChecked(Value(set ? 1 : 0), innerLane)) as Value);
           }
           wide.push(new VectorValue(bits, toLane));
         }
@@ -2406,7 +2411,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
           bits |= (1 << i);
         }
       }
-      return Q(yield* CheckedConvertValue(Value(bits >>> 0), t));
+      return Q(yield* convertChecked(Value(bits >>> 0), t));
     }
   }
   if (t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
@@ -2428,7 +2433,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         const lanes: Value[] = [];
         for (let i = 0; i < laneCount; i += 1) {
           // eslint-disable-next-line no-bitwise
-          lanes.push(Q(yield* CheckedConvertValue(Value((asNumber >>> i) & 1), laneType)) as Value);
+          lanes.push(Q(yield* convertChecked(Value((asNumber >>> i) & 1), laneType)) as Value);
         }
         return new VectorValue(lanes, t);
       }
@@ -2442,7 +2447,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       // Converting once and reusing the result also gives the broadcast its
       // meaning, since every lane must hold the same value of the lane type
       // rather than N separately-converted copies.
-      const lane = Q(yield* CheckedConvertValue(value, laneType));
+      const lane = Q(yield* convertChecked(value, laneType));
       const lanes: Value[] = [];
       for (let i = 0; i < laneCount; i += 1) {
         lanes.push(lane);
@@ -2527,7 +2532,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   }
   const storage: StructuralStorageAdmission[] = [];
   const selection: UnionMemberAdmission = {};
-  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection, sequenceObservation));
+  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection, sequenceObservation, choices));
   if (already) {
     if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
     else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
@@ -2578,7 +2583,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
     return carryStringType(value, t);
   }
   if (t.Kind === 'union') {
-    return yield* ConvertValueToUnion(value, t, CheckedConvertValue);
+    return yield* ConvertValueToUnion(value, t, convertChecked);
   }
   // sec-type-membership: "A value belongs to an intersection if it belongs to
   // EVERY member" - the opposite quantifier to the union above, which is why the
@@ -2602,7 +2607,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       // not the intersection it came from - so `A & B` reported only that the
       // value did not fit `B`, leaving the reader to work out where `B` came
       // from. The loop knows which member rejected, so it says both.
-      const attempt = EnsureCompletion(yield* CheckedConvertValue(current, m));
+      const attempt = EnsureCompletion(yield* convertChecked(current, m));
       if (attempt.Type !== 'normal') {
         return Throw.TypeError(
           '$1 is not assignable to $2: it does not satisfy $3',
@@ -2915,7 +2920,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
       const current = Q(yield* Get(value, key));
-      const converted = Q(yield* CheckedConvertValue(current, prop.type));
+      const converted = Q(yield* convertChecked(current, prop.type));
       if (converted !== current) {
         // CONVERTING IN
         // PLACE ASSUMES THE PROPERTY CAN BE WRITTEN, and nothing checked.
@@ -2980,7 +2985,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
           continue;
         }
         const current = Q(yield* Get(value, own));
-        const converted = Q(yield* CheckedConvertValue(current, signature.Value));
+        const converted = Q(yield* convertChecked(current, signature.Value));
         if (converted !== current) {
           // The same refusal as the declared-member loop above. A property
           // admitted through an INDEX SIGNATURE crosses the same boundary and
@@ -3021,7 +3026,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // the caller's storage. A tuple literal builds a NEW array, so there is no
   // aliased storage to protect and the array rule applies unchanged.
   if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-    return Q(yield* ConvertTupleElementwise(value, t, CheckedConvertValue, sequenceObservation));
+    return Q(yield* ConvertTupleElementwise(value, t, convertChecked, sequenceObservation));
   }
   if (t.Kind === 'array') {
     // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
@@ -3059,7 +3064,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
       }
       if (isArr === Value.true) {
-        return Q(yield* ConvertArrayElementwise(value, t, CheckedConvertValue, sequenceObservation));
+        return Q(yield* ConvertArrayElementwise(value, t, convertChecked, sequenceObservation));
       }
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
@@ -5756,7 +5761,7 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value, completi
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
       // declared one: it constrains the consumer, not the value leaving.
-      const result = Q(yield* RequireType(value, published));
+      const result = Q(yield* RequireType(value, published, undefined, ConstructionSelectionsOf(completion)));
       RetainCheckedResult(completion, published);
       return result;
     }

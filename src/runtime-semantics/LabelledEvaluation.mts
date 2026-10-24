@@ -1,3 +1,4 @@
+import { TransferResultDependency } from '../type-system/result-dependencies.mts';
 import {
   JSStringValue, ObjectValue, Value, ReferenceRecord,
 } from '../value.mts';
@@ -117,7 +118,7 @@ function* LabelledEvaluation_LabelledStatement({ LabelIdentifier, LabelledItem }
   // 4. If stmtResult.[[Type]] is break and SameValue(stmtResult.[[Target]], label) is true, then
   if (stmtResult.Type === 'break' && SameValue(stmtResult.Target!, label)) {
     // a. Set stmtResult to NormalCompletion(stmtResult.[[Value]]).
-    stmtResult = NormalCompletion(stmtResult.Value);
+    stmtResult = TransferResultDependency(stmtResult, NormalCompletion(stmtResult.Value));
   }
   // 5. Return Completion(stmtResult).
   return Completion(stmtResult);
@@ -167,7 +168,7 @@ function* LabelledEvaluation_BreakableStatement(BreakableStatement: ParseNode.Br
           if (stmtResult.Value === undefined) {
             stmtResult = NormalCompletion(Value.undefined);
           } else { // ii. Else, set stmtResult to NormalCompletion(stmtResult.[[Value]]).
-            stmtResult = NormalCompletion(stmtResult.Value);
+            stmtResult = TransferResultDependency(stmtResult, NormalCompletion(stmtResult.Value));
           }
         }
       }
@@ -185,7 +186,7 @@ function* LabelledEvaluation_BreakableStatement(BreakableStatement: ParseNode.Br
           if (stmtResult.Value === undefined) {
             stmtResult = NormalCompletion(Value.undefined);
           } else { // ii. Else, set stmtResult to NormalCompletion(stmtResult.[[Value]]).
-            stmtResult = NormalCompletion(stmtResult.Value);
+            stmtResult = TransferResultDependency(stmtResult, NormalCompletion(stmtResult.Value));
           }
         }
       }

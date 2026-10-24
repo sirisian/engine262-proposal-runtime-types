@@ -1,3 +1,4 @@
+import { contextualTypeFor } from '../type-system/runtime.mts';
 import { Value } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { FreshObjectLiteralTarget } from '../type-system/check.mts';
@@ -102,7 +103,10 @@ function* PopulateObjectLiteral(node: ParseNode.ObjectLiteral, obj: ObjectValue)
   if (surroundingAgent.feature('runtime-types') && Decorators?.length) {
     Q(yield* ApplyDecorators(Decorators, Q(yield* ObjectMemberDecoratorContext('Object', Value.undefined, obj as Value))));
   }
-  return CompleteObjectResult(obj);
+  const context = contextualTypeFor(node, false);
+  const member = contextualTypeFor(node);
+  return CompleteObjectResult(obj, context?.Kind === 'union' && member && member !== context
+    ? { value: obj, context, member } : undefined);
 }
 
 /**

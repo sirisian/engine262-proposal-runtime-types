@@ -1,5 +1,5 @@
 import { anyType, makePrimitive, mentionsTypeParameter, type TypeRecord, type PropertyTypeRecord, type SignatureRecord } from './records.mts';
-import { SameArgumentList } from './relations.mts';
+import { SameArgumentList, SameType } from './relations.mts';
 import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
   EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, SymbolValue, NormalCompletion, type Value,
   type ValueEvaluator, type ParseNode, IsSymbolicPropertyKey, InitializedSymbolKey,
@@ -17,6 +17,52 @@ const constructions = new WeakMap<ObjectValue, Map<string | SymbolValue, { type?
 // A construction can supply a key without supplying a value contract, notably
 // for an accessor. This is distinct from a checked member whose target is any.
 const keyOnly = new WeakSet<PropertyTypeRecord>();
+
+/** A construction choice is a request for admission, never evidence that it
+ * succeeded. It belongs to an evaluation result, not to the returned value. */
+type ConstructionPath = { object: ObjectValue, key: PropertyKeyValue, descriptor: object, value: Value };
+export type ConstructionSelection = {
+  value: ObjectValue, context: TypeRecord, member: TypeRecord, path?: readonly ConstructionPath[],
+};
+export type ConstructionSelections = readonly ConstructionSelection[];
+const constructionSelections = new WeakMap<object, ConstructionSelections>();
+const aggregateSelections = new WeakMap<ObjectValue, Map<string | SymbolValue, {
+  key: PropertyKeyValue, descriptor: object, value: Value, selections: ConstructionSelections,
+}>>();
+export function ConstructionSelectionsOf(result: object | undefined): ConstructionSelections | undefined {
+  return result && constructionSelections.get(result);
+}
+export function PreferredConstructionAlternative(value: Value, context: TypeRecord,
+  selections?: ConstructionSelections): TypeRecord | undefined {
+  if (context.Kind !== 'union') return undefined;
+  const choice = selections?.find((entry) => entry.value === value && SameType(entry.context, context)
+    && entry.path?.every((step) => {
+      const current = step.object.properties.get(step.key);
+      return current === step.descriptor && IsDataDescriptor(current) && current.Value === step.value;
+    }) !== false);
+  return choice?.member;
+}
+export function BeginConstructionSelections(object: ObjectValue): void {
+  aggregateSelections.set(object, new Map());
+}
+export function EndConstructionSelections(object: ObjectValue): void {
+  aggregateSelections.delete(object);
+}
+export function CompleteConstructionSelections<T extends object>(object: ObjectValue, result: T,
+  own?: ConstructionSelection): T {
+  const selections: ConstructionSelection[] = own ? [own] : [];
+  for (const entry of aggregateSelections.get(object)?.values() ?? []) {
+    const current = object.properties.get(entry.key);
+    // Ordinary replacement/deletion or a decorator cannot attach a child
+    // construction's choice to a different receiving descriptor/value.
+    if (current === entry.descriptor && IsDataDescriptor(current) && current.Value === entry.value) {
+      const step = { object, key: entry.key, descriptor: entry.descriptor, value: entry.value };
+      selections.push(...entry.selections.map((selection) => ({ ...selection, path: [...(selection.path ?? []), step] })));
+    }
+  }
+  if (selections.length) constructionSelections.set(result, selections);
+  return result;
+}
 
 function propertyIdentity(key: PropertyKeyValue): string | SymbolValue {
   return key instanceof JSStringValue ? key.stringValue() : key;
@@ -267,12 +313,16 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
 /** Called after the ordinary boundary check, with that boundary's target. */
 export function RetainCheckedResult(completion: object | undefined, type: TypeRecord): void {
   if (!completion) return;
+  constructionSelections.delete(completion);
   if (type.Kind === 'object' || type.Kind === 'function' || (sourceNominal(type) && type.Constructor instanceof ObjectValue)) accepted.set(completion, type);
   else accepted.delete(completion);
 }
 
 /** Preserve an admitted contract when the interpreter wraps the same result. */
-export function TransferResultDependency<T extends object>(from: object, to: T): T {
+export function TransferResultDependency<T extends object>(from: object, to: T, construction = true): T {
+  const selections = construction && constructionSelections.get(from);
+  if (selections) constructionSelections.set(to, selections);
+  else constructionSelections.delete(to);
   const type = accepted.get(from);
   if (type) accepted.set(to, type);
   else accepted.delete(to);
@@ -285,7 +335,11 @@ export function TransferResultDependency<T extends object>(from: object, to: T):
 export function RetainPropertyResult(object: ObjectValue, key: PropertyKeyValue, completion: object): void {
   const descriptor = object.properties.get(key);
   if (descriptor && IsDataDescriptor(descriptor)) {
-    TransferResultDependency(completion, descriptor);
+    TransferResultDependency(completion, descriptor, false);
+    const selections = constructionSelections.get(completion);
+    const pending = aggregateSelections.get(object);
+    if (selections?.length) pending?.set(propertyIdentity(key), { key, descriptor, value: descriptor.Value!, selections });
+    else pending?.delete(propertyIdentity(key));
     const construction = constructions.get(object);
     const type = accepted.get(completion);
     const identity = propertyIdentity(key);
@@ -320,14 +374,16 @@ export function RetainCopiedPropertyKey(object: ObjectValue, key: PropertyKeyVal
 
 export function BeginObjectResult(object: ObjectValue): void {
   constructions.set(object, new Map());
+  BeginConstructionSelections(object);
 }
 
 export function EndObjectResult(object: ObjectValue): void {
   constructions.delete(object);
+  EndConstructionSelections(object);
 }
 
 /** Finish a fresh object's contribution without reading any program value. */
-export function CompleteObjectResult(object: ObjectValue): NormalCompletion<ObjectValue> {
+export function CompleteObjectResult(object: ObjectValue, own?: ConstructionSelection): NormalCompletion<ObjectValue> {
   const result = NormalCompletion(object);
   const entries = constructions.get(object);
   if (entries?.size) accepted.set(result, {
@@ -338,7 +394,7 @@ export function CompleteObjectResult(object: ObjectValue): NormalCompletion<Obje
       return property;
     }),
   });
-  return result;
+  return CompleteConstructionSelections(object, result, own);
 }
 
 function project(type: TypeRecord | undefined, key: PropertyKeyValue, result: object): void {
@@ -368,6 +424,9 @@ export function ReadPropertyResult(reference: ReferenceRecord, key: PropertyKeyV
 
 /** A returned call contributes evidence, not an exemption from admission. */
 export function ForwardResultDependency<T extends object>(from: object, to: T): T {
+  const selections = constructionSelections.get(from);
+  if (selections) constructionSelections.set(to, selections);
+  else constructionSelections.delete(to);
   const type = accepted.get(from);
   if (type) forwarded.set(to, type);
   return to;
@@ -395,5 +454,5 @@ export function RetainBindingResult(reference: ReferenceRecord, completion: obje
   if (!(reference.Base instanceof EnvironmentRecord) || !(reference.ReferencedName instanceof JSStringValue)) return;
   const binding = RefBindingHolder(reference.Base, reference.ReferencedName)?.bindings.get(reference.ReferencedName);
   if (!binding?.initialized || binding.mutable !== false || binding.indirect || binding.refLocation) return;
-  TransferResultDependency(completion, binding);
+  TransferResultDependency(completion, binding, false);
 }

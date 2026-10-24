@@ -52,7 +52,7 @@ export function* Evaluate_DoExpression(node: ParseNode.DoExpression): ValueEvalu
     return completion as ValueCompletion;
   }
   // An EMPTY completion is `do {}` being `void 0`.
-  return completion.Value === undefined ? Value.undefined : completion.Value;
+  return completion.Value === undefined ? Value.undefined : completion as ValueCompletion;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { BeginConstructionSelections, EndConstructionSelections, CompleteConstructionSelections, NormalCompletion } from '#self';
 import { ObjectValue, Value } from '../value.mts';
 import {
   Evaluate, type PlainEvaluator,
@@ -127,8 +128,11 @@ export function* Evaluate_ArrayLiteral(node: ParseNode.ArrayLiteral): ValueEvalu
   // 1. Let array be ! ArrayCreate(0).
   const array = X(ArrayCreate(0));
   // 2. Let len be the result of performing ArrayAccumulation for ElementList with arguments array and 0.
-  const len = yield* ArrayAccumulation(ElementList, array, 0, surroundingAgent.feature('runtime-types') ? elementContextOf(node) : null);
-  Q(len);
-  // 4. Return array.
-  return array;
+  BeginConstructionSelections(array);
+  try {
+    Q(yield* ArrayAccumulation(ElementList, array, 0, surroundingAgent.feature('runtime-types') ? elementContextOf(node) : null));
+    return CompleteConstructionSelections(array, NormalCompletion(array));
+  } finally {
+    EndConstructionSelections(array);
+  }
 }

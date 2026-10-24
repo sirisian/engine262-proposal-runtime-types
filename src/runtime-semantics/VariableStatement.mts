@@ -1,9 +1,9 @@
 import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
-import { TypeNodeToTypeRecord, DefaultValueOf } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, DefaultValueOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { surroundingAgent, LookupTypeDefault } from '#self';
 import { recordDeclaredType , copiesOnBinding } from './LexicalDeclaration.mts';
 import {
-  NormalCompletion, Q,
+  NormalCompletion, EnsureCompletion, Q,
 } from '../completion.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -12,6 +12,7 @@ import { Value } from '../value.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   EnforceAnnotation,
+  EvaluateResultValue,
   GetValue,
   PutValue,
   CopyValueClassInstance,
@@ -83,24 +84,32 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
     const bindingId = StringValue(BindingIdentifier);
     // 2. Let lhs be ? ResolveBinding(bindingId).
     const lhs = Q(yield* ResolveBinding(bindingId, undefined, BindingIdentifier.strict));
-    // 3. If IsAnonymousFunctionDefinition(Initializer) is true, then
-    let value;
-    if (IsAnonymousFunctionDefinition(Initializer)) {
-      // a. Let value be NamedEvaluation of Initializer with argument bindingId.
-      value = Q(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
-    } else { // 4. Else,
-      // a. Let rhs be the result of evaluating Initializer.
-      const rhs = Q(yield* Evaluate(Initializer));
-      // b. Let value be ? GetValue(rhs).
-      value = Q(yield* GetValue(rhs));
+    // Preserve the initializer's selected construction until this boundary,
+    // just as lexical declarations do. Evaluation itself performs no admission.
+    let context = null;
+    if (TypeAnnotation && surroundingAgent.feature('runtime-types')) {
+      context = Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
     }
+    pushContextualType(context, Initializer);
+    let valueResult;
+    try {
+      if (IsAnonymousFunctionDefinition(Initializer)) {
+        valueResult = EnsureCompletion(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
+      } else {
+        valueResult = EnsureCompletion(yield* EvaluateResultValue(Initializer));
+      }
+    } finally {
+      popContextualType();
+    }
+    if (valueResult.Type !== 'normal') return valueResult;
+    let value = valueResult.Value;
     // The declared type is recorded on the binding so a later ASSIGNMENT crosses
     // it too - #sec-typed-bindings checks an annotation "against its initializer
     // and against every later assignment", and a `var` was getting only the
     // first. Without it `var v: uint8 = 1; v = a;` for an out-of-range `any`
     // stored the value, which is the invariant break a `let` no longer has.
     // proposal-runtime-types: the annotation check at the binding boundary.
-    value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
+    value = Q(yield* EnforceAnnotation(TypeAnnotation, value, valueResult));
     // #sec-value-type-copying, as at a lexical binding: a `var` initialized from
     // a NAME or a READ copies, and one initialized from a construction does not.
     // A separate evaluation from `let` and `const`, so it needs the rule said
