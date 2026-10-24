@@ -30,7 +30,7 @@ import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryG
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { CopyValueClassInstance } from '../abstract-ops/testing-comparison.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, functionTypeParameters, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, functionTypeParameters, AdoptedTypeParametersOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -446,6 +446,27 @@ export function* TypeNodeToTypeRecordInContext(
   return yield* InCapturedTypeContext(captured, () => TypeNodeToTypeRecord(node), bindings);
 }
 
+/** Instantiated captures close a signature formed before its enclosing application. */
+function TypeParameterSourceContext(record: TypeParameterRecord | undefined): CapturedTypeContext | undefined {
+  const context = record?.SourceContext;
+  if (!context) return undefined;
+  const frame = context.TypeParameterFrame ? copyTypeParameterFrame(context.TypeParameterFrame) : new Map<string, TypeRecord>();
+  for (const capture of record.Captures ?? []) {
+    if (!mentionsTypeParameter(capture.Type)) {
+      bindTypeParameter(frame, capture.Declaration.BindingIdentifier.name, capture.Type, capture.Declaration);
+    }
+  }
+  return { ...context, TypeParameterFrame: frame };
+}
+
+/** Read an adopted bound/default in its signature context with preceding own bindings. */
+function* TypeParameterSourceRecord(parameter: ParseNode.TypeParameter, node: ParseNode.Type,
+  bindings: ReadonlyMap<string, TypeRecord>, records?: readonly TypeParameterRecord[]): PlainEvaluator<TypeRecord> {
+  const captured = TypeParameterSourceContext(records?.find((record) => record.Declaration === parameter));
+  if (captured) return yield* TypeNodeToTypeRecordInContext(node, captured, bindings);
+  return yield* TypeNodeToTypeRecord(node);
+}
+
 /** Run declaration work with isolated captured bindings, restoring on failure. */
 export function* InCapturedTypeContext<T>(captured: CapturedTypeContext, action: () => PlainEvaluator<T>,
   bindings?: ReadonlyMap<string, TypeRecord>): PlainEvaluator<T> {
@@ -837,7 +858,7 @@ export function* BindTypeArgumentsInto(
   }
   if (declarationContext?.Environment) context.LexicalEnvironment = declarationContext.Environment;
   try {
-    return yield* BindTypeArgumentRecordsInto(params, entries.map((e) => e.record), entries.map((e) => e.name), frame, applied);
+    return yield* BindTypeArgumentRecordsInto(params, entries.map((e) => e.record), entries.map((e) => e.name), frame, applied, undefined, declarationContext && AdoptedTypeParametersOf(declarationContext));
   } finally {
     context.LexicalEnvironment = savedEnvironment;
     if (captured) popTypeParameterFrame();
@@ -852,6 +873,7 @@ export function* BindTypeArgumentRecordsInto(
   frame: Map<string, TypeRecord>,
   applied: string,
   interfaceIdentity?: object,
+  parameterRecords?: readonly TypeParameterRecord[],
 ): PlainEvaluator<TypeRecord[]> {
   const context = surroundingAgent.runningExecutionContext;
   const savedEnvironment = context.LexicalEnvironment;
@@ -859,7 +881,7 @@ export function* BindTypeArgumentRecordsInto(
   parameterEnvironment.TypeParameterList = params;
   context.LexicalEnvironment = parameterEnvironment;
   try {
-    return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied, interfaceIdentity);
+    return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied, interfaceIdentity, parameterRecords);
   } finally {
     context.LexicalEnvironment = savedEnvironment;
   }
@@ -872,6 +894,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
   frame: Map<string, TypeRecord>,
   applied: string,
   interfaceIdentity?: object,
+  parameterRecords?: readonly TypeParameterRecord[],
 ): PlainEvaluator<TypeRecord[]> {
   const entries = records.map((record, i) => ({ record, name: names[i] }));
   const elementBounds: (TypeRecord | null)[] = [];
@@ -881,7 +904,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
       pushTypeParameterFrame(frame);
       let c;
       try {
-        c = EnsureCompletion(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+        c = EnsureCompletion(yield* TypeParameterSourceRecord(q, q.TypeParameterConstraint, frame, parameterRecords));
       } finally {
         popTypeParameterFrame();
       }
@@ -914,7 +937,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
       if (!selfArgument && q.TypeParameterDefault) {
         pushTypeParameterFrame(frame);
         try {
-          selfArgument = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+          selfArgument = Q(yield* TypeParameterSourceRecord(q, q.TypeParameterDefault, frame, parameterRecords));
         } finally {
           popTypeParameterFrame();
         }
@@ -925,7 +948,11 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
       if (selfArgument && name) bindTypeParameter(constraintFrame, name, selfArgument, q);
       pushTypeParameterFrame(constraintFrame);
       try {
-        constraint = Q(yield* ResolveInterfaceArgumentConstraint(q, constraintFrame, selfArgument ?? run[0]?.record, interfaceIdentity));
+        if (parameterRecords) {
+          constraint = Q(yield* TypeParameterSourceRecord(q, q.TypeParameterConstraint, constraintFrame, parameterRecords));
+        } else {
+          constraint = Q(yield* ResolveInterfaceArgumentConstraint(q, constraintFrame, selfArgument ?? run[0]?.record, interfaceIdentity));
+        }
       } finally {
         popTypeParameterFrame();
       }
@@ -935,7 +962,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
       if (run.length === 0 && q.TypeParameterDefault) {
         pushTypeParameterFrame(frame);
         try {
-          record = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+          record = Q(yield* TypeParameterSourceRecord(q, q.TypeParameterDefault, frame, parameterRecords));
         } finally {
           popTypeParameterFrame();
         }
@@ -970,7 +997,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
         }
         pushTypeParameterFrame(frame);
         try {
-          record = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+          record = Q(yield* TypeParameterSourceRecord(q, q.TypeParameterDefault, frame, parameterRecords));
         } finally {
           popTypeParameterFrame();
         }
@@ -1895,8 +1922,9 @@ export function* InferGenericBindings(
   formals: readonly ParseNode[],
   args: readonly Value[],
   preBound?: ReadonlyMap<string, TypeRecord>,
+  parameterRecords?: readonly TypeParameterRecord[],
 ): PlainEvaluator<Map<string, TypeRecord>> {
-  return yield* InferGenericBindingsFrom(typeParameters, formals, valueArguments(args), preBound);
+  return yield* InferGenericBindingsFrom(typeParameters, formals, valueArguments(args), preBound, parameterRecords);
 }
 
 /**
@@ -1950,6 +1978,7 @@ export function* InferGenericBindingsFrom(
   formals: readonly ParseNode[],
   args: InferenceArguments,
   preBound?: ReadonlyMap<string, TypeRecord>,
+  parameterRecords?: readonly TypeParameterRecord[],
 ): PlainEvaluator<Map<string, TypeRecord>> {
   const frame = new Map<string, TypeRecord>();
   let structural: Map<string, TypeRecord> | null = null;
@@ -1987,7 +2016,7 @@ export function* InferGenericBindingsFrom(
         // argument rung does. Captured contracts retain declaration identity.
         bindTypeParameter(frame, paramName, pre, tp);
         if (checkerSupplied && tp.TypeParameterConstraint) {
-          const preConstraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
+          const preConstraint = Q(yield* TypeParameterSourceRecord(tp, tp.TypeParameterConstraint, frame, parameterRecords));
           if (preConstraint !== null && !Q(yield* ConstraintAdmits(pre, preConstraint))
               && !literalArmsFit(pre, preConstraint)) {
             return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pre)), Value(displayType(preConstraint)));
@@ -1999,7 +2028,7 @@ export function* InferGenericBindingsFrom(
       // read earlier parameters, which are already in `frame`).
       let constraint: TypeRecord | null = null;
       if (tp.TypeParameterConstraint) {
-        constraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
+        constraint = Q(yield* TypeParameterSourceRecord(tp, tp.TypeParameterConstraint, frame, parameterRecords));
       }
       const literalRule = constraint !== null && constraintWantsLiteral(constraint);
       // generics.md "Binding a value generic from an argument": a VALUE
@@ -2108,7 +2137,7 @@ export function* InferGenericBindingsFrom(
       }
 
       if (bound === null && tp.TypeParameterDefault) {
-        bound = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterDefault));
+        bound = Q(yield* TypeParameterSourceRecord(tp, tp.TypeParameterDefault, frame, parameterRecords));
       }
       // #sec-type-parameters: a VALUE parameter's argument "is a value of the
       // named type", and a default or an inferred literal is an argument like
@@ -4044,8 +4073,15 @@ export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironmen
       for (const parameter of parameters) {
         let Constraint = parameter.Constraint;
         if (parameter.ConstraintNode && (!Constraint || Constraint.Kind === 'deferred')) {
-          const completed = Q(yield* EvaluateGenericSource({ node: parameter.ConstraintNode,
-            parameters, bindings: new Map(), captures: parameter.Captures }, runtimeEnvironment));
+          const complete = () => EvaluateGenericSource({ node: parameter.ConstraintNode!,
+            parameters, bindings: new Map(), captures: parameter.Captures }, runtimeEnvironment || !!parameter.SourceContext);
+          let completed: TypeRecord | undefined;
+          const sourceContext = TypeParameterSourceContext(parameter);
+          if (sourceContext) {
+            completed = Q(yield* InCapturedTypeContext(sourceContext, complete));
+          } else {
+            completed = Q(yield* complete());
+          }
           if (completed) Constraint = completed;
         }
         TypeParameters.push({ ...parameter, Constraint });
@@ -7294,6 +7330,13 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
   // neither, so a generic method signature dropped its parameters on the
   // floor and `T` in `on<T>(h: (e: T) => void)` had nothing to resolve to.
   const capturedFrame = currentTypeParameterFrame();
+  const context = surroundingAgent.runningExecutionContext;
+  const sourceFrame = capturedFrame && copyTypeParameterFrame(capturedFrame, typeParameters ?? []);
+  for (const parameter of typeParameters ?? []) sourceFrame?.delete(parameter.BindingIdentifier.name);
+  const SourceContext: CapturedTypeContext = {
+    Environment: context.LexicalEnvironment, PrivateEnvironment: context.PrivateEnvironment,
+    Realm: context.Realm, ScriptOrModule: context.ScriptOrModule, TypeParameterFrame: sourceFrame,
+  };
   let pushedTypeParameterFrame = false;
   let tpFrame: Map<string, TypeRecord> | null = null;
   if (typeParameters && typeParameters.length > 0) {
@@ -7373,7 +7416,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     Kind: 'function',
     Signatures: [
       typeParameters && typeParameters.length > 0
-        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters).map((r) => ({ ...r,
+        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters).map((r) => ({ ...r, SourceContext,
           Constraint: (tpFrame!.get(r.Name) as { Constraint?: TypeRecord })?.Constraint ?? r.Constraint,
           Captures: r.Captures?.map((capture) => ({ ...capture,
             Type: instantiateGenericCapture(capture, capturedFrame) })),
@@ -7604,11 +7647,11 @@ export function IsFamilyConstraintEvaluationFailure(value: object): boolean {
 }
 
 
-export function* FillGenericConstraintFrame(params: readonly ParseNode.TypeParameter[], frame: Map<string, TypeRecord>): PlainEvaluator<void> {
+export function* FillGenericConstraintFrame(params: readonly ParseNode.TypeParameter[], frame: Map<string, TypeRecord>, records?: readonly TypeParameterRecord[]): PlainEvaluator<void> {
   for (const parameter of params) {
     const node = parameter.TypeParameterConstraint;
     if (node && !containsComputedType(node)) {
-      const Constraint = Q(yield* TypeNodeToTypeRecord(node));
+      const Constraint = Q(yield* TypeParameterSourceRecord(parameter, node, frame, records));
       const Name = parameter.BindingIdentifier.name;
       // Runtime instantiation must not replace the declaration's symbolic
       // description with the concrete bound of one activation.

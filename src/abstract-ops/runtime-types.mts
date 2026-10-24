@@ -28,7 +28,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -5209,9 +5209,16 @@ export function DeclaredInverseOf(builder: Value): Value | undefined {
  * and was refused at run time as a non-generic callable. TypeScript's
  * contextual signature instantiation is the same commitment.
  */
-const adoptedTypeParameters = new WeakMap<object, readonly ParseNode.TypeParameter[]>();
-export function AdoptTypeParameters(fn: object, list: readonly ParseNode.TypeParameter[]): void {
-  adoptedTypeParameters.set(fn, list);
+const adoptedTypeParameters = new WeakMap<object, {
+  Records: readonly TypeParameterRecord[], Declarations: readonly ParseNode.TypeParameter[],
+}>();
+export function AdoptTypeParameters(fn: object, list: readonly TypeParameterRecord[]): void {
+  adoptedTypeParameters.set(fn, { Records: list, Declarations: list.map((parameter) => parameter.Declaration) });
+}
+
+/** Effective records retain the source context of their bounds and defaults. */
+export function AdoptedTypeParametersOf(fn: object): readonly TypeParameterRecord[] | undefined {
+  return adoptedTypeParameters.get(fn)?.Records;
 }
 
 export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNode.TypeParameter[] | null {
@@ -5222,8 +5229,8 @@ export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNod
   if (list && list.length > 0) {
     return list;
   }
-  const adopted = adoptedTypeParameters.get(fn as unknown as object);
-  return adopted && adopted.length > 0 ? adopted : null;
+  const adopted = adoptedTypeParameters.get(fn as unknown as object)?.Declarations;
+  return adopted?.length ? adopted : null;
 }
 
 /**
@@ -5283,7 +5290,7 @@ export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly 
       seeded = merged;
     }
   }
-  return Q(yield* InferGenericBindings(typeParameters, formals, values, seeded));
+  return Q(yield* InferGenericBindings(typeParameters, formals, values, seeded, AdoptedTypeParametersOf(fn as object)));
 }
 
 /**
@@ -5978,7 +5985,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
   }
   try {
   if (genericFrame && genericTypeParameters) {
-    Q(yield* FillGenericConstraintFrame(genericTypeParameters, genericFrame));
+    Q(yield* FillGenericConstraintFrame(genericTypeParameters, genericFrame, AdoptedTypeParametersOf(fn)));
   }
   const resolved = new Map<ParseNode, TypeRecord>();
   for (const p of formals) {
@@ -6053,7 +6060,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     ReturnType,
     ...(Narrows ? { Narrows } : {}),
     ...(genericTypeParameters && genericTypeParameters.length > 0
-      ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r,
+      ? { TypeParameters: (AdoptedTypeParametersOf(fn) ?? typeParameterRecordsOf(genericTypeParameters)).map((r) => ({ ...r,
         Constraint: (genericFrame?.get(r.Name) as { Constraint?: TypeRecord } | undefined)?.Constraint ?? r.Constraint,
         Captures: r.Captures?.map((capture) => ({ ...capture,
           Type: instantiateGenericCapture(capture, capturedFrame ?? undefined) })),

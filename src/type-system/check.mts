@@ -13602,7 +13602,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               try {
                 const body = resolveType(genericDeclaration.Type);
                 checkSpecializedDeclaration(genericDeclaration, bindings);
-                return body && substituteTypeParameters(body, bindings);
+                return body && substituteFreeTypeParameters(body, bindings, genericParameters);
               } finally {
                 typeParameterScopes.pop();
                 resolvingAliases.delete(genericDeclaration);
@@ -14692,9 +14692,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const methodParamNames = (asMethod.TypeParameters?.TypeParameterList ?? [])
               .map((q) => (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name)
               .filter((n): n is string => typeof n === 'string');
-            if (methodParamNames.length > 0) {
-              typeParameterScopes.push(scopeOfNames(methodParamNames));
-            }
+            // Bounds, defaults and their captures belong to this declaration,
+            // just as in a function type; names alone lose that contract.
+            const pushedMethodScope = pushTypeParameterScopeOf(asMethod as unknown as ParseNode);
             let Parameters: ParameterRecord[] = [];
             let Return: Known = null;
             let predicate: Partial<SignatureRecord> = {};
@@ -14715,12 +14715,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (mp.Rest) {
                   // A type parameter is judged by its constraint, so the
                   // method's own parameters are in scope for the check.
-                  const pushedMethodScope = pushTypeParameterScopeOf(asMethod as unknown as ParseNode);
-                  try {
-                    checkRestAnnotation(mp.TypeAnnotation, mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : resolvedParam);
-                  } finally {
-                    if (pushedMethodScope) typeParameterScopes.pop();
-                  }
+                  checkRestAnnotation(mp.TypeAnnotation, resolvedParam);
                 }
                 Parameters.push(parameter(resolvedParam ?? anyTypeRecord, {
                   Name: mp.BindingIdentifier?.name ?? '',
@@ -14732,7 +14727,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
               predicate = methodPredicate(asMethod.TypeAnnotation, Parameters, Return);
             } finally {
-              if (methodParamNames.length > 0) {
+              if (pushedMethodScope) {
                 typeParameterScopes.pop();
               }
             }

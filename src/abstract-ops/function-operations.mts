@@ -39,7 +39,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
   currentTypeParameterFrame, copyTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
-  pushContextualType, popContextualType, contextualTypeFor, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
+  pushContextualType, popContextualType, contextualTypeFor, SubstituteTypeArguments, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
 } from '../type-system/runtime.mts';
 import { resolveOverloadChecked } from '../type-system/overloads.mts';
 import { functionTypeParameters, AdoptTypeParameters, SignaturesOf } from './runtime-types.mts';
@@ -809,10 +809,11 @@ export function OrdinaryFunctionCreate(functionPrototype: ObjectValue, sourceTex
   if (surroundingAgent.feature('runtime-types') && Body.parent
       && !(Body.parent as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList?.length) {
     const context = contextualTypeFor(Body.parent);
-    const shape = context?.Kind === 'nominal' ? context.Structure : context;
+    const shape = context?.Kind === 'nominal' && context.Structure
+      ? SubstituteTypeArguments(context.Structure, context.Declaration, context.Arguments) : context;
     if (shape?.Kind === 'function' && shape.Signatures.length === 1) {
       const parameters = shape.Signatures[0].TypeParameters;
-      if (parameters?.length) AdoptTypeParameters(F, parameters.map((parameter) => parameter.Declaration));
+      if (parameters?.length) AdoptTypeParameters(F, parameters);
     }
   }
   // #sec-this-adoption: retain the contextual receiver contract at entry,

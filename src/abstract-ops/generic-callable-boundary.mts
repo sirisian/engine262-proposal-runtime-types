@@ -6,7 +6,7 @@ import { RuntimeTypeOf, CompleteCallableConstraints, BindTypeArgumentRecordsInto
 import { SpecializeGenericFunction } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { GenericMapTypeOf, SpecializeGenericMap } from './generic-map.mts';
 import { InCallableDeclarationContext } from './callable-selection.mts';
-import { classFrameOfMethod, functionTypeParameters } from './runtime-types.mts';
+import { AdoptedTypeParametersOf, classFrameOfMethod, functionTypeParameters } from './runtime-types.mts';
 
 /** #sec-crossing-with-a-generic-function: admission must retain the inferred body. */
 export function* MaterializeGenericCallable(value: Value, target: TypeRecord): ValueEvaluator {
@@ -45,7 +45,7 @@ export function* MaterializeGenericCallable(value: Value, target: TypeRecord): V
     if (!bindings) return value;
     const frame = new Map<string, TypeRecord>();
     const records = parameters!.map((p) => bindings.get(p.BindingIdentifier.name)!);
-    Q(yield* BindTypeArgumentRecordsInto(parameters!, records, records.map(() => undefined), frame, 'the function'));
+    Q(yield* BindTypeArgumentRecordsInto(parameters!, records, records.map(() => undefined), frame, 'the function', undefined, AdoptedTypeParametersOf(value)));
     return yield* SpecializeGenericFunction(value, undefined, undefined, parameters!, frame);
   });
 }

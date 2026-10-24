@@ -8,6 +8,7 @@ import { JSStringValue, NumberValue, BigIntValue, TypedNumberValue, Value, type 
 // the root here would make it wait on everything the root re-exports.
 import { R } from '../abstract-ops/spec-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { CapturedTypeContext } from './runtime.mts';
 import { MetadataEntries, MetadataKey, MetadataKeys, SymbolInternIndex } from './metadata-keys.mts';
 
 /**
@@ -307,6 +308,8 @@ export interface TypeParameterRecord {
   readonly DefaultNode: ParseNode.Type | null;
   readonly Default?: TypeRecord;
   readonly Captures?: readonly GenericTypeCapture[];
+  /** Private context of evaluated signature syntax; never a public type identity. */
+  readonly SourceContext?: CapturedTypeContext;
   readonly Declaration: ParseNode.TypeParameter;
   /**
    * Engine-side: the ~parameter~ Type Record this parameter denotes within its
@@ -2399,7 +2402,11 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
                 ? new Map<string, TypeRecord>()
                 : captures.byDeclaration
                   ? new Map(bound ? [[capture.Declaration.BindingIdentifier.name, bound]] : []) : captures.bindings;
-              return { ...capture, Type: makeSubstitution(relevant, null)(capture.Type)! };
+              const type = makeSubstitution(relevant, null)(capture.Type)!;
+              // An alias can replace its C with a captured outer T. Later
+              // instantiation follows T's identity inside that contribution,
+              // while C still identifies the original source dependency.
+              return { ...capture, Type: makeSubstitution(new Map(), null, captures)(type)! };
             }) } : {}),
             ...(parameter.Parameter ? { Parameter: apply(parameter.Parameter)! } : {}),
           })) } : {}),

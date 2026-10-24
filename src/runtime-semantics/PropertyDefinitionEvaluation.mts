@@ -12,7 +12,7 @@ import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
 import { AdoptTypeParameters } from '../abstract-ops/runtime-types.mts';
-import { RuntimeTypeOf, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, SubstituteTypeArguments, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
   Q, X,
@@ -101,10 +101,9 @@ function adoptContextualTypeParameters(PropertyDefinition: ParseNode, closure: O
   if (!member || member.Kind !== 'function') {
     return;
   }
-  const signature = (member as { Signatures?: readonly { TypeParameters?: readonly { Declaration?: unknown }[] }[] }).Signatures?.[0];
-  const declarations = signature?.TypeParameters?.map((tp) => tp.Declaration).filter((d): d is ParseNode.TypeParameter => !!d);
-  if (declarations && declarations.length > 0 && declarations.length === signature!.TypeParameters!.length) {
-    AdoptTypeParameters(closure, declarations);
+  const parameters = member.Signatures[0]?.TypeParameters;
+  if (parameters?.length) {
+    AdoptTypeParameters(closure, parameters);
   }
 }
 
@@ -114,7 +113,8 @@ function propertyContextualType(contextual: TypeRecord | null | undefined, key: 
   }
   const shape = contextual.Kind === 'object'
     ? contextual
-    : (contextual.Kind === 'nominal' ? (contextual as { Structure?: TypeRecord }).Structure : undefined);
+    : (contextual.Kind === 'nominal' && contextual.Structure
+      ? SubstituteTypeArguments(contextual.Structure, contextual.Declaration, contextual.Arguments) : undefined);
   if (!shape || shape.Kind !== 'object') {
     return null;
   }

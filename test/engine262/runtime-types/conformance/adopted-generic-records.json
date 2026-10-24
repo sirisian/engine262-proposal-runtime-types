@@ -1,0 +1,1659 @@
+{
+  "description": "Adopted bounds/defaults retain source contexts, transitive captures and application bindings; expected outcomes prescribed independently. Remaining reflection, materialization and written adopted-parameter annotation probes are recorded separately.",
+  "cases": [
+    {
+      "name": "method-bound-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type=C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type=C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type=C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-preceding-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<P:type=C,U:type=P>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-preceding-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>={map<P:type=C,U:type=P>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-preceding-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>={map<P:type=C,U:type=P>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-preceding-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>={map<P:type=C,T:type=P>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-preceding-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>={map<P:type=C,T:type=P>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T):Adapter.<T>{return {map(value){return {captured:seed,own:value};}};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-preceding-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>={map<P:type=C,T:type=P>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take({map(value){return {captured:seed,own:value};}});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Adapter.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Adapter.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Adapter.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type=C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type=C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Adapter.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type=C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-preceding-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,U:type=P>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-preceding-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,U:type=P>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Adapter.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-preceding-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,U:type=P>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-preceding-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,T:type=P>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-preceding-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,T:type=P>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Adapter.<T>{return function(value){return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-preceding-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,T:type=P>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take(function(value){return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Adapter.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Adapter.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Adapter.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type=C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type=C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Adapter.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type=C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-preceding-U-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,U:type=P>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-preceding-U-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,U:type=P>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T):Adapter.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-preceding-U-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,U:type=P>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-preceding-T-local",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,T:type=P>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-preceding-T-return",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,T:type=P>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T):Adapter.<T>{return (value)=>{return {captured:seed,own:value};};}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-preceding-T-argument",
+      "modules": {
+        "main": "type Adapter<C:type>=<P:type=C,T:type=P>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){function take(a:Adapter.<T>){return a;}return take((value)=>{return {captured:seed,own:value};});}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-stored",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const selected=a.map.<number>;const p=selected.call(a,0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-erased",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a.map;const p=erased.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-caller-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);function caller<C:type>(){return a.map.<number>(0);}const p=caller.<string>();verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);const b=factory.<string>(\"s\");const q=b.map.<string>(\"s\");function other(x:any,y:any){if(x!==\"s\"||y!==\"s\")throw new Error(\"activation\");}other(q.captured,q.own);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-stored",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const selected=a.map.<>;const p=selected.call(a,0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-erased",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a.map;const p=erased.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-caller-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);function caller<C:type>(){return a.map.<>(0);}const p=caller.<string>();verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);const b=factory.<string>(\"s\");const q=b.map.<>(\"s\");function other(x:any,y:any){if(x!==\"s\"||y!==\"s\")throw new Error(\"activation\");}other(q.captured,q.own);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-stored",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const selected=a.<number>;const p=selected(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-erased",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;const p=erased.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-caller-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);function caller<C:type>(){return a.<number>(0);}const p=caller.<string>();verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);const b=factory.<string>(\"s\");const q=b.<string>(\"s\");function other(x:any,y:any){if(x!==\"s\"||y!==\"s\")throw new Error(\"activation\");}other(q.captured,q.own);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-stored",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const selected=a.<>;const p=selected(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-erased",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;const p=erased.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-caller-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);function caller<C:type>(){return a.<>(0);}const p=caller.<string>();verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);const b=factory.<string>(\"s\");const q=b.<>(\"s\");function other(x:any,y:any){if(x!==\"s\"||y!==\"s\")throw new Error(\"activation\");}other(q.captured,q.own);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-stored",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const selected=a.<number>;const p=selected(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-erased",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;const p=erased.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-caller-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);function caller<C:type>(){return a.<number>(0);}const p=caller.<string>();verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);const b=factory.<string>(\"s\");const q=b.<string>(\"s\");function other(x:any,y:any){if(x!==\"s\"||y!==\"s\")throw new Error(\"activation\");}other(q.captured,q.own);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-stored",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const selected=a.<>;const p=selected(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-erased",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;const p=erased.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-caller-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);function caller<C:type>(){return a.<>(0);}const p=caller.<string>();verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-two-activations",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);const b=factory.<string>(\"s\");const q=b.<>(\"s\");function other(x:any,y:any){if(x!==\"s\"||y!==\"s\")throw new Error(\"activation\");}other(q.captured,q.own);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-computed",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}type Adapter<C:type>={map<U:type extends choose(C)>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-body-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<C:type>(seed:C){const a:Adapter.<number>={map(value){const local:C=seed;function check(x:any){if(x!==\"s\")throw new Error(\"body scope\");}check(local);return {captured:0,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<string>(\"s\");const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-imported",
+      "modules": {
+        "dep": "export type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-value-domain",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<0>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-rejected-bound-recovery",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a.map;let refused=false;try{erased.<string>(\"s\");}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"constraint skipped\");const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-computed",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}type Adapter<C:type>={map<U:type=choose(C)>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-body-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<C:type>(seed:C){const a:Adapter.<number>={map(value){const local:C=seed;function check(x:any){if(x!==\"s\")throw new Error(\"body scope\");}check(local);return {captured:0,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<string>(\"s\");const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-imported",
+      "modules": {
+        "dep": "export type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-value-domain",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:C=0>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-bypass",
+      "modules": {
+        "main": "function fail(){throw new Error(\"default evaluated\");}type Adapter<C:type>={map<U:type=fail()>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-computed",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}type Adapter<C:type>=<U:type extends choose(C)>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-body-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<C:type>(seed:C){const a:Adapter.<number>=function(value){const local:C=seed;function check(x:any){if(x!==\"s\")throw new Error(\"body scope\");}check(local);return {captured:0,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<string>(\"s\");const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-imported",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-value-domain",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<0>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-rejected-bound-recovery",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;let refused=false;try{erased.<string>(\"s\");}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"constraint skipped\");const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-computed",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}type Adapter<C:type>=<U:type=choose(C)>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-body-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<C:type>(seed:C){const a:Adapter.<number>=function(value){const local:C=seed;function check(x:any){if(x!==\"s\")throw new Error(\"body scope\");}check(local);return {captured:0,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<string>(\"s\");const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-imported",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-value-domain",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:C=0>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-bypass",
+      "modules": {
+        "main": "function fail(){throw new Error(\"default evaluated\");}type Adapter<C:type>=<U:type=fail()>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-computed",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}type Adapter<C:type>=<U:type extends choose(C)>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-body-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<C:type>(seed:C){const a:Adapter.<number>=(value)=>{const local:C=seed;function check(x:any){if(x!==\"s\")throw new Error(\"body scope\");}check(local);return {captured:0,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<string>(\"s\");const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-imported",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-value-domain",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<0>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-rejected-bound-recovery",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;let refused=false;try{erased.<string>(\"s\");}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"constraint skipped\");const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-computed",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}type Adapter<C:type>=<U:type=choose(C)>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-body-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<C:type>(seed:C){const a:Adapter.<number>=(value)=>{const local:C=seed;function check(x:any){if(x!==\"s\")throw new Error(\"body scope\");}check(local);return {captured:0,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<string>(\"s\");const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-imported",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-value-domain",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:C=0>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-bypass",
+      "modules": {
+        "main": "function fail(){throw new Error(\"default evaluated\");}type Adapter<C:type>=<U:type=fail()>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-bound",
+      "modules": {
+        "main": "interface Adapter<C:type>{map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-default",
+      "modules": {
+        "main": "interface Adapter<C:type>{map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pack-default",
+      "modules": {
+        "main": "type Adapter<C:type>={map<...U:[].<type>=[C]>(...values:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(...values){return {captured:seed,own:values};}};return a;}const p=factory.<number>(0).map.<>(0);function verify(x:any,y:any){if(x!==0||y[0]!==0||y.length!==1)throw new Error(\"pack\");}verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-written-argument-scope",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a.map;function caller<C:type>(){let refused=false;try{erased.<C>(\"s\");}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"argument scope\");}caller.<string>();const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bad-static-bound",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<string>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "method-throwing-default-recovery",
+      "modules": {
+        "main": "function fail(t:type):type{throw new TypeError(\"selected default\");}type Adapter<C:type>={map<U:type=fail(C)>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);Reflect.typeOf(a.map);const erased:any=a.map;let refused=false;try{erased.<>(0);}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"default skipped\");const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-written-argument-scope",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;function caller<C:type>(){let refused=false;try{erased.<C>(\"s\");}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"argument scope\");}caller.<string>();const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bad-static-bound",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<string>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "function-throwing-default-recovery",
+      "modules": {
+        "main": "function fail(t:type):type{throw new TypeError(\"selected default\");}type Adapter<C:type>=<U:type=fail(C)>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);Reflect.typeOf(a);const erased:any=a;let refused=false;try{erased.<>(0);}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"default skipped\");const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-written-argument-scope",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const erased:any=a;function caller<C:type>(){let refused=false;try{erased.<C>(\"s\");}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"argument scope\");}caller.<string>();const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bad-static-bound",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<string>(\"s\");verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "arrow-throwing-default-recovery",
+      "modules": {
+        "main": "function fail(t:type):type{throw new TypeError(\"selected default\");}type Adapter<C:type>=<U:type=fail(C)>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);Reflect.typeOf(a);const erased:any=a;let refused=false;try{erased.<>(0);}catch(error){if(!(error instanceof TypeError))throw error;refused=true;}if(!refused)throw new Error(\"default skipped\");const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-imported-helper",
+      "modules": {
+        "dep": "export function choose(t:type):type{return t;}export type Adapter<C:type>={map<U:type extends choose(C)>(value:U):{captured:C,own:U}};",
+        "main": "import {Adapter} from \"dep\";function choose(t:type):type{return type string;}function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-imported-helper",
+      "modules": {
+        "dep": "export function choose(t:type):type{return t;}export type Adapter<C:type>={map<U:type=choose(C)>(value:U):{captured:C,own:U}};",
+        "main": "import {Adapter} from \"dep\";function choose(t:type):type{return type string;}function factory<T:type>(seed:T){const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.map.<>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-imported-helper",
+      "modules": {
+        "dep": "export function choose(t:type):type{return t;}export type Adapter<C:type>=<U:type extends choose(C)>(value:U)=>{captured:C,own:U};",
+        "main": "import {Adapter} from \"dep\";function choose(t:type):type{return type string;}function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-imported-helper",
+      "modules": {
+        "dep": "export function choose(t:type):type{return t;}export type Adapter<C:type>=<U:type=choose(C)>(value:U)=>{captured:C,own:U};",
+        "main": "import {Adapter} from \"dep\";function choose(t:type):type{return type string;}function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<>(0);verify(p.captured,p.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-preserves-tdz",
+      "modules": {
+        "main": "function factory<T:type>(seed:T){type Adapter<C:type>={map<U:type=Choice>(value:U):{captured:C,own:U}};const a:Adapter.<T>={map(value){return {captured:seed,own:value};}};const erased:any=a.map;let refused=false;try{erased.<>(0);}catch(error){if(!(error instanceof ReferenceError))throw error;refused=true;}if(!refused)throw new Error(\"early initialization\");const Choice=type number;return a;}const a=factory.<number>(0);const p=a.map.<>(0);function verify(x:any,y:any){if(x!==0||y!==0)throw new Error(\"after initialization\");}verify(p.captured,p.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
