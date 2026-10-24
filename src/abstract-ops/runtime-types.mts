@@ -1,3 +1,4 @@
+import { contextualParameters } from '../type-system/contextual-parameters.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
@@ -5,7 +6,7 @@ import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletion, ReturnCompletion, type ThrowCompletion } from '../completion.mts';
@@ -28,7 +29,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -5210,10 +5211,17 @@ export function DeclaredInverseOf(builder: Value): Value | undefined {
  * contextual signature instantiation is the same commitment.
  */
 const adoptedTypeParameters = new WeakMap<object, {
-  Records: readonly TypeParameterRecord[], Declarations: readonly ParseNode.TypeParameter[],
+  Records: readonly TypeParameterRecord[], Declarations: readonly ParseNode.TypeParameter[], Inputs: readonly ParameterRecord[],
 }>();
-export function AdoptTypeParameters(fn: object, list: readonly TypeParameterRecord[]): void {
-  adoptedTypeParameters.set(fn, { Records: list, Declarations: list.map((parameter) => parameter.Declaration) });
+export function AdoptTypeParameters(fn: object, signature: SignatureRecord): void {
+  // Close enclosing captures as a whole signature so its own binders stay open.
+  const closed = instantiateTypeInFrame({ Kind: 'function', Signatures: [signature] },
+    currentTypeParameterFrame() ?? new Map()) as Extract<TypeRecord, { Kind: 'function' }>;
+  const effective = closed.Signatures[0];
+  const list = effective.TypeParameters!;
+  const formals = (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? [];
+  adoptedTypeParameters.set(fn, { Records: list, Declarations: list.map((parameter) => parameter.Declaration),
+    Inputs: contextualParameters(formals, effective.Parameters) });
 }
 
 /** Effective records retain the source context of their bounds and defaults. */
@@ -5290,7 +5298,7 @@ export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly 
       seeded = merged;
     }
   }
-  return Q(yield* InferGenericBindings(typeParameters, formals, values, seeded, AdoptedTypeParametersOf(fn as object)));
+  return Q(yield* InferGenericBindings(typeParameters, formals, values, seeded, AdoptedTypeParametersOf(fn as object), adoptedTypeParameters.get(fn)?.Inputs));
 }
 
 /**
@@ -5998,6 +6006,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       }
     }
   }
+  const adoptedInputs = resolveAnnotations ? adoptedTypeParameters.get(fn)?.Inputs : undefined;
   const params = describeParameters(formals, (annotation) => {
     for (const [node, rec] of resolved) {
       if ((node as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation === annotation) {
@@ -6006,11 +6015,23 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     }
     return resolved.values().next().value ?? ({ Kind: 'any' } as TypeRecord);
   });
+  if (adoptedInputs) {
+    const ownBindings = new Map([...(genericFrame ?? []), ...(applicationFrame ?? [])]);
+    params.forEach((record, index) => {
+      const adopted = adoptedInputs[index];
+      if (!adopted || (formals[index] as { TypeAnnotation?: unknown }).TypeAnnotation) return;
+      params[index] = { ...record,
+        Type: substituteFreeTypeParameters(adopted.Type, ownBindings, ownTypeParameters ?? undefined)!,
+        Optional: record.Optional || adopted.Optional,
+        ...(adopted.Initial !== undefined ? { Initial: adopted.Initial } : {}),
+        DeclaredDefault: record.DeclaredDefault || adopted.DeclaredDefault };
+    });
+  }
   // [[Untyped]]: no parameter annotation and no return annotation anywhere.
   // The return annotation belongs to the declaration, not the function object.
   // Read its syntax even when annotation resolution is deliberately disabled.
   const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation } } }).ECMAScriptCode?.parent;
-  const untyped = resolved.size === 0
+  const untyped = !adoptedInputs && resolved.size === 0
     && !declaration?.TypeAnnotation
     && !((fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation);
   // #sec-overloading-on-return-type: the signature carries its return type so

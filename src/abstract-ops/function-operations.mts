@@ -39,10 +39,10 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
   currentTypeParameterFrame, copyTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
-  pushContextualType, popContextualType, contextualTypeFor, SubstituteTypeArguments, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
+  pushContextualType, popContextualType, contextualTypeFor, SubstituteTypeArguments, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext, TakeBodyContext,
 } from '../type-system/runtime.mts';
 import { resolveOverloadChecked } from '../type-system/overloads.mts';
-import { functionTypeParameters, AdoptTypeParameters, SignaturesOf } from './runtime-types.mts';
+import { functionTypeParameters, AdoptTypeParameters, AdoptedTypeParametersOf, InferGenericCallBindings, SignaturesOf } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -289,10 +289,24 @@ function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: A
   if (toPush !== undefined) {
     pushTypeParameterFrame(toPush);
   }
+  let adoptedBindings = false;
   try {
+    if (AdoptedTypeParametersOf(F)?.length) {
+      // Collected/destructured inputs enforce their retained contracts during
+      // declaration instantiation, before EvaluateBody's later entry checks.
+      // An erased invocation must therefore infer the adopted binders first.
+      const callContext = TakeBodyContext();
+      const bindings = Q(yield* InferGenericCallBindings(F, argumentsList, currentTypeParameterFrame(), callContext));
+      SetBodyContext(callContext);
+      if (bindings) {
+        pushTypeParameterFrame(bindings);
+        adoptedBindings = true;
+      }
+    }
     // 1. Return the result of EvaluateBody of the parsed code that is F.[[ECMAScriptCode]] passing F and argumentsList as the arguments.
     return EnsureCompletion(yield* (EvaluateBody(F.ECMAScriptCode!, F, argumentsList)));
   } finally {
+    if (adoptedBindings) popTypeParameterFrame();
     if (toPush !== undefined) {
       popTypeParameterFrame();
     }
@@ -813,7 +827,7 @@ export function OrdinaryFunctionCreate(functionPrototype: ObjectValue, sourceTex
       ? SubstituteTypeArguments(context.Structure, context.Declaration, context.Arguments) : context;
     if (shape?.Kind === 'function' && shape.Signatures.length === 1) {
       const parameters = shape.Signatures[0].TypeParameters;
-      if (parameters?.length) AdoptTypeParameters(F, parameters);
+      if (parameters?.length) AdoptTypeParameters(F, shape.Signatures[0]);
     }
   }
   // #sec-this-adoption: retain the contextual receiver contract at entry,

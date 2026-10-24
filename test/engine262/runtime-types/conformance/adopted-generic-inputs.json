@@ -1,0 +1,1200 @@
+{
+  "description": "Effective adopted generic inputs in reflection, admission, result publication and implicit erased invocation; independently prescribed outcomes.",
+  "cases": [
+    {
+      "name": "function-reflection",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=function(value){return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}if(Reflect.typeOf(f)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-reflection",
+      "modules": {
+        "main": "type Mapper<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Mapper.<T>=(value)=>{return {captured:seed,own:value};};return f;}function verify(a:any,b:any){if(typeof a!==\"number\"||a!==0||typeof b!==\"string\"||b!==\"s\")throw new Error(\"binder identity\");}const f=factory.<number>(0);const pair=f.<string>(\"s\");verify(pair.captured,pair.own);function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}if(Reflect.typeOf(f)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-concrete-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value){return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const again=held(0);verify(again.captured,again.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-concrete-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return a;}function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"capture\");}const a=factory.<number>(0);const p=a.<number>(0);verify(p.captured,p.own);const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const again=held(0);verify(again.captured,again.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-simple-input",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=function(value){return value;};const a=f;function model<T:type>(value:T):T{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-optional-input",
+      "modules": {
+        "main": "const f:<T:type>(value?:T)=>T|undefined=function(value){return value;};const a=f;function model<T:type>(value?:T):T|undefined{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-rest-input",
+      "modules": {
+        "main": "const f:<T:type>(...values:[].<T>)=>[].<T>=function(...values){return values;};const a=f;function model<T:type>(...values:[].<T>):[].<T>{return values;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-tuple-rest-input",
+      "modules": {
+        "main": "const f:<T:type>(...values:[T,string])=>[T,string]=function(...values){return values;};const a=f;function model<T:type>(...values:[T,string]):[T,string]{return values;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-written-any",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>any=function(value:any){return value;};const a=f;function model<T:type>(value:any):any{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-written-number",
+      "modules": {
+        "main": "const f:<T:type>(value:any)=>number=function(value:number){return value;};const a=f;function model<T:type>(value:number):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-destructured-input",
+      "modules": {
+        "main": "const f:<T:type>(value:{item:T})=>T=function({item}){return item;};const a=f;function model<T:type>(value:{item:T}):T{return value.item;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-open-activation-reflection",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-open-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-open-wrong-result",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:number)=>{captured:string,own:number}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong result\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-activation-reflection",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-wrong-result",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:number)=>{captured:string,own:number}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong result\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-wrong-bound",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:string)=>{captured:number,own:string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong bound\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-stored-specialization",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=function(value){return value;};const a=f;const chosen=a.<number>;function model(value:number):number{return value;}if(Reflect.typeOf(chosen)!==Reflect.typeOf(model))throw new Error(\"stored reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-tuple-rest-to-fixed",
+      "modules": {
+        "main": "const f:<T:type>(...values:[T,string])=>string=function(value,text){return text;};const a=f;function model<T:type>(value:T,text:string):string{return text;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-written-default",
+      "modules": {
+        "main": "const f:<T:type>(value:number)=>number=function(value=4){return value;};const a=f;function model<T:type>(value:number=4):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-ref-mode",
+      "modules": {
+        "main": "const f:<T:type>(ref value:number)=>number=function(ref value){return value;};const a=f;function model<T:type>(ref value:number):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-erased-implicit-call",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=function(value){return value;};const a=f;const erased:any=a;const result=erased.call({},0);if(result!==0)throw new Error(\"inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-reflection-no-body",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=function(value){throw new Error(\"body executed\");};const a=f;const before=Reflect.typeOf(a);const after=Reflect.typeOf(a);if(before!==after)throw new Error(\"unstable reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-result-covariance",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>{value:T}=function(value){return {value};};const a=f;const erased:any=a;const held:(value:number)=>{readonly value:number|string}=erased;const result=held.call({},0);if(result.value!==0)throw new Error(\"covariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-caller-shadow",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>{value:T}=function(value){return {value};};const a=f;function inspect<T:type>(erased:any){const held:(value:number)=>{value:number}=erased;return held.call({},0).value;}if(inspect.<string>(a)!==0)throw new Error(\"caller capture\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-result-invariance",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>{value:T}=function(value){return {value};};const a=f;let failed=false;try{const erased:any=a;const held:(value:number)=>{value:number|string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"mutable covariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-erased-structural-call",
+      "modules": {
+        "main": "const f:<T:type>(value:[].<T>)=>[].<T>=function(value){return value;};const a=f;const erased:any=a;const input:[].<number>=[0,1];const result=erased.call({},input);if(result!==input)throw new Error(\"structural inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-erased-rest-call",
+      "modules": {
+        "main": "const f:<T:type>(...value:[].<T>)=>[].<T>=function(...value){return value;};const a=f;const erased:any=a;const result=erased.call({},0,1);if(result[0]!==0||result[1]!==1)throw new Error(\"rest inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-written-any-no-inference",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>any=function(value:any){return value;};const a=f;const erased:any=a;let failed=false;try{erased.call({},0);}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"written any inferred adopted input\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bad-then-good-admission",
+      "modules": {
+        "main": "const f:<T:type extends number>(value:T)=>{value:T}=function(value){return {value};};const a=f;const erased:any=a;let failed=false;try{const wrong:(value:string)=>{value:string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"bound\");const good:(value:number)=>{value:number}=erased;const result=good.call({},0);if(result.value!==0)throw new Error(\"failed admission poisoned value\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-simple-input",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=(value)=>{return value;};const a=f;function model<T:type>(value:T):T{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-optional-input",
+      "modules": {
+        "main": "const f:<T:type>(value?:T)=>T|undefined=(value)=>{return value;};const a=f;function model<T:type>(value?:T):T|undefined{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-rest-input",
+      "modules": {
+        "main": "const f:<T:type>(...values:[].<T>)=>[].<T>=(...values)=>{return values;};const a=f;function model<T:type>(...values:[].<T>):[].<T>{return values;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-tuple-rest-input",
+      "modules": {
+        "main": "const f:<T:type>(...values:[T,string])=>[T,string]=(...values)=>{return values;};const a=f;function model<T:type>(...values:[T,string]):[T,string]{return values;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-written-any",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>any=(value:any)=>{return value;};const a=f;function model<T:type>(value:any):any{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-written-number",
+      "modules": {
+        "main": "const f:<T:type>(value:any)=>number=(value:number)=>{return value;};const a=f;function model<T:type>(value:number):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-destructured-input",
+      "modules": {
+        "main": "const f:<T:type>(value:{item:T})=>T=({item})=>{return item;};const a=f;function model<T:type>(value:{item:T}):T{return value.item;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-open-activation-reflection",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-open-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-open-wrong-result",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:number)=>{captured:string,own:number}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong result\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-activation-reflection",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-wrong-result",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:number)=>{captured:string,own:number}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong result\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-wrong-bound",
+      "modules": {
+        "main": "type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:string)=>{captured:number,own:string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong bound\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-stored-specialization",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=(value)=>{return value;};const a=f;const chosen=a.<number>;function model(value:number):number{return value;}if(Reflect.typeOf(chosen)!==Reflect.typeOf(model))throw new Error(\"stored reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-tuple-rest-to-fixed",
+      "modules": {
+        "main": "const f:<T:type>(...values:[T,string])=>string=(value,text)=>{return text;};const a=f;function model<T:type>(value:T,text:string):string{return text;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-written-default",
+      "modules": {
+        "main": "const f:<T:type>(value:number)=>number=(value=4)=>{return value;};const a=f;function model<T:type>(value:number=4):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-ref-mode",
+      "modules": {
+        "main": "const f:<T:type>(ref value:number)=>number=(ref value)=>{return value;};const a=f;function model<T:type>(ref value:number):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-erased-implicit-call",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=(value)=>{return value;};const a=f;const erased:any=a;const result=erased.call({},0);if(result!==0)throw new Error(\"inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-reflection-no-body",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>T=(value)=>{throw new Error(\"body executed\");};const a=f;const before=Reflect.typeOf(a);const after=Reflect.typeOf(a);if(before!==after)throw new Error(\"unstable reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-result-covariance",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>{value:T}=(value)=>{return {value};};const a=f;const erased:any=a;const held:(value:number)=>{readonly value:number|string}=erased;const result=held.call({},0);if(result.value!==0)throw new Error(\"covariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-caller-shadow",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>{value:T}=(value)=>{return {value};};const a=f;function inspect<T:type>(erased:any){const held:(value:number)=>{value:number}=erased;return held.call({},0).value;}if(inspect.<string>(a)!==0)throw new Error(\"caller capture\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-result-invariance",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>{value:T}=(value)=>{return {value};};const a=f;let failed=false;try{const erased:any=a;const held:(value:number)=>{value:number|string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"mutable covariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-erased-structural-call",
+      "modules": {
+        "main": "const f:<T:type>(value:[].<T>)=>[].<T>=(value)=>{return value;};const a=f;const erased:any=a;const input:[].<number>=[0,1];const result=erased.call({},input);if(result!==input)throw new Error(\"structural inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-erased-rest-call",
+      "modules": {
+        "main": "const f:<T:type>(...value:[].<T>)=>[].<T>=(...value)=>{return value;};const a=f;const erased:any=a;const result=erased.call({},0,1);if(result[0]!==0||result[1]!==1)throw new Error(\"rest inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-written-any-no-inference",
+      "modules": {
+        "main": "const f:<T:type>(value:T)=>any=(value:any)=>{return value;};const a=f;const erased:any=a;let failed=false;try{erased.call({},0);}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"written any inferred adopted input\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bad-then-good-admission",
+      "modules": {
+        "main": "const f:<T:type extends number>(value:T)=>{value:T}=(value)=>{return {value};};const a=f;const erased:any=a;let failed=false;try{const wrong:(value:string)=>{value:string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"bound\");const good:(value:number)=>{value:number}=erased;const result=good.call({},0);if(result.value!==0)throw new Error(\"failed admission poisoned value\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-simple-input",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):T}={map(value){return value;}};const a=f.map;function model<T:type>(value:T):T{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-optional-input",
+      "modules": {
+        "main": "const f:{map<T:type>(value?:T):T|undefined}={map(value){return value;}};const a=f.map;function model<T:type>(value?:T):T|undefined{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-rest-input",
+      "modules": {
+        "main": "const f:{map<T:type>(...values:[].<T>):[].<T>}={map(...values){return values;}};const a=f.map;function model<T:type>(...values:[].<T>):[].<T>{return values;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-tuple-rest-input",
+      "modules": {
+        "main": "const f:{map<T:type>(...values:[T,string]):[T,string]}={map(...values){return values;}};const a=f.map;function model<T:type>(...values:[T,string]):[T,string]{return values;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-written-any",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):any}={map(value:any){return value;}};const a=f.map;function model<T:type>(value:any):any{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-written-number",
+      "modules": {
+        "main": "const f:{map<T:type>(value:any):number}={map(value:number){return value;}};const a=f.map;function model<T:type>(value:number):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-destructured-input",
+      "modules": {
+        "main": "const f:{map<T:type>(value:{item:T}):T}={map({item}){return item;}};const a=f.map;function model<T:type>(value:{item:T}):T{return value.item;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-open-activation-reflection",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-open-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-open-wrong-result",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:number)=>{captured:string,own:number}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong result\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-activation-reflection",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-materialization",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-wrong-result",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:number)=>{captured:string,own:number}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong result\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-wrong-bound",
+      "modules": {
+        "main": "type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");let failed=false;try{const erased:any=a;const held:(value:string)=>{captured:number,own:string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"accepted wrong bound\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-stored-specialization",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):T}={map(value){return value;}};const a=f.map;const chosen=a.<number>;function model(value:number):number{return value;}if(Reflect.typeOf(chosen)!==Reflect.typeOf(model))throw new Error(\"stored reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-tuple-rest-to-fixed",
+      "modules": {
+        "main": "const f:{map<T:type>(...values:[T,string]):string}={map(value,text){return text;}};const a=f.map;function model<T:type>(value:T,text:string):string{return text;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-written-default",
+      "modules": {
+        "main": "const f:{map<T:type>(value:number):number}={map(value=4){return value;}};const a=f.map;function model<T:type>(value:number=4):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-ref-mode",
+      "modules": {
+        "main": "const f:{map<T:type>(ref value:number):number}={map(ref value){return value;}};const a=f.map;function model<T:type>(ref value:number):number{return value;}if(Reflect.typeOf(a)!==Reflect.typeOf(model))throw new Error(\"reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-erased-implicit-call",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):T}={map(value){return value;}};const a=f.map;const erased:any=a;const result=erased.call({},0);if(result!==0)throw new Error(\"inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-reflection-no-body",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):T}={map(value){throw new Error(\"body executed\");}};const a=f.map;const before=Reflect.typeOf(a);const after=Reflect.typeOf(a);if(before!==after)throw new Error(\"unstable reflection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-result-covariance",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):{value:T}}={map(value){return {value};}};const a=f.map;const erased:any=a;const held:(value:number)=>{readonly value:number|string}=erased;const result=held.call({},0);if(result.value!==0)throw new Error(\"covariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-caller-shadow",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):{value:T}}={map(value){return {value};}};const a=f.map;function inspect<T:type>(erased:any){const held:(value:number)=>{value:number}=erased;return held.call({},0).value;}if(inspect.<string>(a)!==0)throw new Error(\"caller capture\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-result-invariance",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):{value:T}}={map(value){return {value};}};const a=f.map;let failed=false;try{const erased:any=a;const held:(value:number)=>{value:number|string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"mutable covariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-erased-structural-call",
+      "modules": {
+        "main": "const f:{map<T:type>(value:[].<T>):[].<T>}={map(value){return value;}};const a=f.map;const erased:any=a;const input:[].<number>=[0,1];const result=erased.call({},input);if(result!==input)throw new Error(\"structural inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-erased-rest-call",
+      "modules": {
+        "main": "const f:{map<T:type>(...value:[].<T>):[].<T>}={map(...value){return value;}};const a=f.map;const erased:any=a;const result=erased.call({},0,1);if(result[0]!==0||result[1]!==1)throw new Error(\"rest inference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-written-any-no-inference",
+      "modules": {
+        "main": "const f:{map<T:type>(value:T):any}={map(value:any){return value;}};const a=f.map;const erased:any=a;let failed=false;try{erased.call({},0);}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"written any inferred adopted input\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bad-then-good-admission",
+      "modules": {
+        "main": "const f:{map<T:type extends number>(value:T):{value:T}}={map(value){return {value};}};const a=f.map;const erased:any=a;let failed=false;try{const wrong:(value:string)=>{value:string}=erased;}catch(e){if(!(e instanceof TypeError))throw e;failed=true;}if(!failed)throw new Error(\"bound\");const good:(value:number)=>{value:number}=erased;const result=good.call({},0);if(result.value!==0)throw new Error(\"failed admission poisoned value\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-open-imported-alias",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound-imported-alias",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const f:Adapter.<T>=function(value){return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-open-imported-alias",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<T:type>(value:T)=>{captured:C,own:T};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-bound-imported-alias",
+      "modules": {
+        "dep": "export type Adapter<C:type>=<T:type extends C>(value:T)=>{captured:C,own:T};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const f:Adapter.<T>=(value)=>{return {captured:seed,own:value};};return f;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-open-imported-alias",
+      "modules": {
+        "dep": "export type Adapter<C:type>={map<T:type>(value:T):{captured:C,own:T}};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bound-imported-alias",
+      "modules": {
+        "dep": "export type Adapter<C:type>={map<T:type extends C>(value:T):{captured:C,own:T}};",
+        "main": "import {Adapter} from \"dep\";function factory<T:type>(seed:T){const f:Adapter.<T>={map(value){return {captured:seed,own:value};}};return f.map;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const erased:any=a;const held:(value:number)=>{captured:number,own:number}=erased;const result=held.call({},0);if(result.captured!==0||result.own!==0)throw new Error(\"result\");if(held!==a.<number>)throw new Error(\"specialization identity\");function model<T:type extends number>(value:T):{captured:number,own:T}{return {captured:0,own:value};}function other<T:type extends string>(value:T):{captured:string,own:T}{return {captured:\"s\",own:value};}if(Reflect.typeOf(a)!==Reflect.typeOf(model)||Reflect.typeOf(b)!==Reflect.typeOf(other))throw new Error(\"activation\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

@@ -103,7 +103,7 @@ function adoptContextualTypeParameters(PropertyDefinition: ParseNode, closure: O
   }
   const parameters = member.Signatures[0]?.TypeParameters;
   if (parameters?.length) {
-    AdoptTypeParameters(closure, parameters);
+    AdoptTypeParameters(closure, member.Signatures[0]);
   }
 }
 

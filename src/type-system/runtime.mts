@@ -1923,8 +1923,9 @@ export function* InferGenericBindings(
   args: readonly Value[],
   preBound?: ReadonlyMap<string, TypeRecord>,
   parameterRecords?: readonly TypeParameterRecord[],
+  effectiveInputs?: readonly ParameterRecord[],
 ): PlainEvaluator<Map<string, TypeRecord>> {
-  return yield* InferGenericBindingsFrom(typeParameters, formals, valueArguments(args), preBound, parameterRecords);
+  return yield* InferGenericBindingsFrom(typeParameters, formals, valueArguments(args), preBound, parameterRecords, effectiveInputs);
 }
 
 /**
@@ -1979,6 +1980,7 @@ export function* InferGenericBindingsFrom(
   args: InferenceArguments,
   preBound?: ReadonlyMap<string, TypeRecord>,
   parameterRecords?: readonly TypeParameterRecord[],
+  effectiveInputs?: readonly ParameterRecord[],
 ): PlainEvaluator<Map<string, TypeRecord>> {
   const frame = new Map<string, TypeRecord>();
   let structural: Map<string, TypeRecord> | null = null;
@@ -1987,14 +1989,19 @@ export function* InferGenericBindingsFrom(
   const ordinary: { name: string, annotationName: string | null }[] = [];
   let restName: string | null = null;
   let restAnnotationName: string | null = null;
-  for (const p of formals as readonly ParseNode[]) {
+  const adoptedName = (index: number): string | null => {
+    const type = effectiveInputs?.[index]?.Type;
+    return type?.Kind === 'parameter' && typeParameters.some((p) =>
+      type.CapturedDeclaration ? type.CapturedDeclaration === p : type.Name === p.BindingIdentifier.name) ? type.Name : null;
+  };
+  for (const [index, p] of formals.entries()) {
     const node = p as { type?: string, BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, BindingRestElement?: { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null } };
     if (node.type === 'BindingRestElement') {
       const rest = node as { BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null };
       restName = rest.BindingIdentifier?.name ?? null;
-      restAnnotationName = annotationTypeName(rest.TypeAnnotation);
+      restAnnotationName = rest.TypeAnnotation ? annotationTypeName(rest.TypeAnnotation) : adoptedName(index);
     } else {
-      ordinary.push({ name: node.BindingIdentifier?.name ?? '', annotationName: annotationTypeName(node.TypeAnnotation) });
+      ordinary.push({ name: node.BindingIdentifier?.name ?? '', annotationName: node.TypeAnnotation ? annotationTypeName(node.TypeAnnotation) : adoptedName(index) });
     }
   }
 
@@ -2128,7 +2135,7 @@ export function* InferGenericBindingsFrom(
       // and consulted by every later parameter it bound.
       if (bound === null && ((tp as { Arity?: number }).Arity ?? 0) === 0) {
         if (structural === null) {
-          structural = Q(yield* structuralBindingsOf(typeParameters, formals, args, frame));
+          structural = Q(yield* structuralBindingsOf(typeParameters, formals, args, frame, effectiveInputs));
         }
         const found = structural.get(paramName);
         if (found !== undefined) {
@@ -2211,7 +2218,9 @@ export function* InferGenericBindingsFrom(
         // remedy.
         if (bound === null) {
           const kinded = ((tp as { Arity?: number }).Arity ?? 0) > 0;
-          if (!kinded && annotationMentions(formals, paramName)) {
+          if (!kinded && (annotationMentions(formals, paramName)
+              || effectiveInputs?.some((input, index) => !(formals[index] as { TypeAnnotation?: unknown }).TypeAnnotation
+                && mentionsParameterNamed(input.Type, new Set([paramName]))))) {
             // REACHED but UNTYPED: a formal mentions the parameter and an
             // argument arrived, but the argument's type says nothing about it -
             // an unannotated callback `(x) => x` at `cb: (x: T) => T`, an
@@ -2283,6 +2292,7 @@ function* structuralBindingsOf(
   formals: readonly ParseNode[],
   args: InferenceArguments,
   frame: ReadonlyMap<string, TypeRecord>,
+  effectiveInputs?: readonly ParameterRecord[],
 ): PlainEvaluator<Map<string, TypeRecord>> {
   const into = new Map<string, TypeRecord>();
   const placeholders = new Map<string, TypeRecord>();
@@ -2299,7 +2309,7 @@ function* structuralBindingsOf(
   const shapes: { Type?: TypeRecord | null, Rest?: boolean }[] = [];
   pushTypeParameterFrame(placeholders);
   try {
-    for (const f of formals) {
+    for (const [index, f] of formals.entries()) {
       const node = f as { type?: string, TypeAnnotation?: { Type?: ParseNode.Type } | null };
       const annotation = node.TypeAnnotation?.Type;
       // A formal typed by a BUILDER over a parameter, `x: wrapOf(T)`, is rung
@@ -2307,6 +2317,12 @@ function* structuralBindingsOf(
       // verification, or is refused naming the builder - never by evaluating
       // the builder over a placeholder here, which would run it on a record
       // that is not a type and bind whatever fell out.
+      const adopted = !annotation && effectiveInputs?.[index];
+      if (adopted) {
+        shapes.push({ Type: substituteFreeTypeParameters(adopted.Type,
+          new Map([...placeholders, ...frame]), typeParameters), Rest: node.type === 'BindingRestElement' });
+        continue;
+      }
       if (!annotation || containsComputedTypeOver(annotation, names)) {
         shapes.push({ Type: null, Rest: node.type === 'BindingRestElement' });
         continue;

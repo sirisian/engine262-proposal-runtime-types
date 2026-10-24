@@ -11,7 +11,7 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
   parameterArgumentType, restElementType, makePrimitive,
-  substituteTypeParameters, mentionsTypeParameter,
+  substituteTypeParameters, substituteFreeTypeParameters, mentionsTypeParameter,
 } from './records.mts';
 import { builtinImplements, libraryExtends, iterationInterfaceRecord } from './iteration-types.mts';
 import { matchesFamilyPattern } from './family-patterns.mts';
@@ -1937,7 +1937,8 @@ export function InferSignatureInstantiation(sg: SignatureRecord, tg: SignatureRe
     return true;
   };
   if (!collectBindings()) return undefined;
-  const sourceResult = substituteTypeParameters(signatureResult(sg), byName);
+  const declarations = sTP.map((parameter) => parameter.Declaration);
+  const sourceResult = substituteFreeTypeParameters(signatureResult(sg), byName, declarations);
   const targetResult = signatureResult(tg);
   // Inputs already fixed these parameters. A wider expected result must not
   // rebind them or turn result covariance into an equality constraint.
@@ -1950,7 +1951,7 @@ export function InferSignatureInstantiation(sg: SignatureRecord, tg: SignatureRe
     const bound = u.Parameter ? bindings.get(u.Parameter) : byName.get(u.Name);
     if (!bound) return undefined;
     if (u.Constraint) {
-      const constraint = substituteTypeParameters(u.Constraint, byName)!;
+      const constraint = substituteFreeTypeParameters(u.Constraint, byName, declarations)!;
       if (!mentionsTypeParameter(constraint) && !IsAssignable(bound, constraint)) return undefined;
     }
   }

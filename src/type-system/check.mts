@@ -1,3 +1,4 @@
+import { contextualParameters } from './contextual-parameters.mts';
 import { DeclaredMemberImplements } from './implements-member.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
@@ -3822,30 +3823,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const setContextualParameters = (node: ParseNode, parameters: readonly ParameterRecord[]): void => {
     const literal = node as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[] };
     const formals = literal.ArrowParameters ?? literal.FormalParameters ?? literal.UniqueFormalParameters ?? [];
-    const sequence = parameters.flatMap((p): ParameterRecord[] => p.Rest && p.Type.Kind === 'tuple'
-      ? p.Type.Elements.map((element) => parameter(element.Type, { Rest: element.Rest, Ref: p.Ref,
-        Optional: element.Initial !== 'none' || element.DeclaredDefault,
-        DeclaredDefault: element.Initial !== 'none' || element.DeclaredDefault,
-        ...(element.Initial !== 'none' ? { Initial: element.Initial } : {}) })) : [p]);
-    let position = 0;
-    const mapped = parameters.length === 0 ? [] : formals.map((formal, index): ParameterRecord => {
-      const original = sequence[position];
-      if (formal.type === 'BindingRestElement' && index === formals.length - 1) {
-        const tail = sequence.slice(position);
-        const collection: TypeRecord = tail.length === 1 && tail[0].Rest ? tail[0].Type
-          : { Kind: 'tuple', Elements: tail.map((p) => ({ Type: p.Optional && p.Initial === undefined && !p.DeclaredDefault
-            ? joinTypes(p.Type, undefinedType) : p.Type, Rest: p.Rest, Initial: p.Initial ?? 'none', DeclaredDefault: p.DeclaredDefault })) };
-        return parameter(collection, { Rest: true, Ref: original?.Ref });
-      }
-      if (original?.Rest) {
-        // A single trailing homogeneous run has a known element contract.
-        // Distribution across multiple runs needs argument facts unavailable here.
-        return sequence.length === position + 1 && original.Type.Kind === 'array'
-          ? parameter(original.Type.Element, { Optional: true, Ref: original.Ref }) : parameter(anyTypeRecord);
-      }
-      position += 1;
-      return original ?? parameter(anyTypeRecord);
-    });
+    const mapped = contextualParameters(formals, parameters);
     const types = mapped.map((p) => p.Type);
     contextualParameterRecords.set(types, mapped);
     contextualParameterTypes.set(node, types);
@@ -29573,6 +29551,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       publishedReturnTypes.set(fn as unknown as object, taken as TypeRecord);
       return;
     }
+    // Inference and its participation test read the same effective inputs as
+    // body checking. A bare adopted own result (T) still needs these facts.
+    const contextual = contextualParameterTypes.get(fn);
+    parameterTypes = parameterTypes.map((type, index) => type ?? contextual?.[index] ?? null);
     const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
     inferenceDepth += 1;
     let inferred: Known;
