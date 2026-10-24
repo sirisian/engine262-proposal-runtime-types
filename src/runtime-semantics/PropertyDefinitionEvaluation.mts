@@ -11,7 +11,9 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
-import { AdoptTypeParameters } from '../abstract-ops/runtime-types.mts';
+import { AdoptTypeParameters, NumericArmRank } from '../abstract-ops/runtime-types.mts';
+import { SelectedObjectLiteralContext } from '../type-system/check.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { RuntimeTypeOf, SubstituteTypeArguments, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
@@ -336,7 +338,15 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
   // 5. If IsAnonymousFunctionDefinition(AssignmentExpression) is true and isProtoSetter is false, then
   if (IsAnonymousFunctionDefinition(AssignmentExpression) && !isProtoSetter) {
     // a. Let propValue be NamedEvaluation of AssignmentExpression with argument propKey.
-    propValue = yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, propKey);
+    const typed = surroundingAgent.feature('runtime-types');
+    if (typed) {
+      pushContextualType(propertyContextualType(objectLiteralContext(PropertyDefinition, PropertyDefinition.parent), propKey), AssignmentExpression);
+    }
+    try {
+      propValue = yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, propKey);
+    } finally {
+      if (typed) popContextualType();
+    }
   } else { // 6. Else,
     // a. Let exprValueRef be the result of evaluating AssignmentExpression.
     // proposal-runtime-types #sec-contextual-types: "a property of an object
@@ -365,6 +375,16 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
     if (readResult.Type !== 'normal') return readResult;
     propResult = readResult;
     propValue = readResult.Value;
+  }
+  // A selected complete union arm governs literal representation at creation.
+  // Otherwise the later union boundary can convert the untyped Number into
+  // an earlier, wider arm even though checking selected the narrow one.
+  if (surroundingAgent.feature('runtime-types') && PropertyDefinition.parent
+    && SelectedObjectLiteralContext(PropertyDefinition.parent) && isNumericLiteralOperand(AssignmentExpression)) {
+    const memberContext = propertyContextualType(objectLiteralContext(PropertyDefinition, PropertyDefinition.parent), propKey);
+    if (memberContext && NumericArmRank(memberContext) !== null) {
+      propValue = Q(yield* CheckedConvertValue(X(propValue), memberContext));
+    }
   }
   // 7. If isProtoSetter is true, then
   if (isProtoSetter) {

@@ -1,0 +1,2257 @@
+{
+  "description": "Complete contextual object alternatives, runtime creation, rollback and failure phases. Overlapping callable admission probes remain in the external audit.",
+  "cases": [
+    {
+      "name": "function-union-trial-0",
+      "modules": {
+        "main": "const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-union-trial-0",
+      "modules": {
+        "main": "const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-construction",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-invocation",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-member-order",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-parentheses",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}=({tag:\"good\",fn:function(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-outer-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-inner-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{{type U=string;const local:U=\"s\";}const own:U=value;return own;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-unannotated",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value){return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-erased",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;}};function model<U:type>(value:U):U{return value;}verify(Reflect.typeOf(a.fn),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}}={outer:{tag:\"good\",fn:function(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested-union",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"bad\",fn:(value:string)=>string}}|{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}}={outer:{tag:\"good\",fn:function(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:[].<{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}>=[{tag:\"good\",fn:function(value:U):U{return value;}}];const f:any=a[0].fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-alias",
+      "modules": {
+        "main": "type Choice={tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U};function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");",
+        "dep": "export type Choice={tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-wrong-tag",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"absent\",fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-0-wrong-body",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return \"wrong\";}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-0-wrong-local",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{const wrong:string=1;return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-0-extra-member",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{return value;},extra:1};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-0-late-discriminant",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"bad\",fn:function(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-missing-callable",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-0-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:function(value:U):U{type Bad=Missing;const closed:Bad=\"s\";return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-0-captured",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function factory<T:type>(seed:T){const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>{captured:T,own:U}}={tag:\"good\",fn:function(value:U){return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"seed\");const f:any=a.fn;const g:any=b.fn;verify(f.<string>(\"own\").captured,0);verify(g.<number>(2).captured,\"seed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-construction",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-invocation",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-member-order",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={fn:function(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-parentheses",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}=({tag:\"good\",fn:function(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-outer-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-inner-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{{type U=string;const local:U=\"s\";}const own:U=value;return own;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-unannotated",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value){return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-erased",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return value;}};function model<U:type>(value:U):U{return value;}verify(Reflect.typeOf(a.fn),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}}={outer:{tag:\"good\",fn:function(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested-union",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}}|{outer:{tag:\"bad\",fn:(value:string)=>string}}={outer:{tag:\"good\",fn:function(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:[].<{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}>=[{tag:\"good\",fn:function(value:U):U{return value;}}];const f:any=a[0].fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-alias",
+      "modules": {
+        "main": "type Choice={tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string};function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");",
+        "dep": "export type Choice={tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-wrong-tag",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"absent\",fn:function(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-1-wrong-body",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return \"wrong\";}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-1-wrong-local",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{const wrong:string=1;return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-1-extra-member",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{return value;},extra:1};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-1-late-discriminant",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"bad\",fn:function(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-missing-callable",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-1-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U):U{type Bad=Missing;const closed:Bad=\"s\";return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-1-captured",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function factory<T:type>(seed:T){const a:{tag:\"good\",fn:<U:type>(value:U)=>{captured:T,own:U}}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U){return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"seed\");const f:any=a.fn;const g:any=b.fn;verify(f.<string>(\"own\").captured,0);verify(g.<number>(2).captured,\"seed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-construction",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-invocation",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-member-order",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={fn:(value:U):U=>{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-parentheses",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}=({tag:\"good\",fn:(value:U):U=>{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-outer-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-inner-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{{type U=string;const local:U=\"s\";}const own:U=value;return own;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-unannotated",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value)=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-erased",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;}};function model<U:type>(value:U):U{return value;}verify(Reflect.typeOf(a.fn),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}}={outer:{tag:\"good\",fn:(value:U):U=>{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested-union",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"bad\",fn:(value:string)=>string}}|{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}}={outer:{tag:\"good\",fn:(value:U):U=>{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:[].<{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}>=[{tag:\"good\",fn:(value:U):U=>{return value;}}];const f:any=a[0].fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-alias",
+      "modules": {
+        "main": "type Choice={tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U};function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");",
+        "dep": "export type Choice={tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-wrong-tag",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"absent\",fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-0-wrong-body",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return \"wrong\";}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-0-wrong-local",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{const wrong:string=1;return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-0-extra-member",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{return value;},extra:1};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-0-late-discriminant",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"bad\",fn:(value:U):U=>{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-missing-callable",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-0-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn:(value:U):U=>{type Bad=Missing;const closed:Bad=\"s\";return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "arrow-0-captured",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function factory<T:type>(seed:T){const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>{captured:T,own:U}}={tag:\"good\",fn:(value:U)=>{return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"seed\");const f:any=a.fn;const g:any=b.fn;verify(f.<string>(\"own\").captured,0);verify(g.<number>(2).captured,\"seed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-construction",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-invocation",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-member-order",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={fn:(value:U):U=>{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-parentheses",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}=({tag:\"good\",fn:(value:U):U=>{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-outer-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-inner-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{{type U=string;const local:U=\"s\";}const own:U=value;return own;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-unannotated",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value)=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-erased",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return value;}};function model<U:type>(value:U):U{return value;}verify(Reflect.typeOf(a.fn),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}}={outer:{tag:\"good\",fn:(value:U):U=>{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested-union",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}}|{outer:{tag:\"bad\",fn:(value:string)=>string}}={outer:{tag:\"good\",fn:(value:U):U=>{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:[].<{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}>=[{tag:\"good\",fn:(value:U):U=>{return value;}}];const f:any=a[0].fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-alias",
+      "modules": {
+        "main": "type Choice={tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string};function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");",
+        "dep": "export type Choice={tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-wrong-tag",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"absent\",fn:(value:U):U=>{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-1-wrong-body",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return \"wrong\";}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-1-wrong-local",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{const wrong:string=1;return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-1-extra-member",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{return value;},extra:1};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-1-late-discriminant",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"bad\",fn:(value:U):U=>{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-missing-callable",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-1-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U):U=>{type Bad=Missing;const closed:Bad=\"s\";return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "arrow-1-captured",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function factory<T:type>(seed:T){const a:{tag:\"good\",fn:<U:type>(value:U)=>{captured:T,own:U}}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U)=>{return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"seed\");const f:any=a.fn;const g:any=b.fn;verify(f.<string>(\"own\").captured,0);verify(g.<number>(2).captured,\"seed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-construction",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-invocation",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-member-order",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-parentheses",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}=({tag:\"good\",fn(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-outer-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-inner-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{{type U=string;const local:U=\"s\";}const own:U=value;return own;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-unannotated",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value){return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-erased",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return value;}};function model<U:type>(value:U):U{return value;}verify(Reflect.typeOf(a.fn),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}}={outer:{tag:\"good\",fn(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested-union",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"bad\",fn:(value:string)=>string}}|{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}}={outer:{tag:\"good\",fn(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:[].<{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}>=[{tag:\"good\",fn(value:U):U{return value;}}];const f:any=a[0].fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-alias",
+      "modules": {
+        "main": "type Choice={tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U};function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");",
+        "dep": "export type Choice={tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-wrong-tag",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"absent\",fn(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-0-wrong-body",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return \"wrong\";}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-0-wrong-local",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{const wrong:string=1;return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-0-extra-member",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{return value;},extra:1};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-0-late-discriminant",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"bad\",fn(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-missing-callable",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-0-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>U}={tag:\"good\",fn(value:U):U{type Bad=Missing;const closed:Bad=\"s\";return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "method-0-captured",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function factory<T:type>(seed:T){const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type>(value:U)=>{captured:T,own:U}}={tag:\"good\",fn(value:U){return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"seed\");const f:any=a.fn;const g:any=b.fn;verify(f.<string>(\"own\").captured,0);verify(g.<number>(2).captured,\"seed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-construction",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-invocation",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-member-order",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={fn(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-parentheses",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}=({tag:\"good\",fn(value:U):U{return value;}});const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-outer-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-inner-shadow",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{{type U=string;const local:U=\"s\";}const own:U=value;return own;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-unannotated",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value){return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-erased",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f(7),7);verify(f(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-reflection",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return value;}};function model<U:type>(value:U):U{return value;}verify(Reflect.typeOf(a.fn),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}}={outer:{tag:\"good\",fn(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested-union",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{outer:{tag:\"good\",fn:<U:type>(value:U)=>U}}|{outer:{tag:\"bad\",fn:(value:string)=>string}}={outer:{tag:\"good\",fn(value:U):U{return value;}}};const f:any=a.outer.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-array",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:[].<{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}>=[{tag:\"good\",fn(value:U):U{return value;}}];const f:any=a[0].fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-alias",
+      "modules": {
+        "main": "type Choice={tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string};function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-import",
+      "modules": {
+        "main": "import {Choice} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:Choice={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");",
+        "dep": "export type Choice={tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string};"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-wrong-tag",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"absent\",fn(value:U):U{return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-1-wrong-body",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return \"wrong\";}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-1-wrong-local",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{const wrong:string=1;return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-1-extra-member",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{return value;},extra:1};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-1-late-discriminant",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"bad\",fn(value:U):U{return value;},tag:\"good\"};const f:any=a.fn;verify(f.<number>(7),7);verify(f.<string>(\"s\"),\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-missing-callable",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-1-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"good\",fn:<U:type>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U):U{type Bad=Missing;const closed:Bad=\"s\";return value;}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "method-1-captured",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}function factory<T:type>(seed:T){const a:{tag:\"good\",fn:<U:type>(value:U)=>{captured:T,own:U}}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U){return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"seed\");const f:any=a.fn;const g:any=b.fn;verify(f.<string>(\"own\").captured,0);verify(g.<number>(2).captured,\"seed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-rank-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{x:int32}|{x:uint8}={x:1};verify(Reflect.typeOf(a.x),type uint8);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "union-freshness-0",
+      "modules": {
+        "main": "const a:{a:uint8}|{b:string}={a:1,b:\"s\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-rank-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{x:uint8}|{x:int32}={x:1};verify(Reflect.typeOf(a.x),type uint8);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "union-freshness-1",
+      "modules": {
+        "main": "const a:{b:string}|{a:uint8}={a:1,b:\"s\"};"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-rollback-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"wrong\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends string>(value:U)=>U})}|{tag:\"right\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends number>(value:U)=>U})}={box:{k:\"take\",fn:function(value:U):U{return value;}},tag:\"right\"};const f:any=a.box.fn;verify(f.<number>(7),7);function model<U:type extends number>(value:U):U{return value;}verify(Reflect.typeOf(f),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-effects-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function next():any{count+=1;return 5;}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type=number>(value:U)=>U}={tag:\"good\",fn:function(value:U=next()):U{return value;}};verify(count,0);const f:any=a.fn;verify(f.<number>(),5);verify(count,1);verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-creation-effects-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function tag():\"good\"{count+=1;return \"good\";}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type=number>(value:U)=>U}={tag:tag(),fn:function(value:U):U{return value;}};verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-interfaces-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}interface Bad {tag:\"bad\";fn:(value:string)=>string;}interface Good {tag:\"good\";fn:<U:type>(value:U)=>U;}const a:Bad|Good={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-rollback-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"right\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends number>(value:U)=>U})}|{tag:\"wrong\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends string>(value:U)=>U})}={box:{k:\"take\",fn:function(value:U):U{return value;}},tag:\"right\"};const f:any=a.box.fn;verify(f.<number>(7),7);function model<U:type extends number>(value:U):U{return value;}verify(Reflect.typeOf(f),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-default-effects-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function next():any{count+=1;return 5;}const a:{tag:\"good\",fn:<U:type=number>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:function(value:U=next()):U{return value;}};verify(count,0);const f:any=a.fn;verify(f.<number>(),5);verify(count,1);verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-creation-effects-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function tag():\"good\"{count+=1;return \"good\";}const a:{tag:\"good\",fn:<U:type=number>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:tag(),fn:function(value:U):U{return value;}};verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-interfaces-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}interface Bad {tag:\"bad\";fn:(value:string)=>string;}interface Good {tag:\"good\";fn:<U:type>(value:U)=>U;}const a:Good|Bad={tag:\"good\",fn:function(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-rollback-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"wrong\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends string>(value:U)=>U})}|{tag:\"right\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends number>(value:U)=>U})}={box:{k:\"take\",fn:(value:U):U=>{return value;}},tag:\"right\"};const f:any=a.box.fn;verify(f.<number>(7),7);function model<U:type extends number>(value:U):U{return value;}verify(Reflect.typeOf(f),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-effects-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function next():any{count+=1;return 5;}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type=number>(value:U)=>U}={tag:\"good\",fn:(value:U=next()):U=>{return value;}};verify(count,0);const f:any=a.fn;verify(f.<number>(),5);verify(count,1);verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-creation-effects-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function tag():\"good\"{count+=1;return \"good\";}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type=number>(value:U)=>U}={tag:tag(),fn:(value:U):U=>{return value;}};verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-interfaces-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}interface Bad {tag:\"bad\";fn:(value:string)=>string;}interface Good {tag:\"good\";fn:<U:type>(value:U)=>U;}const a:Bad|Good={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-rollback-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"right\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends number>(value:U)=>U})}|{tag:\"wrong\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends string>(value:U)=>U})}={box:{k:\"take\",fn:(value:U):U=>{return value;}},tag:\"right\"};const f:any=a.box.fn;verify(f.<number>(7),7);function model<U:type extends number>(value:U):U{return value;}verify(Reflect.typeOf(f),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-default-effects-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function next():any{count+=1;return 5;}const a:{tag:\"good\",fn:<U:type=number>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn:(value:U=next()):U=>{return value;}};verify(count,0);const f:any=a.fn;verify(f.<number>(),5);verify(count,1);verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-creation-effects-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function tag():\"good\"{count+=1;return \"good\";}const a:{tag:\"good\",fn:<U:type=number>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:tag(),fn:(value:U):U=>{return value;}};verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-interfaces-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}interface Bad {tag:\"bad\";fn:(value:string)=>string;}interface Good {tag:\"good\";fn:<U:type>(value:U)=>U;}const a:Good|Bad={tag:\"good\",fn:(value:U):U=>{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-rollback-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"wrong\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends string>(value:U)=>U})}|{tag:\"right\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends number>(value:U)=>U})}={box:{k:\"take\",fn(value:U):U{return value;}},tag:\"right\"};const f:any=a.box.fn;verify(f.<number>(7),7);function model<U:type extends number>(value:U):U{return value;}verify(Reflect.typeOf(f),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-effects-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function next():any{count+=1;return 5;}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type=number>(value:U)=>U}={tag:\"good\",fn(value:U=next()):U{return value;}};verify(count,0);const f:any=a.fn;verify(f.<number>(),5);verify(count,1);verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-creation-effects-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function tag():\"good\"{count+=1;return \"good\";}const a:{tag:\"bad\",fn:(value:string)=>string}|{tag:\"good\",fn:<U:type=number>(value:U)=>U}={tag:tag(),fn(value:U):U{return value;}};verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-interfaces-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}interface Bad {tag:\"bad\";fn:(value:string)=>string;}interface Good {tag:\"good\";fn:<U:type>(value:U)=>U;}const a:Bad|Good={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-rollback-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"right\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends number>(value:U)=>U})}|{tag:\"wrong\",box:({k:\"skip\",fn:(value:boolean)=>boolean}|{k:\"take\",fn:<U:type extends string>(value:U)=>U})}={box:{k:\"take\",fn(value:U):U{return value;}},tag:\"right\"};const f:any=a.box.fn;verify(f.<number>(7),7);function model<U:type extends number>(value:U):U{return value;}verify(Reflect.typeOf(f),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-default-effects-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function next():any{count+=1;return 5;}const a:{tag:\"good\",fn:<U:type=number>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:\"good\",fn(value:U=next()):U{return value;}};verify(count,0);const f:any=a.fn;verify(f.<number>(),5);verify(count,1);verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-creation-effects-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let count:number=0;function tag():\"good\"{count+=1;return \"good\";}const a:{tag:\"good\",fn:<U:type=number>(value:U)=>U}|{tag:\"bad\",fn:(value:string)=>string}={tag:tag(),fn(value:U):U{return value;}};verify(count,1);const f:any=a.fn;verify(f.<number>(7),7);verify(count,1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-interfaces-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}interface Bad {tag:\"bad\";fn:(value:string)=>string;}interface Good {tag:\"good\";fn:<U:type>(value:U)=>U;}const a:Good|Bad={tag:\"good\",fn(value:U):U{return value;}};const f:any=a.fn;verify(f.<number>(7),7);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-trial-rollback-0",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"wrong\",xs:[].<float32>}|{tag:\"right\",xs:[].<uint8>}={xs:[1],tag:\"right\"};verify(Reflect.typeOf(a.xs[0]),type uint8);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-trial-rollback-1",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}const a:{tag:\"right\",xs:[].<uint8>}|{tag:\"wrong\",xs:[].<float32>}={xs:[1],tag:\"right\"};verify(Reflect.typeOf(a.xs[0]),type uint8);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

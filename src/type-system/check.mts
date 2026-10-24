@@ -978,6 +978,11 @@ export function TargetTypedNewType(node: object): TypeRecord | undefined {
  * position a literal can occupy - a binding, an argument, a return, a nested
  * property - rather than one change per coercion site.
  */
+const selectedObjectLiteralContexts = new WeakMap<object, TypeRecord>();
+export function SelectedObjectLiteralContext(node: object): TypeRecord | undefined {
+  return selectedObjectLiteralContexts.get(node);
+}
+
 const freshObjectLiteralTargets = new WeakMap<object, TypeRecord>();
 
 export function FreshObjectLiteralTarget(node: object): TypeRecord | undefined {
@@ -3306,7 +3311,77 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   bindingContracts?: BindingContractPass, inferenceResources = new InferenceResources()): ObjectValue[] {
   const modulePartials: ModulePartialContribution[] = [];
   if (root.type === 'Module') pendingModulePartials.set(root, modulePartials);
-  const unresolvedTypes = new Map<object, DeferredTypeCheck>();
+  const trialJournal: (() => void)[] = [];
+  let trialDepth = 0;
+  const journalSet = <K extends object, V>(map: Map<K, V> | WeakMap<K, V>, key: K, value: V): void => {
+    if (trialDepth > 0) {
+      const had = map.has(key), old = map.get(key);
+      trialJournal.push(() => { if (had) map.set(key, old!); else map.delete(key); });
+    }
+    map.set(key, value);
+  };
+  const journalDelete = <K extends object, V>(map: Map<K, V> | WeakMap<K, V>, key: K): void => {
+    if (trialDepth > 0 && map.has(key)) {
+      const old = map.get(key)!;
+      trialJournal.push(() => { map.set(key, old); });
+    }
+    map.delete(key);
+  };
+  const journalMembership = (set: WeakSet<object>, key: object, present: boolean): void => {
+    if (trialDepth > 0) {
+      const had = set.has(key);
+      trialJournal.push(() => { if (had) set.add(key); else set.delete(key); });
+    }
+    if (present) set.add(key); else set.delete(key);
+  };
+  const setNodeContext = (node: ParseNode, contextual: Known): void => {
+    const record = node as ParseNode & { ContextualType?: Known };
+    if (trialDepth > 0) {
+      const descriptor = Object.getOwnPropertyDescriptor(record, 'ContextualType');
+      trialJournal.push(() => {
+        if (descriptor) Object.defineProperty(record, 'ContextualType', descriptor);
+        else delete record.ContextualType;
+      });
+    }
+    record.ContextualType = contextual;
+  };
+  class Journaled<V, K extends object = ParseNode> extends Map<K, V> {
+    override set(key: K, value: V): this {
+      if (trialDepth > 0) {
+        const had = this.has(key), old = this.get(key);
+        trialJournal.push(() => { if (had) super.set(key, old!); else super.delete(key); });
+      }
+      return super.set(key, value);
+    }
+    override delete(key: K): boolean {
+      if (trialDepth > 0 && this.has(key)) {
+        const old = this.get(key)!;
+        trialJournal.push(() => { super.set(key, old); });
+      }
+      return super.delete(key);
+    }
+  }
+
+  /** Nested successes remain undoable by an enclosing failed trial. */
+  const speculate = (attempt: () => boolean): boolean => {
+    const mark = trialJournal.length;
+    const graphWasInvalid = invalidTypeGraph;
+    trialDepth += 1;
+    let ok = false;
+    try {
+      ok = attempt();
+      return ok;
+    } finally {
+      trialDepth -= 1;
+      if (!ok) {
+        invalidTypeGraph = graphWasInvalid;
+        for (let i = trialJournal.length - 1; i >= mark; i -= 1) trialJournal[i]();
+      }
+      if (!ok || trialDepth === 0) trialJournal.length = mark;
+    }
+  };
+
+  const unresolvedTypes = new Journaled<DeferredTypeCheck, object>();
   const deferredConstants = new Map<ParseNode, Value>();
   deferredTypeChecks.set(root, unresolvedTypes);
 
@@ -3688,8 +3763,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `staticTypeIn` is not a query - it RECORDS a contextual type for
    * every literal it walks - so an arm that loses a trial must be rolled back.
    *
-   * On the MAP rather than at its callers: there are seven of these maps and
-   * many write sites, and a journal that lives with the map cannot miss one.
+   * Context maps journal their own writes. Runtime-facing source publications
+   * also use the trial journal, which starts before deferred annotations.
    */
   // Loop bindings over an untyped literal iterable that were NOT inferred a type.
   // Such a value behaves as a numeric literal does at a typed boundary - it is
@@ -3697,45 +3772,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // time - and is refused where a literal is refused, at a `string`. See the
   // `for`-`of` handler and `requireAssignable`.
   const literalDerivedNumbers = new WeakSet<object>();
-  const trialJournal: { map: Map<ParseNode, unknown>, key: ParseNode, had: boolean, old: unknown }[] = [];
-
-  let trialDepth = 0;
-
-  class Journaled<V> extends Map<ParseNode, V> {
-    override set(key: ParseNode, value: V): this {
-      if (trialDepth > 0) {
-        trialJournal.push({
-          map: this as unknown as Map<ParseNode, unknown>, key, had: this.has(key), old: this.get(key),
-        });
-      }
-      return super.set(key, value) as this;
-    }
-  }
-
-  /** Run `attempt`, discarding what it recorded unless it reports success. */
-  const speculate = (attempt: () => boolean): boolean => {
-    const mark = trialJournal.length;
-    trialDepth += 1;
-    let ok: boolean;
-    try {
-      ok = attempt();
-    } finally {
-      trialDepth -= 1;
-    }
-    if (!ok) {
-      for (let i = trialJournal.length - 1; i >= mark; i -= 1) {
-        const e = trialJournal[i]!;
-        if (e.had) {
-          e.map.set(e.key, e.old);
-        } else {
-          e.map.delete(e.key);
-        }
-      }
-    }
-    trialJournal.length = mark;
-    return ok;
-  };
-
   /** The `this` a non-arrow literal adopted from its contextual signature. */
   const contextualThisTypes = new Journaled<Known>();
 
@@ -15965,7 +16001,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const lit of literals) staticTypeIn(lit.node, chosen);
     }
     if (!family && everyArgProven && literalsFit && argNodes.length > 0 && literals.length === argNodes.length) {
-      staticCallResolutions.set(call, chosen);
+      journalSet(staticCallResolutions, call, chosen);
     }
     return returned;
   };
@@ -17087,7 +17123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const wantedThis = signature.ThisType;
       if (wantedThis !== undefined && wantedThis !== null && node.type !== 'ArrowFunction' && node.type !== 'AsyncArrowFunction') {
         contextualThisTypes.set(node, wantedThis as Known);
-        adoptedReceiverTypes.set(node, wantedThis);
+        journalSet(adoptedReceiverTypes, node, wantedThis);
       }
     }
     // sec-type-arguments-and-placement-new-in-expression-position: `new.(...)` constructs the type its POSITION requires.
@@ -17135,7 +17171,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         reportType('rt-constructor-required', node, '$1 is not constructible', Value(displayType(contextual)));
         return null;
       }
-      targetTypedNewTypes.set(node as object, contextual);
+      journalSet(targetTypedNewTypes, node as object, contextual);
       if (isVector) {
         const lanes = vectorConstructorType(contextual, (node.Arguments ?? []) as readonly ParseNode[]);
         if (lanes) checkCallArguments({ CallExpression: node, Arguments: node.Arguments }, lanes, node);
@@ -17166,7 +17202,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // makes begin with what the position requires - and the `NewExpression` arm
     // of `staticType` reads it back off the node exactly as the call arm does.
     if (node.type === 'NewExpression' && contextual) {
-      (node as unknown as { ContextualType?: Known }).ContextualType = contextual;
+      setNodeContext(node, contextual);
     }
     if (node.type === 'CallExpression') {
       // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
@@ -17176,7 +17212,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // target through every recursion of the walk - the walk reads it back
       // where it resolves, and a call in no contextual position simply has none.
       if (contextual) {
-        (node as unknown as { ContextualType?: Known }).ContextualType = contextual;
+        setNodeContext(node, contextual);
       }
       const resolved = checkNumericCall(node, contextual);
       if (resolved) {
@@ -17750,6 +17786,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+      if (contextual.Kind === 'union') {
+        const selected = selectObjectLiteralContext(inner as ParseNode.ObjectLiteral, contextual);
+        if (selected) {
+          unionFreshnessChecks.add(inner);
+          try { return staticTypeIn(inner, selected); }
+          finally { unionFreshnessChecks.delete(inner); }
+        }
+      }
       if (walkable && walkable.Kind === 'object') {
         const shape = walkable;
         // Freshness applies to a STRUCTURAL type written at the position, and
@@ -17867,7 +17911,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
-        checkObjectLiteralAgainst(inner as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
+        checkObjectLiteralAgainst(inner as ParseNode.ObjectLiteral, shape, structural && !unionFreshnessChecks.has(inner), requiresMembers);
         // Only a FRESH literal takes the type's defaults; `structural` is the
         // freshness this pass already computed for the excess-member rule, so
         // the two agree by construction rather than by a second judgement.
@@ -17887,7 +17931,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // filled nothing, while `{ m?: uint8 = 5 }` filled. The unfolded ones
           // are carried as `InitializerNode` and evaluated at the fill.
           if (shape.Properties.some((p) => p.initial !== undefined || p.InitializerNode)) {
-            freshObjectLiteralTargets.set(inner as object, shape);
+            journalSet(freshObjectLiteralTargets, inner as object, shape);
           }
         }
         return contextual;
@@ -17916,7 +17960,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (typeof text === 'string') {
         const digits = ParseDecimalDigits(text.replace(/_/g, ''));
         if (digits) {
-          rationalLiterals.set(node, { sig: digits.significand, exp: digits.exponent, type: contextual });
+          journalSet(rationalLiterals, node, { sig: digits.significand, exp: digits.exponent, type: contextual });
           // #sec-literal-propagation: "a literal whose value that type cannot represent
           // is a type error rather than a silent truncation" - at every width,
           // `rational.<1>`, which has no values, included.
@@ -17936,7 +17980,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && (node as { Imaginary?: boolean }).Imaginary) {
       const base = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
       if (base.Kind === 'primitive' && base.Name === 'complex' && base.Arguments.length === 1) {
-        complexLiteralComponents.set(node, base.Arguments[0] as TypeRecord);
+        journalSet(complexLiteralComponents, node, base.Arguments[0] as TypeRecord);
         // AND the literal REPORTS that type. Recording alone left its static
         // type as the bare `complex`, which is not assignable to
         // `complex.<float64>`, so the checker refused the declaration before the
@@ -17950,13 +17994,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && !(node as { Imaginary?: boolean }).Imaginary) {
       const base = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
       if (base.Kind === 'primitive' && base.Name === 'complex' && base.Arguments.length === 1) {
-        complexRealLiteralComponents.set(node, base.Arguments[0] as TypeRecord);
+        journalSet(complexRealLiteralComponents, node, base.Arguments[0] as TypeRecord);
       }
     }
     if (node.type === 'NumericLiteral' && contextual) {
       const width = decimalWidthOf(contextual);
       if (width !== undefined && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
-        decimalLiterals.set(node, width);
+        journalSet(decimalLiterals, node, width);
         return contextual;
       }
     }
@@ -17966,7 +18010,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type === 'NumericLiteral' && contextual && contextual.Kind === 'primitive'
         && (contextual.Name === 'float16' || contextual.Name === 'float32' || contextual.Name === 'float128')
         && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
-      floatLiterals.set(node, contextual.Name === 'float16' ? 16 : contextual.Name === 'float32' ? 32 : 128);
+      journalSet(floatLiterals, node, contextual.Name === 'float16' ? 16 : contextual.Name === 'float32' ? 32 : 128);
     }
     // A SIGNED literal is its literal with a sign applied, and rounding to
     // nearest-even is symmetric in sign, so the literal inside is marked the same
@@ -17984,7 +18028,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : (inner as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
       }
       if (inner && inner.type === 'NumericLiteral' && typeof (inner as ParseNode.NumericLiteral).SourceText === 'string') {
-        floatLiterals.set(inner, contextual.Name === 'float16' ? 16 : contextual.Name === 'float32' ? 32 : 128);
+        journalSet(floatLiterals, inner, contextual.Name === 'float16' ? 16 : contextual.Name === 'float32' ? 32 : 128);
       }
     }
     // #sec-requiretype, #table-numeric-conversions: `bigint` is an ordinary
@@ -18023,7 +18067,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type === 'NumericLiteral' && contextual && bigintTarget(contextual)) {
       const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
       if (exact !== null) {
-        bigintLiterals.add(node);
+        journalMembership(bigintLiterals, node, true);
         return { Kind: 'literal', Value: Value(exact), Base: makePrimitive('bigint') };
       }
     }
@@ -18074,7 +18118,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // lets `300 - 299` stand at a `uint8`: the EXPRESSION denotes 1, which
         // fits, and `300` is never a value of anything.
         const type = foldedBigint ? makePrimitive('bigint') : contextual;
-        foldedConstants.set(node, { value: folded, type });
+        journalSet(foldedConstants, node, { value: folded, type });
         return type;
       }
     }
@@ -18094,7 +18138,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && node.type !== 'NumericLiteral') {
       const rat = foldRationalConstant(node);
       if (rat !== null) {
-        foldedRationals.set(node, { ...rat, type: contextual as TypeRecord });
+        journalSet(foldedRationals, node, { ...rat, type: contextual as TypeRecord });
         // A folded constant is a literal of the type as much as a bare one is.
         if (!rationalFitsType(rat.num, rat.den, contextual as TypeRecord)) {
           const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(`${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
@@ -18107,7 +18151,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && node.type !== 'NumericLiteral') {
       const dec = foldDecimal(node);
       if (dec !== null) {
-        foldedDecimals.set(node, { ...dec, width: decimalWidthOf(contextual as TypeRecord)!, type: contextual as TypeRecord });
+        journalSet(foldedDecimals, node, { ...dec, width: decimalWidthOf(contextual as TypeRecord)!, type: contextual as TypeRecord });
         return contextual;
       }
     }
@@ -18125,7 +18169,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // would be the tidier-looking route and is wrong: the checker may
           // ELIDE an annotation it has proved, and the raw BigInt would then be
           // the binding's value.
-          wideIntegerLiterals.set(node, { value: exact, type: contextual as TypeRecord });
+          journalSet(wideIntegerLiterals, node, { value: exact, type: contextual as TypeRecord });
           return contextual;
         }
       }
@@ -22740,7 +22784,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // and a stringified key would match the wrong one.
       // #sec-object-types: contextualize once at the simultaneous constraints.
       const declared = key === undefined ? undefined : propertyContract(key);
-      if (declared && def.AssignmentExpression) {
+      if (declared && def.AssignmentExpression && (typeof key !== 'string' || lastWriterOf.get(key) === member)) {
         // A method's [[ThisType]]
         // is the SELF MARKER - "the receiver this method expects" - which has
         // no members, so a literal adopting it got a `this` that was typed and
@@ -22848,27 +22892,90 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
   };
 
-  /**
-   * The object type an OBJECT LITERAL describes, for the transparency rule only.
-   *
-   * `function f(x: number) { const o = { p: g() }; return o.p; }` published
-   * nothing, because an object literal has no Static Type and so a local
-   * initialized with one had nothing to read. With the object ANNOTATED the
-   * member read carries its type, so the gap is the literal rather than the
-   * member read.
-   *
-   * Computed HERE rather than given to the literal as its Static Type, for the
-   * reason an array literal is not typed either: typing an expression form for
-   * every consumer reaches library signatures, where literal propagation builds an
-   * argument at the element type and changes what an untyped program means. This
-   * type has one consumer - the contribution - and appears in no expression's
-   * Static Type.
-   *
-   * Conservative by construction: a spread, a computed key, a method, an
-   * accessor, or a member whose own type is unknown yields nothing at all,
-   * rather than an object type that omits what it could not read and thereby
-   * describes a value with fewer members than it has.
-   */
+  const unionFreshnessChecks = new Set<ParseNode>();
+  // Select a complete shape only when compatibility or the existing numeric
+  // preference identifies one alternative. Competing callable contexts do not
+  // justify choosing whichever member-local trial happened to run first.
+  const selectObjectLiteralContext = (node: ParseNode.ObjectLiteral, target: TypeRecord): TypeRecord | null => {
+    journalDelete(selectedObjectLiteralContexts, node);
+    const alternatives: TypeRecord[] = [];
+    const collect = (type: TypeRecord, seen = new Set<TypeRecord>()): void => {
+      if (seen.has(type)) return;
+      seen.add(type);
+      if (type.Kind === 'union') type.Members.forEach((member) => collect(member, seen));
+      else if (type.Kind === 'object' || type.Kind === 'nominal' && type.Structure) alternatives.push(type);
+    };
+    collect(target);
+    const viable: TypeRecord[] = [];
+    for (const alternative of alternatives) {
+      const before = errors.length;
+      try {
+        speculate(() => {
+          contextualObjectTypes.set(node, alternative);
+          const shape = objectLiteralShape(node);
+          // An unresolved annotation is an obligation, not proof of a
+          // compatible signature (notably an own binder absent in this arm).
+          const pending = [...unresolvedTypes.keys()].some((key) => {
+            for (let source: ParseNode | undefined = key as ParseNode; source; source = source.parent) {
+              if (source === node) return true;
+              // Closed declarations in a body retain their ordinary checking
+              // phase. They do not make its surrounding signature unknown.
+              if (['FunctionBody', 'AsyncBody', 'GeneratorBody', 'AsyncGeneratorBody'].includes(source.type)) return false;
+            }
+            return false;
+          });
+          let comparable = shape;
+          const expected = structureOf(alternative);
+          if (shape?.Kind === 'object' && expected?.Kind === 'object') {
+            // A fresh method keeps its written optional/default positions,
+            // but may inhabit a member contract admitting fewer calls. Judge
+            // its callable assignment before the writable property's invariant
+            // comparison, as the data-property path already does.
+            comparable = { ...shape, Properties: shape.Properties.map((property) => {
+              const wanted = expected.Properties.find((entry) => entry.key === property.key)?.type;
+              return property.type.Kind === 'function' && wanted?.Kind === 'function' && IsAssignable(property.type, wanted)
+                ? { ...property, type: wanted } : property;
+            }) };
+          }
+          if (!pending && errors.length === before && comparable && IsAssignable(comparable, alternative)) viable.push(alternative);
+          return false;
+        });
+      } finally { errors.length = before; }
+    }
+    // Numeric member adaptation already prefers the narrowest fitting
+    // representation. Apply that preference only among complete alternatives,
+    // and only when every differing position has an agreeing numeric order.
+    const numericPreference = (left: TypeRecord, right: TypeRecord, seen = new Map<TypeRecord, Set<TypeRecord>>()): boolean | null => {
+      if (SameType(left, right) || seen.get(left)?.has(right)) return false;
+      const paired = seen.get(left) ?? new Set<TypeRecord>();
+      paired.add(right);
+      seen.set(left, paired);
+      const a = NumericArmRank(left), b = NumericArmRank(right);
+      if (a !== null && b !== null) return a < b ? true : null;
+      if (left.Kind !== 'object' || right.Kind !== 'object'
+        || left.IndexSignatures.length || right.IndexSignatures.length
+        || left.Properties.length !== right.Properties.length) return null;
+      let better = false;
+      for (const prop of left.Properties) {
+        const other = right.Properties.find((entry) => entry.key === prop.key);
+        if (!other || prop.optional !== other.optional || prop.readonly !== other.readonly
+          || prop.writeType || other.writeType || prop.initial !== other.initial
+          || prop.InitializerNode !== other.InitializerNode) return null;
+        const preference = numericPreference(prop.type, other.type, seen);
+        if (preference === null) return null;
+        better ||= preference;
+      }
+      return better;
+    };
+    const selected = viable.length === 1 ? viable[0]
+      : viable.find((candidate) => viable.every((other) => candidate === other || numericPreference(candidate, other) === true));
+    if (!selected) return null;
+    journalSet(selectedObjectLiteralContexts, node, selected);
+    return selected;
+  };
+
+  // Read every surviving descriptor in its contextual environment. An unknown
+  // member or spread leaves the shape unknown instead of omitting that member.
   const objectLiteralShape = (node: ParseNode | null | undefined): Known =>
     withValueQueryFlow(() => constructionResult(buildObjectLiteralShape(node)));
   const buildObjectLiteralShape = (node: ParseNode | null | undefined): Known => {
@@ -22891,7 +22998,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The target's member types, where the literal has a target. Recorded by
     // `staticTypeIn` because this operation is reached from `staticType`'s own
     // arm and cannot take one as a parameter.
-    const wanted = node ? contextualObjectTypes.get(node as ParseNode) : undefined;
+    let wanted = contextualObjectTypes.get(node);
+    if (wanted?.Kind === 'union') {
+      const selected = selectObjectLiteralContext(node as ParseNode.ObjectLiteral, wanted);
+      if (selected) { wanted = selected; contextualObjectTypes.set(node, selected); }
+    }
     /**
      * The arms a UNION offers for a key its arms DISAGREE about.
      *
@@ -23076,7 +23187,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (inferred && anchorage.anchored && inferred.Kind !== 'void' && !mentionsTypeParameter(inferred)) {
               valueType = inferred;
-              publishedReturnTypes.set(member, inferred);
+              journalSet(publishedReturnTypes, member, inferred);
             }
           }
           if (!valueType) return null;
@@ -23107,7 +23218,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const contextual = contextualParameterTypes.get(member) ?? [];
         if (expected?.Return) contextualMethodReturns.set(member, expected.Return);
         if (expected?.ThisType) {
-          adoptedReceiverTypes.set(member, expected.ThisType);
+          journalSet(adoptedReceiverTypes, member, expected.ThisType);
           contextualThisTypes.set(member, expected.ThisType as Known);
           if (wanted) contextualThisOwners.set(member, wanted);
         }
@@ -23182,7 +23293,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               signature.InferredReturn = inferred;
               // Own and captured binders remain symbolic until this method's
               // runtime application supplies them, as for function declarations.
-              if (inferred) publishedReturnTypes.set(member, inferred);
+              if (inferred) journalSet(publishedReturnTypes, member, inferred);
             }
             if (expected) signature.Return = expected.Return;
           }
@@ -23291,6 +23402,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return null;
       })();
+      if (armForMember && prop.AssignmentExpression && isFunctionLiteral(prop.AssignmentExpression)) {
+        staticTypeIn(prop.AssignmentExpression, armForMember);
+      }
       const memberLiteral = (prop.AssignmentExpression as ParseNode | undefined)?.type;
       if (armForMember && prop.AssignmentExpression
         && (memberLiteral === 'ObjectLiteral' || memberLiteral === 'ArrayLiteral')) {
@@ -24564,7 +24678,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const judgeFact = (fact: NarrowingFact, site: ParseNode): void => {
     // A parameterization is met by its meta type's hook, which runs after type
     // evaluation; the test is judged again then (#table-meta-hooks).
-    if (!afterTypeEvaluation && fact.type?.Kind === 'parameterized') deferredGuardChecks.add(root);
+    if (!afterTypeEvaluation && fact.type?.Kind === 'parameterized') journalMembership(deferredGuardChecks, root, true);
     const { source } = branchTypes(fact);
     if (source.Kind === 'any') return;
     if (scalarFactExcluded(fact)) {
@@ -25709,7 +25823,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (let i = frames.length - 1; i >= 0; i -= 1) {
         if (!frames[i].declaredNames.has(callee.name)) continue;
         if (frames[i].unresolvedAnnotations.has(callee.name)) {
-          deferredGuardChecks.add(root);
+          journalMembership(deferredGuardChecks, root, true);
           for (const argument of expression.Arguments) {
             const name = narrowableName(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument);
             if (name !== null) declareNarrowed(name, anyTypeRecord);
@@ -26920,7 +27034,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (let i = frames.length - 1; i >= 0; i -= 1) {
         if (!frames[i].declaredNames.has(callee.name)) continue;
         if (frames[i].unresolvedAnnotations.has(callee.name)) {
-          deferredGuardChecks.add(root);
+          journalMembership(deferredGuardChecks, root, true);
           for (const argument of callTest.Arguments) {
             const name = narrowableName(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument);
             if (name !== null) declareNarrowed(name, anyTypeRecord);
@@ -28186,7 +28300,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           returned ?? anyTypeRecord, voidType]);
       }
       if (!inputs.size) {
-        if (result && !mentionsTypeParameter(result)) publishedReturnTypes.set(node, result);
+        if (result && !mentionsTypeParameter(result)) journalSet(publishedReturnTypes, node, result);
         doGeneratorResults.set(node, { revision: typeRevision, contextual, type: result,
           diagnostics: [...new Set(errors.slice(diagnosticsStart))] });
       }
@@ -28538,7 +28652,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     item.signature.InferredReturn = fallback;
     if (item.property) item.property.type = anyTypeRecord;
     if (item.generator) baselineGeneratorSignatures.add(item.signature);
-    publishedReturnTypes.delete(item.fn);
+    journalDelete(publishedReturnTypes, item.fn);
     publishedAnchors.delete(item.signature);
     publishedOrigins.delete(item.signature);
     return !!previous !== !!fallback || !!(previous && fallback && !SameType(previous, fallback));
@@ -28577,7 +28691,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Preserve the symbolic declaration contract. The runtime boundary
     // substitutes this invocation's bindings before conversion; omitting a
     // dependent result would let an untyped caller bypass its enforcement.
-    publishedReturnTypes.set(item.fn as unknown as object, published);
+    journalSet(publishedReturnTypes, item.fn as unknown as object, published);
     if (item.property) item.property.type = published.Kind === 'void' ? undefinedType : published;
     return changed;
   };
@@ -28865,7 +28979,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       item.signature.InferredReturn = undefined;
       if (item.property) item.property.type = anyTypeRecord;
       item.signature.ProvisionalReturn = undefined;
-      publishedReturnTypes.delete(item.fn);
+      journalDelete(publishedReturnTypes, item.fn);
       publishedAnchors.delete(item.signature);
       publishedOrigins.delete(item.signature);
       inferenceWave?.delete(item.signature);
@@ -29156,8 +29270,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } else if (type) owner.bindings.set(name, type);
       else owner.bindings.delete(name);
       if (binding.constant && !binding.storeTarget) {
-        if (type) inferredConstTypes.set(binding.node, type);
-        else inferredConstTypes.delete(binding.node);
+        if (type) journalSet(inferredConstTypes, binding.node, type);
+        else journalDelete(inferredConstTypes, binding.node);
       }
       typeRevision += 1;
       invalidateBindingConsumers(binding);
@@ -29214,7 +29328,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               baselineGeneratorSignatures.delete(only);
               // A symbolic protocol result supersedes an earlier concrete
               // approximation too. The invocation instantiates its bindings.
-              if (item.asyncFunction || item.receiver) publishedReturnTypes.set(item.fn, result);
+              if (item.asyncFunction || item.receiver) journalSet(publishedReturnTypes, item.fn, result);
             } else changed = withdrawInferredReturn(item) || changed;
           }
           if (changed && !item.local) changedInferences?.add(item);
@@ -29550,10 +29664,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // context is never recorded, and a type parameter is not a type to enforce, so
     // both keep the inference below.
     const narrowing = contextualNarrowings.get(fn);
-    if (narrowing) publishedNarrowings.set(fn, narrowing);
+    if (narrowing) journalSet(publishedNarrowings, fn, narrowing);
     const taken = isEnumeratorInitializer(fn) ? undefined : contextualReturnTypes.get(fn);
     if (taken && taken.Kind !== 'void' && taken.Kind !== 'parameter' && taken.Kind !== 'any') {
-      publishedReturnTypes.set(fn as unknown as object, taken as TypeRecord);
+      journalSet(publishedReturnTypes, fn as unknown as object, taken as TypeRecord);
       return;
     }
     // Inference and its participation test read the same effective inputs as
@@ -29579,7 +29693,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? voidType
       : inferred;
     if (published.Kind !== 'void') {
-      publishedReturnTypes.set(fn as unknown as object, published);
+      journalSet(publishedReturnTypes, fn as unknown as object, published);
     }
   };
 
@@ -32240,9 +32354,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const contribution = selected?.get(node);
       const inferred = infer && (!selected || contribution && patternEvidence(contribution).initializer)
         ? contribution?.type ?? source.type : null;
-      inferredConstTypes.delete(node);
+      journalDelete(inferredConstTypes, node);
       if (declaring && !annotation && !(node as { Ref?: boolean }).Ref && inferred && inferred.Kind !== 'any') {
-        inferredConstTypes.set(node, inferred);
+        journalSet(inferredConstTypes, node, inferred);
       }
       declare(node.BindingIdentifier.name, bindingType ?? inferred, frame);
       if (declaring) completePreparedBinding(frame, node.BindingIdentifier.name, bindingType ?? inferred);
@@ -32605,7 +32719,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (source && source.Kind !== 'any' && source.Kind !== 'literal'
             && !conversionHasEffect(declared) && IsAssignable(source, declared)
             && derivationIsStable(b.Initializer)) {
-          elidableAnnotations.add(b.TypeAnnotation);
+          journalMembership(elidableAnnotations, b.TypeAnnotation, true);
         }
       }
       // proposal-runtime-types (spec sec-enums): a parameter annotated with an enum
@@ -32625,9 +32739,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Context supplies a real binding contract, including calls through an
       // erased alias or a replacement library method. Admit the argument at
       // initialization, before later defaults and the body can read it.
-      inferredConstTypes.delete(b);
+      journalDelete(inferredConstTypes, b);
       if (!b.TypeAnnotation && !b.Ref && bodyType && bodyType.Kind !== 'any') {
-        inferredConstTypes.set(b, bodyType);
+        journalSet(inferredConstTypes, b, bodyType);
       }
       // A simple parameter is declared here directly rather than through
       // checkPattern, so it records its unary-operand participation here: an
@@ -32901,9 +33015,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const restName = (p as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
         if (typeof restName === 'string') {
           declare(restName, restType);
-          inferredConstTypes.delete(p);
+          journalDelete(inferredConstTypes, p);
           if (!p.TypeAnnotation && !(p as { Ref?: boolean }).Ref && restType && restType.Kind !== 'any') {
-            inferredConstTypes.set(p, restType);
+            journalSet(inferredConstTypes, p, restType);
           }
         } else {
           checkPattern(p.BindingPattern as PatternNode, { type: restType, typed: !!restType, annotated: !!p.TypeAnnotation }, true, !!restType);
@@ -32933,7 +33047,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const expr = (body as { ExpressionBody?: { AssignmentExpression?: ParseNode } }).ExpressionBody?.AssignmentExpression
           ?? (body as { AssignmentExpression?: ParseNode }).AssignmentExpression;
         if (expr) {
-          (expr as unknown as { ContextualType?: Known }).ContextualType = conciseReturn;
+          setNodeContext(expr, conciseReturn);
           // ...and CHECKED against it. The contextual was recorded and
           // never compared, so `(): uint8 => "s"` and `(): void => "s"` were
           // both accepted although the comment above says the declaration is
@@ -32969,7 +33083,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `returnAnnotation` - a contextual return has no annotation to elide.
     if (checkReturns && !rawOperatorResult && returnAnnotation && declaredReturn && proven
         && !conversionHasEffect(declaredReturn) && endsWithReturn(body)) {
-      elidableAnnotations.add(returnAnnotation);
+      journalMembership(elidableAnnotations, returnAnnotation, true);
     }
     // sec-check-elision applies to the effective body result: ordinary T,
     // Promise resolve T, or Generator R. Resumability does not excuse undefined.
@@ -34998,7 +35112,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         names.every((name) => candidate.Parameters.some((p) => p.Name === name))).length === 1;
       const expectedThis = selectedByNames ? effective.ThisType : undefined;
       const argumentsNode = n.type === 'TaggedTemplateExpression' ? n.TemplateLiteral : c.Arguments;
-      if (expectedThis && argumentsNode) callReceiverTypes.set(argumentsNode, expectedThis);
+      if (expectedThis && argumentsNode) journalSet(callReceiverTypes, argumentsNode, expectedThis);
       if (expectedThis && expectedThis !== SelfThisTypeRecord && !SameType(expectedThis, SelfThisTypeRecord)
           && !mentionsTypeParameter(expectedThis)) {
         let target = c.CallExpression;
@@ -36965,11 +37079,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // inherit its treatment.
         for (let i = frames.length - 1; i >= 0; i -= 1) {
           if (frames[i].constLiterals.has(name)) {
-            constLiteralUses.add(node as object);
+            journalMembership(constLiteralUses, node as object, true);
             break;
           }
           if (frames[i].letConstants.has(name)) {
-            letConstantUses.add(node as object);
+            journalMembership(letConstantUses, node as object, true);
             break;
           }
           if (frames[i].declaredNames.has(name)) {
@@ -38226,7 +38340,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (src && src.Kind !== 'any' && src.Kind !== 'literal'
                 && !conversionHasEffect(declared) && IsAssignable(src, declared)
                 && derivationIsStable(n.Initializer)) {
-              elidableAnnotations.add(n.TypeAnnotation);
+              journalMembership(elidableAnnotations, n.TypeAnnotation, true);
             }
           }
           let initialized: Known = null;
@@ -38270,8 +38384,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const stringValue = n.TypeAnnotation || n.Ref ? null : stringConstantValue(n.Initializer);
             if (stringValue) {
               bindingFrame.constStringValues.set(n.BindingIdentifier.name, stringValue);
-              literalConstantTypes.set(n, { type: stringValue, namesLiteral: !!literal });
-            } else literalConstantTypes.delete(n);
+              journalSet(literalConstantTypes, n, { type: stringValue, namesLiteral: !!literal });
+            } else journalDelete(literalConstantTypes, n);
           }
           if (!n.TypeAnnotation && n.Initializer && isNumericConstantExpression(n.Initializer)) {
             const frame = frames[frames.length - 1];
@@ -38299,11 +38413,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Parentheses and expression form do not change participation. Any
           // explicit annotation wins, including `any`; plain let remains dynamic.
           const newInit = n.Initializer as ParseNode | null | undefined;
-          inferredConstTypes.delete(n);
+          journalDelete(inferredConstTypes, n);
           if (!n.TypeAnnotation && !(n as { Ref?: boolean }).Ref && isConstDeclaration && newInit && constInitializerParticipates(newInit)) {
             const inferred = staticType(newInit);
             if (inferred && inferred.Kind !== 'any') {
-              inferredConstTypes.set(n, inferred);
+              journalSet(inferredConstTypes, n, inferred);
               declare(n.BindingIdentifier.name, inferred, bindingFrame);
               completePreparedBinding(bindingFrame, n.BindingIdentifier.name, inferred);
               rememberValueOrigin(bindingFrame, n.BindingIdentifier.name, newInit, inferred);

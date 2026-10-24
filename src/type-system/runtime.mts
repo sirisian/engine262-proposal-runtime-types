@@ -35,7 +35,7 @@ import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-sele
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
-import { PublishedReturnTypeOf } from './check.mts';
+import { PublishedReturnTypeOf, SelectedObjectLiteralContext } from './check.mts';
 import { EvaluateGenericSource } from './check-pass.mts';
 import type { GenericTypeCapture, TypeParameterRecord } from './records.mts';
 import { skipDebugger } from '../evaluator.mts';
@@ -152,18 +152,42 @@ export function currentContextualType(): TypeRecord | undefined {
  * or `??`, the last expression of a comma. A push with no node answers for any
  * node, as it always did.
  */
+function selectedLiteralContext(node: object | undefined, context: TypeRecord | null): TypeRecord | undefined {
+  const selected = node && SelectedObjectLiteralContext(node);
+  if (!selected || context?.Kind !== 'union') return context ?? undefined;
+  const frame = currentTypeParameterFrame() ?? new Map<string, TypeRecord>();
+  const closed = substituteFreeTypeParameters(selected, frame, undefined, declarationBindings.get(frame) ?? new Map())!;
+  const matches = new Set<TypeRecord>();
+  const seen = new Set<TypeRecord>();
+  const find = (type: TypeRecord): void => {
+    if (seen.has(type)) return;
+    seen.add(type);
+    if (type.Kind === 'union') { type.Members.forEach(find); return; }
+    // A source interface template has no evaluated declaration identity yet.
+    // Match it in the current runtime context, retaining that context's actual
+    // identity and captured arguments. Multiple matching instances are not a
+    // basis for selecting whichever one appeared first.
+    const template = closed.Kind === 'nominal' && type.Kind === 'nominal'
+      && closed.DeclarationIdentity === undefined && closed.Declaration === type.Declaration
+      ? { ...closed, DeclarationIdentity: type.DeclarationIdentity } : closed;
+    if (SameType(template, type)) matches.add(type);
+  };
+  find(context);
+  return matches.size === 1 ? [...matches][0] : context;
+}
+
 export function contextualTypeFor(node: object | undefined): TypeRecord | undefined {
   const top = contextualTypes[contextualTypes.length - 1];
   if (!top) {
     return undefined;
   }
   if (top.node === undefined) {
-    return top.type ?? undefined;
+    return selectedLiteralContext(node, top.type);
   }
   let n: object | undefined = node;
   while (n) {
     if (n === top.node) {
-      return top.type ?? undefined;
+      return selectedLiteralContext(node, top.type);
     }
     const parent = (n as { parent?: object }).parent;
     if (!parent) {
