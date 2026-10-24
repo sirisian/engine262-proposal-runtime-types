@@ -68,7 +68,7 @@ import {
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
-import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
+import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
@@ -3771,6 +3771,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const contextualMethodReturns = new Journaled<Known>();
   const contextualGenericParameters = new Journaled<readonly TypeParameterRecord[]>();
+  const ResolveBindingDeclaration = (reference: ParseNode, name: string) =>
+    ResolveWrittenBindingDeclaration(reference, name, (scope, parameterName) =>
+      contextualGenericParameters.get(scope)?.some((parameter) => parameter.Name === parameterName) ?? false);
   // Selected contextual binders are declaration scope even without written syntax.
   const effectiveTypeParameterNamesOf = (node: ParseNode): readonly string[] =>
     typeParameterNamesOf(node) ?? contextualGenericParameters.get(node)?.map((parameter) => parameter.Name) ?? [];

@@ -170,8 +170,11 @@ function hoistedVarIn(root: unknown, name: string): AnyNode | undefined {
 /**
  * The declaration a reference to _name_ at _reference_ resolves to, or
  * *undefined* where no enclosing scope declares it.
+ * A caller can supply effective adopted binders at their lexical owner;
+ * nearer written declarations retain precedence over that supplied scope.
  */
-export function ResolveBindingDeclaration(reference: ParseNode, name: string): BindingDeclaration | undefined {
+export function ResolveBindingDeclaration(reference: ParseNode, name: string,
+  additionalTypeParameter?: (scope: ParseNode, name: string) => boolean): BindingDeclaration | undefined {
   let child: ParseNode = reference;
   for (let at = (reference as { parent?: ParseNode }).parent as AnyNode | undefined; at; child = at, at = at.parent as AnyNode | undefined) {
     for (const key of Object.keys(at)) {
@@ -186,7 +189,8 @@ export function ResolveBindingDeclaration(reference: ParseNode, name: string): B
     // Specialization captures bind in the same declaration scope as ordinary
     // parameters; a same-spelled outer type cannot replace a capture reference.
     const typeParameters = [...(typeList?.TypeParameterList ?? []), ...(typeList?.Captures ?? [])];
-    if (typeParameters.some((tp) => (tp.BindingIdentifier as { name?: string } | undefined)?.name === name)) {
+    if (typeParameters.some((tp) => (tp.BindingIdentifier as { name?: string } | undefined)?.name === name)
+        || additionalTypeParameter?.(at, name)) {
       return { kind: 'type-parameter', node: at };
     }
     if (isFunctionLike(at)) {

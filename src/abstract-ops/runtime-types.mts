@@ -6,7 +6,7 @@ import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletion, ReturnCompletion, type ThrowCompletion } from '../completion.mts';
@@ -5219,9 +5219,11 @@ export function AdoptTypeParameters(fn: object, signature: SignatureRecord): voi
     currentTypeParameterFrame() ?? new Map()) as Extract<TypeRecord, { Kind: 'function' }>;
   const effective = closed.Signatures[0];
   const list = effective.TypeParameters!;
+  const declarations = list.map((parameter) => parameter.Declaration);
   const formals = (fn as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? [];
-  adoptedTypeParameters.set(fn, { Records: list, Declarations: list.map((parameter) => parameter.Declaration),
+  adoptedTypeParameters.set(fn, { Records: list, Declarations: declarations,
     Inputs: contextualParameters(formals, effective.Parameters) });
+  retainAdoptedParameterScope(fn, declarations);
 }
 
 /** Effective records retain the source context of their bounds and defaults. */

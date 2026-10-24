@@ -327,6 +327,21 @@ export function takePendingCheckerBindings(): boolean {
 // T, but cannot replace a capture of an outer declaration. Keep identities on
 // frames, never on interned Type Records, and preserve them when copying.
 const declarationBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>>();
+// Adopted binders occupy the literal's lexical scope, although their source
+// declarations belong to its supplying signature. Keep this correspondence
+// with each value's captured context, never on the shared source tree.
+const adoptedParameterScopes = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode, readonly ParseNode.TypeParameter[]>>();
+
+export function retainAdoptedParameterScope(fn: object, parameters: readonly ParseNode.TypeParameter[]): void {
+  const callable = fn as { ECMAScriptCode?: ParseNode | null, TypeParameterFrame?: Map<string, TypeRecord> };
+  const owner = callable.ECMAScriptCode?.parent;
+  if (!owner || parameters.length === 0) return;
+  const frame = copyTypeParameterFrame(callable.TypeParameterFrame ?? new Map());
+  let scopes = adoptedParameterScopes.get(frame);
+  if (!scopes) adoptedParameterScopes.set(frame, scopes = new Map());
+  scopes.set(owner, parameters);
+  callable.TypeParameterFrame = frame;
+}
 // A partial can execute for multiple evaluated families and applications. Its
 // self type belongs to the captured frame, not a source-node singleton or an
 // ordinary name binding that could change value-position lookup.
@@ -341,6 +356,8 @@ export function BindPartialClassSelf(frame: ReadonlyMap<string, TypeRecord>, dec
 export function copyTypeParameterFrame(frame: ReadonlyMap<string, TypeRecord>,
   excluding: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] = []): Map<string, TypeRecord> {
   const copy = new Map(frame);
+  const scopes = adoptedParameterScopes.get(frame);
+  if (scopes) adoptedParameterScopes.set(copy, new Map(scopes));
   const partials = partialSelfBindings.get(frame);
   if (partials) partialSelfBindings.set(copy, new Map(partials));
   const declarations = declarationBindings.get(frame);
@@ -419,14 +436,17 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
   // Flattened innermost-last, so a nested specialization shadows an outer one.
   const merged = new Map<string, TypeRecord>();
   const declarations = new Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>();
+  const scopes = new Map<ParseNode, readonly ParseNode.TypeParameter[]>();
   for (const frame of typeParameterFrames) {
     for (const [name, record] of frame) {
       merged.set(name, record);
     }
     for (const [declaration, record] of declarationBindings.get(frame) ?? []) declarations.set(declaration, record);
+    for (const [owner, parameters] of adoptedParameterScopes.get(frame) ?? []) scopes.set(owner, parameters);
     for (const [declaration, record] of partialSelfBindings.get(frame) ?? []) BindPartialClassSelf(merged, declaration, record);
   }
   declarationBindings.set(merged, declarations);
+  if (scopes.size) adoptedParameterScopes.set(merged, scopes);
   return merged;
 }
 
@@ -693,8 +713,19 @@ export function isValueParameterBinding(record: TypeRecord): boolean {
  * of the given name in the active frames, innermost first, or null if none. A
  * type parameter referenced as a builder-call argument (`joinResult(P, d)`)
  * resolves to its bound type through this, since it is not a value binding.
+ * Source-aware annotation reads first exclude nearer lexical declarations.
  */
-export function lookupTypeParameter(name: string): TypeRecord | null {
+export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRecord | null {
+  if (reference) {
+    const binding = ResolveBindingDeclaration(reference, name, (scope, parameterName) => {
+      for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
+        const parameters = adoptedParameterScopes.get(typeParameterFrames[i])?.get(scope);
+        if (parameters) return parameters.some((parameter) => parameter.BindingIdentifier.name === parameterName);
+      }
+      return false;
+    });
+    if (binding && binding.kind !== 'type-parameter') return null;
+  }
   for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
     const bound = typeParameterFrames[i].get(name);
     if (bound !== undefined) {
@@ -2017,7 +2048,10 @@ export function* InferGenericBindingsFrom(
       // constraints and defaults OVER it. Inferring here first, with `N`
       // falling back to `any`, evaluated `M: uint32 = N.foo` against a Type
       // Object and refused every call of such a declaration.
-      const pre = preBound?.get(paramName);
+      // A flattened ambient frame can also contain an unrelated caller's U.
+      // Its spelling is not a pre-binding of this declaration's own U.
+      const identities = preBound && declarationBindings.get(preBound);
+      const pre = identities && !checkerSupplied ? identities.get(tp) : preBound?.get(paramName);
       if (pre) {
         // Checker/contextual seeds bind this declaration just as the inferred
         // argument rung does. Captured contracts retain declaration identity.
@@ -5511,7 +5545,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
     }
     return Throw.TypeError('$1 does not expose nominal type arguments', Value(name.IdentifierReference.name));
   }
-  const pendingDeclarationDefault = deferredDeclarationDefault(node, lookupTypeParameter);
+  const pendingDeclarationDefault = deferredDeclarationDefault(node, (name) => lookupTypeParameter(name, node));
   if (pendingDeclarationDefault) {
     return { ...pendingDeclarationDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
   }
@@ -5574,7 +5608,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       // `W.<X>` means the same as writing the bound declaration applied to X.
       if (node.TypeName.MemberNames.length === 0 && node.TypeArguments) {
         const appliedName = node.TypeName.IdentifierReference.name;
-        const boundDecl = lookupTypeParameter(appliedName);
+        const boundDecl = lookupTypeParameter(appliedName, node);
         if (boundDecl && boundDecl.Kind !== 'parameter') {
           const argRecords: TypeRecord[] = [];
           const argNames: (string | undefined)[] = [];
@@ -5606,7 +5640,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       }
       if (node.TypeName.MemberNames.length === 0 && !node.TypeArguments) {
         const kindedName = node.TypeName.IdentifierReference.name;
-        const bound = lookupTypeParameter(kindedName);
+        const bound = lookupTypeParameter(kindedName, node);
         if (bound && bound.Kind === 'parameter' && (bound.Arity ?? 0) > 0) {
           return Throw.TypeError(
             '$1 takes $2 type arguments and cannot be used unapplied',
@@ -5624,7 +5658,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
         // reads as its value - the literal, or a pack's array - so `I.length`
         // in a default or a constraint is the pack's length. ResolveTypeName
         // answered with the Type Object, whose `length` is nothing.
-        const boundHead = lookupTypeParameter(baseName);
+        const boundHead = lookupTypeParameter(baseName, node);
         let base: Value;
         if (boundHead && isValueParameterBinding(boundHead) && boundHead.Kind === 'literal') {
           base = boundHead.Value as Value;
@@ -5674,8 +5708,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
         return { Kind: 'literal', Value: base, Base: RuntimeTypeOf(base) };
       }
       const name = node.TypeName.IdentifierReference.name;
-      for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
-        const bound = typeParameterFrames[i].get(name);
+      {
+        const bound = lookupTypeParameter(name, node);
         if (bound) {
           // The DEFERRED reading.
           //

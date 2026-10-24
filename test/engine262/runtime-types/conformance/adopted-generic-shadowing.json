@@ -1,0 +1,1331 @@
+{
+  "description": "Effective generic declarations obey lexical shadowing and ambient call prebindings retain declaration identity. Two complete-union contextual-selection failures remain in the audit evidence.",
+  "cases": [
+    {
+      "name": "function-block-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"values\");}verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-outer-alias-shadow",
+      "modules": {
+        "main": "type U=string;type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"values\");}verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-block-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"values\");}verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-outer-alias-shadow",
+      "modules": {
+        "main": "type U=string;type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"values\");}verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-block-shadow",
+      "modules": {
+        "main": "type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"values\");}verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-outer-alias-shadow",
+      "modules": {
+        "main": "type U=string;type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);function verify(a:any,b:any){if(a!==0||b!==0)throw new Error(\"values\");}verify(pair.captured,pair.own);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-outer-result",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U):{captured:T,own:U}{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-outer-computed-parameter",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:choose(U)){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-outer-computed-body",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:choose(U)=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-inner-computed-annotation",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:choose(U)=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-both-directions",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-nested-blocks",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";{type U=boolean;const b:U=true;verify(b,true);}const again:U=s;verify(again,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-alias-application",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U<X:type>=X;const s:U.<string>=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-alias-forward-type",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{const s:U=\"s\";type U=string;verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-alias-captured-closure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const copy=(v:U):U=>v;verify(copy(\"s\"),\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-alias-nested-function",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;function copy(v:U):U{return v;}verify(copy(\"s\"),\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-inner-constant-type",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{const U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-outer-constant-type",
+      "modules": {
+        "main": "const U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-unused-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=Missing;const s:U=\"s\";}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-inner-wrong-assignment",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=0;}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-outer-wrong-own-assignment",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=\"s\";return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-two-activations",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const n=a.<number>(0);const s=b.<string>(\"s\");verify(n.own,0);verify(s.own,\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-erased-call",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const erased:any=a;const p=erased(0);verify(p.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-stored-specialization",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const selected=a.<number>;const p=selected.call(a,0);verify(p.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-reflection",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function model<U:type extends number>(value:U):{captured:number,own:U}{return {captured:0,own:value};}verify(Reflect.typeOf(a),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-function-block-shadow",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function<U:type extends T>(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-function-outer-alias-shadow",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function<U:type extends T>(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-function-both-directions",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function<U:type extends T>(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-direct-body-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){type U=string;const local:U=\"s\";verify(local,\"s\");return {captured:seed,own:value};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-closed-over-inner-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){let held:any;{type U=string;held=(v:U):U=>v;}verify(held(\"s\"),\"s\");const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-computed-reflection",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:choose(U)){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function model<U:type extends number>(value:choose(U)):{captured:number,own:U}{return {captured:0,own:value};}verify(Reflect.typeOf(a),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-caller-shadow",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function run<U:type>(f:any){const pair=f(0);verify(pair.own,0);}run.<boolean>(a);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-caller-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function run<U:type>(f:any){const pair=f(0);verify(pair.own,0);}run.<boolean>(a);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-caller-explicit-own",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const selected=a.<number>;function run<U:type>(f:any){const pair=f.call(a,0);verify(pair.own,0);}run.<boolean>(selected);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-generic-default",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<>(0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-value-default",
+      "modules": {
+        "main": "type U=string;function fallback<V:type>():any{return 0;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U=fallback.<U>()){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const selected=a.<>;const pair=selected.call(a);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-exported-callable",
+      "modules": {
+        "dep": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}export {factory};",
+        "main": "import {factory} from \"dep\";type U=boolean;const a=factory.<number>(0);const pair=a.<number>(0);function verify(x:any){if(x!==0)throw new Error(\"value\");}verify(pair.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-imported-outer-alias",
+      "modules": {
+        "dep": "export type U=string;",
+        "main": "import {U} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=function(value:U){const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-outer-result",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U):{captured:T,own:U}=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-outer-computed-parameter",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:choose(U))=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-outer-computed-body",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:choose(U)=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-inner-computed-annotation",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:choose(U)=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-both-directions",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-nested-blocks",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";{type U=boolean;const b:U=true;verify(b,true);}const again:U=s;verify(again,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-alias-application",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U<X:type>=X;const s:U.<string>=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-alias-forward-type",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{const s:U=\"s\";type U=string;verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-alias-captured-closure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const copy=(v:U):U=>v;verify(copy(\"s\"),\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-alias-nested-function",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;function copy(v:U):U{return v;}verify(copy(\"s\"),\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-inner-constant-type",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{const U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-outer-constant-type",
+      "modules": {
+        "main": "const U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-unused-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=Missing;const s:U=\"s\";}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "arrow-inner-wrong-assignment",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=0;}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-outer-wrong-own-assignment",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=\"s\";return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-two-activations",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const n=a.<number>(0);const s=b.<string>(\"s\");verify(n.own,0);verify(s.own,\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-erased-call",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const erased:any=a;const p=erased(0);verify(p.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-stored-specialization",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const selected=a.<number>;const p=selected.call(a,0);verify(p.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-reflection",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function model<U:type extends number>(value:U):{captured:number,own:U}{return {captured:0,own:value};}verify(Reflect.typeOf(a),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-direct-body-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{type U=string;const local:U=\"s\";verify(local,\"s\");return {captured:seed,own:value};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-closed-over-inner-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{let held:any;{type U=string;held=(v:U):U=>v;}verify(held(\"s\"),\"s\");const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-computed-reflection",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:choose(U))=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function model<U:type extends number>(value:choose(U)):{captured:number,own:U}{return {captured:0,own:value};}verify(Reflect.typeOf(a),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-caller-shadow",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function run<U:type>(f:any){const pair=f(0);verify(pair.own,0);}run.<boolean>(a);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-caller-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);function run<U:type>(f:any){const pair=f(0);verify(pair.own,0);}run.<boolean>(a);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-caller-explicit-own",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const selected=a.<number>;function run<U:type>(f:any){const pair=f.call(a,0);verify(pair.own,0);}run.<boolean>(selected);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-generic-default",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<>(0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-value-default",
+      "modules": {
+        "main": "type U=string;function fallback<V:type>():any{return 0;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type=C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U=fallback.<U>())=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const selected=a.<>;const pair=selected.call(a);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-exported-callable",
+      "modules": {
+        "dep": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};};return a;}export {factory};",
+        "main": "import {factory} from \"dep\";type U=boolean;const a=factory.<number>(0);const pair=a.<number>(0);function verify(x:any){if(x!==0)throw new Error(\"value\");}verify(pair.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-imported-outer-alias",
+      "modules": {
+        "dep": "export type U=string;",
+        "main": "import {U} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>=<U:type extends C>(value:U)=>{captured:C,own:U};function factory<T:type>(seed:T){const a:Adapter.<T>=(value:U)=>{const copy:U=value;return {captured:seed,own:copy};};return a;}const a=factory.<number>(0);const pair=a.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-outer-result",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U):{captured:T,own:U}{const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-outer-computed-parameter",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:choose(U)){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-outer-computed-body",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:choose(U)=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-inner-computed-annotation",
+      "modules": {
+        "main": "function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:choose(U)=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-both-directions",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-nested-blocks",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";{type U=boolean;const b:U=true;verify(b,true);}const again:U=s;verify(again,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-alias-application",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U<X:type>=X;const s:U.<string>=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-alias-forward-type",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{const s:U=\"s\";type U=string;verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-alias-captured-closure",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const copy=(v:U):U=>v;verify(copy(\"s\"),\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-alias-nested-function",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;function copy(v:U):U{return v;}verify(copy(\"s\"),\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-inner-constant-type",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{const U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-outer-constant-type",
+      "modules": {
+        "main": "const U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-unused-closed-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=Missing;const s:U=\"s\";}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "method-inner-wrong-assignment",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=0;}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-outer-wrong-own-assignment",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=\"s\";return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-two-activations",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const b=factory.<string>(\"s\");const n=a.map.<number>(0);const s=b.map.<string>(\"s\");verify(n.own,0);verify(s.own,\"s\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-erased-call",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const erased:any=a.map;const p=erased(0);verify(p.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-stored-specialization",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const selected=a.map.<number>;const p=selected.call(a,0);verify(p.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-reflection",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);function model<U:type extends number>(value:U):{captured:number,own:U}{return {captured:0,own:value};}verify(Reflect.typeOf(a.map),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-method-block-shadow",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map<U:type extends T>(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-method-outer-alias-shadow",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map<U:type extends T>(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-method-both-directions",
+      "modules": {
+        "main": "type U=boolean;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map<U:type extends T>(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-direct-body-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){type U=string;const local:U=\"s\";verify(local,\"s\");return {captured:seed,own:value};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-closed-over-inner-alias",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){let held:any;{type U=string;held=(v:U):U=>v;}verify(held(\"s\"),\"s\");const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-computed-reflection",
+      "modules": {
+        "main": "type U=string;function choose(t:type):type{return t;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:choose(U)){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);function model<U:type extends number>(value:choose(U)):{captured:number,own:U}{return {captured:0,own:value};}verify(Reflect.typeOf(a.map),Reflect.typeOf(model));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-caller-shadow",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);function run<U:type>(f:any){const pair=f(0);verify(pair.own,0);}run.<boolean>(a.map);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-caller-control",
+      "modules": {
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);function run<U:type>(f:any){const pair=f(0);verify(pair.own,0);}run.<boolean>(a.map);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-caller-explicit-own",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const selected=a.map.<number>;function run<U:type>(f:any){const pair=f.call(a,0);verify(pair.own,0);}run.<boolean>(selected);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-generic-default",
+      "modules": {
+        "main": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<>(0);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-value-default",
+      "modules": {
+        "main": "type U=string;function fallback<V:type>():any{return 0;}function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type=C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U=fallback.<U>()){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const selected=a.map.<>;const pair=selected.call(a);verify(pair.own,0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-exported-callable",
+      "modules": {
+        "dep": "type U=string;function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){{type U=string;const s:U=\"s\";verify(s,\"s\");}const copy:U=value;return {captured:seed,own:copy};}};return a;}export {factory};",
+        "main": "import {factory} from \"dep\";type U=boolean;const a=factory.<number>(0);const pair=a.map.<number>(0);function verify(x:any){if(x!==0)throw new Error(\"value\");}verify(pair.own);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-imported-outer-alias",
+      "modules": {
+        "dep": "export type U=string;",
+        "main": "import {U} from \"dep\";function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}type Adapter<C:type>={map<U:type extends C>(value:U):{captured:C,own:U}};function factory<T:type>(seed:T){const a:Adapter.<T>={map(value:U){const copy:U=value;return {captured:seed,own:copy};}};return a;}const a=factory.<number>(0);const pair=a.map.<number>(0);verify(pair.captured,0);verify(pair.own,0);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}
