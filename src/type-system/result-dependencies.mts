@@ -64,6 +64,41 @@ export function CompleteConstructionSelections<T extends object>(object: ObjectV
   return result;
 }
 
+/** Index only this producing result's direct data contributions. Building the
+ * index performs no property reads and avoids scanning every choice per key. */
+export function NamedSpreadConstructionOf(source: object, object: ObjectValue): ReadonlyMap<string | SymbolValue, ConstructionSelections> | undefined {
+  const selections = constructionSelections.get(source);
+  if (!selections?.length) return undefined;
+  const byKey = new Map<string | SymbolValue, ConstructionSelection[]>();
+  for (const selection of selections) {
+    const edge = selection.path?.at(-1);
+    if (edge?.object !== object) continue;
+    const key = propertyIdentity(edge.key);
+    const group = byKey.get(key) ?? [];
+    group.push(selection);
+    byKey.set(key, group);
+  }
+  return byKey;
+}
+
+/** A named call spread captures one live data contribution into an argument.
+ * The consumed source edge is no longer between that argument and its value;
+ * nested edges inside the captured value remain live until admission. */
+export function CaptureNamedSpreadResult(source: ReturnType<typeof NamedSpreadConstructionOf>, key: PropertyKeyValue,
+  value: Value, result: object): void {
+  const selections: ConstructionSelection[] = [];
+  for (const selection of source?.get(propertyIdentity(key)) ?? []) {
+    const path = selection.path!;
+    if (path.at(-1)!.value !== value || !path.every((step) => {
+      const current = step.object.properties.get(step.key);
+      return current === step.descriptor && IsDataDescriptor(current) && current.Value === step.value;
+    })) continue;
+    selections.push({ ...selection, path: path.slice(0, -1) });
+  }
+  if (selections.length) constructionSelections.set(result, selections);
+  else constructionSelections.delete(result);
+}
+
 // Argument and parameter receipts belong to a particular invocation. Ordinary
 // reads of the same value never consult these tables.
 const argumentResults = new WeakMap<readonly (Value | undefined)[], Map<number, { value: Value, result: object }>>();

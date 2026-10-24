@@ -34949,6 +34949,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+      // Last-name-wins binding does not erase earlier source expressions.
+      // They are still constructed and their bodies checked in the named
+      // position's context, but they contribute no argument admission.
+      const retainedArguments = new Set(mapped.entries.map((entry) => entry.node));
+      for (const argument of supplied) {
+        const named = objectSpreadItems(argument)
+          ?? (argument.type === 'NamedArgument' ? [{ name: argument.Name, value: argument.AssignmentExpression }] : []);
+        for (const item of named) {
+          if (retainedArguments.has(item.value)) continue;
+          const parameter = chosen.Parameters.find((p) => p.Name === item.name && !p.Ref);
+          let context = parameter?.Type;
+          if (context && generic?.length && bindings.size) context = substituteTypeParameters(context, bindings) as TypeRecord;
+          if (parameter?.Rest) context = context?.Kind === 'array' ? context.Element : undefined;
+          if (context) staticTypeIn(item.value, context);
+        }
+      }
       mapped.entries.forEach(({ node: arg, slot: slotIndex, offset }) => {
         const slot = chosen.Parameters[slotIndex];
         // Complete the collected contract before projecting a rest position.

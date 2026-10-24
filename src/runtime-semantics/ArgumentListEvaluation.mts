@@ -14,7 +14,7 @@ import { NamedCallArguments, NamedCallItemsOf, SetNamedParameterCounts, BuiltinN
 import { assignArguments, resolveOverloadChecked } from '../type-system/overloads.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import { RuntimeTypeOf, SpecializedFunctionSignatureOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
-import { EvaluateResultValue, RetainArgumentResult, TransferResultDependency } from '../type-system/result-dependencies.mts';
+import { EvaluateResultValue, RetainArgumentResult, TransferResultDependency, NamedSpreadConstructionOf, CaptureNamedSpreadResult } from '../type-system/result-dependencies.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
 import { TupleStorageShapeOf, TupleStorageTypeAt } from '../type-system/tuple-storage.mts';
 import {
@@ -353,8 +353,26 @@ export function ArgumentContexts(args: ParseNode.Arguments, parameters: readonly
   Name: string, Rest: boolean, Ref?: boolean, Optional?: boolean, Type?: TypeRecord | null,
 }[]): ReadonlyMap<object, TypeRecord> {
   const contexts = new Map<object, TypeRecord>();
+  let namedSpreadContext: TypeRecord | undefined;
   // Even an overwritten named expression is evaluated in its fixed contract.
   for (const arg of args) {
+    if (arg.type === 'AssignmentRestElement') {
+      let source: ParseNode = arg.AssignmentExpression;
+      while (source.type === 'ParenthesizedExpression') source = source.Expression;
+      if (source.type === 'ObjectLiteral') {
+        // This is a construction context for named contributions, not proof
+        // that the value will choose named spreading. Protocol dispatch below
+        // remains observable and only the actual data-property read transports
+        // a child choice. Stored values are never contextualized by this map.
+        namedSpreadContext ??= { Kind: 'object', IndexSignatures: [],
+          Properties: parameters.flatMap((p) => {
+            const type = !p.Rest ? p.Type : p.Type?.Kind === 'array' ? p.Type.Element : undefined;
+            return p.Name && type && !p.Ref ? [{ key: p.Name, type, optional: true, readonly: false }] : [];
+          }) };
+        contexts.set(arg.AssignmentExpression, namedSpreadContext);
+      }
+      continue;
+    }
     if (arg.type !== 'NamedArgument') continue;
     const parameter = parameters.find((p) => p.Name === arg.Name && !p.Rest && !p.Ref);
     if (parameter?.Type) contexts.set(arg.AssignmentExpression, parameter.Type);
@@ -409,9 +427,6 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments, contexts
   const placePositional = (value: Value): void => {
     items.push({ value });
   };
-  const placeNamed = (name: string, value: Value): void => {
-    items.push({ name, value });
-  };
 
   for (const element of args) {
     if ((element as { type?: string }).type === 'NamedArgument') {
@@ -421,8 +436,9 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments, contexts
       items.push(TransferResultDependency(result, { name: named.Name, value: result.Value }));
     } else if ((element as { type?: string }).type === 'AssignmentRestElement') {
       const { AssignmentExpression } = element as ParseNode.AssignmentRestElement;
-      const spreadRef = Q(yield* Evaluate(AssignmentExpression));
-      const spreadObj = Q(yield* GetValue(spreadRef));
+      const spreadResult = EnsureCompletion(yield* EvaluateArgument(AssignmentExpression, contexts));
+      if (spreadResult.Type !== 'normal') return spreadResult;
+      const spreadObj = spreadResult.Value;
       if (spreadObj instanceof ReferenceRunValue) {
         if (spreadObj.Locations.length === 0) emptyRuns.push(items.length);
         for (const location of spreadObj.Locations) items.push({ value: new ReferenceValue(location), referenceRun: true });
@@ -436,13 +452,16 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments, contexts
         ? Q(yield* GetMethod(spreadObj, wellKnownSymbols.iterator))
         : Value.undefined;
       if (spreadObj instanceof ObjectValue && !tupleComposite && method === Value.undefined) {
+        const construction = NamedSpreadConstructionOf(spreadResult, spreadObj);
         const keys = Q(yield* spreadObj.OwnPropertyKeys());
         for (const key of keys) {
           if (!(key instanceof JSStringValue)) continue;
           const desc = Q(yield* spreadObj.GetOwnProperty(key));
           if (!(desc instanceof Descriptor) || desc.Enumerable !== Value.true) continue;
-          const value = Q(yield* Get(spreadObj, key));
-          placeNamed(key.stringValue(), value);
+          const result = EnsureCompletion(yield* Get(spreadObj, key));
+          if (result.Type !== 'normal') return result;
+          CaptureNamedSpreadResult(construction, key, result.Value, result);
+          items.push(TransferResultDependency(result, { name: key.stringValue(), value: result.Value }));
         }
       } else {
         let iteratorRecord;
