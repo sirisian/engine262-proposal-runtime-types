@@ -66,7 +66,7 @@ export function CompleteConstructionSelections<T extends object>(object: ObjectV
 
 /** Index only this producing result's direct data contributions. Building the
  * index performs no property reads and avoids scanning every choice per key. */
-export function NamedSpreadConstructionOf(source: object, object: ObjectValue): ReadonlyMap<string | SymbolValue, ConstructionSelections> | undefined {
+export function SpreadConstructionOf(source: object, object: ObjectValue): ReadonlyMap<string | SymbolValue, ConstructionSelections> | undefined {
   const selections = constructionSelections.get(source);
   if (!selections?.length) return undefined;
   const byKey = new Map<string | SymbolValue, ConstructionSelection[]>();
@@ -81,10 +81,10 @@ export function NamedSpreadConstructionOf(source: object, object: ObjectValue): 
   return byKey;
 }
 
-/** A named call spread captures one live data contribution into an argument.
+/** A call spread captures one live data contribution into an argument.
  * The consumed source edge is no longer between that argument and its value;
  * nested edges inside the captured value remain live until admission. */
-export function CaptureNamedSpreadResult(source: ReturnType<typeof NamedSpreadConstructionOf>, key: PropertyKeyValue,
+export function CaptureSpreadDataResult(source: ReturnType<typeof SpreadConstructionOf>, key: PropertyKeyValue,
   value: Value, result: object): void {
   const selections: ConstructionSelection[] = [];
   for (const selection of source?.get(propertyIdentity(key)) ?? []) {

@@ -121,6 +121,7 @@ import { rememberDeclaredConstraint, rememberDeclaredDefault, rememberGenericTyp
 import {
   R, Throw, wellKnownSymbols, RegisterSymbolKeyDeclaration, RememberCheckedPropertyKey,
 } from '#self';
+import { ArgumentContexts, FreshArraySpreadSource } from './argument-construction.mts';
 
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
@@ -34383,6 +34384,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ))) {
         reportType('rt-reference-permission', n,
           'a reference run can only be forwarded to a reference-rest position; no signature in this callable contract has a possible forwarding route');
+      }
+    }
+    // Construction contexts do not assert the output/count of a replaceable
+    // iterator. Establish fresh children before their annotations are resolved,
+    // leaving spread routing and admission on the existing checking path.
+    if (callee.Signatures.length === 1 && c.Arguments.some(FreshArraySpreadSource)) {
+      const contexts = ArgumentContexts(c.Arguments, callee.Signatures[0].Parameters);
+      const operands = new Set(c.Arguments.filter(FreshArraySpreadSource).map((arg) => (arg as ParseNode.AssignmentRestElement).AssignmentExpression));
+      for (const [source, context] of contexts) {
+        if (!operands.has(source as ParseNode.AssignmentExpressionOrHigher) && (source as ParseNode).type !== 'Elision') {
+          staticTypeIn(source as ParseNode, context);
+        }
       }
     }
     const supplied = expandValueSpreads(c.Arguments);

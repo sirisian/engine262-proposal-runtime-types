@@ -55,6 +55,7 @@ import {
 } from '#self';
 import {
   ScalarRestOwner, ScalarRestLengthAllowed, ScalarRestGuardsAccept, ScalarRestValues, PrepareScalarRestValues, isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
+import { CaptureArrayIteratorValue } from '../type-system/iteration-construction.mts';
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
@@ -894,6 +895,7 @@ export function CreateArrayIterator(array: ObjectValue, kind: 'key+value' | 'key
         const elementValue = elementResult.Value;
         // 3. If kind is value, perform ? Yield(elementValue).
         if (kind === 'value') {
+          CaptureArrayIteratorValue(generator, elementKey, elementResult);
           result = elementValue;
           resultDependency = elementResult;
         } else { // 4. Else,

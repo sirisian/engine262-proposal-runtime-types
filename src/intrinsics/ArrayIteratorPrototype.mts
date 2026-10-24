@@ -7,6 +7,7 @@ import {
   GeneratorResume,
 } from '#self';
 import type { Realm } from '#self';
+import { RegisterArrayIteratorNext } from '../type-system/iteration-construction.mts';
 
 /** https://tc39.es/ecma262/#sec-%arrayiteratorprototype%.next */
 function* ArrayIteratorPrototype_next(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -21,4 +22,5 @@ export function bootstrapArrayIteratorPrototype(realmRec: Realm) {
 
   realmRec.Intrinsics['%ArrayIteratorPrototype%'] = proto;
   realmRec.Intrinsics['%ArrayIteratorPrototype.next%'] = proto.properties.get(Value('next'))!.Value as ObjectValue;
+  RegisterArrayIteratorNext(realmRec.Intrinsics['%ArrayIteratorPrototype.next%']);
 }

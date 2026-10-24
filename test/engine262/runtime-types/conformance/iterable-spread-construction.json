@@ -1,0 +1,1803 @@
+{
+  "cases": [
+    {
+      "name": "function-0-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-parenthesized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...([{fn:function(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-two-positions",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-two-spreads",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:function(value:U):U{return value;}}],...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-positional-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"prefix\");verify(a);}run(3,...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-positional-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:function(value:U):U{return value;}}],{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-named-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"named\");verify(a);}run(...[{fn:function(value:U):U{return value;}}],n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-homogeneous-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[].<Item>){verify(values[0]);verify(values[1]);}run(...[{fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"tuple\");verify(values[1]);}run(...[3,{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-rest-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,...[].<Item>,string]){if(values[0]!==3||values[2]!==\"end\")throw new Error(\"suffix\");verify(values[1]);}run(...[3,{fn:function(value:U):U{return value;}},\"end\"]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested-object",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:{child:Item}){verify(box.child);}run(...[{child:{fn:function(value:U):U{return value;}}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:[Item]){verify(box[0]);}run(...[[{fn:function(value:U):U{return value;}}]]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-callable-view",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function implementation(value:any){verify(value);}const run:(renamed:Item)=>void=implementation;run(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-specialized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run<T:type>(a:T){verify(a);}run.<Item>(...([{fn:function(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-constructor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}class C{constructor(a:Item){verify(a);}}new C(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-omitted-default",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,n:number=3){if(n!==3)throw new Error(\"default\");verify(a);}run(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-elision",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:any,a:Item){if(n!==undefined)throw new Error(\"hole\");verify(a);}run(...[,{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-empty-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[],...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-parenthesized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...([{fn:function(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-two-positions",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-two-spreads",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:function(value:U):U{return value;}}],...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-positional-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"prefix\");verify(a);}run(3,...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-positional-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:function(value:U):U{return value;}}],{fn:function(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-named-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"named\");verify(a);}run(...[{fn:function(value:U):U{return value;}}],n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-homogeneous-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[].<Item>){verify(values[0]);verify(values[1]);}run(...[{fn:function(value:U):U{return value;}},{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"tuple\");verify(values[1]);}run(...[3,{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-rest-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,...[].<Item>,string]){if(values[0]!==3||values[2]!==\"end\")throw new Error(\"suffix\");verify(values[1]);}run(...[3,{fn:function(value:U):U{return value;}},\"end\"]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested-object",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:{child:Item}){verify(box.child);}run(...[{child:{fn:function(value:U):U{return value;}}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:[Item]){verify(box[0]);}run(...[[{fn:function(value:U):U{return value;}}]]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-callable-view",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function implementation(value:any){verify(value);}const run:(renamed:Item)=>void=implementation;run(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-specialized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run<T:type>(a:T){verify(a);}run.<Item>(...([{fn:function(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-constructor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}class C{constructor(a:Item){verify(a);}}new C(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-omitted-default",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,n:number=3){if(n!==3)throw new Error(\"default\");verify(a);}run(...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-elision",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:any,a:Item){if(n!==undefined)throw new Error(\"hole\");verify(a);}run(...[,{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-empty-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[],...[{fn:function(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-parenthesized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...([{fn:(value:U):U=>{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-two-positions",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-two-spreads",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:(value:U):U=>{return value;}}],...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-positional-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"prefix\");verify(a);}run(3,...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-positional-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:(value:U):U=>{return value;}}],{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-named-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"named\");verify(a);}run(...[{fn:(value:U):U=>{return value;}}],n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-homogeneous-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[].<Item>){verify(values[0]);verify(values[1]);}run(...[{fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"tuple\");verify(values[1]);}run(...[3,{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-rest-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,...[].<Item>,string]){if(values[0]!==3||values[2]!==\"end\")throw new Error(\"suffix\");verify(values[1]);}run(...[3,{fn:(value:U):U=>{return value;}},\"end\"]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested-object",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:{child:Item}){verify(box.child);}run(...[{child:{fn:(value:U):U=>{return value;}}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:[Item]){verify(box[0]);}run(...[[{fn:(value:U):U=>{return value;}}]]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-callable-view",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function implementation(value:any){verify(value);}const run:(renamed:Item)=>void=implementation;run(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-specialized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run<T:type>(a:T){verify(a);}run.<Item>(...([{fn:(value:U):U=>{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-constructor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}class C{constructor(a:Item){verify(a);}}new C(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-omitted-default",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,n:number=3){if(n!==3)throw new Error(\"default\");verify(a);}run(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-elision",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:any,a:Item){if(n!==undefined)throw new Error(\"hole\");verify(a);}run(...[,{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-empty-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[],...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-parenthesized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...([{fn:(value:U):U=>{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-two-positions",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-two-spreads",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:(value:U):U=>{return value;}}],...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-positional-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"prefix\");verify(a);}run(3,...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-positional-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn:(value:U):U=>{return value;}}],{fn:(value:U):U=>{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-named-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"named\");verify(a);}run(...[{fn:(value:U):U=>{return value;}}],n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-homogeneous-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[].<Item>){verify(values[0]);verify(values[1]);}run(...[{fn:(value:U):U=>{return value;}},{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"tuple\");verify(values[1]);}run(...[3,{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-rest-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,...[].<Item>,string]){if(values[0]!==3||values[2]!==\"end\")throw new Error(\"suffix\");verify(values[1]);}run(...[3,{fn:(value:U):U=>{return value;}},\"end\"]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested-object",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:{child:Item}){verify(box.child);}run(...[{child:{fn:(value:U):U=>{return value;}}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:[Item]){verify(box[0]);}run(...[[{fn:(value:U):U=>{return value;}}]]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-callable-view",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function implementation(value:any){verify(value);}const run:(renamed:Item)=>void=implementation;run(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-specialized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run<T:type>(a:T){verify(a);}run.<Item>(...([{fn:(value:U):U=>{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-constructor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}class C{constructor(a:Item){verify(a);}}new C(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-omitted-default",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,n:number=3){if(n!==3)throw new Error(\"default\");verify(a);}run(...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-elision",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:any,a:Item){if(n!==undefined)throw new Error(\"hole\");verify(a);}run(...[,{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-empty-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[],...[{fn:(value:U):U=>{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-fixed",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-parenthesized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...([{fn(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-two-positions",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn(value:U):U{return value;}},{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-two-spreads",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn(value:U):U{return value;}}],...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-positional-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"prefix\");verify(a);}run(3,...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-positional-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn(value:U):U{return value;}}],{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-named-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"named\");verify(a);}run(...[{fn(value:U):U{return value;}}],n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-homogeneous-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[].<Item>){verify(values[0]);verify(values[1]);}run(...[{fn(value:U):U{return value;}},{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple-rest",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"tuple\");verify(values[1]);}run(...[3,{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-rest-suffix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,...[].<Item>,string]){if(values[0]!==3||values[2]!==\"end\")throw new Error(\"suffix\");verify(values[1]);}run(...[3,{fn(value:U):U{return value;}},\"end\"]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested-object",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:{child:Item}){verify(box.child);}run(...[{child:{fn(value:U):U{return value;}}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:[Item]){verify(box[0]);}run(...[[{fn(value:U):U{return value;}}]]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-callable-view",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function implementation(value:any){verify(value);}const run:(renamed:Item)=>void=implementation;run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-specialized",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run<T:type>(a:T){verify(a);}run.<Item>(...([{fn(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-constructor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}class C{constructor(a:Item){verify(a);}}new C(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-omitted-default",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,n:number=3){if(n!==3)throw new Error(\"default\");verify(a);}run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-elision",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:any,a:Item){if(n!==undefined)throw new Error(\"hole\");verify(a);}run(...[,{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-empty-prefix",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[],...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-fixed",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-parenthesized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...([{fn(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-two-positions",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn(value:U):U{return value;}},{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-two-spreads",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn(value:U):U{return value;}}],...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-positional-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"prefix\");verify(a);}run(3,...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-positional-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,b:Item){verify(a);verify(b);}run(...[{fn(value:U):U{return value;}}],{fn(value:U):U{return value;}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-named-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:number,a:Item){if(n!==3)throw new Error(\"named\");verify(a);}run(...[{fn(value:U):U{return value;}}],n:3);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-homogeneous-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[].<Item>){verify(values[0]);verify(values[1]);}run(...[{fn(value:U):U{return value;}},{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple-rest",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,Item]){if(values[0]!==3)throw new Error(\"tuple\");verify(values[1]);}run(...[3,{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-rest-suffix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(...values:[number,...[].<Item>,string]){if(values[0]!==3||values[2]!==\"end\")throw new Error(\"suffix\");verify(values[1]);}run(...[3,{fn(value:U):U{return value;}},\"end\"]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested-object",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:{child:Item}){verify(box.child);}run(...[{child:{fn(value:U):U{return value;}}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(box:[Item]){verify(box[0]);}run(...[[{fn(value:U):U{return value;}}]]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-callable-view",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function implementation(value:any){verify(value);}const run:(renamed:Item)=>void=implementation;run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-specialized",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run<T:type>(a:T){verify(a);}run.<Item>(...([{fn(value:U):U{return value;}}]));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-constructor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}class C{constructor(a:Item){verify(a);}}new C(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-omitted-default",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item,n:number=3){if(n!==3)throw new Error(\"default\");verify(a);}run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-elision",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(n:any,a:Item){if(n!==undefined)throw new Error(\"hole\");verify(a);}run(...[,{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-empty-prefix",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){verify(a);}run(...[],...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "identity",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let saved:any;function remember(c:Reflect.Object){saved=c.objectContext;}function run(a:Item){if(a!==saved)throw new Error(\"identity\");verify(a);}run(...[@remember {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "effects-before-admission",
+      "modules": {
+        "main": "type Item={readonly tag:number,fn:(value:string)=>string}|{readonly tag:number,fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let log=\"\";function mark(s:string):number{log+=s;return 1;}function run(a:Item,b:number,c:number){if(log!==\"bcg\")throw new Error(\"order\");verify(a);}run(...[{get tag():number{log+=\"g\";return 1;},fn(value:U):U{return value;}},mark(\"b\")],mark(\"c\"));"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-before-read",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;Object.defineProperty(source,\"0\",{value:source[0],writable:true,enumerable:true,configurable:true});return original.call(source);};}function run(a:Item){ordinary(a);}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor-before-read",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let reads=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const item=source[0];Object.defineProperty(source,\"0\",{get(){reads++;return item;},configurable:true,enumerable:true});return original.call(source);};}function run(a:Item){ordinary(a);if(reads!==1)throw new Error(\"reads\");}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-after-capture",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let reads=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;Object.defineProperty(source,\"1\",{get(){reads++;Object.defineProperty(source,\"0\",{value:source[0],writable:true,enumerable:true,configurable:true});return 1;},enumerable:true,configurable:true});return original.call(source);};}function run(a:Item,b:number){verify(a);if(reads!==1)throw new Error(\"reads\");}run(...[@configure {fn(value:U):U{return value;}},0]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-replacement-after-capture",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;Object.defineProperty(source,\"1\",{get(){const item=source[0];Object.defineProperty(item,\"child\",{value:item.child,writable:true,enumerable:true,configurable:true});return 1;},enumerable:true,configurable:true});return original.call(source);};}function run(a:{child:Item},b:number){ordinary(a.child);}run(...[@configure {child:{fn(value:U):U{return value;}}},0]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-argument-replaces-slot",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let captured:any;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;captured=source;return original.call(source);};}function change():number{const source:any=captured;Object.defineProperty(source,\"0\",{value:source[0],writable:true,enumerable:true,configurable:true});return 1;}function run(a:Item,b:number){verify(a);}run(...[@configure {fn(value:U):U{return value;}}],change());"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "custom-hook-returning-native-iterator",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let calls=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;calls++;return original.call(source);};}function run(a:Item){verify(a);if(calls!==1)throw new Error(\"calls\");}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "preconsumed-native-index",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);iterator.next();return iterator;};}function run(a:Item,b?:Item){verify(a);if(b!==undefined)throw new Error(\"unexpected second value\");}run(...[@configure {fn(value:U):U{return value;}},{fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "custom-generator-is-ordinary",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let calls=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;return (function*(){calls++;yield source[0];})();};}function run(a:Item){ordinary(a);if(calls!==1)throw new Error(\"calls\");}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrapped-next-is-ordinary",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let calls=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);const next=iterator.next;iterator.next=function(){calls++;return next.call(iterator);};return iterator;};}function run(a:Item){ordinary(a);if(calls!==2)throw new Error(\"calls\");}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-native-next",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);iterator.next=iterator.next.bind(iterator).bind(null);return iterator;};}function run(a:Item){verify(a);}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-native-next-through-wrapper",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);return {next:iterator.next.bind(iterator)};};}function run(a:Item){verify(a);}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-other-array-is-ordinary",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call([source[0]]);return {next:iterator.next.bind(iterator)};};}function run(a:Item){ordinary(a);}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "different-array-is-ordinary",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;return original.call([source[0]]);};}function run(a:Item){ordinary(a);}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-next-is-once",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let reads=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);const next=iterator.next;Object.defineProperty(iterator,\"next\",{get(){reads++;return next;}});return iterator;};}function run(a:Item){verify(a);if(reads!==1)throw new Error(\"reads\");}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "next-getter-replaces-source",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let reads=0;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);const next=iterator.next;Object.defineProperty(iterator,\"next\",{get(){reads++;Object.defineProperty(source,\"0\",{value:source[0],writable:true,enumerable:true,configurable:true});return next;}});return iterator;};}function run(a:Item){ordinary(a);if(reads!==1)throw new Error(\"reads\");}run(...[@configure {fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "stored-source-is-ordinary",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const source:any=[{fn<U:type>(value:U):U{return value;}}];function run(a:Item){ordinary(a);}run(...source);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "throwing-next-stops-later",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}const sentinel={};let entered=false;let later=false;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);iterator.next=function(){throw sentinel;};return iterator;};}function side():number{later=true;return 1;}function run(a:Item,b:number){entered=true;}try{run(...[@configure {fn(value:U):U{return value;}}],side());throw new Error(\"accepted\");}catch(e){if(e!==sentinel||entered||later)throw e;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "noncallable-next-stops-later",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let entered=false;let later=false;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;const iterator=original.call(source);iterator.next=3;return iterator;};}function side():number{later=true;return 1;}function run(a:Item,b:number){entered=true;}let caught=false;try{run(...[@configure {fn(value:U):U{return value;}}],side());}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||entered||later)throw new Error(\"next failure\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "abrupt-later-argument-prevents-admission",
+      "modules": {
+        "main": "type Item={readonly tag:number,fn:(value:string)=>string}|{readonly tag:number,fn:<U:type>(value:U)=>U};let reads=0;const sentinel={};function fail():any{throw sentinel;}function run(a:Item,b:any){throw new Error(\"body\");}try{run(...[{get tag():number{reads++;return 1;},fn(value:U):U{return value;}}],fail());throw new Error(\"accepted\");}catch(e){if(e!==sentinel||reads!==0)throw e;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-failure-no-fallback",
+      "modules": {
+        "main": "type Item={readonly tag:string,fn:(value:string)=>string}|{readonly tag:number,fn:<U:type>(value:U)=>U};const raw:any=\"wrong\";let later=false;let entered=false;let reads=0;function change(c:Reflect.Object){Object.defineProperty(c.objectContext,\"tag\",{get(){if(!later)throw new Error(\"early\");reads++;return raw;}});}function side():number{later=true;return 1;}function run(a:Item,b:number){entered=true;}let caught=false;try{run(...[@change{tag:1,fn(value:U):U{return value;}}],side());}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||entered||!later||reads===0)throw new Error(\"selected admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reentrant-read-is-independent",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let escaped:any;let entered=false;function remember(c:Reflect.Object){escaped=c.objectContext;}function cross():number{const value:Item=escaped;ordinary(value);entered=true;return 1;}function run(a:{readonly trigger:number,child:Item}){throw new Error(\"body\");}let caught=false;try{run(...[{get trigger():number{return cross();},child:@remember {fn(value:U):U{return value;}}}]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!entered||!caught)throw new Error(\"reentry\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reentrant-iterator-read-is-independent",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let crossed=false;const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;Object.defineProperty(source,\"1\",{get(){const item:Item=source[0];ordinary(item);crossed=true;return 1;},configurable:true,enumerable:true});return original.call(source);};}function run(a:Item,b:number){throw new Error(\"entered\");}let caught=false;try{run(...[@configure {fn(value:U):U{return value;}},0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||!crossed)throw new Error(\"reentry\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-spread-during-iterator-read",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let crossed=false;function independent(){function accept(a:Item){verify(a);}accept(...[{fn(value:U):U{return value;}}]);crossed=true;}const proto:any=Array.prototype;const original:any=proto[Symbol.iterator];function configure(c:Reflect.Object){proto[Symbol.iterator]=function(){proto[Symbol.iterator]=original;const source:any=this;Object.defineProperty(source,\"1\",{get(){independent();return 1;},configurable:true,enumerable:true});return original.call(source);};}function run(a:Item,b:number){verify(a);if(!crossed)throw new Error(\"nested\");}run(...[@configure {fn(value:U):U{return value;}},0]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled-iterable-spread-failure",
+      "modules": {
+        "main": "const raw:any=\"wrong\";function change(c:Reflect.Object){Object.defineProperty(c.objectContext,\"tag\",{get(){return raw;}});}function run(a:{readonly tag:string,fn:(value:string)=>string}|{readonly tag:number,fn:<U:type>(value:U)=>U}){throw new Error(\"body\");}run(...[@change{tag:1,fn(value:U):U{return value;}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-body-error",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}function run(a:Item){}run(...[{fn(value:U):U{return \"wrong\";}}]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "captured-alias-context",
+      "modules": {
+        "main": "function check<T:type>(value:T){type Item={fn:(value:string,carry:T)=>string}|{fn:<U:type>(value:U,carry:T)=>U};function run(a:Item){const f:any=a.fn;if(f.<number>(7,value)!==7||f.<string>(\"ok\",value)!==\"ok\")throw new Error(\"capture\");}run(...[{fn(result:U,carry:T):U{return result;}}]);}check.<number>(3);check.<string>(\"x\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-positions",
+      "modules": {
+        "main": "function check(a:any,b:any){if(Reflect.typeOf(a)!==uint8||Reflect.typeOf(b)!==uint16)throw new Error(\"domains\");}function run(a:uint8,b:uint16){check(a,b);}run(...[1,2]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-context",
+      "modules": {
+        "dep": "export type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}export function run(a:Item){verify(a);}",
+        "main": "import {run} from \"dep\";run(...[{fn(value:U):U{return value;}}]);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}
