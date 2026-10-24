@@ -3771,6 +3771,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const contextualMethodReturns = new Journaled<Known>();
   const contextualGenericParameters = new Journaled<readonly TypeParameterRecord[]>();
+  // Selected contextual binders are declaration scope even without written syntax.
+  const effectiveTypeParameterNamesOf = (node: ParseNode): readonly string[] =>
+    typeParameterNamesOf(node) ?? contextualGenericParameters.get(node)?.map((parameter) => parameter.Name) ?? [];
   const adoptContextualSignature = (node: ParseNode, signature: SignatureRecord): SignatureRecord => {
     if ((node as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList?.length) return signature;
     const parameters = signature.TypeParameters ?? [];
@@ -5447,7 +5450,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
       const scoped = new Map(available);
       typeParameterArguments.set(scoped, inputs);
-      if (node !== declaration) for (const name of typeParameterNamesOf(node) ?? []) scoped.delete(name);
+      if (node !== declaration) for (const name of effectiveTypeParameterNamesOf(node)) scoped.delete(name);
       // Expansion can erase alias bounds, and a callable signature can hide an
       // omitted default. Retain each application after its inference rungs and
       // close its inputs under the enclosing specialization before consumers run.
@@ -13281,9 +13284,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // including when the computation is nested in an array or tuple type.
       if (parent.type === 'TypeParameter' && parent.TypeParameterDefault === child) defaultSource = true;
       if (parent.type === 'TypeParameter' && parent.TypeParameterConstraint === child) constraintSource = true;
-      // Through typeParameterNamesOf, which also reads a primitive block's
-      // captures of metadata.
-      (typeParameterNamesOf(parent) ?? []).forEach((name) => enclosingParameters.add(name));
+      // Include selected adopted binders and primitive-block metadata captures.
+      effectiveTypeParameterNamesOf(parent).forEach((name) => enclosingParameters.add(name));
       if (IsPartialDeclaration(parent) && child.type === 'ClassTail') {
         const primary = partialPrimaryOf(parent);
         if (primary) (typeParameterNamesOf(primary) ?? []).forEach((name) => enclosingParameters.add(name));
@@ -39534,25 +39536,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return;
       }
-      case 'ArrowFunction':
-        checkPredicateTarget(n.TypeAnnotation, n.ArrowParameters as readonly ParseNode[] | undefined);
-        publishLiteralReturn(n as ParseNode, (n.ArrowParameters ?? []).map((prm) => {
-          const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          return ann ? resolveType(ann.Type) : null;
-        }));
-        // A CONTEXTUALLY TYPED ARROW takes its target's return type, as it takes its
-        // parameter types. #sec-contextual-types: a function or arrow expression "in a
-        // position whose contextual type is a function type takes that type's signature
-        // for every position it leaves unannotated: a parameter's type, the return type
-        // ... The signature so taken is the Static Type of the expression". The
-        // parameters were passed; the return type, recorded beside them in
-        // `contextualReturnTypes`, was not - so `const fn: () => uint8 = () => 3`
-        // returned an unconverted `number`, where a contextually typed METHOD, whose
-        // call does pass it, returned a `uint8`.
-        enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true,
-          contextualParameterTypes.get(n), undefined, undefined,
-          isEnumeratorInitializer(n) ? null : contextualReturnTypes.get(n) ?? null);
+      case 'ArrowFunction': {
+        const scope = pushTypeParameterScopeOf(n);
+        try {
+          checkPredicateTarget(n.TypeAnnotation, n.ArrowParameters as readonly ParseNode[] | undefined);
+          publishLiteralReturn(n as ParseNode, (n.ArrowParameters ?? []).map((prm) => {
+            const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+            return ann ? resolveType(ann.Type) : null;
+          }));
+          // A CONTEXTUALLY TYPED ARROW takes its target's return type, as it takes its
+          // parameter types. #sec-contextual-types: a function or arrow expression "in a
+          // position whose contextual type is a function type takes that type's signature
+          // for every position it leaves unannotated: a parameter's type, the return type
+          // ... The signature so taken is the Static Type of the expression". The
+          // parameters were passed; the return type, recorded beside them in
+          // `contextualReturnTypes`, was not - so `const fn: () => uint8 = () => 3`
+          // returned an unconverted `number`, where a contextually typed METHOD, whose
+          // call does pass it, returned a `uint8`.
+          enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true,
+            contextualParameterTypes.get(n), undefined, undefined,
+            isEnumeratorInitializer(n) ? null : contextualReturnTypes.get(n) ?? null);
+        } finally {
+          if (scope) typeParameterScopes.pop();
+        }
         return;
+      }
       case 'OperatorDefinition': {
         if (!n.FunctionBody && !n.GeneratorBody) {
           return;
