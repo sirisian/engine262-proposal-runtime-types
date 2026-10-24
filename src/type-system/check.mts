@@ -3844,7 +3844,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const p = node as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Optional?: boolean, Initializer?: ParseNode | null };
     const type = p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : contextual;
     const optional = p.Optional || (!p.TypeAnnotation && record?.Optional && record.Initial === undefined && !record.DeclaredDefault);
-    return type && optional && !p.Initializer ? joinTypes(type, undefinedType) : type;
+    // A binding keeps the generic declarations of its own source position.
+    // Reading it inside a same-named inner binder must not retarget its type.
+    const captured = captureLexicalTypeParameters(type, node);
+    return captured && optional && !p.Initializer ? joinTypes(captured, undefinedType) : captured;
   };
 
   /** A callback's inferred return type, keyed by the CALL that passed it. */
@@ -4917,8 +4920,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (value.Kind === 'literal') return portableCompletionType(value.Base, scopes, visited);
     if (value.Kind === 'primitive') return value.Arguments.length === 0 && value.Name !== 'symbol';
     if (value.Kind !== 'parameter' || (value.Arity ?? 0) !== 0
-      || Object.keys(value).some((key) => !['Kind', 'Name', 'Constraint', 'Arity'].includes(key))) return false;
-    const owners = scopes.filter((scope) => scope.has(value.Name));
+      || Object.keys(value).some((key) => !['Kind', 'Name', 'Constraint', 'Arity', 'CapturedDeclaration'].includes(key))) return false;
+    const owners = scopes.filter((scope) => scope.has(value.Name)
+      && (!value.CapturedDeclaration || typeParameterDeclarations.get(scope)?.includes(value.CapturedDeclaration)));
     if (owners.length !== 1 || !typeParameterDeclarations.get(owners[0])?.some((declaration) =>
       (declaration as ParseNode.TypeParameter).BindingIdentifier?.name === value.Name)) return false;
     const constraint = owners[0].get(value.Name);
@@ -9105,7 +9109,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return captures;
   };
-  const captureGetterResult = (type: Known, owner: ParseNode): Known => {
+  const captureLexicalTypeParameters = (type: Known, owner: ParseNode): Known => {
     const captures = lexicalParameterCaptures(owner);
     return substituteFreeTypeParameters(type, new Map(captures.map((capture) => [capture.Declaration.BindingIdentifier.name, capture.Type])));
   };
@@ -9292,7 +9296,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const previous = Properties.findIndex((property) => property.key === key);
           if (previous >= 0 && Properties[previous] !== fieldProperties.get(key)) Properties.splice(previous, 1);
           methods.delete(key);
-          const property = { key, type: captureGetterResult(t, n) ?? anyTypeRecord, optional: false };
+          const property = { key, type: captureLexicalTypeParameters(t, n) ?? anyTypeRecord, optional: false };
           Properties.push(property);
           if (!md.TypeAnnotation) {
             const classScope = pushTypeParameterScopeOf(n, 'type-only');
@@ -29164,7 +29168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!item.generator && !item.asyncFunction) {
             const anchorage: ReturnAnchorage = { anchored: false };
             let result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
-            if (item.property && item.receiver) result = captureGetterResult(result, item.receiver.owner);
+            if (item.property && item.receiver) result = captureLexicalTypeParameters(result, item.receiver.owner);
             if (inferenceResources.exhausted) return;
             changed = publishOrdinaryReturn(item, result, anchorage);
           } else {
@@ -30082,7 +30086,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return;
             }
             if (bound.TypeAnnotation) {
-              const bt = resolveType(bound.TypeAnnotation.Type);
+              const bt = captureLexicalTypeParameters(resolveType(bound.TypeAnnotation.Type), b);
               declare(bname, bt, bindingFrame);
               recordInferenceAnchor(bname, !!bt && bt.Kind !== 'any', bindingFrame);
               return;
@@ -30156,7 +30160,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!bound.BindingPattern || !bound.Initializer) return;
             const kind = (n as ParseNode.LexicalDeclaration).LetOrConst;
             const contributions = (transparent = false) => patternContributions(bound.BindingPattern!, {
-              type: bound.TypeAnnotation ? resolveType(bound.TypeAnnotation.Type) : staticType(bound.Initializer!),
+              type: bound.TypeAnnotation ? captureLexicalTypeParameters(resolveType(bound.TypeAnnotation.Type), bound) : staticType(bound.Initializer!),
               expression: bound.Initializer!, annotated: !!bound.TypeAnnotation,
             }, transparent, transparent);
             const selected = contributions(true);
@@ -32029,7 +32033,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let source = describedPatternSource(input);
       if (source.annotated) source = { ...source, expression: undefined };
       if (node.TypeAnnotation) {
-        const annotation = resolveType(node.TypeAnnotation.Type);
+        const annotation = captureLexicalTypeParameters(resolveType(node.TypeAnnotation.Type), node as ParseNode);
         const fallback = node.Initializer && staticTypeIn(node.Initializer, annotation);
         source = { type: annotation && node.Optional && !(fallback && AreDisjoint(fallback, undefinedType))
           ? joinTypes(annotation, undefinedType) : annotation, annotated: true };
@@ -32164,7 +32168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
     infer = false, frame = frames[frames.length - 1], selected?: ReadonlyMap<PatternNode, PatternSource>): void => {
     let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? operandParticipates(incoming.expression) : incoming.type !== null) };
-    const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
+    const annotation = node.TypeAnnotation ? captureLexicalTypeParameters(resolveType(node.TypeAnnotation.Type), node as ParseNode) : null;
     if (declaring) requireBindingType(annotation);
     // #sec-typed-destructuring: optional members use undefined as the sentinel.
     const admitted = annotation && node.Optional ? joinTypes(annotation, undefinedType) : annotation;
@@ -38162,7 +38166,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (isConstDeclaration) rememberValueOrigin(bindingFrame, n.BindingIdentifier.name, n.TypedInitializer.AssignmentExpression, inferred);
             return;
           }
-          const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
+          const declared = n.TypeAnnotation ? captureLexicalTypeParameters(resolveType(n.TypeAnnotation.Type), n) : null;
           requireBindingType(declared);
           if (n.TypeAnnotation && !declared) {
             frames[frames.length - 1].unresolvedAnnotations.set(n.BindingIdentifier.name, n.TypeAnnotation.Type);

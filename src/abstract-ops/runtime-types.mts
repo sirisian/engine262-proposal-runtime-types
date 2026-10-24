@@ -5895,7 +5895,6 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
   // resolution, and the signature carries their Type Parameter Records, so the
   // resolver can rank a generic member (overloads.mts, the Generic tier) and the
   // call that selects it binds them from the arguments as any generic call does.
-  const genericDeclaration = (((fn as { ECMAScriptCode?: { parent?: unknown } | null }).ECMAScriptCode?.parent) ?? null) as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null;
   // A generic CLASS's constructor is a generic signature over the CLASS's
   // parameters: `Reflect.typeOf(Box)` for `class Box<T> { constructor(v: T) }`
   // is `<T>(v: T) => Box.<T>`, as `Reflect.typeOf(f)` for `function f<T>(x: T):
@@ -5931,7 +5930,9 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
   })();
   const classParameters = constructorOfGeneric?.TypeParameters?.TypeParameterList
     ?? declarationOfMethod?.TypeParameters?.TypeParameterList;
-  const ownTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList;
+  // A contextual method's adopted parameters belong to the function value
+  // even though its source has no written type-parameter list.
+  const ownTypeParameters = functionTypeParameters(fn as AnnotatedFunction);
   const genericTypeParameters = ownTypeParameters ?? classParameters;
   // A METHOD's annotations may name its CLASS's parameters (`[].<T>` on a
   // method of `vec<T, N>`); they resolve under the specialized class's frame.

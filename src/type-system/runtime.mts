@@ -30,7 +30,7 @@ import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryG
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { CopyValueClassInstance } from '../abstract-ops/testing-comparison.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, functionTypeParameters, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -398,7 +398,7 @@ function instantiatePublishedReturn(value: unknown, application?: ReadonlyMap<st
   }
   if (!published || !mentionsTypeParameter(published)) return published;
   // A case's captures belong to this application, just as an owner's parameters do.
-  const own = [...declaration?.TypeParameters?.TypeParameterList ?? [], ...declaration?.TypeParameters?.Captures ?? []];
+  const own = [...functionTypeParameters(fn as never) ?? [], ...declaration?.TypeParameters?.Captures ?? []];
   const captured = fn.TypeParameterFrame ? copyTypeParameterFrame(fn.TypeParameterFrame, own) : new Map<string, TypeRecord>();
   for (const parameter of own) captured.delete(parameter.BindingIdentifier.name);
   const closed = substituteFreeTypeParameters(published, captured, undefined,
@@ -1983,7 +1983,9 @@ export function* InferGenericBindingsFrom(
       // Object and refused every call of such a declaration.
       const pre = preBound?.get(paramName);
       if (pre) {
-        frame.set(paramName, pre);
+        // Checker/contextual seeds bind this declaration just as the inferred
+        // argument rung does. Captured contracts retain declaration identity.
+        bindTypeParameter(frame, paramName, pre, tp);
         if (checkerSupplied && tp.TypeParameterConstraint) {
           const preConstraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
           if (preConstraint !== null && !Q(yield* ConstraintAdmits(pre, preConstraint))

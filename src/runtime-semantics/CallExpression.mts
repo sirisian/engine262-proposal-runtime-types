@@ -23,7 +23,7 @@ import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { anyType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
-import { setPendingCheckerBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { setPendingCheckerBindings, pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
@@ -1212,6 +1212,14 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const stamped = (CallExpression as unknown as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings;
     if (stamped && stamped.size > 0) {
       explicitFrame = InstantiateCheckedBindings(stamped, surroundingAgent.runningExecutionContext.LexicalEnvironment);
+      // Hoisted function declarations capture this frame during declaration
+      // instantiation, before the body binder runs. Retain the selected
+      // callee's parameter identities here as explicit type arguments do.
+      for (const parameter of functionTypeParameters(func as never) ?? []) {
+        const name = parameter.BindingIdentifier.name;
+        const bound = explicitFrame.get(name);
+        if (bound) bindTypeParameter(explicitFrame, name, bound, parameter);
+      }
       setPendingCheckerBindings(true);
     }
   }
