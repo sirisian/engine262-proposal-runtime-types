@@ -150,3 +150,5 @@ export { CompleteSpecializationResult } from './type-system/runtime.mts';
 export { ClassMethodThisTypeOf } from './type-system/runtime.mts';
 
 export * from './type-system/inherited-storage.mts';
+
+export * from './type-system/store-admission.mts';

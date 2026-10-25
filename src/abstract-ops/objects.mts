@@ -1,3 +1,5 @@
+import type { StoreAdmission } from '../type-system/store-admission.mts';
+import { AdmitStoreValue, isArrayExoticObject } from '#self';
 import { HasInheritedStorageDependents, PlanInheritedDefinition, PlanInheritedDeletion, PlanInheritedPrototypeChange, CommitInheritedStorageChanges } from '#self';
 import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import {
@@ -15,7 +17,7 @@ import {
 } from '../completion.mts';
 import type { Mutable } from '../utils/language.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
-import { DefaultValueOf } from '../type-system/runtime.mts';
+import { DefaultValueOf, OrdinaryDataReadSupported } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { RemoveArrayElementIdentity } from '../type-system/array-borrow.mts';
@@ -141,7 +143,7 @@ export function OrdinaryGetOwnProperty(O: ObjectValue, P: PropertyKeyValue) {
 }
 
 // 9.1.6.1 OrdinaryDefineOwnProperty
-export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections): ValueEvaluator<BooleanValue> {
+export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections, admission?: StoreAdmission): ValueEvaluator<BooleanValue> {
   // proposal-runtime-types (spec sec-object-types-semantics): a descriptor with a
   // declared type gives the property a type. A descriptor with a type and no value
   // takes the type's default; a descriptor with a type and a value has the value
@@ -214,7 +216,8 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
         // RequireType returns the value OF THE TYPE to be used, so the
         // descriptor must carry what it returned rather than the raw value -
         // the same correction made to the typed branch above.
-        const converted = Q(yield* RequireType(Desc.Value, declared.TypeRecord, undefined, choices));
+        const checked = Q(yield* AdmitStoreValue(O, P, Desc.Value, declared.TypeRecord, admission, choices));
+        const converted = checked.value;
         const current = Q(yield* O.GetOwnProperty(P));
         const extensible = Q(yield* IsExtensible(O));
         const applied = Descriptor({ ...Desc, Value: converted });
@@ -424,20 +427,25 @@ export function* OrdinaryGet(O: ObjectValue, P: PropertyKeyValue, Receiver: Valu
 }
 
 // 9.1.9.1 OrdinarySet
-export function* OrdinarySet(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections) {
+export function* OrdinarySet(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections, admission?: StoreAdmission) {
   Assert(IsPropertyKey(P));
+  if (!OrdinaryDataReadSupported(O)) admission = undefined;
   const ownDesc = Q(yield* O.GetOwnProperty(P));
-  return yield* OrdinarySetWithOwnDescriptor(O, P, V, Receiver, ownDesc, choices);
+  return yield* OrdinarySetWithOwnDescriptor(O, P, V, Receiver, ownDesc, choices, admission);
 }
 
 // 9.1.9.2 OrdinarySetWithOwnDescriptor
-export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, ownDesc: Descriptor | UndefinedValue, choices?: ConstructionSelections): ValueEvaluator<BooleanValue> {
+export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValue, V: Value, Receiver: Value, ownDesc: Descriptor | UndefinedValue, choices?: ConstructionSelections, admission?: StoreAdmission): ValueEvaluator<BooleanValue> {
   Assert(IsPropertyKey(P));
 
   if (ownDesc instanceof UndefinedValue) {
+    if (O.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf) admission = undefined;
     const parent = Q(yield* O.GetPrototypeOf());
     if (!(parent instanceof NullValue)) {
-      return Q(yield* parent.Set(P, V, Receiver, choices));
+      // Only ordinary internal delegation carries successful admission. A Proxy
+      // or other override may call user code even while selecting its method.
+      if (parent.Set !== ObjectValue.prototype.Set) admission = undefined;
+      return Q(yield* parent.Set(P, V, Receiver, choices, admission));
     }
     ownDesc = Descriptor({
       Value: Value.undefined,
@@ -455,7 +463,10 @@ export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValu
       return Value.false;
     }
 
+    if (!OrdinaryDataReadSupported(Receiver)) admission = undefined;
     const existingDescriptor = Q(yield* Receiver.GetOwnProperty(P));
+    if (Receiver.DefineOwnProperty !== ObjectValue.prototype.DefineOwnProperty
+        && !isArrayExoticObject(Receiver)) admission = undefined;
     if (!(existingDescriptor instanceof UndefinedValue)) {
       if (IsAccessorDescriptor(existingDescriptor)) {
         return Value.false;
@@ -464,13 +475,13 @@ export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValu
         return Value.false;
       }
       const valueDesc = Descriptor({ Value: V });
-      return Q(yield* Receiver.DefineOwnProperty(P, valueDesc, choices));
+      return Q(yield* Receiver.DefineOwnProperty(P, valueDesc, choices, admission));
     }
     // This is the ordinary CreateDataProperty descriptor, with the source
     // occurrence carried only through this internal definition.
     return yield* Receiver.DefineOwnProperty(P, Descriptor({
       Value: V, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
-    }), choices);
+    }), choices, admission);
   }
 
   Assert(IsAccessorDescriptor(ownDesc));

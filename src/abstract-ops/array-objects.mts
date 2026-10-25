@@ -1,3 +1,4 @@
+import { AdmitStoreValue } from '#self';
 import { CheckInheritedDefinitions } from '#self';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
@@ -60,7 +61,7 @@ import { CaptureArrayIteratorValue } from '../type-system/iteration-construction
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
-  * DefineOwnProperty(P, Desc, choices): ValueEvaluator<BooleanValue> {
+  * DefineOwnProperty(P, Desc, choices, admission): ValueEvaluator<BooleanValue> {
     const array = this;
 
     Assert(IsPropertyKey(P));
@@ -72,9 +73,9 @@ const InternalMethods = {
     const removal = removalScope && removalScope.context === surroundingAgent.executionContextStack.at(-1) && removalScope.key === P
       ? removalScope.plan : undefined;
     if (removal) Q(CheckArrayRemoval(removal));
-    const admission = admissionWrites.get(array);
-    const admissionCheck = admission && admission.context === surroundingAgent.executionContextStack.at(-1) && admission.key === P
-      ? admission.check : undefined;
+    const borrowAdmission = admissionWrites.get(array);
+    const admissionCheck = borrowAdmission && borrowAdmission.context === surroundingAgent.executionContextStack.at(-1) && borrowAdmission.key === P
+      ? borrowAdmission.check : undefined;
     if (admissionCheck) Q(admissionCheck());
     // `Set` checks a store against the tuple's
     // position type or the array's element type; a REDEFINITION reached
@@ -101,7 +102,10 @@ const InternalMethods = {
         return Throw.TypeError('a fixed-extent array cannot be grown');
       }
       const tuple = typed.TypedTuple;
-      if (Desc.Value !== undefined) Desc = Descriptor({ ...Desc, Value: Q(yield* PrepareScalarRestStore(array, P as JSStringValue, Desc.Value)) });
+      if (Desc.Value !== undefined && ScalarRestOwner(array).ScalarRestGuards?.length) {
+        admission = undefined;
+        Desc = Descriptor({ ...Desc, Value: Q(yield* PrepareScalarRestStore(array, P as JSStringValue, Desc.Value)) });
+      }
       if (tuple !== undefined) {
         const position = Number((P as JSStringValue).stringValue());
         const length = TupleBackingLength(array);
@@ -110,9 +114,13 @@ const InternalMethods = {
         if (!target || !TupleResizePreserves(tuple, length, nextLength)) {
           return Throw.TypeError('a tuple definition cannot change a surviving position contract');
         }
-        if (Desc.Value !== undefined) Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, target, undefined, choices)) });
+        if (Desc.Value !== undefined) {
+          admission = Q(yield* AdmitStoreValue(array, P, Desc.Value, target, admission, choices));
+          Desc = Descriptor({ ...Desc, Value: admission.value });
+        }
       } else if (typed.TypedElement !== undefined && Desc.Value !== undefined) {
-        Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, typed.TypedElement, undefined, choices)) });
+        admission = Q(yield* AdmitStoreValue(array, P, Desc.Value, typed.TypedElement, admission, choices));
+        Desc = Descriptor({ ...Desc, Value: admission.value });
       }
     }
     // Conversion can reenter before this definition reaches its ordinary write.
@@ -166,7 +174,7 @@ const InternalMethods = {
       }
       // Independently acquired object-property contracts can refuse this
       // definition even on an otherwise untyped Array. Propagate that error.
-      let succeeded = Q(yield* OrdinaryDefineOwnProperty(array, P, Desc, choices));
+      let succeeded = Q(yield* OrdinaryDefineOwnProperty(array, P, Desc, choices, admission));
       if (succeeded === Value.false) {
         return Value.false;
       }
@@ -177,7 +185,7 @@ const InternalMethods = {
       }
       return Value.true;
     }
-    return yield* OrdinaryDefineOwnProperty(array, P, Desc, choices);
+    return yield* OrdinaryDefineOwnProperty(array, P, Desc, choices, admission);
   },
 
   * Delete(P): ValueEvaluator<BooleanValue> {

@@ -1,0 +1,746 @@
+{
+  "cases": [
+    {
+      "name": "assignment-depth-0",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-set-depth-0",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.set(raw,\"a\",candidate))throw new Error(\"set refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "define-depth-0",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"a\",{value:candidate});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-define-depth-0",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.defineProperty(raw,\"a\",{value:candidate}))throw new Error(\"define refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-depth-1",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-set-depth-1",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.set(raw,\"a\",candidate))throw new Error(\"set refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "define-depth-1",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"a\",{value:candidate});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-define-depth-1",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.defineProperty(raw,\"a\",{value:candidate}))throw new Error(\"define refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-depth-2",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-set-depth-2",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.set(raw,\"a\",candidate))throw new Error(\"set refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "define-depth-2",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"a\",{value:candidate});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-define-depth-2",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.defineProperty(raw,\"a\",{value:candidate}))throw new Error(\"define refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-depth-5",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);link=Object.create(link);link=Object.create(link);link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-set-depth-5",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);link=Object.create(link);link=Object.create(link);link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.set(raw,\"a\",candidate))throw new Error(\"set refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "define-depth-5",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);link=Object.create(link);link=Object.create(link);link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"a\",{value:candidate});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-define-depth-5",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};let link:any=proto;link=Object.create(link);link=Object.create(link);link=Object.create(link);link=Object.create(link);const raw:any=Object.create(link);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.defineProperty(raw,\"a\",{value:candidate}))throw new Error(\"define refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-target-receiver",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};const raw:any=Object.create(proto);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.set(proto,\"a\",candidate,raw))throw new Error(\"set refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);if(proto.a===candidate)throw new Error(\"wrong receiver\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-target",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};if(!Reflect.set({},\"a\",candidate,raw))throw new Error(\"set refused\");if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independent-repeat",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;raw.a=candidate;if(reads!==2)throw new Error(\"cached independent store:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independent-receivers",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;const other:any={a:{x:0}};const otherView:{a:{x:number}}=other;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;other.a=candidate;if(reads!==2||otherView.a!==candidate)throw new Error(\"receiver identity:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independent-keys",
+      "modules": {
+        "main": "const raw:any={a:{x:0},b:{x:0}};const view:{a:{x:number},b:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;raw.b=candidate;if(reads!==2||view.b!==candidate)throw new Error(\"key identity:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-key",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};let keys=0;const key:any={toString(){keys++;return \"a\";}};raw[key]=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);if(keys!==1)throw new Error(\"key replay\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-key",
+      "modules": {
+        "main": "const raw:any={\"\":{x:0}};const view:{\"\":{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw[\"\"]=candidate;if(reads!==1||view[\"\"]!==candidate)throw new Error(\"empty key\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "symbol-key",
+      "modules": {
+        "main": "const key=Symbol(\"a\");const other=Symbol(\"a\");const raw:any={[key]:{x:0},[other]:null};const view:{[key]:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw[key]=candidate;raw[other]=\"untyped\";if(reads!==1||view[key]!==candidate)throw new Error(\"symbol identity\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-getter-throws",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;const original=raw.a;const sentinel={};let reads=0;const candidate:any={get x(){reads++;throw sentinel;}};let caught=false;try{raw.a=candidate;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==1||raw.a!==original)throw new Error(\"getter failure\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-second-read-would-throw",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){if(++reads>1)throw new Error(\"replayed\");return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "freeze-during-admission",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;const original=raw.a;let reads=0;const candidate:any={get x(){reads++;Object.freeze(raw);return 1;}};if(Reflect.set(raw,\"a\",candidate)!==false||reads!==1||raw.a!==original)throw new Error(\"freeze publication\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nonwritable-keeps-admission-order",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;Object.defineProperty(raw,\"a\",{writable:false});const sentinel={};let reads=0;const candidate:any={get x(){reads++;throw sentinel;}};let caught=false;try{Reflect.set(raw,\"a\",candidate);}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"admission precedence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nonextensible-keeps-admission-order",
+      "modules": {
+        "main": "const proto:any={a:{x:0}};const raw:any=Object.create(proto);const view:{a:{x:number}}=raw;Object.preventExtensions(raw);let reads=0;const candidate:any={get x(){reads++;return 1;}};if(Reflect.set(raw,\"a\",candidate)!==false||reads!==1||Object.hasOwn(raw,\"a\"))throw new Error(\"extensibility\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-getter-store",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;const other:any={a:{x:0}};const otherView:{a:{x:number}}=other;let reads=0;let nested=0;const inner:any={get x(){nested++;return 2;}};const candidate:any={get x(){reads++;other.a=inner;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);if(nested!==1||otherView.a!==inner)throw new Error(\"nested store\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-destination-reentry",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;let nested=0;const inner:any={get x(){nested++;return 2;}};const candidate:any={get x(){reads++;raw.a=inner;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);if(nested!==1)throw new Error(\"nested same destination\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-outer-keeps-inner",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let nested=0;const inner:any={get x(){nested++;return 2;}};const sentinel={};const candidate:any={get x(){raw.a=inner;throw sentinel;}};let caught=false;try{raw.a=candidate;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||nested!==1||view.a!==inner)throw new Error(\"nested effect rollback\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-reentry",
+      "modules": {
+        "main": "const other:any={a:{x:0}};const typedOther:{a:{x:number}}=other;let calls=0;const raw:any={get a(){return {x:0};},set a(v){calls++;other.a=v;}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;if(reads!==2||calls!==1||typedOther.a!==candidate)throw new Error(\"setter authority:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-throws",
+      "modules": {
+        "main": "const sentinel={};let calls=0;const raw:any={get a(){return {x:0};},set a(v){calls++;throw sentinel;}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};let caught=false;try{raw.a=candidate;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==1||calls!==1)throw new Error(\"setter failure\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-assignment",
+      "modules": {
+        "main": "const array:[].<{x:number}>=[{x:0}];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw[0]=candidate;if(reads!==1||array[0]!==candidate)throw new Error(\"element observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-reflect-set",
+      "modules": {
+        "main": "const array:[].<{x:number}>=[{x:0}];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};Reflect.set(raw,\"0\",candidate);if(reads!==1||array[0]!==candidate)throw new Error(\"element observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-define",
+      "modules": {
+        "main": "const array:[].<{x:number}>=[{x:0}];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"0\",{value:candidate});if(reads!==1||array[0]!==candidate)throw new Error(\"element observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tuple-assignment",
+      "modules": {
+        "main": "const array:[{x:number}]=[{x:0}];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw[0]=candidate;if(reads!==1||array[0]!==candidate)throw new Error(\"element observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tuple-reflect-set",
+      "modules": {
+        "main": "const array:[{x:number}]=[{x:0}];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};Reflect.set(raw,\"0\",candidate);if(reads!==1||array[0]!==candidate)throw new Error(\"element observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tuple-define",
+      "modules": {
+        "main": "const array:[{x:number}]=[{x:0}];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"0\",{value:candidate});if(reads!==1||array[0]!==candidate)throw new Error(\"element observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-growth",
+      "modules": {
+        "main": "const array:[].<{x:number}>=[];const raw:any=array;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw[0]=candidate;if(reads!==1||array[0]!==candidate||array.length!==1)throw new Error(\"growth observations:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-extra-property",
+      "modules": {
+        "main": "const raw:any=[];raw.a={x:0};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-converted-value",
+      "modules": {
+        "main": "const raw:any={a:0};const view:{a:uint8}=raw;raw.a=7;if(Reflect.typeOf(view.a)!==type uint8||view.a!==7)throw new Error(\"converted value\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-then-success",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let bad=0;let good=0;let caught=false;try{raw.a={get x(){bad++;throw 1;}};}catch(e){if(e!==1)throw e;caught=true;}const candidate:any={get x(){good++;return 1;}};raw.a=candidate;if(!caught||bad!==1||good!==1||view.a!==candidate)throw new Error(\"failure reuse\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-set-callback",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let traps=0;const proxy:any=new Proxy(raw,{set(t,k,v,r){traps++;return Reflect.set(t,k,v,t);}});let reads=0;const candidate:any={get x(){reads++;return 1;}};proxy.a=candidate;if(reads!==3||traps!==1||view.a!==candidate)throw new Error(\"proxy boundary:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-prototype-barrier",
+      "modules": {
+        "main": "const sentinel={};let changed=false;const original={x:0};const target:any={a:original};const proxy:any=new Proxy(target,{get set(){changed=true;return undefined;}});const raw:any=Object.create(proxy);const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;if(changed)throw sentinel;return 1;}};let caught=false;try{raw.a=candidate;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==2||Object.hasOwn(raw,\"a\")||target.a!==original)throw new Error(\"proxy continuation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-descriptor-effects",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};let descriptors=0;Object.defineProperty(raw,\"a\",{get value(){descriptors++;return candidate;}});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);if(descriptors!==1)throw new Error(\"descriptor replay\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-type-descriptor",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"a\",{type:type {x:number},value:candidate});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-descriptor-independent",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};Object.defineProperty(raw,\"a\",{value:candidate});Object.defineProperty(raw,\"a\",{value:candidate});if(reads!==2)throw new Error(\"definition cache\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;raw.a={get x(){throw new TypeError(\"source\");}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "callable-materialization",
+      "modules": {
+        "main": "function id<T:type>(v:T):T{return v;}type Item={x:number,f:(v:string)=>string};const raw:any={a:{x:0,f:id.<string>}};const view:{a:Item}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;},f:id};raw.a=candidate;if(reads!==1||view.a.f!==id.<string>||view.a.f(\"ok\")!==\"ok\")throw new Error(\"callable receiving choice:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "union-construction-choice",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};const raw:{a:Item}={a:{fn:function(value:U):U{return value;}}};raw.a={fn:function(value:U):U{return value;}};const f:any=raw.a.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"selected choice\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destructuring-store",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};({value:raw.a}={value:candidate});if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "for-of-store",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};for(raw.a of [candidate]){}if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-store",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};let ref r=raw.a;r=candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-store-skipped",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a ||= candidate;if(reads!==0)throw new Error(\"skipped store\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-store-taken",
+      "modules": {
+        "main": "const raw:any={a:{x:0}};const view:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 1;}};raw.a &&= candidate;if(reads!==1||view.a!==candidate)throw new Error(\"one receiving observation:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

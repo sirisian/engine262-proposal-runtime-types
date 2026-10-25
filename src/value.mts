@@ -1,3 +1,4 @@
+import type { StoreAdmission } from './type-system/store-admission.mts';
 import type { ConstructionSelections } from './type-system/result-dependencies.mts';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from './type-system/tuple-storage.mts';
 import { type GCMarker } from './host-defined/engine.mts';
@@ -14,7 +15,7 @@ import { PropertyKeyMap } from './utils/container.mts';
 import type { PrivateElementRecord } from './runtime-semantics/MethodDefinitionEvaluation.mts';
 import type { PlainEvaluator } from './evaluator.mts';
 import {
-  ScalarRestOwner,
+  ScalarRestOwner, AdmitStoreValue,
   OrdinaryDefineOwnProperty,
   OrdinaryDelete,
   OrdinaryGet,
@@ -1020,10 +1021,10 @@ export interface ObjectInternalMethods<Self> {
   IsExtensible(this: Self): ValueEvaluator<BooleanValue>;
   PreventExtensions(this: Self): ValueEvaluator<BooleanValue>;
   GetOwnProperty(this: Self, P: PropertyKeyValue): PlainEvaluator<Descriptor | UndefinedValue>;
-  DefineOwnProperty(this: Self, P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections): ValueEvaluator<BooleanValue>;
+  DefineOwnProperty(this: Self, P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections, admission?: StoreAdmission): ValueEvaluator<BooleanValue>;
   HasProperty(this: Self, P: PropertyKeyValue): ValueEvaluator<BooleanValue>;
   Get(this: Self, P: PropertyKeyValue, Receiver: Value): ValueEvaluator;
-  Set(this: Self, P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections): ValueEvaluator<BooleanValue>;
+  Set(this: Self, P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections, admission?: StoreAdmission): ValueEvaluator<BooleanValue>;
   Delete(this: Self, P: PropertyKeyValue): ValueEvaluator<BooleanValue>;
   OwnPropertyKeys(this: Self): PlainEvaluator<PropertyKeyValue[]>;
   Call?(this: Self, thisArg: Value, args: Arguments): ValueEvaluator;
@@ -1119,9 +1120,9 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     return OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
   }
 
-  * DefineOwnProperty(P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections): ObjectSlotReturn['DefineOwnProperty'] {
+  * DefineOwnProperty(P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections, admission?: StoreAdmission): ObjectSlotReturn['DefineOwnProperty'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
-    return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc, choices);
+    return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc, choices, admission);
   }
 
   * HasProperty(P: PropertyKeyValue): ObjectSlotReturn['HasProperty'] {
@@ -1270,7 +1271,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     return completion;
   }
 
-  * Set(P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections): ObjectSlotReturn['Set'] {
+  * Set(P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections, admission?: StoreAdmission): ObjectSlotReturn['Set'] {
     // TODO:
     Q(surroundingAgent.debugger_tryTouchDuringPreview(Receiver as ObjectValue));
     // proposal-runtime-types (spec sec-typed-classes): a write to a `readonly`
@@ -1307,7 +1308,10 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       // object, and a String written through the wider view would otherwise land
       // in a slot declared `uint8`.
       const scalarOwner = ScalarRestOwner(Receiver as ObjectValue);
-      if (scalarOwner.ScalarRestGuards?.length && isArrayIndex(P)) V = Q(yield* PrepareScalarRestStore(Receiver as ObjectValue, P as JSStringValue, V));
+      if (scalarOwner.ScalarRestGuards?.length && isArrayIndex(P)) {
+        admission = undefined;
+        V = Q(yield* PrepareScalarRestStore(Receiver as ObjectValue, P as JSStringValue, V));
+      }
       const tuple = ((scalarOwner.ScalarRestGuards?.length ? scalarOwner : Receiver) as { TypedTuple?: TupleStorageShape }).TypedTuple;
       if (tuple !== undefined && isArrayIndex(P)) {
         const index = Number((P as JSStringValue).stringValue());
@@ -1317,11 +1321,13 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         if (!target || !TupleResizePreserves(tuple, length, nextLength)) {
           return Throw.TypeError('a tuple store cannot change a surviving position contract');
         }
-        V = Q(yield* RequireType(V, target, undefined, choices));
+        admission = Q(yield* AdmitStoreValue(Receiver, P, V, target, admission, choices));
+        V = admission.value;
       }
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
-        V = Q(yield* RequireType(V, elementType as never, undefined, choices));
+        admission = Q(yield* AdmitStoreValue(Receiver, P, V, elementType as TypeRecord, admission, choices));
+        V = admission.value;
         const typed = Receiver as { TypedExtent?: number };
         const index = Number((P as JSStringValue).stringValue());
         // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
@@ -1392,11 +1398,12 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
           // The store boundary of #table-check-sites, and it uses what
           // RequireType returns: `o.x = 7` on a uint8 property stores that
           // property's uint8 value, not the plain Number.
-          V = Q(yield* RequireType(V, typeObject.TypeRecord as never, undefined, choices));
+          admission = Q(yield* AdmitStoreValue(Receiver, P, V, typeObject.TypeRecord as TypeRecord, admission, choices));
+          V = admission.value;
         }
       }
     }
-    return yield* OrdinarySet(this as unknown as OrdinaryObject, P, V, Receiver, choices);
+    return yield* OrdinarySet(this as unknown as OrdinaryObject, P, V, Receiver, choices, admission);
   }
 
   * Delete(P: PropertyKeyValue): ObjectSlotReturn['Delete'] {
