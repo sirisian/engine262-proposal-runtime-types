@@ -4188,6 +4188,10 @@ export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironmen
   }
 }
 
+/** A data read and the ordinary lookup path which actually supplied it.
+ * Path includes the receiver and ends at the supplying data holder. */
+export type OrdinaryDataObservation = { path: readonly ObjectValue[], value: Value };
+
 /** Successful structural membership can supply boundary-owned storage evidence.
  * Pure membership callers omit the collector and never acquire contracts. */
 export type StructuralStorageAdmission = {
@@ -4195,8 +4199,8 @@ export type StructuralStorageAdmission = {
   object: ObjectValue, key: string | SymbolValue, type: TypeRecord,
   value: Value, admittedType: TypeRecord, construction?: TupleDefaultConstruction,
   defaultCheck?: boolean, optional?: boolean, descendants?: readonly StructuralStorageAdmission[],
-  /** This observation read the receiver's own ordinary data value. */
-  ownData?: boolean,
+  /** Present only for a proven ordinary data read, never an accessor/Proxy. */
+  data?: OrdinaryDataObservation,
 } | {
   kind: 'object', object: ObjectValue, type: TypeRecord & { Kind: 'object' },
 } | {
@@ -4309,16 +4313,48 @@ export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStora
   }
 }
 
-/** Only actual ordinary data storage can support an own-location witness.
- * Equal values from proxies or representation-specific reads prove no such
- * provenance. This inspection executes no internal method or user code. */
-function ordinaryDataValue(object: ObjectValue, key: PropertyKeyValue): Value | undefined {
+/** Inspect only representation and internal ordinary slots, never call a
+ * method to discover provenance. Base Get also implements non-property reads. */
+function hasOrdinaryDataRead(object: ObjectValue): boolean {
   if (object.Get !== ObjectValue.prototype.Get || object.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
       || PlacementBackingOf(object) !== undefined || SoAElementBackingOf(object) !== undefined
       || SoAStorageOf(object) !== undefined || ArraySpanBackingOf(object) !== undefined
-      || ArrayViewBackingOf(object) !== undefined) return undefined;
-  const own = object.properties.get(key);
-  return own && IsDataDescriptor(own) ? own.Value : undefined;
+      || ArrayViewBackingOf(object) !== undefined) return false;
+  return true;
+}
+
+function ordinaryDataObservation(object: ObjectValue, key: PropertyKeyValue): OrdinaryDataObservation | undefined {
+  const path: ObjectValue[] = [];
+  const seen = new Set<ObjectValue>();
+  let current: ObjectValue = object;
+  while (!seen.has(current)) {
+    seen.add(current);
+    if (!hasOrdinaryDataRead(current)) return undefined;
+    path.push(current);
+    const own = current.properties.get(key);
+    if (own) return IsDataDescriptor(own) ? { path, value: own.Value! } : undefined;
+    if (current.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf) return undefined;
+    const parent = (current as { Prototype?: Value }).Prototype;
+    if (!(parent instanceof ObjectValue)) return undefined;
+    current = parent;
+  }
+  return undefined;
+}
+
+/** No observable lookup. An admission's own verified shadowing write may
+ * ignore the new receiver property while checking the old inherited path. */
+export function OrdinaryDataObservationValid(observation: OrdinaryDataObservation, key: PropertyKeyValue, ownWrite = false): boolean {
+  const { path, value } = observation;
+  for (let i = 0; i < path.length; i += 1) {
+    const object = path[i]!;
+    if (!hasOrdinaryDataRead(object)) return false;
+    const own = object.properties.get(key);
+    if (i === path.length - 1) return own !== undefined && IsDataDescriptor(own) && SameValue(own.Value!, value);
+    if (own !== undefined && !(ownWrite && i === 0)) return false;
+    if (object.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf
+        || (object as { Prototype?: Value }).Prototype !== path[i + 1]) return false;
+  }
+  return false;
 }
 
 function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections): PlainEvaluator<boolean> {
@@ -5150,15 +5186,15 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           continue;
         }
-        const observedData = storage ? ordinaryDataValue(value, key) : undefined;
+        const observedData = storage ? ordinaryDataObservation(value, key) : undefined;
         const pv = Q(yield* Get(value, key));
-        const ownData = observedData !== undefined && SameValue(observedData, pv);
+        const data = observedData && SameValue(observedData.value, pv) ? observedData : undefined;
         const childStart = storage?.length;
         const admitted = storage ? {} as UnionMemberAdmission : undefined;
         if (!Q(yield* isMember(pv, p.type, storage, admitted))) {
           return false;
         }
-        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type, construction: admitted?.construction, optional: p.optional, descendants: storage.slice(childStart), ownData });
+        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type, construction: admitted?.construction, optional: p.optional, descendants: storage.slice(childStart), data });
       }
       // Index signatures constrain every own enumerable key not already named.
       if (t.IndexSignatures.length > 0) {
@@ -5174,15 +5210,15 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           for (const ix of t.IndexSignatures) {
             if (Q(yield* isMember(k, ix.Key))) {
-              const observedData = storage ? ordinaryDataValue(value, k) : undefined;
+              const observedData = storage ? ordinaryDataObservation(value, k) : undefined;
               const kv = Q(yield* Get(value, k));
-              const ownData = observedData !== undefined && SameValue(observedData, kv);
+              const data = observedData && SameValue(observedData.value, kv) ? observedData : undefined;
               const childStart = storage?.length;
               const admitted = storage ? {} as UnionMemberAdmission : undefined;
               if (!Q(yield* isMember(kv, ix.Value, storage, admitted))) {
                 return false;
               }
-              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value, construction: admitted?.construction, optional: true, descendants: storage.slice(childStart), ownData });
+              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value, construction: admitted?.construction, optional: true, descendants: storage.slice(childStart), data });
             }
           }
         }

@@ -5,7 +5,7 @@ import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
+import { OrdinaryDataObservationValid, type OrdinaryDataObservation, publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -344,20 +344,19 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
   // observed data location. Retained evidence must still describe that place;
   // replaying its Get or overwriting the nested operation's result is not a
   // successful admission. Own materialization writes advance only this ledger.
-  const data = new Map<ObjectValue, Map<string | SymbolValue, { value: Value }>>();
-  const checkData = (object: ObjectValue, key: string | SymbolValue, expected: Value): ThrowCompletion | undefined => {
-    const current = object.properties.get(propertyKeyValue(key));
-    if (!current || !IsDataDescriptor(current) || !SameValue(current.Value!, expected)) {
-      return Throw.TypeError('an observed data property changed during structural admission');
+  const data = new Map<ObjectValue, Map<string | SymbolValue, OrdinaryDataObservation>>();
+  const checkData = (key: string | SymbolValue, observation: OrdinaryDataObservation, ownWrite = false): ThrowCompletion | undefined => {
+    if (!OrdinaryDataObservationValid(observation, propertyKeyValue(key), ownWrite)) {
+      return Throw.TypeError('an observed data property or lookup path changed during structural admission');
     }
     return undefined;
   };
   for (const entry of storage) {
-    if ((entry.kind !== 'property' && entry.kind !== 'element') || !entry.ownData) continue;
-    Q(checkData(entry.object, entry.key, entry.value));
+    if ((entry.kind !== 'property' && entry.kind !== 'element') || !entry.data) continue;
+    Q(checkData(entry.key, entry.data));
     let properties = data.get(entry.object);
     if (!properties) data.set(entry.object, properties = new Map());
-    properties.set(entry.key, { value: entry.value });
+    properties.set(entry.key, { ...entry.data });
   }
   type SequenceStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: TupleStorageShape };
   type SequenceGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number,
@@ -488,7 +487,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     const group = groups.get(object)!.get(key)!;
     const datum = data.get(object)?.get(key);
     if (datum) {
-      Q(checkData(object, key, datum.value));
+      Q(checkData(key, datum));
     }
     if (group.previous === value) continue;
     group.previous = value;
@@ -510,7 +509,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     const position = typeof key === 'string' ? plan?.positions.get(key) : undefined;
     if (position) position.value = converted;
     if (datum) {
-      Q(checkData(object, key, datum.value));
+      Q(checkData(key, datum));
     }
     if (converted !== value) {
       const property = propertyKeyValue(key);
@@ -536,16 +535,23 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
       }
       if (plan) Q(checkLength(object, plan));
       if (datum) {
-        Q(checkData(object, key, converted));
+        // A successful ordinary Set of inherited data creates an own value.
+        // It cannot excuse an unrelated change to the old supplying path.
+        if (datum.path.length > 1) {
+          Q(checkData(key, datum, true));
+        }
+        const writtenData = { path: [object], value: converted };
+        Q(checkData(key, writtenData));
+        datum.path = writtenData.path;
         datum.value = converted;
       }
     }
   }
-  // No getter/trap is invoked to validate retained own data. Earlier effects,
+  // No getter/trap is invoked to validate retained data or its lookup path. Earlier effects,
   // including independently completed admissions, survive a refusal here.
-  for (const [object, properties] of data) {
+  for (const properties of data.values()) {
     for (const [key, datum] of properties) {
-      Q(checkData(object, key, datum.value));
+      Q(checkData(key, datum));
     }
   }
   const missing: { object: OrdinaryObject, key: JSStringValue, value: Value }[] = [];

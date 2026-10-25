@@ -1,0 +1,993 @@
+{
+  "cases": [
+    {
+      "name": "prototype-data",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={get z(){proto.a=\"bad\";return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"stale inherited data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "prototype-replacement",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={get z(){Object.setPrototypeOf(raw,{a:\"bad\"});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"stale inherited data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-value-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;proto.a=\"bad\";return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-compatible-value-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-deletion-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;delete proto.a;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-accessor-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.defineProperty(proto,\"a\",{get(){throw new Error(\"replayed\");},configurable:true});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");Object.defineProperty(proto,\"a\",{value:1,writable:true,configurable:true});raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-shadow-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;raw.a=1;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-accessor-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.defineProperty(raw,\"a\",{get(){throw new Error(\"replayed\");},set(v){},configurable:true});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");delete raw.a;raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,{a:\"bad\"});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "equal-value-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,{a:1});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-null-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,null);return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unchanged-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-holder-data-definition-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.defineProperty(proto,\"a\",{value:1});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-attributes-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.freeze(proto);return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-properties-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;proto.b=2;raw.b=3;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(proto,{a:\"irrelevant\"});return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "restored-value-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;proto.a=2;proto.a=1;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "restored-path-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,{});Object.setPrototypeOf(raw,proto);return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-value-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;proto.a=\"bad\";return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-compatible-value-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-deletion-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;delete proto.a;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-accessor-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.defineProperty(proto,\"a\",{get(){throw new Error(\"replayed\");},configurable:true});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");Object.defineProperty(proto,\"a\",{value:1,writable:true,configurable:true});raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-shadow-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;raw.a=1;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-accessor-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.defineProperty(raw,\"a\",{get(){throw new Error(\"replayed\");},set(v){},configurable:true});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");delete raw.a;raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,{a:\"bad\"});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "equal-value-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,{a:1});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-null-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,null);return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unchanged-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-holder-data-definition-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.defineProperty(proto,\"a\",{value:1});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-attributes-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.freeze(proto);return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-properties-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;proto.b=2;raw.b=3;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "holder-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(proto,{a:\"irrelevant\"});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "restored-value-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;proto.a=2;proto.a=1;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "restored-path-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,{});Object.setPrototypeOf(raw,middle);return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;middle.a=1;return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-prototype",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(middle,{a:1});return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-holder-shorter-path",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;Object.setPrototypeOf(raw,proto);return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-holder-longer-path",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);let reads=0;const raw:any={get z(){reads++;const bridge:any={};Object.setPrototypeOf(bridge,proto);Object.setPrototypeOf(middle,bridge);return 1;}};Object.setPrototypeOf(raw,middle);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true||reads!==1)throw new Error(\"admission\");raw.a=\"after\";if(raw.a!==\"after\")throw new Error(\"failed contract published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nonextensible-no-write",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};let reads=0;const raw:any={get z(){reads++;return 1;}};Object.setPrototypeOf(raw,proto);Object.preventExtensions(raw);let caught=false;try{const out:{a:number,readonly z:number}=raw;if(out!==raw)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false||reads!==1)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-data",
+      "modules": {
+        "main": "const proto:any={a:undefined};let reads=0;const raw:any={get z(){reads++;delete proto.a;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:undefined,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"undefined data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-shadow-stops-path",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={a:1,get z(){proto.a=\"bad\";Object.setPrototypeOf(raw,{});return 1;}};Object.setPrototypeOf(raw,proto);const out:{a:number,readonly z:number}=raw;if(out.a!==1)throw new Error(\"own\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pure-membership",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);if(!(raw is {a:number,readonly z:number})||reads!==1)throw new Error(\"membership\");Reflect.set(raw,\"a\",\"after\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-own-shadow-depth-1",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:(x:string)=>string}=raw;const f:any=out.a;if(out!==raw||!Object.hasOwn(raw,\"a\")||proto.a!==id||f(\"ok\")!==\"ok\"||Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"materialization\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-intersection-depth-1",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);type A={a:(x:string)=>string};const out:A&A=raw;const f:any=out.a;if(out!==raw||!Object.hasOwn(raw,\"a\")||proto.a!==id||f(\"ok\")!==\"ok\"||Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"materialization\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-nonextensible-depth-1",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);Object.preventExtensions(raw);let caught=false;try{const out:{a:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||Object.hasOwn(raw,\"a\")||proto.a!==id)throw new Error(\"write refusal\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-nonwritable-depth-1",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);Object.freeze(proto);let caught=false;try{const out:{a:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||Object.hasOwn(raw,\"a\")||proto.a!==id)throw new Error(\"write refusal\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-own-shadow-depth-2",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:(x:string)=>string}=raw;const f:any=out.a;if(out!==raw||!Object.hasOwn(raw,\"a\")||proto.a!==id||f(\"ok\")!==\"ok\"||Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"materialization\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-intersection-depth-2",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);type A={a:(x:string)=>string};const out:A&A=raw;const f:any=out.a;if(out!==raw||!Object.hasOwn(raw,\"a\")||proto.a!==id||f(\"ok\")!==\"ok\"||Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"materialization\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-nonextensible-depth-2",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);Object.preventExtensions(raw);let caught=false;try{const out:{a:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||Object.hasOwn(raw,\"a\")||proto.a!==id)throw new Error(\"write refusal\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-nonwritable-depth-2",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);Object.freeze(proto);let caught=false;try{const out:{a:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||Object.hasOwn(raw,\"a\")||proto.a!==id)throw new Error(\"write refusal\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-own-shadow",
+      "modules": {
+        "main": "const proto:any={a:3};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:uint8}=raw;if(out!==raw||out.a!==3||Reflect.typeOf(out.a)!==type uint8||!Object.hasOwn(raw,\"a\")||Reflect.typeOf(proto.a)!==type number)throw new Error(\"numeric\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tuple-own-shadow",
+      "modules": {
+        "main": "const source:any=[1];const proto:any={a:source};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:[number,number=2]}=raw;if(out!==raw||out.a===source||out.a[1]!==2||source.length!==1||proto.a!==source||!Object.hasOwn(raw,\"a\"))throw new Error(\"tuple\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-holder-change",
+      "modules": {
+        "main": "const proto:any={a:1};const child:any={};Object.setPrototypeOf(child,proto);const raw:any={child,get z(){proto.a=2;return 1;}};let caught=false;try{const out:{child:{a:number},readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"nested\");child.a=\"after\";raw.child=0;"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-throw-precedence",
+      "modules": {
+        "main": "const sentinel={};const proto:any={a:1};const raw:any={get z(){proto.a=2;throw sentinel;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}=raw;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||proto.a!==2)throw new Error(\"precedence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-invalidates-holder",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const sentinel={};const proto:any={a:1};let reads=0;let writes=0;const raw:any={get z(){reads++;return id;},set z(v){writes++;proto.a=2;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,z:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1||writes!==1||proto.a!==2)throw new Error(\"setter\");raw.a=\"after\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-throw-precedence",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const sentinel={};const proto:any={a:1};let reads=0;let writes=0;const raw:any={get z(){reads++;return id;},set z(v){writes++;proto.a=2;throw sentinel;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,z:(x:string)=>string}=raw;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==1||writes!==1||proto.a!==2)throw new Error(\"setter\");raw.a=\"after\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-setter-invalidates-own-materialization",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};let writes=0;const raw:any={get z(){return id;},set z(v){writes++;delete raw.a;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:(x:string)=>string,z:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||writes!==1||Object.hasOwn(raw,\"a\")||proto.a!==id)throw new Error(\"own shadow lost\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-holder-change-after-own-write",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const proto:any={a:id};const raw:any={get z(){return id;},set z(v){proto.a=0;}};Object.setPrototypeOf(raw,proto);const out:{a:(x:string)=>string,z:(x:string)=>string}=raw;const f:any=out.a;if(f(\"ok\")!==\"ok\"||proto.a!==0)throw new Error(\"advanced own path\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor-on-path",
+      "modules": {
+        "main": "let reads=0;const proto:any={get a(){reads++;return 1;}};const raw:any={get z(){Object.setPrototypeOf(raw,{a:2});return 1;}};Object.setPrototypeOf(raw,proto);const out:{a:number,readonly z:number}=raw;if(reads!==1||out!==raw)throw new Error(\"accessor replay\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-on-path",
+      "modules": {
+        "main": "let gets=0;let descriptors=0;let prototypes=0;const target:any={a:1};const proto:any=new Proxy(target,{get(t,k,r){gets++;return Reflect.get(t,k,r);},getOwnPropertyDescriptor(t,k){descriptors++;return Reflect.getOwnPropertyDescriptor(t,k);},getPrototypeOf(t){prototypes++;return Reflect.getPrototypeOf(t);}});const raw:any={get z(){target.a=2;return 1;}};Object.setPrototypeOf(raw,proto);const out:{a:number,readonly z:number}=raw;if(gets!==1||descriptors!==0||prototypes!==0||out!==raw)throw new Error(\"proxy probes\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-receiver",
+      "modules": {
+        "main": "let gets=0;let descriptors=0;let prototypes=0;const target:any={a:1,get z(){target.a=2;return 1;}};const raw:any=new Proxy(target,{get(t,k,r){gets++;return Reflect.get(t,k,r);},getOwnPropertyDescriptor(t,k){descriptors++;return Reflect.getOwnPropertyDescriptor(t,k);},getPrototypeOf(t){prototypes++;return Reflect.getPrototypeOf(t);}});const out:{a:number,readonly z:number}=raw;if(gets!==2||descriptors!==0||prototypes!==0||out!==raw)throw new Error(\"proxy receiver probes\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-self-replaces-with-equal-data",
+      "modules": {
+        "main": "let reads=0;const proto:any={get a(){reads++;Object.defineProperty(proto,\"a\",{value:1,writable:true,configurable:true});return proto.a;}};const raw:any={get z(){proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);const out:{a:number,readonly z:number}=raw;if(reads!==1||out!==raw)throw new Error(\"forged data origin\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-argument",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{function receive(v:{a:number,readonly z:number}){throw new Error(\"body entered\");}receive(raw);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"boundary\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-return",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{function receive():{a:number,readonly z:number}{return raw;}receive();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"boundary\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-assignment",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{let result:{a:number,readonly z:number}={a:4,z:5};try{result=raw;}finally{if(result.a!==4)throw new Error(\"published binding\");}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"boundary\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-union",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,readonly z:number}|{a:number,readonly z:number,readonly other?:string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"boundary\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-intersection",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{type A={a:number};const out:A&{readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"boundary\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-publication-and-recovery",
+      "modules": {
+        "main": "let escaped:any;let later=0;let fail=true;let reads=0;const proto:any={a:1};const raw:any={get z(){reads++;if(fail)proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);class C{before=(escaped=this,1);value:{a:number,readonly z:number}=raw;after=(later++,1);}let caught=false;try{new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||escaped.before!==1||Object.hasOwn(escaped,\"value\")||Object.hasOwn(escaped,\"after\")||later!==0)throw new Error(\"publication\");fail=false;const c=new C();if(c.value!==raw||later!==1||reads!==2)throw new Error(\"recovery\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled",
+      "modules": {
+        "main": "const proto:any={a:1};let reads=0;const raw:any={get z(){reads++;proto.a=2;return 1;}};Object.setPrototypeOf(raw,proto);const out:{a:number,readonly z:number}=raw;"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-array-own-index",
+      "modules": {
+        "main": "const arr:[].<number>=[1];const raw:any=arr;Object.defineProperty(raw,\"z\",{get(){raw[0]=2;return 1;}});let caught=false;try{const out:{\"0\":number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"typed own observation lost\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-array-inherited-index",
+      "modules": {
+        "main": "const arr:[].<number>=[1];const proto:any=arr;const raw:any={get z(){proto[0]=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{\"0\":number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"typed inherited observation lost\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-tuple-own-index",
+      "modules": {
+        "main": "const arr:[number]=[1];const raw:any=arr;Object.defineProperty(raw,\"z\",{get(){raw[0]=2;return 1;}});let caught=false;try{const out:{\"0\":number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"typed own observation lost\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-tuple-inherited-index",
+      "modules": {
+        "main": "const arr:[number]=[1];const proto:any=arr;const raw:any={get z(){proto[0]=2;return 1;}};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{\"0\":number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"typed inherited observation lost\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-array-explicit-byteLength",
+      "modules": {
+        "main": "const arr:[].<number>=[1];const raw:any=arr;Object.defineProperty(raw,\"byteLength\",{value:5,writable:true});Object.defineProperty(raw,\"z\",{get(){raw.byteLength=6;return 1;}});let caught=false;try{const out:{byteLength:number,readonly z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"explicit data lost\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independently-acquired-index-backing",
+      "modules": {
+        "main": "const raw:any=[1];Object.defineProperty(raw,\"z\",{get(){const inner:[].<number>=raw;return 1;}});const out:{\"0\":number,readonly z:number}=raw;if(out!==raw||out[0]!==1)throw new Error(\"backing acquisition\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independently-acquired-inherited-index-backing",
+      "modules": {
+        "main": "const proto:any=[1];const raw:any={get z(){const inner:[].<number>=proto;return 1;}};Object.setPrototypeOf(raw,proto);const out:{\"0\":number,readonly z:number}=raw;if(out!==raw||out[0]!==1)throw new Error(\"inherited backing acquisition\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
