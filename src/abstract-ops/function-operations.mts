@@ -358,7 +358,10 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     let initializerResult;
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
       // Tagged with the initializer expression, which is the function's code.
-      pushContextualType((fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord, (initializer as { ECMAScriptCode?: object }).ECMAScriptCode);
+      // Type Object identity ignores bound-parameter renaming. Construction
+      // needs this field's own binder declarations and captured source context.
+      pushContextualType(fieldRecord.InitializerContext ?? (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord,
+        (initializer as { ECMAScriptCode?: object }).ECMAScriptCode);
       try {
         initializerResult = EnsureCompletion(yield* Call(initializer, receiver));
       } finally {

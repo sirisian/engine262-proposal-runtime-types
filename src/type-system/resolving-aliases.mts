@@ -65,12 +65,12 @@ export function tieAliasKnot(placeholder: TypeRecord, resolved: TypeRecord): voi
  * binding. Weak keys do not retain dead environments or publish local aliases
  * into later source texts.
  */
-const resolvedByBinding = new WeakMap<object, { declaration: ParseNode, record: TypeRecord }>();
+const resolvedByBinding = new WeakMap<object, { declaration: ParseNode, record: TypeRecord, context: TypeRecord }>();
 
-export function recordResolvedAlias(environment: EnvironmentRecord, name: JSStringValue, declaration: ParseNode, record: TypeRecord): void {
+export function recordResolvedAlias(environment: EnvironmentRecord, name: JSStringValue, declaration: ParseNode, record: TypeRecord, context = record): void {
   const binding = RefBindingHolder(environment, name)?.bindings.get(name);
   if (binding?.initialized && !binding.indirect && !binding.refLocation) {
-    resolvedByBinding.set(binding, { declaration, record });
+    resolvedByBinding.set(binding, { declaration, record, context });
   }
 }
 
@@ -85,8 +85,16 @@ export function resolvedAlias(environment: EnvironmentRecord | null | undefined,
   return published?.declaration.type === 'TypeAliasDeclaration' ? published.record : undefined;
 }
 
+/** A declaration's resolved signature context is not its interned Type Object.
+ * Keep its binders/captures when equal types share a public identity. Ordinary
+ * value reads and reflection continue to use the interned object. */
+export function resolvedAliasContext(environment: EnvironmentRecord | null | undefined, name: string): TypeRecord | undefined {
+  const published = resolvedPublication(environment, name);
+  return published?.declaration.type === 'TypeAliasDeclaration' ? published.context : undefined;
+}
+
 function resolvedPublication(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode):
-  { declaration: ParseNode, record: TypeRecord } | undefined {
+  { declaration: ParseNode, record: TypeRecord, context: TypeRecord } | undefined {
   let at = environment;
   let key = Value(name);
   let imported = false;

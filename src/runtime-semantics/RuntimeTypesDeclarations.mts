@@ -198,6 +198,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   const name = StringValue(node.BindingIdentifier);
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   let value: Value = Value.undefined;
+  let aliasContext: TypeRecord | undefined;
   if (node.type === 'TypeAliasDeclaration') {
     if (node.TypeParameters) {
       // A generic alias binds uninstantiated; instantiation substitutes the
@@ -243,10 +244,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // (two textually identical `where` blocks are two types), so it binds as
         // a nominal type whose structure is the base record; the predicates ride
         // on the declaration and are checked at every boundary by IsOfType.
-        value = GetTypeObject({
-          Kind: 'nominal', Declaration: node, Arguments: [], Structure: record,
-        });
+        aliasContext = { Kind: 'nominal', Declaration: node, Arguments: [], Structure: record };
+        value = GetTypeObject(aliasContext);
       } else {
+        aliasContext = record;
         value = GetTypeObject(record);
       }
     }
@@ -823,7 +824,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   // shape-only preparation must not lend a record to another binding.
   if ((node.type === 'InterfaceDeclaration' || node.type === 'TypeAliasDeclaration' && !node.TypeParameters)
     && isTypeObject(value)) {
-    recordResolvedAlias(env, name, node, value.TypeRecord);
+    recordResolvedAlias(env, name, node, value.TypeRecord, aliasContext ?? value.TypeRecord);
   }
   // proposal-runtime-types decorators.md: `@f enum Count { @f Zero, ... }`.
   // decorators.md "Order" puts members before their container, so the

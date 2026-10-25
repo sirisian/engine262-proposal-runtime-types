@@ -67,6 +67,9 @@ export interface ClassFieldDefinitionRecord {
   // also what the store check needs, since a field's declared type must be
   // recorded on the instance for #table-check-sites to enforce it.
   readonly TypeObject?: object;
+  /** The declaration's resolved initializer context, before Type Object
+   * interning can select an alpha-equivalent signature with other binders. */
+  readonly InitializerContext?: TypeRecord;
   /** The same annotation resolved with every type parameter UNBOUND, which is what a per-application layout substitutes into. */
   readonly TypeObjectUnbound?: object;
   // proposal-runtime-types: whether the field is declared `readonly`, so it may
@@ -118,6 +121,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   // 5. Return the ClassFieldDefinition Record { [[Name]]: name, [[Initializer]]: initializer }.
   const typeAnnotation = (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
   let typeObject;
+  let initializerContext;
   let typeObjectUnbound;
   if (typeAnnotation && surroundingAgent.feature('runtime-types')) {
     // proposal-runtime-types: a field annotation inside a GENERIC class names
@@ -160,6 +164,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       pushTypeParameterFrame(frame);
       try {
         const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
+        initializerContext = record;
         typeObject = GetTypeObject(record);
       } finally {
         popTypeParameterFrame();
@@ -193,6 +198,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       }
     } else {
       const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
+      initializerContext = record;
       typeObject = GetTypeObject(record);
     }
   }
@@ -292,6 +298,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       Initializer: initializer,
       TypeAnnotation: typeAnnotation,
       TypeObject: typeObject,
+      InitializerContext: initializerContext,
       TypeObjectUnbound: typeObjectUnbound,
       Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
     Access: (FieldDefinition as { protected?: boolean }).protected === true ? 'protected' : undefined,
@@ -302,6 +309,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
     Initializer: initializer,
     TypeAnnotation: typeAnnotation,
     TypeObject: typeObject,
+    InitializerContext: initializerContext,
     TypeObjectUnbound: typeObjectUnbound,
     Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
     Access: (FieldDefinition as { protected?: boolean }).protected === true ? 'protected' : undefined,

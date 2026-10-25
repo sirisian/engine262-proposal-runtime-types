@@ -79,7 +79,7 @@ import { PartialClassSelfOf, MergePartialStructures, RuntimePartialContributions
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
-import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
+import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot, resolvedAliasContext } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { IsAssignable, COLLECTION_LIBRARY_NAMES } from './relations.mts';
@@ -6256,7 +6256,12 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       // consistently.
       let baseRecord: TypeRecord | null = declarationRecord ?? null;
       if (isTypeObject(value)) {
-        const record = value.TypeRecord;
+        // GetValue above retains TDZ/import checks. Only the actual published
+        // alias binding supplies a declaration context; an equal Type Object
+        // read from an unrelated value binding cannot supply that provenance.
+        const aliasContext = node.TypeName.MemberNames.length === 0 && ref.Base instanceof EnvironmentRecord
+          ? resolvedAliasContext(ref.Base, name) : undefined;
+        const record = aliasContext ?? value.TypeRecord;
         if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
           if (asDeclaration && !node.TypeArguments) return record;
           const decl2 = record.Declaration as ParseNode.TypeAliasDeclaration;

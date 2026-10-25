@@ -1,0 +1,1185 @@
+{
+  "cases": [
+    {
+      "name": "function-0-public",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};#g:<V:type>(value:V)=>V=function(value:V):V{return value;};run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-static",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<U:type>(value:U)=>U=function(value:U):U{return value;};static g:<V:type>(value:V)=>V=function(value:V):V{return value;};}check(C.f,C.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-static-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<U:type>(value:U)=>U=function(value:U):U{return value;};static #g:<V:type>(value:V)=>V=function(value:V):V{return value;};static run(){check(this.f,this.#g);}}C.run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{accessor f:<U:type>(value:U)=>U=function(value:U):U{return value;};accessor g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-private-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};accessor #g:<V:type>(value:V)=>V=function(value:V):V{return value;};run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-readonly",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{readonly f:<U:type>(value:U)=>U=function(value:U):U{return value;};readonly g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-inherited",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class B{f:<U:type>(value:U)=>U=function(value:U):U{return value;};}class C extends B{g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-separate-classes",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class A{f:<U:type>(value:U)=>U=function(value:U):U{return value;};}class B{g:<V:type>(value:V)=>V=function(value:V):V{return value;};}check(new A().f,new B().g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-parenthesized",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=(function(value:U):U{return value;});g:<V:type>(value:V)=>V=(function(value:V):V{return value;});}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-conditional",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const yes:any=true;class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=yes?(function(value:V):V{return value;}):(function(value:V):V{return value;});}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-class-expression",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const C=class{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};};const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-public",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=function(value:V):V{return value;};g:<U:type>(value:U)=>U=function(value:U):U{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=function(value:V):V{return value;};#g:<U:type>(value:U)=>U=function(value:U):U{return value;};run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-static",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<V:type>(value:V)=>V=function(value:V):V{return value;};static g:<U:type>(value:U)=>U=function(value:U):U{return value;};}check(C.f,C.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-static-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<V:type>(value:V)=>V=function(value:V):V{return value;};static #g:<U:type>(value:U)=>U=function(value:U):U{return value;};static run(){check(this.f,this.#g);}}C.run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{accessor f:<V:type>(value:V)=>V=function(value:V):V{return value;};accessor g:<U:type>(value:U)=>U=function(value:U):U{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-private-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=function(value:V):V{return value;};accessor #g:<U:type>(value:U)=>U=function(value:U):U{return value;};run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-readonly",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{readonly f:<V:type>(value:V)=>V=function(value:V):V{return value;};readonly g:<U:type>(value:U)=>U=function(value:U):U{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-inherited",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class B{f:<V:type>(value:V)=>V=function(value:V):V{return value;};}class C extends B{g:<U:type>(value:U)=>U=function(value:U):U{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-separate-classes",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class A{f:<V:type>(value:V)=>V=function(value:V):V{return value;};}class B{g:<U:type>(value:U)=>U=function(value:U):U{return value;};}check(new A().f,new B().g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-parenthesized",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=(function(value:V):V{return value;});g:<U:type>(value:U)=>U=(function(value:U):U{return value;});}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-conditional",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const yes:any=true;class C{f:<V:type>(value:V)=>V=function(value:V):V{return value;};g:<U:type>(value:U)=>U=yes?(function(value:U):U{return value;}):(function(value:U):U{return value;});}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-class-expression",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const C=class{f:<V:type>(value:V)=>V=function(value:V):V{return value;};g:<U:type>(value:U)=>U=function(value:U):U{return value;};};const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-public",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=(value:U):U=>value;g:<V:type>(value:V)=>V=(value:V):V=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=(value:U):U=>value;#g:<V:type>(value:V)=>V=(value:V):V=>value;run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-static",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<U:type>(value:U)=>U=(value:U):U=>value;static g:<V:type>(value:V)=>V=(value:V):V=>value;}check(C.f,C.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-static-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<U:type>(value:U)=>U=(value:U):U=>value;static #g:<V:type>(value:V)=>V=(value:V):V=>value;static run(){check(this.f,this.#g);}}C.run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{accessor f:<U:type>(value:U)=>U=(value:U):U=>value;accessor g:<V:type>(value:V)=>V=(value:V):V=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-private-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=(value:U):U=>value;accessor #g:<V:type>(value:V)=>V=(value:V):V=>value;run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-readonly",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{readonly f:<U:type>(value:U)=>U=(value:U):U=>value;readonly g:<V:type>(value:V)=>V=(value:V):V=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-inherited",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class B{f:<U:type>(value:U)=>U=(value:U):U=>value;}class C extends B{g:<V:type>(value:V)=>V=(value:V):V=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-separate-classes",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class A{f:<U:type>(value:U)=>U=(value:U):U=>value;}class B{g:<V:type>(value:V)=>V=(value:V):V=>value;}check(new A().f,new B().g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-parenthesized",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=((value:U):U=>value);g:<V:type>(value:V)=>V=((value:V):V=>value);}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-conditional",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const yes:any=true;class C{f:<U:type>(value:U)=>U=(value:U):U=>value;g:<V:type>(value:V)=>V=yes?((value:V):V=>value):((value:V):V=>value);}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-class-expression",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const C=class{f:<U:type>(value:U)=>U=(value:U):U=>value;g:<V:type>(value:V)=>V=(value:V):V=>value;};const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-public",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=(value:V):V=>value;g:<U:type>(value:U)=>U=(value:U):U=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=(value:V):V=>value;#g:<U:type>(value:U)=>U=(value:U):U=>value;run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-static",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<V:type>(value:V)=>V=(value:V):V=>value;static g:<U:type>(value:U)=>U=(value:U):U=>value;}check(C.f,C.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-static-private",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{static f:<V:type>(value:V)=>V=(value:V):V=>value;static #g:<U:type>(value:U)=>U=(value:U):U=>value;static run(){check(this.f,this.#g);}}C.run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{accessor f:<V:type>(value:V)=>V=(value:V):V=>value;accessor g:<U:type>(value:U)=>U=(value:U):U=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-private-accessor",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=(value:V):V=>value;accessor #g:<U:type>(value:U)=>U=(value:U):U=>value;run(){check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-readonly",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{readonly f:<V:type>(value:V)=>V=(value:V):V=>value;readonly g:<U:type>(value:U)=>U=(value:U):U=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-inherited",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class B{f:<V:type>(value:V)=>V=(value:V):V=>value;}class C extends B{g:<U:type>(value:U)=>U=(value:U):U=>value;}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-separate-classes",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class A{f:<V:type>(value:V)=>V=(value:V):V=>value;}class B{g:<U:type>(value:U)=>U=(value:U):U=>value;}check(new A().f,new B().g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-parenthesized",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<V:type>(value:V)=>V=((value:V):V=>value);g:<U:type>(value:U)=>U=((value:U):U=>value);}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-conditional",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const yes:any=true;class C{f:<V:type>(value:V)=>V=(value:V):V=>value;g:<U:type>(value:U)=>U=yes?((value:U):U=>value):((value:U):U=>value);}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-class-expression",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const C=class{f:<V:type>(value:V)=>V=(value:V):V=>value;g:<U:type>(value:U)=>U=(value:U):U=>value;};const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};b:{fn:<V:type>(value:V)=>V}={fn:function(value:V):V{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-tuple",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:[{fn:<U:type>(value:U)=>U}]=[{fn:function(value:U):U{return value;}}];b:[{fn:<V:type>(value:V)=>V}]=[{fn:function(value:V):V{return value;}}];}const c=new C();check(c.a[0].fn,c.b[0].fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-union",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};b:{fn:(value:string)=>string}|{fn:<V:type>(value:V)=>V}={fn:function(value:V):V{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:<V:type>(value:V)=>V}={fn:function(value:V):V{return value;}};b:{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-tuple",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:[{fn:<V:type>(value:V)=>V}]=[{fn:function(value:V):V{return value;}}];b:[{fn:<U:type>(value:U)=>U}]=[{fn:function(value:U):U{return value;}}];}const c=new C();check(c.a[0].fn,c.b[0].fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-union",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:(value:string)=>string}|{fn:<V:type>(value:V)=>V}={fn:function(value:V):V{return value;}};b:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:function(value:U):U{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>value};b:{fn:<V:type>(value:V)=>V}={fn:(value:V):V=>value};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-tuple",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:[{fn:<U:type>(value:U)=>U}]=[{fn:(value:U):U=>value}];b:[{fn:<V:type>(value:V)=>V}]=[{fn:(value:V):V=>value}];}const c=new C();check(c.a[0].fn,c.b[0].fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-union",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>value};b:{fn:(value:string)=>string}|{fn:<V:type>(value:V)=>V}={fn:(value:V):V=>value};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:<V:type>(value:V)=>V}={fn:(value:V):V=>value};b:{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>value};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-tuple",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:[{fn:<V:type>(value:V)=>V}]=[{fn:(value:V):V=>value}];b:[{fn:<U:type>(value:U)=>U}]=[{fn:(value:U):U=>value}];}const c=new C();check(c.a[0].fn,c.b[0].fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-union",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:(value:string)=>string}|{fn:<V:type>(value:V)=>V}={fn:(value:V):V=>value};b:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn:(value:U):U=>value};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};b:{fn:<V:type>(value:V)=>V}={fn(value:V):V{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-tuple",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:[{fn:<U:type>(value:U)=>U}]=[{fn(value:U):U{return value;}}];b:[{fn:<V:type>(value:V)=>V}]=[{fn(value:V):V{return value;}}];}const c=new C();check(c.a[0].fn,c.b[0].fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-union",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};b:{fn:(value:string)=>string}|{fn:<V:type>(value:V)=>V}={fn(value:V):V{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:<V:type>(value:V)=>V}={fn(value:V):V{return value;}};b:{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-tuple",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:[{fn:<V:type>(value:V)=>V}]=[{fn(value:V):V{return value;}}];b:[{fn:<U:type>(value:U)=>U}]=[{fn(value:U):U{return value;}}];}const c=new C();check(c.a[0].fn,c.b[0].fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-union",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{a:{fn:(value:string)=>string}|{fn:<V:type>(value:V)=>V}={fn(value:V):V{return value;}};b:{fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U}={fn(value:U):U{return value;}};}const c=new C();check(c.a.fn,c.b.fn);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-contexts",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}type A=<U:type>(value:U)=>U;type B=<V:type>(value:V)=>V;if(A!==B)throw new Error(\"type identity\");class C{f:A=function(value:U):U{return value;};g:B=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "warm-type-object",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}type Warm=<Z:type>(value:Z)=>Z;Reflect.getReflection(Warm);class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "warm-unrelated-value",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const warm:<Z:type>(value:Z)=>Z=function(value:Z):Z{return value;};Reflect.typeOf(warm);class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "outer-name-collision",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}function make<V:type>(){class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};}return new C();}const a=make.<boolean>(),b=make.<uint8>();check(a.f,a.g);check(b.f,b.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-captures",
+      "modules": {
+        "main": "class C<T:type>{f:<U:type>(value:U,carry:T)=>U=function(value:U,carry:T):U{return value;};g:<V:type>(value:V,carry:T)=>V=function(value:V,carry:T):V{return value;};}function run(c:any,carry:any){if(c.f.<number>(7,carry)!==7||c.g.<string>(\"ok\",carry)!==\"ok\")throw new Error(\"capture\");}run(new C.<number>(),3);run(new C.<string>(),\"x\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-alias-activations",
+      "modules": {
+        "main": "type F<C:type>=<U:type>(value:U,carry:C)=>U;type G<C:type>=<V:type>(value:V,carry:C)=>V;function make<T:type>(){class C{f:F.<T>=function(value:U,carry:T):U{return value;};g:G.<T>=function(value:V,carry:T):V{return value;};}return new C();}function run(c:any,carry:any){if(c.f.<number>(7,carry)!==7||c.g.<string>(\"ok\",carry)!==\"ok\")throw new Error(\"capture\");}run(make.<number>(),3);run(make.<string>(),\"x\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-functions",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};#g:<V:type>(value:V)=>V=function(value:V):V{return value;};run(){if(this.f.name!==\"f\"||this.#g.name!==\"#g\")throw new Error(\"name\");check(this.f,this.#g);}}new C().run();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-instances",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}let made=0;class C{f:<U:type>(value:U)=>U=(made++,function(value:U):U{return value;});g:<V:type>(value:V)=>V=(made++,function(value:V):V{return value;});}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g||made!==4)throw new Error(\"instances\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "decorated-field",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}let decorated=0;function touch(c:Reflect.ClassField){decorated++;}class C{@touch f:<U:type>(value:U)=>U=function(value:U):U{return value;};@touch g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);if(decorated!==2)throw new Error(\"decoration\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-explicit-binder",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:<U:type>(value:U)=>U=function<X:type>(value:X):X{return value;};g:<V:type>(value:V)=>V=function<Y:type>(value:Y):Y{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-parameters",
+      "modules": {
+        "main": "class C{f:<U:type,V:type>(a:U,b:V)=>[U,V]=function(a:U,b:V):[U,V]{return [a,b];};g:<X:type,Y:type>(a:X,b:Y)=>[X,Y]=function(a:X,b:Y):[X,Y]{return [a,b];};}const c:any=new C();const p=c.f.<number,string>(7,\"a\"),q=c.g.<string,number>(\"b\",9);if(p[0]!==7||p[1]!==\"a\"||q[0]!==\"b\"||q[1]!==9)throw new Error(\"position\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "defaults",
+      "modules": {
+        "main": "class C{f:<U:type=number>(value:U)=>U=function(value:U):U{return value;};g:<V:type=number>(value:V)=>V=function(value:V):V{return value;};}const c:any=new C();if(c.f.<>(7)!==7||c.g.<>(9)!==9)throw new Error(\"default\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bounds",
+      "modules": {
+        "main": "class C{f:<U:type extends number>(value:U)=>U=function(value:U):U{return value;};g:<V:type extends number>(value:V)=>V=function(value:V):V{return value;};}const c:any=new C();if(c.f.<number>(7)!==7||c.g.<number>(9)!==9)throw new Error(\"bound\");let caught=false;try{c.g.<string>(\"bad\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"accepted bound\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrong-argument",
+      "modules": {
+        "main": "class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};}const c:any=new C();c.g.<number>(\"wrong\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-body-error",
+      "modules": {
+        "main": "class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return \"wrong\";};}"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "default-field",
+      "modules": {
+        "main": "class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V;}let caught=false;try{new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"missing default\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "initializer-failure-recovery",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}let fail=true;const sentinel={};function touch(){if(fail)throw sentinel;}class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=(touch(),function(value:V):V{return value;});}try{new C();throw new Error(\"accepted\");}catch(e){if(e!==sentinel)throw e;}fail=false;const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F,G} from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-class",
+      "modules": {
+        "dep": "export class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=function(value:V):V{return value;};}",
+        "main": "import {C} from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}const c=new C();check(c.f,c.g);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export {F as A,G as B} from \"dep\";",
+        "main": "import {A,B} from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:A=function(value:U):U{return value;};g:B=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-chain",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}type A=<U:type>(value:U)=>U;type B=<V:type>(value:V)=>V;type D=B;class C{f:A=function(value:U):U{return value;};g:D=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-shadowing",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}type A=<U:type>(value:U)=>U;type B=<Z:type>(value:Z)=>Z;function make(){type B=<V:type>(value:V)=>V;class C{f:A=function(value:U):U{return value;};g:B=function(value:V):V{return value;};}return new C();}const c=make();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-forward-nominal",
+      "modules": {
+        "main": "type A={c:C};class C{x:uint8=1;}const a:A={c:new C()};if(a.c.x!==1)throw new Error(\"nominal\");const raw:any={c:{x:1}};let caught=false;try{const b:A=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"admission\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-bounds-defaults",
+      "modules": {
+        "main": "type F=<U:type extends number=number>(value:U)=>U;type G=<V:type extends number=number>(value:V)=>V;class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c:any=new C();if(c.f.<>(7)!==7||c.g.<>(9)!==9)throw new Error(\"default\");let caught=false;try{c.g.<string>(\"bad\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"bound\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
