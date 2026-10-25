@@ -4315,7 +4315,7 @@ export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStora
 
 /** Inspect only representation and internal ordinary slots, never call a
  * method to discover provenance. Base Get also implements non-property reads. */
-function hasOrdinaryDataRead(object: ObjectValue): boolean {
+export function OrdinaryDataReadSupported(object: ObjectValue): boolean {
   if (object.Get !== ObjectValue.prototype.Get || object.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
       || PlacementBackingOf(object) !== undefined || SoAElementBackingOf(object) !== undefined
       || SoAStorageOf(object) !== undefined || ArraySpanBackingOf(object) !== undefined
@@ -4329,7 +4329,7 @@ function ordinaryDataObservation(object: ObjectValue, key: PropertyKeyValue): Or
   let current: ObjectValue = object;
   while (!seen.has(current)) {
     seen.add(current);
-    if (!hasOrdinaryDataRead(current)) return undefined;
+    if (!OrdinaryDataReadSupported(current)) return undefined;
     path.push(current);
     const own = current.properties.get(key);
     if (own) return IsDataDescriptor(own) ? { path, value: own.Value! } : undefined;
@@ -4347,7 +4347,7 @@ export function OrdinaryDataObservationValid(observation: OrdinaryDataObservatio
   const { path, value } = observation;
   for (let i = 0; i < path.length; i += 1) {
     const object = path[i]!;
-    if (!hasOrdinaryDataRead(object)) return false;
+    if (!OrdinaryDataReadSupported(object)) return false;
     const own = object.properties.get(key);
     if (i === path.length - 1) return own !== undefined && IsDataDescriptor(own) && SameValue(own.Value!, value);
     if (own !== undefined && !(ownWrite && i === 0)) return false;

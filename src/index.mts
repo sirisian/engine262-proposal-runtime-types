@@ -148,3 +148,5 @@ export { SelectionOfValue } from './abstract-ops/callable-selection.mts';
 
 export { CompleteSpecializationResult } from './type-system/runtime.mts';
 export { ClassMethodThisTypeOf } from './type-system/runtime.mts';
+
+export * from './type-system/inherited-storage.mts';

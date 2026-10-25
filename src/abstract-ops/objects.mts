@@ -1,3 +1,4 @@
+import { HasInheritedStorageDependents, PlanInheritedDefinition, PlanInheritedDeletion, PlanInheritedPrototypeChange, CommitInheritedStorageChanges } from '#self';
 import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import {
   Descriptor,
@@ -15,6 +16,7 @@ import {
 import type { Mutable } from '../utils/language.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
+import { SameType } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { RemoveArrayElementIdentity } from '../type-system/array-borrow.mts';
 import {
@@ -94,8 +96,11 @@ export function OrdinarySetPrototypeOf(O: OrdinaryObject, V: ObjectValue | NullV
   }
   const changes = PlanNominalPrototypeChange(O, V);
   if (changes === false) return Value.false;
+  const inherited = PlanInheritedPrototypeChange(O, V);
+  if (inherited === false) return Value.false;
   O.Prototype = V;
   CommitNominalPrototypeChange(changes);
+  CommitInheritedStorageChanges(inherited);
   return Value.true;
 }
 
@@ -148,6 +153,9 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
   if (surroundingAgent.feature('runtime-types') && (Desc as { Type?: object }).Type !== undefined) {
     const typeObject = (Desc as { Type: object }).Type;
     const record = (typeObject as { TypeRecord: TypeRecord }).TypeRecord;
+    const existing = (O as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> })
+      .TypedProperties?.get(P instanceof JSStringValue ? P.stringValue() : P)?.TypeRecord;
+    if (existing && !SameType(existing, record)) return Throw.TypeError('a definition cannot replace an existing property backing type');
     const builtBy = (O as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
     if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
       return Throw.TypeError('a typed own property cannot be added to an instance of a non-dynamic typed class');
@@ -170,7 +178,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     const extensible = Q(yield* IsExtensible(O));
     Q(CheckArrayDefinition(O, P));
     if (!ScalarRestDefinitionAllowed(O, P, applied)) return Throw.TypeError('a property definition violates an ordered scalar rest guard');
-    const result = ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current);
+    const result = ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current, record);
     if (result === Value.true) {
       const map = ((O as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
       map.set(P instanceof JSStringValue ? P.stringValue() : P, typeObject);
@@ -212,7 +220,7 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
         const applied = Descriptor({ ...Desc, Value: converted });
         Q(CheckArrayDefinition(O, P));
         if (!ScalarRestDefinitionAllowed(O, P, applied)) return Throw.TypeError('a property definition violates an ordered scalar rest guard');
-        return ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current);
+        return ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current, declared.TypeRecord);
       }
     }
   }
@@ -225,13 +233,21 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
 
 /** https://tc39.es/ecma262/#sec-iscompatiblepropertydescriptor */
 export function IsCompatiblePropertyDescriptor(Extensible: BooleanValue, Desc: Descriptor, Current: UndefinedValue | Descriptor) {
-  return ValidateAndApplyPropertyDescriptor(Value.undefined, Value.undefined, Extensible, Desc, Current);
+  return ValidateAndApplyPropertyDescriptorUnobserved(Value.undefined, Value.undefined, Extensible, Desc, Current);
 }
 
 // 9.1.6.3 ValidateAndApplyPropertyDescriptor
-export function ValidateAndApplyPropertyDescriptor(O: ObjectValue | UndefinedValue, P: PropertyKeyValue | UndefinedValue, extensible: BooleanValue, Desc: Descriptor, current: UndefinedValue | Descriptor) {
+export function ValidateAndApplyPropertyDescriptor(O: ObjectValue | UndefinedValue, P: PropertyKeyValue | UndefinedValue, extensible: BooleanValue, Desc: Descriptor, current: UndefinedValue | Descriptor, admitted?: TypeRecord) {
   const previous = O instanceof ObjectValue ? O.properties.get(P as PropertyKeyValue) : undefined;
+  const watched = O instanceof ObjectValue && HasInheritedStorageDependents(O);
+  if (watched) {
+    const compatible = ValidateAndApplyPropertyDescriptorUnobserved(Value.undefined, P, extensible, Desc, current);
+    if (compatible === Value.false) return compatible;
+  }
+  const inherited = watched ? PlanInheritedDefinition(O as ObjectValue, P as PropertyKeyValue, Desc, admitted) : [];
+  if (inherited === false) return Throw.TypeError('a definition would invalidate an inherited storage contract');
   const result = ValidateAndApplyPropertyDescriptorUnobserved(O, P, extensible, Desc, current);
+  if (result === Value.true) CommitInheritedStorageChanges(inherited);
   // Attribute-only changes preserve the stored contribution. An explicit value
   // write or accessor replacement supplies no old evidence, even for SameValue.
   if (result === Value.true && O instanceof ObjectValue) {
@@ -474,11 +490,14 @@ export function* OrdinaryDelete(O: ObjectValue, P: PropertyKeyValue): ValueEvalu
     return Value.true;
   }
   if (desc.Configurable === Value.true) {
+    const inherited = PlanInheritedDeletion(O, P);
+    if (inherited === false) return Throw.TypeError('a deletion would invalidate an inherited storage contract');
     const typed = O as { TypedElement?: unknown, TypedTuple?: unknown };
     if (P instanceof JSStringValue && (typed.TypedElement !== undefined || typed.TypedTuple !== undefined)) {
       RemoveArrayElementIdentity(O, P.stringValue());
     }
     O.properties.delete(P);
+    CommitInheritedStorageChanges(inherited);
     RefreshNominalRestDependencies(O, P as PropertyKeyValue);
     return Value.true;
   }

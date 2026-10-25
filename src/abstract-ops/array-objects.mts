@@ -1,3 +1,4 @@
+import { CheckInheritedDefinitions } from '#self';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { ThrowCompletion } from '../completion.mts';
@@ -419,6 +420,10 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
       return Throw.TypeError('array growth violates its ordered scalar rest guards');
     }
   }
+  Q(CheckInheritedDefinitions(array, [
+    ...values.map((entry, offset) => ({ key: Value(String(oldLen + offset)), desc: entry })),
+    { key: lengthKey, desc },
+  ]));
   // No user code runs between this revalidation and publication. Define own
   // data slots directly, without inherited setters or a second conversion.
   for (let offset = 0; offset < values.length; offset += 1) {

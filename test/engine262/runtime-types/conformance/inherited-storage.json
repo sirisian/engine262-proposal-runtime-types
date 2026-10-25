@@ -1,0 +1,993 @@
+{
+  "cases": [
+    {
+      "name": "store-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{proto.a=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-store-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Reflect.set(proto,\"a\",\"bad\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "define-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{value:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-define-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Reflect.defineProperty(proto,\"a\",{value:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "delete-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{delete proto.a;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-delete-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Reflect.deleteProperty(proto,\"a\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{get(){throw new Error(\"getter called\");}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,{a:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "null-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,null);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-store-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{proto.a=2;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==2)throw new Error(\"store\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-define-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{value:2});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==2)throw new Error(\"define\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "equal-definition-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{value:1});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "freeze-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.freeze(proto);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-key-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{proto.b=\"ok\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "supplier-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(proto,{a:\"irrelevant\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-retarget-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,{a:2});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==2)throw new Error(\"retarget\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-prototype-depth-1",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,Object.getPrototypeOf(raw));}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "store-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{proto.a=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-store-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Reflect.set(proto,\"a\",\"bad\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "define-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{value:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-define-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Reflect.defineProperty(proto,\"a\",{value:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "delete-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{delete proto.a;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-delete-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Reflect.deleteProperty(proto,\"a\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{get(){throw new Error(\"getter called\");}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,{a:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "null-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,null);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-store-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{proto.a=2;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==2)throw new Error(\"store\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-define-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{value:2});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==2)throw new Error(\"define\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "equal-definition-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(proto,\"a\",{value:1});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "freeze-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.freeze(proto);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-key-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{proto.b=\"ok\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "supplier-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(proto,{a:\"irrelevant\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-retarget-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,{a:2});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==2)throw new Error(\"retarget\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-prototype-depth-2",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,Object.getPrototypeOf(raw));}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-bad-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{middle.a=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-accessor-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(middle,\"a\",{get(){throw new Error(\"getter called\");}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-bad-prototype",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(middle,{a:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-compatible-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{middle.a=2;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");proto.a=\"old supplier\";if(out.a!==2)throw new Error(\"detach\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-compatible-prototype",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(middle,{a:2});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");proto.a=\"old supplier\";if(out.a!==2)throw new Error(\"detach\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-own-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{raw.a=2;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");proto.a=\"detached\";Object.setPrototypeOf(raw,null);if(out.a!==2)throw new Error(\"own\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-incompatible-own-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,middle);const out:{a:number}=raw;let caught=false;try{raw.a=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "delete-reveals-compatible",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;Object.setPrototypeOf(proto,{a:3});let caught=false;try{delete proto.a;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==3)throw new Error(\"fallback\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "delete-reveals-incompatible",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;Object.setPrototypeOf(proto,{a:\"bad\"});let caught=false;try{delete proto.a;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-prototype-false",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{if(Reflect.setPrototypeOf(raw,{a:\"bad\"})!==false)throw new Error(\"Reflect refusal\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"Reflect changed\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-retarget-no-traps",
+      "modules": {
+        "main": "const proto:any={a:1};const middle:any={};Object.setPrototypeOf(middle,proto);const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.setPrototypeOf(raw,new Proxy({a:1},{get(){throw new Error(\"get trap\");},getPrototypeOf(){throw new Error(\"prototype trap\");},getOwnPropertyDescriptor(){throw new Error(\"descriptor trap\");}}));}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"mutation phase\");if(out.a!==1)throw new Error(\"invalid mutation published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shared-supplier-conjunctive",
+      "modules": {
+        "main": "const proto:any={a:1};const r:any={};const s:any={};Object.setPrototypeOf(r,proto);Object.setPrototypeOf(s,proto);const one:{a:1|2}=r;const two:{a:1|3}=s;let caught=0;try{proto.a=2;}catch(e){if(!(e instanceof TypeError))throw e;caught++;}try{proto.a=3;}catch(e){if(!(e instanceof TypeError))throw e;caught++;}if(caught!==2||proto.a!==1)throw new Error(\"conjunction\");r.a=2;proto.a=3;if(one.a!==2||two.a!==3)throw new Error(\"detached receiver\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "retarget-registers-new-supplier",
+      "modules": {
+        "main": "const old:any={a:1};const next:any={a:2};const raw:any={};Object.setPrototypeOf(raw,old);const out:{a:number}=raw;Object.setPrototypeOf(raw,next);old.a=\"free\";let caught=false;try{next.a=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out.a!==2)throw new Error(\"new supplier\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pure-membership-does-not-acquire",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);if(!(raw is {a:number}))throw new Error(\"membership\");proto.a=\"free\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-admission-does-not-acquire",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={z:\"bad\"};Object.setPrototypeOf(raw,proto);let caught=false;try{const out:{a:number,z:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"failure\");proto.a=\"free\";Object.setPrototypeOf(raw,null);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "readonly-view-does-not-freeze-supplier",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{readonly a:number}=raw;proto.a=2;if(out.a!==2)throw new Error(\"readonly alias\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destination-conversion-only",
+      "modules": {
+        "main": "const value:uint8=1;const proto:any={a:value};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:uint8}=raw;let caught=false;try{proto.a=2;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out.a!==value)throw new Error(\"indirect conversion\");raw.a=2;if(Reflect.typeOf(out.a)!==type uint8||out.a!==2)throw new Error(\"own conversion\");proto.a=\"detached\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fresh-structural-indirect-proof",
+      "modules": {
+        "main": "const first:{x:number}={x:1};const proto:any={a:first};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:{x:number}}=raw;let reads=0;const candidate:any={get x(){reads++;return 2;}};let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==0||out.a!==first)throw new Error(\"extra observation\");const next:{x:number}={x:3};proto.a=next;if(out.a!==next)throw new Error(\"existing proof\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-structural-write-acquires-backing",
+      "modules": {
+        "main": "const first:{x:number}={x:1};const proto:any={a:first};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:{x:number}}=raw;const candidate:any={x:2};raw.a=candidate;if(out.a!==candidate)throw new Error(\"own admission\");let caught=false;try{candidate.x=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"nested backing\");proto.a=0;"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-index-signature-write",
+      "modules": {
+        "main": "type Item={[key:string]:number};const first:Item={x:1};const proto:any={a:first};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:Item}=raw;raw.a={y:2};if(out.a.y!==2)throw new Error(\"index signature\");proto.a=0;"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-descriptor-cannot-replace-contract",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let caught=false;try{Object.defineProperty(raw,\"a\",{type:type string,value:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||Object.hasOwn(raw,\"a\")||out.a!==1)throw new Error(\"retyping\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-typed-descriptor-shadow",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;Object.defineProperty(raw,\"a\",{type:type number,value:2});proto.a=\"free\";if(out.a!==2)throw new Error(\"same type\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-string-key",
+      "modules": {
+        "main": "const proto:any={\"\":1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{\"\":number}=raw;let caught=false;try{proto[\"\"]=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out[\"\"]!==1)throw new Error(\"empty key\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-union-compatible",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:1|2}=raw;proto.a=2;if(out.a!==2)throw new Error(\"literal member\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-supplier-index",
+      "modules": {
+        "main": "const proto:any=[1];const raw:any={};Object.setPrototypeOf(raw,proto);const out:{\"0\":number}=raw;let caught=false;try{proto[0]=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out[0]!==1)throw new Error(\"array index\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-supplier-removal",
+      "modules": {
+        "main": "const proto:any=[1,2];const raw:any={};Object.setPrototypeOf(raw,proto);const out:{\"1\":number}=raw;let caught=false;try{proto.length=0;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||proto.length!==2||out[1]!==2)throw new Error(\"array removal\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-length-representation",
+      "modules": {
+        "main": "const proto:any=[1];const raw:any={};Object.setPrototypeOf(raw,proto);const out:{length:number}=raw;let caught=false;try{const typed:[].<number>=proto;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||Reflect.typeOf(out.length)!==type number)throw new Error(\"length representation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-index-backing-compatible",
+      "modules": {
+        "main": "const proto:any=[1];const raw:any={};Object.setPrototypeOf(raw,proto);const out:{\"0\":number}=raw;const typed:[].<number>=proto;typed[0]=2;if(out[0]!==2)throw new Error(\"index backing\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-explicit-byteLength-backing",
+      "modules": {
+        "main": "const proto:any=[1];Object.defineProperty(proto,\"byteLength\",{value:7,writable:true});const raw:any={};Object.setPrototypeOf(raw,proto);const out:{byteLength:number}=raw;const typed:[].<number>=proto;proto.byteLength=8;if(out.byteLength!==8)throw new Error(\"explicit byteLength\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-failure-precedence",
+      "modules": {
+        "main": "const proto:any={};Object.defineProperty(proto,\"a\",{value:1,writable:false,configurable:false});const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;if(Reflect.defineProperty(proto,\"a\",{value:\"bad\"})!==false||Reflect.deleteProperty(proto,\"a\")!==false)throw new Error(\"ordinary refusal\");Object.preventExtensions(raw);if(Reflect.setPrototypeOf(raw,{a:\"bad\"})!==false)throw new Error(\"nonextensible\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-error-precedence",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;const sentinel={};let caught=false;try{Object.defineProperty(proto,\"a\",{get value(){throw sentinel;}});}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||out.a!==1)throw new Error(\"conversion precedence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;proto.a=\"bad\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "symbol-key-identity",
+      "modules": {
+        "main": "const k=Symbol(\"a\");const other=Symbol(\"a\");const proto:any={[k]:1,[other]:3};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{[k]:number}=raw;proto[other]=\"free\";let caught=false;try{proto[k]=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out[k]!==1)throw new Error(\"symbol guard\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-receiver-write",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let ref r=raw.a;let caught=false;try{proto.a=\"bad\";}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||r!==1)throw new Error(\"failed mutation liveness\");r=2;proto.a=\"free\";if(r!==2||out.a!==2)throw new Error(\"reference shadow\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-contract-not-narrowed",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number|string}=raw;let calls=0;function f(ref ...ns:[number]){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"narrowed reference\");proto.a=\"ok\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "descriptor-effects-preserved",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number}=raw;let reads=0;let caught=false;try{Object.defineProperty(proto,\"a\",{get value(){reads++;proto.a=2;return \"bad\";}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1||out.a!==2)throw new Error(\"descriptor effects\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "earlier-definitions-preserved",
+      "modules": {
+        "main": "const proto:any={a:1,b:3};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:number,b:number}=raw;let caught=false;try{Object.defineProperties(proto,{a:{value:2},b:{value:\"bad\"}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out.a!==2||out.b!==3)throw new Error(\"earlier definitions\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-contract-cannot-be-retyped",
+      "modules": {
+        "main": "const raw:any={a:1};const out:{a:number}=raw;let caught=false;try{Object.defineProperty(raw,\"a\",{type:type string,value:\"bad\"});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||out.a!==1)throw new Error(\"own retyping\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wider-value-class",
+      "modules": {
+        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new R();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"width refusal\");if(out.a instanceof R)throw new Error(\"published wider value\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-width-value-class",
+      "modules": {
+        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new Q();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-value-class",
+      "modules": {
+        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new P();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-value-class-widening",
+      "modules": {
+        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=(new R()) := P;let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

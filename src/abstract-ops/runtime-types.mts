@@ -1,3 +1,4 @@
+import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
 import { TakeParameterConstruction, ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { contextualParameters } from '../type-system/contextual-parameters.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
@@ -590,6 +591,21 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
       }
     }
   }
+  for (const [object, sequence] of sequences) {
+    const target = object as SequenceStorage;
+    if (sequence.acquire && target.TypedElement === undefined && target.TypedTuple === undefined) {
+      Q(CheckInheritedArrayAcquisition(object, sequence.type));
+    }
+  }
+  const missingDefinitions = new Map<ObjectValue, { key: JSStringValue, desc: Descriptor }[]>();
+  for (const { object, key, value } of missing) {
+    const entries = missingDefinitions.get(object) ?? [];
+    entries.push({ key, desc: Descriptor({ Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }) });
+    missingDefinitions.set(object, entries);
+  }
+  for (const [object, entries] of missingDefinitions) {
+    Q(CheckInheritedDefinitions(object, entries));
+  }
   for (const { object, key, value } of missing) {
     Assert(ValidateAndApplyPropertyDescriptor(object, key, object.Extensible,
       Descriptor({ Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }), Value.undefined) === Value.true);
@@ -602,6 +618,8 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
       if (!group.property) continue;
       const typed = (target.TypedProperties ??= new Map());
       if (!typed.has(key)) typed.set(key, { TypeRecord: group.type! });
+      const datum = data.get(object)?.get(key);
+      if (datum) AcquireInheritedStorage(object, propertyKeyValue(key), datum.value, datum.path);
     }
   }
   for (const [object, sequence] of sequences) {
@@ -627,7 +645,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
 
 /** Elision can retain its no-evaluation behavior when storage already carries
  * every required contract. This inspects internal descriptors, never getters. */
-function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
+export function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
   if (MayRequireTupleDefaults(type)) return false;
   if (!(value instanceof ObjectValue)) return true;
   if (type.Kind === 'reference' || type.Kind === 'any') return true;
