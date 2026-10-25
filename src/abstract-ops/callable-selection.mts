@@ -174,7 +174,10 @@ function* TypedFrameOfBindings(declaration: unknown, bindings: readonly { Captur
   for (const tp of list) {
     const name = tp.BindingIdentifier?.name;
     const bound = name ? frame.get(name) : undefined;
-    if (name && bound && tp.IsValueParameter) {
+    if (name && bound) {
+      // A selected owner's type arguments also need declaration identity.
+      // A name-only frame loses explicit bindings when body inference filters
+      // out same-named parameters belonging to unrelated declarations.
       Q(yield* BindTypeParameterTyped(frame, name, bound, tp));
     }
   }

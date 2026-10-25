@@ -103,3 +103,17 @@ test('reflection makes the selected declaration discoverable', () => {
   expect(evaluated(`${P}${PACKED} String(Reflect.getReflection(Box.<uint8>).generic.selected);`)).toBe('Box<T: type>');
   expect(evaluated('class G<T: type> { a: T; } String(Reflect.getReflection(G.<uint8>).generic.selected);')).toBe('G<T: type>');
 });
+
+for (const stored of [false, true]) {
+  for (const nested of [false, true]) {
+    test(`explicit owner fallback retains its own binding (stored=${stored}, nested=${nested})`, () => {
+      const call = stored ? 'const run = f.<string>; run();' : 'f.<string>();';
+      const declarations = 'function f<T: type>(): string { return String(T); } '
+        + 'function f<const U: type extends [].<any>>(): string { return "array"; } ';
+      const source = nested
+        ? declarations + `function outer<T: type>(): string { ${stored ? 'const run = f.<string>; return run();' : 'return f.<string>();'} } outer.<uint8>();`
+        : declarations + call;
+      expect(evaluated(source)).toBe('string');
+    });
+  }
+}

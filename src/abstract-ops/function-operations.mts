@@ -76,7 +76,7 @@ import {
 } from './all.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
-  GetActiveScriptOrModule, TransferResultDependency, SelectionOfValue,
+  GetActiveScriptOrModule, TransferResultDependency, SelectionOfValue, ConstructionSelectionsOf, type ConstructionSelections,
   Realm,
   EnvironmentRecord,
   FunctionEnvironmentRecord,
@@ -331,6 +331,7 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   const initializer = fieldRecord.Initializer;
   // 3. If initializer is not empty, then
   let initValue;
+  let choices: ConstructionSelections | undefined;
   // decorators.md's replacement table: a `Reflect.ClassField` decorator's
   // return replaces "THE FIELD'S INITIAL VALUE", of type T - not an initializer
   // FUNCTION, which is what a TC39 field decorator returns. A decorator runs
@@ -354,17 +355,20 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     // is evaluated with it as the contextual type - the same push a declaration's
     // initializer gets in LexicalDeclaration, so `b: Box.<uint8> = new Box(1)`
     // constructs the `Box.<uint8>` the RequireType below then checks.
+    let initializerResult;
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
       // Tagged with the initializer expression, which is the function's code.
       pushContextualType((fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord, (initializer as { ECMAScriptCode?: object }).ECMAScriptCode);
       try {
-        initValue = Q(yield* Call(initializer, receiver));
+        initializerResult = EnsureCompletion(yield* Call(initializer, receiver));
       } finally {
         popContextualType();
       }
     } else {
-      initValue = Q(yield* Call(initializer, receiver));
+      initializerResult = EnsureCompletion(yield* Call(initializer, receiver));
     }
+    choices = ConstructionSelectionsOf(initializerResult);
+    initValue = Q(initializerResult);
   } else if (fieldAnnotation) {
     // proposal-runtime-types (spec sec-typed-classes): a typed field declared
     // without an initializer takes its type's default rather than undefined, the
@@ -400,10 +404,19 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   } else { // 4. Else, let initValue be undefined.
     initValue = Value.undefined;
   }
+  // A private (including auto-accessor backing) field also admits a written
+  // initializer before publication. Its replacement/default paths already
+  // admitted above; do not add a second check to those paths.
+  const needsAdmission = !(fieldName instanceof PrivateName)
+    || (initializer !== undefined && replaced === undefined);
+  let stored = initValue;
+  if (surroundingAgent.feature('runtime-types') && fieldTypeObject && needsAdmission) {
+    stored = Q(yield* RequireType(initValue, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord, undefined, choices));
+  }
   // 5. If fieldName is a Private Name, then
   if (fieldName instanceof PrivateName) {
     // a. Perform ? PrivateFieldAdd(fieldName, receiver, initValue).
-    Q(yield* PrivateFieldAdd(receiver, fieldName, initValue));
+    Q(yield* PrivateFieldAdd(receiver, fieldName, stored));
     // A private field with a declared type is a typed field: the same row of
     // #table-check-sites, stored elsewhere. PrivateSet reads the type from the
     // Private Name, which is per-class and so shared by every instance.
@@ -413,17 +426,6 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   } else { // 6. Else,
     // a. Assert: ! IsPropertyKey(fieldName) is true.
     Assert(X(IsPropertyKey(fieldName)));
-    // proposal-runtime-types (#table-check-sites, row "a value stored to a
-    // property or field of declared type t"): the INITIALIZER is such a store,
-    // and it was the one path that skipped the conversion - a field with no
-    // initializer got a typed default, a field written after construction got
-    // a typed value, and a field with an initializer kept whatever the
-    // initializer produced, so `class C { x: uint8 = 1 }` made `new C().x is
-    // uint8` FALSE until something wrote to it.
-    let stored = initValue;
-    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
-      stored = Q(yield* RequireType(initValue, (fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord));
-    }
     // proposal-runtime-types: on a PLACED instance a field's storage is the
     // buffer, so its definition writes bytes rather than creating a property.
     // This is a define rather than a set, so it does not pass through [[Set]]

@@ -28,14 +28,14 @@ import {
   NewPromiseCapability,
   OrdinaryCreateFromConstructor,
   AsyncGeneratorStart,
-  GetValue,
+  GetResultValue,
   type ECMAScriptFunctionObject,
   type GeneratorObject,
   type AsyncGeneratorObject,
   type Body,
   functionHasAnnotations,
   EnforceParameterTypes,
-  EnforceReturnType, ConversionResultTypeNode, GetResultValue,
+  EnforceReturnType, ConversionResultTypeNode,
   VerifyContracts,
   InferGenericCallBindings,
   functionTypeParameters,
@@ -326,19 +326,24 @@ export function* EvaluateBody_AssignmentExpression(AssignmentExpression: ParseNo
   }
   // 2. Assert: functionObject.[[ClassFieldInitializerName]] is not empty.
   Assert(functionObject.ClassFieldInitializerName !== undefined);
-  let value;
+  let valueResult;
   // 3. If IsAnonymousFunctionDefinition(AssignmentExpression) is true, then
   if (IsAnonymousFunctionDefinition(AssignmentExpression)) {
     // a. Let value be NamedEvaluation of Initializer with argument functionObject.[[ClassFieldInitializerName]].
-    value = yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, functionObject.ClassFieldInitializerName);
+    valueResult = EnsureCompletion(yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, functionObject.ClassFieldInitializerName));
   } else { // 4. Else,
     // a. Let rhs be the result of evaluating AssignmentExpression.
-    const rhs = Q(yield* Evaluate(AssignmentExpression));
+    const rhs = EnsureCompletion(yield* Evaluate(AssignmentExpression));
+    if (rhs.Type !== 'normal') return rhs;
     // b. Let value be ? GetValue(rhs).
-    value = Q(yield* GetValue(rhs));
+    valueResult = EnsureCompletion(yield* GetResultValue(rhs));
   }
+  if (valueResult.Type !== 'normal') return valueResult;
+  // The synthetic return is part of field initialization. Keep the producing
+  // occurrence's pending choice until DefineField performs the field check;
+  // no check or publication takes place at this internal return.
   // 5. Return Completion { [[Type]]: return, [[Value]]: value, [[Target]]: empty }.
-  return new Completion({ Type: 'return', Value: X(value), Target: undefined });
+  return ForwardResultDependency(valueResult, new Completion({ Type: 'return', Value: valueResult.Value, Target: undefined }));
 }
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-evaluateclassstaticblockbody */
