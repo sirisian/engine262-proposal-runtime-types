@@ -806,12 +806,44 @@
       "name": "inherited all element reads precede specialization",
       "steps": [
         {
-          "source": "let trace=\"\";const gate:any={get value(){trace+=\"w\";return true;}};function id<T:type>(x:T):T where gate.value{return x;}const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[0];delete raw[1];Object.defineProperty(accessorPrototype,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(accessorPrototype,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});const a:[].<(x:string)=>string>=raw;trace;",
+          "source": "let trace=\"\";function id<T:type>(x:T):T where T===uint8{return x;}const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[0];delete raw[1];Object.defineProperty(accessorPrototype,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(accessorPrototype,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});let failure=\"missed\";try{const a:[].<(x:string)=>string>=raw;}catch(e){failure=e.name;}trace+\"/\"+failure;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "abwAB"
+            "value": "ab/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited successful pure predicate precedes element writes",
+      "steps": [
+        {
+          "source": "let trace=\"\";function id<T:type>(x:T):T where T===string{return x;}const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[0];delete raw[1];Object.defineProperty(accessorPrototype,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(accessorPrototype,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});const a:[].<(x:string)=>string>=raw;trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "abAB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "impure specialization trace predicate rejects before element reads",
+      "steps": [
+        {
+          "source": "let trace=\"\";const gate:any={get value(){trace+=\"w\";return true;}};function id<T:type>(x:T):T where gate.value{return x;}const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[0];delete raw[1];Object.defineProperty(accessorPrototype,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(accessorPrototype,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});const a:[].<(x:string)=>string>=raw;trace;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_COMPILE_TIME_EVALUABILITY",
+              "phase": "static"
+            }
           }
         }
       ]

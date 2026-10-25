@@ -340,6 +340,25 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     if (entry.kind !== 'property' && entry.kind !== 'element') return entry;
     return merged.has(entry) ? { ...entry, construction: constructions.get(entry) } : entry;
   });
+  // Membership can run a later getter which independently changes an already
+  // observed data location. Retained evidence must still describe that place;
+  // replaying its Get or overwriting the nested operation's result is not a
+  // successful admission. Own materialization writes advance only this ledger.
+  const data = new Map<ObjectValue, Map<string | SymbolValue, { value: Value }>>();
+  const checkData = (object: ObjectValue, key: string | SymbolValue, expected: Value): ThrowCompletion | undefined => {
+    const current = object.properties.get(propertyKeyValue(key));
+    if (!current || !IsDataDescriptor(current) || !SameValue(current.Value!, expected)) {
+      return Throw.TypeError('an observed data property changed during structural admission');
+    }
+    return undefined;
+  };
+  for (const entry of storage) {
+    if ((entry.kind !== 'property' && entry.kind !== 'element') || !entry.ownData) continue;
+    Q(checkData(entry.object, entry.key, entry.value));
+    let properties = data.get(entry.object);
+    if (!properties) data.set(entry.object, properties = new Map());
+    properties.set(entry.key, { value: entry.value });
+  }
   type SequenceStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: TupleStorageShape };
   type SequenceGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number,
     shapes: TupleStorageShape[], shape?: TupleStorageShape, acquire: boolean,
@@ -467,6 +486,10 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     if (entry.kind !== 'property' && entry.kind !== 'element') continue;
     const { object, key, value } = entry;
     const group = groups.get(object)!.get(key)!;
+    const datum = data.get(object)?.get(key);
+    if (datum) {
+      Q(checkData(object, key, datum.value));
+    }
     if (group.previous === value) continue;
     group.previous = value;
     const plan = initialization.get(object);
@@ -486,6 +509,9 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     if (plan) Q(checkLength(object, plan));
     const position = typeof key === 'string' ? plan?.positions.get(key) : undefined;
     if (position) position.value = converted;
+    if (datum) {
+      Q(checkData(object, key, datum.value));
+    }
     if (converted !== value) {
       const property = propertyKeyValue(key);
       const own = object.properties.has(property);
@@ -509,6 +535,17 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
         return Throw.TypeError('$1 cannot be converted to $2 in place, because it is not writable', property, Value(displayType(group.type!)));
       }
       if (plan) Q(checkLength(object, plan));
+      if (datum) {
+        Q(checkData(object, key, converted));
+        datum.value = converted;
+      }
+    }
+  }
+  // No getter/trap is invoked to validate retained own data. Earlier effects,
+  // including independently completed admissions, survive a refusal here.
+  for (const [object, properties] of data) {
+    for (const [key, datum] of properties) {
+      Q(checkData(object, key, datum.value));
     }
   }
   const missing: { object: OrdinaryObject, key: JSStringValue, value: Value }[] = [];

@@ -13,7 +13,8 @@ import { wrappedParse } from '../parse.mts';
 import type { Parser } from '../parser/Parser.mts';
 import { OutOfRange } from '../utils/language.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
-import { SoAStorageOf } from '../intrinsics/SoA.mts';
+import { SoAStorageOf, SoAElementBackingOf } from '../intrinsics/SoA.mts';
+import { PlacementBackingOf } from '../abstract-ops/placement.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
@@ -89,7 +90,7 @@ import { IsSubtype } from './relations.mts';
 import { CloseInferredNominal } from './inferred-nominals.mts';
 import {
   LexicalClassFamily, ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
-  Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean, SymbolKeyDependencyOf,
+  Call, Get, GetValue, HasProperty, IsCallable, IsDataDescriptor, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean, SymbolKeyDependencyOf,
   NormalCompletion, RetainCheckedResult,
 } from '#self';
 
@@ -4194,6 +4195,8 @@ export type StructuralStorageAdmission = {
   object: ObjectValue, key: string | SymbolValue, type: TypeRecord,
   value: Value, admittedType: TypeRecord, construction?: TupleDefaultConstruction,
   defaultCheck?: boolean, optional?: boolean, descendants?: readonly StructuralStorageAdmission[],
+  /** This observation read the receiver's own ordinary data value. */
+  ownData?: boolean,
 } | {
   kind: 'object', object: ObjectValue, type: TypeRecord & { Kind: 'object' },
 } | {
@@ -4304,6 +4307,18 @@ export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStora
       }
     }
   }
+}
+
+/** Only actual ordinary data storage can support an own-location witness.
+ * Equal values from proxies or representation-specific reads prove no such
+ * provenance. This inspection executes no internal method or user code. */
+function ordinaryDataValue(object: ObjectValue, key: PropertyKeyValue): Value | undefined {
+  if (object.Get !== ObjectValue.prototype.Get || object.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
+      || PlacementBackingOf(object) !== undefined || SoAElementBackingOf(object) !== undefined
+      || SoAStorageOf(object) !== undefined || ArraySpanBackingOf(object) !== undefined
+      || ArrayViewBackingOf(object) !== undefined) return undefined;
+  const own = object.properties.get(key);
+  return own && IsDataDescriptor(own) ? own.Value : undefined;
 }
 
 function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections): PlainEvaluator<boolean> {
@@ -5135,13 +5150,15 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           continue;
         }
+        const observedData = storage ? ordinaryDataValue(value, key) : undefined;
         const pv = Q(yield* Get(value, key));
+        const ownData = observedData !== undefined && SameValue(observedData, pv);
         const childStart = storage?.length;
         const admitted = storage ? {} as UnionMemberAdmission : undefined;
         if (!Q(yield* isMember(pv, p.type, storage, admitted))) {
           return false;
         }
-        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type, construction: admitted?.construction, optional: p.optional, descendants: storage.slice(childStart) });
+        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type, construction: admitted?.construction, optional: p.optional, descendants: storage.slice(childStart), ownData });
       }
       // Index signatures constrain every own enumerable key not already named.
       if (t.IndexSignatures.length > 0) {
@@ -5157,13 +5174,15 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           for (const ix of t.IndexSignatures) {
             if (Q(yield* isMember(k, ix.Key))) {
+              const observedData = storage ? ordinaryDataValue(value, k) : undefined;
               const kv = Q(yield* Get(value, k));
+              const ownData = observedData !== undefined && SameValue(observedData, kv);
               const childStart = storage?.length;
               const admitted = storage ? {} as UnionMemberAdmission : undefined;
               if (!Q(yield* isMember(kv, ix.Value, storage, admitted))) {
                 return false;
               }
-              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value, construction: admitted?.construction, optional: true, descendants: storage.slice(childStart) });
+              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value, construction: admitted?.construction, optional: true, descendants: storage.slice(childStart), ownData });
             }
           }
         }

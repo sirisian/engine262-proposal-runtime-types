@@ -1,0 +1,1177 @@
+{
+  "cases": [
+    {
+      "name": "method-0-public",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-private",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);#value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-accessor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);accessor value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");let absent=false;try{owner.value;}catch(e){if(!(e instanceof TypeError))throw e;absent=true;}if(!absent)throw new Error(\"backing published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-readonly",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);readonly value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-inherited",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class B{first=(owner=this,1);}class C extends B{value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-static",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{static first=(owner=this,1);static value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};static last=(later++,1);}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{items:[Item],readonly z:number}={items:[@save {fn(value:U):U{return value;}}],get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-nested-object",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{box:{child:Item},readonly z:number}={box:{child:@save {fn(value:U):U{return value;}}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-binding",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{const out:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-argument",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function consume(out:{child:Item,readonly z:number}){later++;}consume({child:@save {fn(value:U):U{return value;}},get z():number{return cross();}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-0-return",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function make():{child:Item,readonly z:number}{return {child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};}make();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-public",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-private",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);#value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-accessor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);accessor value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");let absent=false;try{owner.value;}catch(e){if(!(e instanceof TypeError))throw e;absent=true;}if(!absent)throw new Error(\"backing published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-readonly",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);readonly value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-inherited",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class B{first=(owner=this,1);}class C extends B{value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-static",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{static first=(owner=this,1);static value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};static last=(later++,1);}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{items:[Item],readonly z:number}={items:[@save {fn(value:U):U{return value;}}],get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-nested-object",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{box:{child:Item},readonly z:number}={box:{child:@save {fn(value:U):U{return value;}}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-binding",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{const out:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-argument",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function consume(out:{child:Item,readonly z:number}){later++;}consume({child:@save {fn(value:U):U{return value;}},get z():number{return cross();}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-1-return",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function make():{child:Item,readonly z:number}{return {child:@save {fn(value:U):U{return value;}},get z():number{return cross();}};}make();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-public",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-private",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);#value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-accessor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);accessor value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");let absent=false;try{owner.value;}catch(e){if(!(e instanceof TypeError))throw e;absent=true;}if(!absent)throw new Error(\"backing published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-readonly",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);readonly value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-inherited",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class B{first=(owner=this,1);}class C extends B{value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-static",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{static first=(owner=this,1);static value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};static last=(later++,1);}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{items:[Item],readonly z:number}={items:[@save {fn:function(value:U):U{return value;}}],get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-nested-object",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{box:{child:Item},readonly z:number}={box:{child:@save {fn:function(value:U):U{return value;}}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-binding",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{const out:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-argument",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function consume(out:{child:Item,readonly z:number}){later++;}consume({child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-0-return",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function make():{child:Item,readonly z:number}{return {child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};}make();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-public",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-private",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);#value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-accessor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);accessor value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");let absent=false;try{owner.value;}catch(e){if(!(e instanceof TypeError))throw e;absent=true;}if(!absent)throw new Error(\"backing published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-readonly",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);readonly value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-inherited",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class B{first=(owner=this,1);}class C extends B{value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-static",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{static first=(owner=this,1);static value:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};static last=(later++,1);}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{items:[Item],readonly z:number}={items:[@save {fn:function(value:U):U{return value;}}],get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-nested-object",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{box:{child:Item},readonly z:number}={box:{child:@save {fn:function(value:U):U{return value;}}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-binding",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{const out:{child:Item,readonly z:number}={child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-argument",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function consume(out:{child:Item,readonly z:number}){later++;}consume({child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-1-return",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function make():{child:Item,readonly z:number}{return {child:@save {fn:function(value:U):U{return value;}},get z():number{return cross();}};}make();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-public",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-private",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);#value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-accessor",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);accessor value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");let absent=false;try{owner.value;}catch(e){if(!(e instanceof TypeError))throw e;absent=true;}if(!absent)throw new Error(\"backing published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-readonly",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);readonly value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-inherited",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class B{first=(owner=this,1);}class C extends B{value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-static",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{static first=(owner=this,1);static value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};static last=(later++,1);}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{items:[Item],readonly z:number}={items:[@save {fn:(value:U):U=>value}],get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-nested-object",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{box:{child:Item},readonly z:number}={box:{child:@save {fn:(value:U):U=>value}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-binding",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{const out:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-argument",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function consume(out:{child:Item,readonly z:number}){later++;}consume({child:@save {fn:(value:U):U=>value},get z():number{return cross();}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-0-return",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function make():{child:Item,readonly z:number}{return {child:@save {fn:(value:U):U=>value},get z():number{return cross();}};}make();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-public",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-private",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);#value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-accessor",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);accessor value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");let absent=false;try{owner.value;}catch(e){if(!(e instanceof TypeError))throw e;absent=true;}if(!absent)throw new Error(\"backing published\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-readonly",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);readonly value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-inherited",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class B{first=(owner=this,1);}class C extends B{value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-static",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{static first=(owner=this,1);static value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};static last=(later++,1);}}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested-tuple",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{items:[Item],readonly z:number}={items:[@save {fn:(value:U):U=>value}],get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-nested-object",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{class C{first=(owner=this,1);value:{box:{child:Item},readonly z:number}={box:{child:@save {fn:(value:U):U=>value}},get z():number{return cross();}};last=(later++,1);}new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);if(owner.first!==1||Object.hasOwn(owner,\"last\"))throw new Error(\"earlier/later fields\");if(Object.hasOwn(owner,\"value\"))throw new Error(\"published failed field\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-binding",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{const out:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-argument",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function consume(out:{child:Item,readonly z:number}){later++;}consume({child:@save {fn:(value:U):U=>value},get z():number{return cross();}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-1-return",
+      "modules": {
+        "main": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}let caught=false;try{function make():{child:Item,readonly z:number}{return {child:@save {fn:(value:U):U=>value},get z():number{return cross();}};}make();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||later!==0)throw new Error(\"failure/order\");ordinary(escaped);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "original",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let escaped:any;let crossed=false;function save(c:Reflect.Object){escaped=c.objectContext;}function cross():number{let a:Item=escaped;ordinary(a);crossed=true;return 1;}class C{a:{readonly trigger:number,child:Item}={get trigger():number{return cross();},child:@save {fn(value:U):U{return value;}}};}let caught=false;try{new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||!crossed)throw new Error(\"reentry\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-changed-compatible",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}let caught=false;try{const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;raw.x=2;return 1;}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||extra!==0)throw new Error(\"stale evidence\");raw.x=\"after\";if(raw.x!==\"after\")throw new Error(\"published failed contract\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-changed-incompatible",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}let caught=false;try{const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;raw.x=\"wrong\";return 1;}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||extra!==0)throw new Error(\"stale evidence\");raw.x=\"after\";if(raw.x!==\"after\")throw new Error(\"published failed contract\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-deleted",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}let caught=false;try{const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;delete raw.x;return 1;}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||extra!==0)throw new Error(\"stale evidence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-accessor-replacement",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}let caught=false;try{const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;Object.defineProperty(raw,\"x\",{get(){extra++;return 1;},configurable:true});return 1;}};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||extra!==0)throw new Error(\"stale evidence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-same-value",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;raw.x=1;return 1;}};if(calls!==1||out!==raw||out.x!==1)throw new Error(\"unchanged data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-same-value-descriptor",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;Object.defineProperty(raw,\"x\",{value:1,writable:true,enumerable:true,configurable:true});return 1;}};if(calls!==1||out!==raw||out.x!==1)throw new Error(\"unchanged data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-freeze",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;Object.freeze(raw);return 1;}};if(calls!==1||out!==raw||out.x!==1)throw new Error(\"unchanged data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "data-unrelated",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;raw.other=2;return 1;}};if(calls!==1||out!==raw||out.x!==1)throw new Error(\"unchanged data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor-read-once",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}let reads=0;const out:{readonly x:number,readonly z:number}=@save {get x():number{reads++;return 1;},get z():number{calls++;return 1;}};if(reads!==1||calls!==1||out!==raw)throw new Error(\"reads\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-throw-precedence",
+      "modules": {
+        "main": "let raw:any;let calls=0;let extra=0;function save(c:Reflect.Object){raw=c.objectContext;}const sentinel={};let caught=false;try{const out:{x:number,readonly z:number}=@save {x:1,get z():number{calls++;raw.x=\"bad\";throw sentinel;}};}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||calls!==1)throw new Error(\"precedence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "numeric-materialization",
+      "modules": {
+        "main": "const raw:any={n:3};const out:{n:uint8}=raw;if(out!==raw||out.n!==3||Reflect.typeOf(out.n)!==type uint8)throw new Error(\"numeric\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-materialization",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const raw:any={fn:id};const out:{fn:(x:string)=>string}=raw;const f:any=out.fn;if(f(\"ok\")!==\"ok\"||Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"materialization\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-location-intersection",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const raw:any={fn:id};type A={fn:(x:string)=>string};const out:A&A=raw;const f:any=out.fn;if(f(\"ok\")!==\"ok\")throw new Error(\"intersection\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-nested-admission",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let calls=0;function save(c:Reflect.Object){escaped=c.objectContext;}class C{value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{calls++;const inner:{fn:<V:type>(value:V)=>V}=escaped;return 1;}};}const c=new C();const f:any=c.value.child.fn;if(calls!==1||f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"compatible nested\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-instance-recovery",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};let escaped:any;let fail=true;let calls=0;function save(c:Reflect.Object){escaped=c.objectContext;}class C{value:{child:Item,readonly z:number}={child:@save {fn(value:U):U{return value;}},get z():number{calls++;if(fail){const inner:Item=escaped;}return 1;}};}let caught=false;try{new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"failure\");fail=false;const c=new C();const f:any=c.value.child.fn;if(calls!==2||f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"recovery\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "feature-off",
+      "modules": {
+        "main": "let raw;let calls=0;const out={x:1,get z(){calls++;raw.x=2;return 1;}};raw=out;if(out.z!==1||out.x!==2||calls!==1)throw new Error(\"ordinary\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-invalidates-earlier-data",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}let reads=0;let writes=0;const raw:any={a:1,get z(){reads++;return id;},set z(v){writes++;raw.a=2;}};let caught=false;try{const out:{a:number,z:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1||writes!==1||raw.a!==2)throw new Error(\"setter invalidation\");raw.a=\"after\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-invalidates-earlier-materialization",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}let reads=0;let writes=0;const raw:any={a:id,get z(){reads++;return id;},set z(v){writes++;raw.a=id;}};let caught=false;try{const out:{a:(x:string)=>string,z:(x:string)=>string}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1||writes!==1||raw.a!==id)throw new Error(\"materialization invalidation\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-preserves-earlier-materialization",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}let reads=0;let writes=0;const raw:any={a:id,get z(){reads++;return id;},set z(v){writes++;raw.a=raw.a;}};const out:{a:(x:string)=>string,z:(x:string)=>string}=raw;const f:any=raw.a;if(reads!==1||writes!==1||f(\"ok\")!==\"ok\"||Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"materialized data\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "setter-throw-precedence",
+      "modules": {
+        "main": "function id<T:type>(x:T):T{return x;}const sentinel={};let reads=0;let writes=0;const raw:any={a:id,get z(){reads++;return id;},set z(v){writes++;raw.a=id;throw sentinel;}};let caught=false;try{const out:{a:(x:string)=>string,z:(x:string)=>string}=raw;}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==1||writes!==1||raw.a!==id)throw new Error(\"setter precedence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "index-data-invalidation",
+      "modules": {
+        "main": "let calls=0;const raw:any={x:1,get y(){calls++;raw.x=2;return 3;}};let caught=false;try{const out:{[key:string]:number}=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||raw.x!==2)throw new Error(\"index evidence\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-context",
+      "modules": {
+        "dep": "type Item={fn:<U:type>(value:U)=>U}|{fn:(value:string)=>string};let escaped:any;let owner:any;let calls=0;let later=0;function save(c:Reflect.Object){escaped=c.objectContext;}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined||f(\"ok\")!==\"ok\")throw new Error(\"nested admission\");}function cross():number{calls++;const inner:Item=escaped;ordinary(inner);return 1;}export {Item,save,cross,ordinary,escaped,calls};",
+        "main": "import {Item,save,cross,ordinary,escaped,calls} from \"dep\";class C{value:{child:Item,readonly z:number}={child:@save {fn:(value:U):U=>value},get z():number{return cross();}};}let caught=false;try{new C();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1)throw new Error(\"imported admission\");ordinary(escaped);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled",
+      "modules": {
+        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let escaped:any;let crossed=false;function save(c:Reflect.Object){escaped=c.objectContext;}function cross():number{let a:Item=escaped;ordinary(a);crossed=true;return 1;}class C{a:{readonly trigger:number,child:Item}={get trigger():number{return cross();},child:@save {fn(value:U):U{return value;}}};}new C();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}
