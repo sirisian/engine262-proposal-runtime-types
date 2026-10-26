@@ -2,7 +2,7 @@ import { RetainArgumentResult, CopyArgumentResults, RetainParameterConstruction,
   BeginConstructionSelections, EndConstructionSelections, CompleteConstructionSelections,
   ConstructionSelectionsOf, RetainPropertyResult } from '../type-system/result-dependencies.mts';
 import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
-import { Value, ReferenceValue, ReferenceRunValue, ObjectValue, JSStringValue } from '../value.mts';
+import { Value, ReferenceValue, ReferenceRunValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
 import { DecayReferenceValue, withReferenceRunInitializationEvaluator } from '../abstract-ops/reference-operations.mts';
 import {
@@ -18,7 +18,7 @@ import {
 } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { __ts_cast__ } from '../utils/language.mts';
-import { CreateRefBinding, DeclarativeEnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
+import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
 import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
 import { TypeNodeToTypeRecord, RuntimeTypeOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
@@ -45,7 +45,7 @@ import {
 
   IteratorStepValue,
   UndefinedValue, EnvironmentRecord, type FunctionDeclaration,
-  Throw, ScalarRestOwner,
+  Throw,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-iteratorbindinginitialization */
@@ -253,39 +253,17 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
     if (node.TypeAnnotation) {
       const referent = Q(yield* GetValue(v.Location));
       const expected = Q(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type));
-      // Value admission does not change a location's invariant metadata type.
-      // Checking only its present value accepted a bare location as Scalar
-      // through `any`, although a later store can put metres in that location.
-      let location = v.Location;
-      let locationType: TypeRecord | undefined;
-      for (;;) {
-        const holder = location.Base instanceof EnvironmentRecord && location.ReferencedName instanceof JSStringValue
-          ? RefBindingHolder(location.Base, location.ReferencedName) : undefined;
-        const binding = holder?.bindings.get(location.ReferencedName as JSStringValue);
-        if (binding?.refLocation) {
-          location = binding.refLocation;
-          continue;
-        }
-        locationType = binding?.declaredType as TypeRecord | undefined;
-        break;
+      // The formal borrows the declared location, not the narrower value
+      // currently stored there. Share the alias/property/tuple lookup used by
+      // reference distribution; it performs no additional observable read.
+      const declared = DeclaredReferenceLocationType(v.Location);
+      if (declared && declared.Kind !== 'any' && expected.Kind !== 'any'
+          && !SameType(declared, expected)) {
+        return Throw.TypeError('the location bound by ref to $1 must have the same storage type', bindingId);
       }
-      if (location.Base instanceof ObjectValue && location.ReferencedName instanceof JSStringValue) {
-        const key = location.ReferencedName.stringValue();
-        const base = location.Base as ObjectValue & {
-          TypedProperties?: Map<string, { TypeRecord: TypeRecord }>, TypedElement?: { TypeRecord: TypeRecord },
-        };
-        locationType = base.TypedProperties?.get(key)?.TypeRecord
-          ?? (String(Number(key)) === key ? base.TypedElement?.TypeRecord : undefined);
-        const owner = ScalarRestOwner(base);
-        if (owner.ScalarRestGuards?.length) {
-          locationType = DeclaredReferenceLocationType(location);
-          if (locationType && locationType.Kind !== 'any' && expected.Kind !== 'any'
-              && !SameType(locationType, expected)) {
-            return Throw.TypeError('the location bound by ref to $1 must have the same storage type', bindingId);
-          }
-        }
-      }
-      locationType ??= RuntimeTypeOf(referent);
+      // Preserve the existing metadata-specific dynamic-boundary rule. An
+      // unknown location's current value is not a general invariant contract.
+      const locationType = declared ?? RuntimeTypeOf(referent);
       if ((expected.Kind === 'parameterized' || locationType.Kind === 'parameterized')
           && !SameType(locationType, expected)) {
         return Throw.TypeError('the location bound by ref to $1 must have the same metadata type', bindingId);

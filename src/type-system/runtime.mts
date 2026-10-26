@@ -4423,9 +4423,9 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
   if (t.Kind === 'reference') {
     if (value instanceof ReferenceValue) {
       const referent = Q(yield* GetValue(value.Location));
-      // Scalar-rest backing supplies a stable invariant place contract across
-      // reference-typed parameters and returns as well as `ref` parameters.
-      const locationType = DeclaredReferenceLocationType(value.Location, true);
+      // All known backing contracts are invariant, including reference-typed
+      // parameters and returns as well as the `ref` parameter spelling.
+      const locationType = DeclaredReferenceLocationType(value.Location);
       if (locationType && locationType.Kind !== 'any' && t.Target.Kind !== 'any' && !SameType(locationType, t.Target)) return false;
       return Q(yield* isMember(referent, t.Target));
     }

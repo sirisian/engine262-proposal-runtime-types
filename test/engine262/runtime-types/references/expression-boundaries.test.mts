@@ -102,7 +102,7 @@ test("ref spread value valid preserves behavior", () => {
 });
 
 test("ref optional valid preserves behavior", () => {
-  expectStaticTypeError("function take(x:uint8){return x;}const t:((x:uint8)=>uint8)|null=take;let x:uint8=1;String(t?.(ref x));");
+  expect(evaluated("function take(x:uint8){return x;}const t:((x:uint8)=>uint8)|null=take;let x:uint8=1;String(t?.(ref x));")).toBe("1");
   const prelude = "function take(x:uint8){return x;}function call(t:((x:uint8)=>uint8)|null,x:uint8){return t?.(ref x);}";
   expect(evaluated(`${prelude}String(call(take,1));`)).toBe("1");
   expect(evaluated(`${prelude}String(call(null,1));`)).toBe("undefined");

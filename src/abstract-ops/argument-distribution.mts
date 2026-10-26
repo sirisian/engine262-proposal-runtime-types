@@ -1,7 +1,7 @@
 import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { Value, ReferenceValue, ObjectValue, JSStringValue, SymbolValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
-import { EnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
+import { EnvironmentRecord, ModuleEnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
 import { Q, EnsureCompletion } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { IsOfType, RuntimeTypeOf } from '../type-system/runtime.mts';
@@ -15,10 +15,27 @@ import { ScalarRestOwner } from '#self';
 /** A location's declared contract, following aliases without reading storage. */
 export function DeclaredReferenceLocationType(location: ReferenceRecord, scalarRestOnly = false): TypeRecord | undefined {
   const seen = new Set<ReferenceRecord>();
+  const imports = new Set<object>();
   while (!seen.has(location)) {
     seen.add(location);
     if (location.Base instanceof EnvironmentRecord && location.ReferencedName instanceof JSStringValue) {
-      const binding = RefBindingHolder(location.Base, location.ReferencedName)?.bindings.get(location.ReferencedName);
+      let name = location.ReferencedName;
+      let holder = RefBindingHolder(location.Base, name);
+      let binding = holder?.bindings.get(name);
+      // An import names its exporter's binding; its local immutable indirection
+      // does not erase that binding's declared type. Inspect only module slots,
+      // retaining the original ReferenceRecord and all of its permissions.
+      while (holder instanceof ModuleEnvironmentRecord && binding?.indirect) {
+        if (imports.has(binding)) return undefined;
+        imports.add(binding);
+        const imported = holder.bindings.get(name);
+        if (!imported?.indirect) return undefined;
+        const [module, targetName] = imported.target;
+        if (!module.Environment) return undefined;
+        name = targetName;
+        holder = RefBindingHolder(module.Environment, name);
+        binding = holder?.bindings.get(name);
+      }
       if (binding?.refLocation) {
         location = binding.refLocation;
         continue;

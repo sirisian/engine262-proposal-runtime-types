@@ -1,0 +1,951 @@
+{
+  "cases": [
+    {
+      "name": "marker-narrow-binding",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-own",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number|string}=raw;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-inherited",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number|string}=raw;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-symbol",
+      "modules": {
+        "main": "const key=Symbol(\"x\");const raw:any={[key]:1};const view:{[key]:number|string}=raw;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[key]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-empty-key",
+      "modules": {
+        "main": "const raw:any={\"\":1};const view:{\"\":number|string}=raw;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[\"\"]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-array",
+      "modules": {
+        "main": "const raw:[].<number|string>=[1];let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-tuple",
+      "modules": {
+        "main": "const raw:[number|string]=[1];let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-narrow-alias",
+      "modules": {
+        "main": "let value:number|string=1;let ref alias=value;let ref nested=alias;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref nested);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-binding",
+      "modules": {
+        "main": "let value:number=1;let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-own",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number}=raw;let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-inherited",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number}=raw;let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-symbol",
+      "modules": {
+        "main": "const key=Symbol(\"x\");const raw:any={[key]:1};const view:{[key]:number}=raw;let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[key]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-empty-key",
+      "modules": {
+        "main": "const raw:any={\"\":1};const view:{\"\":number}=raw;let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[\"\"]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-array",
+      "modules": {
+        "main": "const raw:[].<number>=[1];let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-tuple",
+      "modules": {
+        "main": "const raw:[number]=[1];let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-widen-alias",
+      "modules": {
+        "main": "let value:number=1;let ref alias=value;let ref nested=alias;let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;let caught=false;try{invoke(ref nested);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-same-number",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number}=raw;let calls=0;function f(ref n:number){calls++;n=2;}const invoke:any=f;invoke(ref raw.a);if(calls!==1||raw.a!==2||proto.a!==1)throw new Error(\"lost reference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-same-number|string",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number|string}=raw;let calls=0;function f(ref n:number|string){calls++;n=2;}const invoke:any=f;invoke(ref raw.a);if(calls!==1||raw.a!==2||proto.a!==1)throw new Error(\"lost reference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-bad-referent",
+      "modules": {
+        "main": "const raw:any={a:\"bad\"};let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(raw.a!==\"bad\")throw new Error(\"rewrote source\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-explicit-any-location",
+      "modules": {
+        "main": "let value:any=1;let calls=0;function f(ref n:number){calls++;n=2;}const invoke:any=f;invoke(ref value);if(calls!==1||value!==2)throw new Error(\"dynamic location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-unknown-location",
+      "modules": {
+        "main": "const raw:any={a:1};let calls=0;function f(ref n:number|string){calls++;}const invoke:any=f;invoke(ref raw.a);if(calls!==1||raw.a!==1)throw new Error(\"unknown location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-any-formal",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;function f(ref n:any){calls++;}const invoke:any=f;invoke(ref value);if(calls!==1)throw new Error(\"any formal\");value=\"still allowed\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-stale-after-default",
+      "modules": {
+        "main": "const a:[].<number>=[1];let ref r=a[0];let calls=0;function invalidate(){a.reserve(64);return 0;}function f(first:any=invalidate(),ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(undefined,ref r);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-numeric-no-conversion",
+      "modules": {
+        "main": "const raw:any={a:1};let calls=0;function f(ref n:uint8){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(Reflect.typeOf(raw.a)!==type number)throw new Error(\"converted borrow\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-binding",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-own",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number|string}=raw;let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-inherited",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number|string}=raw;let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-symbol",
+      "modules": {
+        "main": "const key=Symbol(\"x\");const raw:any={[key]:1};const view:{[key]:number|string}=raw;let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[key]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-empty-key",
+      "modules": {
+        "main": "const raw:any={\"\":1};const view:{\"\":number|string}=raw;let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[\"\"]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-array",
+      "modules": {
+        "main": "const raw:[].<number|string>=[1];let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-tuple",
+      "modules": {
+        "main": "const raw:[number|string]=[1];let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-narrow-alias",
+      "modules": {
+        "main": "let value:number|string=1;let ref alias=value;let ref nested=alias;let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref nested);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-binding",
+      "modules": {
+        "main": "let value:number=1;let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-own",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number}=raw;let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-inherited",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number}=raw;let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-symbol",
+      "modules": {
+        "main": "const key=Symbol(\"x\");const raw:any={[key]:1};const view:{[key]:number}=raw;let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[key]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-empty-key",
+      "modules": {
+        "main": "const raw:any={\"\":1};const view:{\"\":number}=raw;let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[\"\"]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-array",
+      "modules": {
+        "main": "const raw:[].<number>=[1];let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-tuple",
+      "modules": {
+        "main": "const raw:[number]=[1];let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw[0]);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-widen-alias",
+      "modules": {
+        "main": "let value:number=1;let ref alias=value;let ref nested=alias;let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref nested);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-same-number",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number}=raw;let calls=0;function f(n:ref (number)){calls++;const seen:any=n;if(String(seen)!==\"1\")throw new Error(\"read reference\");}const invoke:any=f;invoke(ref raw.a);if(calls!==1||raw.a!==1||proto.a!==1)throw new Error(\"lost reference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-same-number|string",
+      "modules": {
+        "main": "const proto:any={a:1};const raw:any=Object.create(proto);const view:{a:number|string}=raw;let calls=0;function f(n:ref (number|string)){calls++;const seen:any=n;if(String(seen)!==\"1\")throw new Error(\"read reference\");}const invoke:any=f;invoke(ref raw.a);if(calls!==1||raw.a!==1||proto.a!==1)throw new Error(\"lost reference\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-bad-referent",
+      "modules": {
+        "main": "const raw:any={a:\"bad\"};let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(raw.a!==\"bad\")throw new Error(\"rewrote source\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-explicit-any-location",
+      "modules": {
+        "main": "let value:any=1;let calls=0;function f(n:ref (number)){calls++;const seen:any=n;if(String(seen)!==\"1\")throw new Error(\"read reference\");}const invoke:any=f;invoke(ref value);if(calls!==1||value!==1)throw new Error(\"dynamic location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-unknown-location",
+      "modules": {
+        "main": "const raw:any={a:1};let calls=0;function f(n:ref (number|string)){calls++;}const invoke:any=f;invoke(ref raw.a);if(calls!==1||raw.a!==1)throw new Error(\"unknown location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-any-formal",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;function f(n:ref (any)){calls++;}const invoke:any=f;invoke(ref value);if(calls!==1)throw new Error(\"any formal\");value=\"still allowed\";"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-stale-after-default",
+      "modules": {
+        "main": "const a:[].<number>=[1];let ref r=a[0];let calls=0;function invalidate(){a.reserve(64);return 0;}function f(first:any=invalidate(),n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(undefined,ref r);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-numeric-no-conversion",
+      "modules": {
+        "main": "const raw:any={a:1};let calls=0;function f(n:ref (uint8)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(Reflect.typeOf(raw.a)!==type number)throw new Error(\"converted borrow\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "by-value-decay",
+      "modules": {
+        "main": "let value:number|string=1;function f(n:number){n=2;}const invoke:any=f;invoke(ref value);if(String(value)!==\"1\")throw new Error(\"by-value alias\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-rest-control",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;function f(ref ...items:[number]){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"rest invariance\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number|string}=raw;let calls=0;function f(ref n:number,label:string=\"default\"){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a,label:\"ok\");}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number|string}=raw;let calls=0;function f(ref n:number,label:string=\"default\"){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-equal",
+      "modules": {
+        "main": "function f<T:type>(ref n:T,value:T){n=value;}let value:number|string=1;const invoke:any=f.<number|string>;invoke(ref value,\"ok\");if(String(value)!==\"ok\")throw new Error(\"generic location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-mismatch",
+      "modules": {
+        "main": "function f<T:type>(ref n:T){calls++;}let value:number|string=1;let calls=0;const invoke:any=f.<number>;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forwarded-alias",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;function inner(ref n:number){calls++;}const invoke:any=inner;function outer(ref n:number|string){invoke(ref n);}const call:any=outer;let caught=false;try{call(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-default-not-run",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;let effects=0;function f(ref n:number,later:any=(effects++,0)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(effects!==0)throw new Error(\"later default ran\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "earlier-default-survives",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;let effects=0;function f(first:any=(effects++,0),ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(undefined,ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(effects!==1)throw new Error(\"lost earlier default\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "throwing-getter-precedence",
+      "modules": {
+        "main": "const sentinel={};let reads=0;const raw:any={get a(){reads++;if(reads>1)throw sentinel;return 1;}};const view:{a:number|string}=raw;function f(ref n:number){throw new Error(\"body\");}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==2)throw new Error(\"read precedence:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-parameter-reads",
+      "modules": {
+        "main": "let reads=0;const raw:any={get a(){reads++;return 1;}};const view:{a:number|string}=raw;reads=0;let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==2||calls!==0)throw new Error(\"receiving reads:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-receiving-read",
+      "modules": {
+        "main": "let reads=0;const raw:any={get a(){reads++;return 1;}};const view:{a:number|string}=raw;reads=0;let calls=0;const invoke:any=(ref n:number)=>{calls++;};let caught=false;try{invoke(ref raw.a);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1||calls!==0)throw new Error(\"arrow receiving reads:\"+reads);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-number|string",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number|string}=raw;let calls=0;function get():ref (number){return ref raw.a;}const invoke:any=get;let caught=false;try{invoke();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-number",
+      "modules": {
+        "main": "const raw:any={a:1};const view:{a:number}=raw;let calls=0;function get():ref (number|string){return ref raw.a;}const invoke:any=get;let caught=false;try{invoke();}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "marker-import-location",
+      "modules": {
+        "dep": "export let value:number|string=1;",
+        "main": "import {value} from \"dep\";let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"import invariant\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotation-import-location",
+      "modules": {
+        "dep": "export let value:number|string=1;",
+        "main": "import {value} from \"dep\";let calls=0;function f(n:ref (number)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"import invariant\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "metadata-bare-location",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}type Scalar=float32.<{m:0}>;let value:float32=2;let calls=0;function f(ref n:Scalar){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "metadata-equal",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}type Scalar=float32.<{m:0}>;let value:Scalar=(2 := Scalar);let calls=0;function f(ref n:Scalar){calls++;n=(3 := Scalar);}const invoke:any=f;invoke(ref value);if(calls!==1||String(value)!==\"3\")throw new Error(\"metadata equal\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport",
+      "modules": {
+        "dep": "export let value:number|string=1;",
+        "bridge": "export {value as forwarded} from \"dep\";",
+        "main": "import {forwarded as value} from \"bridge\";let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"reexport invariant\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "readonly-import",
+      "modules": {
+        "dep": "export let value:number=1;",
+        "main": "import {value} from \"dep\";let calls=0;function f(ref n:number){calls++;n=2;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==1||String(value)!==\"1\")throw new Error(\"import permission\");"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-field",
+      "modules": {
+        "main": "class Box{value:number|string=1;}const raw:any=new Box();let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-field",
+      "modules": {
+        "main": "const seed:any=1;class Box<T:type>{value:T=seed;}const raw:any=new Box.<number|string>();let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-type-existing-phase",
+      "modules": {
+        "main": "let value:number|string=1;let calls=0;let effects=0;function f(n:ref number,later:any=(effects++,0)){calls++;}const invoke:any=f;let caught=false;try{invoke(ref value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");if(effects!==1)throw new Error(\"reference-type phase\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unhandled",
+      "modules": {
+        "main": "let value:number|string=1;function f(ref n:number){}const invoke:any=f;invoke(ref value);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}
