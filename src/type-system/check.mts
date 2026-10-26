@@ -33641,6 +33641,64 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     reportType('rt-assignability', call, '$1 is not assignable to $2', Value(displayType(type)), Value('object'));
   };
 
+  // #sec-weak-references-and-typed-objects: the `target` and `unregisterToken`
+  // of `FinalizationRegistry.prototype.register`, and `unregister`'s token, are
+  // "checked the same way where their Static Type is known", and the
+  // registry's type parameter is its held value, "unconstrained", so a typed
+  // receiver is no precondition; a `WeakMap` key and a `WeakSet` value are the
+  // same judgment on the same criterion. A bare `new WeakMap()` has no Static
+  // Type by design (see `classTypeOf`), so the judgment reads the receiver's
+  // ORIGIN instead: a fresh construction of the unshadowed intrinsic, direct or
+  // through an immutable binding, with the prototype method still the original.
+  const checkWeakCollectionCall = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'MemberExpression' || !callee.IdentifierName) return;
+    const method = callee.IdentifierName.name;
+    const slots: Record<string, Record<string, readonly number[]>> = {
+      FinalizationRegistry: { register: [0, 2], unregister: [0] },
+      WeakMap: { set: [0] },
+      WeakSet: { add: [0] },
+    };
+    const construction = (expression: ParseNode, scope = frames.length - 1): ParseNode.NewExpression | null => {
+      const node = patternExpression(expression)!;
+      if (node.type === 'NewExpression') return node;
+      if (node.type !== 'IdentifierReference') return null;
+      for (let i = scope; i >= 0; i -= 1) {
+        const frame = frames[i];
+        if (frame.dynamicBindings) return null;
+        const origin = invocationOrigins.get(frame)?.get(node.name);
+        if (origin) return origin.immutable && !origin.annotated ? construction(origin.node, i) : null;
+        if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name)) return null;
+      }
+      return null;
+    };
+    const receiver = construction(callee.MemberExpression);
+    const target = receiver ? patternExpression(receiver.MemberExpression)! : null;
+    if (!target || target.type !== 'IdentifierReference' || !(target.name in slots) || !(method in slots[target.name]!)) return;
+    const library = target.name as 'FinalizationRegistry' | 'WeakMap' | 'WeakSet';
+    const realm = surroundingAgent.currentRealmRecord;
+    // A construction reached through a binding is screened at its own site by
+    // `intrinsicOrigin`. A construction that is the call's own receiver,
+    // `new WeakMap().set(k, v)`, shares the call's top-level item, where the
+    // screen would count the judged call itself as an unknown effect; it is
+    // screened at the call with that one call admitted.
+    const direct = receiver === patternExpression(callee.MemberExpression);
+    const stable = direct
+      ? !shadowedByProgram(library) && !hasDirectEval
+        && intrinsicSourceIsStable(root, realm, (node) => node === call.CallExpression
+          || (node.type === 'AssignmentRestElement' && objectSpreadItems(node) !== null), call)
+      : intrinsicOrigin(target, library);
+    if (!stable || !OriginalLibraryFunction(realm, `%${library}.prototype%`, method)) return;
+    const held = library === 'WeakMap' ? 'keys' : library === 'WeakSet' ? 'values' : method === 'register' ? 'target and token' : 'token';
+    for (const slot of slots[library]![method]!) {
+      const argument = call.Arguments[slot];
+      if (!argument || argument.type === 'AssignmentRestElement' || !operandParticipates(argument)) continue;
+      const type = staticType(argument);
+      if (!type || type.Kind === 'any' || mentionsTypeParameter(type) || typeCanBeHeldWeakly(widen(type)!)) continue;
+      reportType('rt-weak-target', argument, '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(type)), Value(library), Value(held));
+    }
+  };
+
   const checkStaticLibraryCall = (call: ParseNode.CallExpression): void => {
     const operation = staticLibraryOperations().get(call);
     if (!operation) return;
@@ -38903,6 +38961,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkStaticLibraryCall(n as ParseNode.CallExpression);
         checkLibraryBoundary(n as ParseNode.CallExpression);
         checkCompositeCall(n as ParseNode.CallExpression);
+        checkWeakCollectionCall(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);
