@@ -33600,6 +33600,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return element && element.Kind !== 'any' ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null;
   };
 
+  // #sec-composite-function: `Composite ( source: object )` is a contract on a
+  // global this proposal introduces, so it applies everywhere. A participating
+  // argument whose type holds no Object is refused at the call rather than by
+  // the TypeError step 1 of the algorithm throws; `any` and unknown arguments
+  // keep that runtime check, and the Symbol-key rule stays dynamic, since own
+  // enumerable keys are not a static fact of an open object type.
+  const checkCompositeCall = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'IdentifierReference' || callee.name !== 'Composite' || shadowedByProgram('Composite')) return;
+    const source = call.Arguments[0];
+    if (!source || source.type === 'AssignmentRestElement' || !operandParticipates(source)) return;
+    const type = staticType(source);
+    if (!type || type.Kind === 'any' || mentionsTypeParameter(type) || !knownNonObject(type)) return;
+    reportType('rt-assignability', call, '$1 is not assignable to $2', Value(displayType(type)), Value('object'));
+  };
+
   const checkStaticLibraryCall = (call: ParseNode.CallExpression): void => {
     const operation = staticLibraryOperations().get(call);
     if (!operation) return;
@@ -37685,6 +37701,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // initializer declares - a sequential function's parameter, say - is
         // that binding's, and is not reported.
         const enumName = n.BindingIdentifier.name;
+        // #sec-enums: "It is a type error if two enumerators of one declaration
+        // have the same name." The rule is syntactic, so it is judged here for
+        // every declaration, including one in a body that never runs, rather
+        // than left to the TypeError closed evaluation throws.
+        {
+          const seen = new Set<string>();
+          for (const member of n.EnumMemberList) {
+            const own = member.IdentifierName.name;
+            if (seen.has(own)) {
+              reportType('rt-enum-initializer', member as ParseNode, '$1 is already an enumerator of this enum, $2; each enumerator of one declaration has its own name', Value(own), Value(enumName));
+            }
+            seen.add(own);
+          }
+        }
         n.EnumMemberList.forEach((member, index) => {
           if (!member.Initializer) return;
           const own = member.IdentifierName.name;
@@ -38835,6 +38865,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkLibraryOperation(n as ParseNode.CallExpression);
         checkStaticLibraryCall(n as ParseNode.CallExpression);
         checkLibraryBoundary(n as ParseNode.CallExpression);
+        checkCompositeCall(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);

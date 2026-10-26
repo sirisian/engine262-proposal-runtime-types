@@ -59,6 +59,20 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
   };
   const symbol = (node: ParseNode): boolean => node.type === 'CallExpression' && node.Arguments.length === 0
     && node.CallExpression.type === 'IdentifierReference' && node.CallExpression.name === 'Symbol' && global('Symbol');
+  // A top-level binding carrying a type annotation supplies its declared
+  // store type as the operand's contract whatever its initializer, and
+  // whether it is `let` or `const`: an assignment can change its value and
+  // never its declared type (#sec-checking-state, "a narrower current value
+  // never changes a declared store contract"), which is the participation
+  // #sec-proved-library-operations reads.
+  const annotated = (expression: ParseNode): boolean => {
+    const node = unwrap(expression);
+    if (node.type !== 'IdentifierReference') return false;
+    const defs = definitions.get(node.name);
+    const def = defs?.length === 1 ? defs[0] : null;
+    return def?.type === 'LexicalBinding' && def.parent?.type === 'LexicalDeclaration' && topLevel(def)
+      && !!(def as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+  };
   const scalar = (expression: ParseNode): boolean => {
     const node = initializer(expression);
     return ['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral'].includes(node.type)
@@ -148,7 +162,7 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
   for (const node of nodes) {
     if (node.type === 'CallExpression' && topLevel(node) && node.CallExpression.type === 'IdentifierReference'
         && convertingGlobals.includes(node.CallExpression.name) && node.Arguments.length >= 1
-        && node.Arguments.every(scalar) && originalGlobal(node.CallExpression.name)) {
+        && node.Arguments.every((arg) => scalar(arg) || annotated(arg)) && originalGlobal(node.CallExpression.name)) {
       results.set(node, { kind: 'stringConversion', operand: node.Arguments[0] });
       selected.add(node);
       continue;
@@ -162,7 +176,7 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
     if (receiver.type === 'IdentifierReference' && receiver.name === 'Object' && global('Object')
         && name && ['create', 'setPrototypeOf'].includes(name) && OriginalLibraryFunction(realm, '%Object%', name)) {
       const index = name === 'create' ? 0 : 1;
-      if (args.length === index + 1 && args.every((arg) => scalar(arg) || !!data(initializer(arg)))) {
+      if (args.length === index + 1 && args.every((arg) => scalar(arg) || annotated(arg) || !!data(initializer(arg)))) {
         const target = index === 1 ? initializer(args[0]) : null;
         // RequireObjectCoercible precedes the prototype check in setPrototypeOf.
         if (!target || (target.type !== 'NullLiteral' && !(target.type === 'IdentifierReference' && target.name === 'undefined'))) {
@@ -175,15 +189,15 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
       // The receiver is a String, so ToString of it is established, and each
       // of these converts its search operand next.
       if (['includes', 'startsWith', 'endsWith', 'indexOf', 'lastIndexOf', 'localeCompare'].includes(name)
-          && args.length >= 1 && args.length <= 2 && args.every(scalar)) {
+          && args.length >= 1 && args.length <= 2 && args.every((arg) => scalar(arg) || annotated(arg))) {
         operation = { kind: 'stringConversion', operand: args[0] };
       }
-      if (name === 'concat' && args.length >= 1 && args.every(scalar)) {
+      if (name === 'concat' && args.length >= 1 && args.every((arg) => scalar(arg) || annotated(arg))) {
         operation = { kind: 'stringConversions', operands: args };
       }
       // StringPaddingBuiltinsImpl converts the filler only where the target
       // length exceeds the receiver's; otherwise that stage is never reached.
-      if (['padStart', 'padEnd'].includes(name) && args.length === 2 && args.every(scalar)) {
+      if (['padStart', 'padEnd'].includes(name) && args.length === 2 && scalar(args[0]) && (scalar(args[1]) || annotated(args[1]))) {
         const length = numeric(args[0]);
         if (length !== null && toLength(length) > string.value.length) operation = { kind: 'stringConversion', operand: args[1] };
       }
@@ -199,7 +213,7 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
         }
       }
     }
-    if (name === 'join' && array(receiver) && args.length === 1 && scalar(args[0])
+    if (name === 'join' && array(receiver) && args.length === 1 && (scalar(args[0]) || annotated(args[0]))
         && OriginalLibraryFunction(realm, '%Array.prototype%', name)) operation = { kind: 'stringConversion', operand: args[0] };
     // The ELEMENT stage: `join` and `toString` convert every element after the
     // separator. Whether an element is known to exist is the checker's
@@ -209,7 +223,7 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
       operation = { kind: 'elementStringConversion', receiver, method: name };
     }
     if (receiver.type === 'IdentifierReference' && receiver.name === 'Object' && global('Object') && name === 'is'
-        && args.length === 2 && args.every(scalar) && OriginalLibraryFunction(realm, '%Object%', 'is')) {
+        && args.length === 2 && args.every((arg) => scalar(arg) || annotated(arg)) && OriginalLibraryFunction(realm, '%Object%', 'is')) {
       operation = { kind: 'sameValueTest', operands: [args[0], args[1]] };
     }
     if (name === 'set' && args.length >= 1 && args.length <= 2) {

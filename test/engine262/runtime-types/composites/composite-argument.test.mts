@@ -30,3 +30,20 @@ test('object, tuple, array, interface and generic arguments are admitted', () =>
   expect(evaluated('interface P { x: uint8; } const Q = Composite.<P>; String(Q({ x: 2 }).x);')).toBe('2');
   expect(evaluated('function f<T: type>(x: T) { return Composite.<T>; } "ok";')).toBe('ok');
 });
+
+// `Composite ( source: object )`: the call's parameter is a declared contract
+// on a global this proposal introduces, so it applies everywhere. Step 1 of
+// the algorithm still guards `any` and unknown arguments, and the Symbol-key
+// rule stays dynamic: own enumerable keys are not a static fact.
+test('a participating argument holding no object is refused at the call', () => {
+  expectStaticTypeError('let n: uint8 = 5; Composite(n);');
+  expectStaticTypeError('const s: string = "a"; Composite(s);');
+  expectStaticTypeError('function f(v: null | undefined) { return Composite(v); }');
+});
+
+test('objects, arrays, any and unknown arguments keep their runtime path', () => {
+  expect(evaluated('const o: { x: uint8 } = { x: 1 }; String(Composite(o).x);')).toBe('1');
+  expect(evaluated('const t: [uint8, uint8] = [1, 2]; String(Composite(t)[0]);')).toBe('1');
+  expect(evaluated('let v: any = 5; try { Composite(v); } catch (e) { String(e instanceof TypeError); }')).toBe('true');
+  expect(evaluated('function f(u: object | uint8) { return Composite(u); } String(typeof f({}));')).toBe('object');
+});

@@ -4372,6 +4372,17 @@ export abstract class ExpressionParser extends FunctionParser {
         // followed by a relational operator in this position.
         if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
           const list = this.parseTypeParameters(false, 'method');
+          // #sec-type-parameters-static-semantics-early-errors: "It is a
+          // Syntax Error if this TypeParameters is not a parameter list and it
+          // belongs to ... the declaration of ... a constructor". A method
+          // may declare a case; the constructor is the one method that may
+          // not, since a class has one construct signature set and no family
+          // of constructors to specialize.
+          const constructorList = type === 'class element' && !isSpecialMethod && !(node as { static?: boolean }).static
+            && this.classElementNameIsConstructor((node as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);
+          if (constructorList && list.ListKind !== 'parameters') {
+            this.addEarlyError(Throw.SyntaxError('a constructor declares parameters only; a specialization list belongs to a method, function, or operator'), list);
+          }
           (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = list;
           this.scope.declareTypeParameters(list);
         }
