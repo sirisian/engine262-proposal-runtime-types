@@ -16985,6 +16985,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const inferStaticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
+    // Decoration does not remove the construction context of its operand.
+    // Function replacements must preserve its contract; retain that signature
+    // for contextual candidate selection without certifying a runtime result.
+    if (node?.type === 'DecoratedExpression') {
+      const source = staticTypeIn(node.Expression, contextual);
+      let literal = node.Expression;
+      while (literal.type === 'ParenthesizedExpression') literal = literal.Expression;
+      return isFunctionLiteral(literal) ? source : null;
+    }
     // #sec-vector-comparisons: the result form "is decided by the expected
     // type", so a comparison that reaches here with one is not ambiguous. The
     // drain after the walk reads this back.
@@ -19823,6 +19832,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return thisTypeFrames.length > 0 ? thisTypeFrames[thisTypeFrames.length - 1]! : null;
       case 'ParenthesizedExpression':
         return staticType((node as { Expression: ParseNode }).Expression);
+      case 'DecoratedExpression': {
+        let literal = node.Expression;
+        while (literal.type === 'ParenthesizedExpression') literal = literal.Expression;
+        // A function decorator may change identity, but each replacement must
+        // preserve this contract. This is not a proof of its returned value.
+        return isFunctionLiteral(literal) ? staticType(literal) : null;
+      }
       // #sec-generic-specialization: application binds explicit arguments and
       // defaults before a specialization publishes its instantiated signature.
       case 'TypeArgumentsExpression': {

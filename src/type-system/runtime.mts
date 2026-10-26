@@ -219,6 +219,7 @@ export function contextualTypeFor(node: object | undefined, selectLiteral = true
       || pt === 'CaseBlock' && (completion.DefaultClause === n || completion.CaseClauses_a?.includes(n) || completion.CaseClauses_b?.includes(n))
       || pt === 'DoExpression' && !completion.star && completion.Block === n;
     const transparent = completionChild || pt === 'ParenthesizedExpression'
+      || (pt === 'DecoratedExpression' && p.Expression === n)
       || (pt === 'ConditionalExpression' && n !== p.ShortCircuitExpression)
       || pt === 'LogicalANDExpression' || pt === 'LogicalORExpression' || pt === 'CoalesceExpression'
       || (pt === 'CommaOperator' && p.ExpressionList !== undefined && p.ExpressionList[p.ExpressionList.length - 1] === n);

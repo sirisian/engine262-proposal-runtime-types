@@ -1,0 +1,647 @@
+{
+  "cases": [
+    {
+      "name": "two-instances",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}let made=0;function touch(c:Reflect.Function){made++;}class C{f:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};g:<V:type>(value:V)=>V=@touch function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g||made!==4)throw new Error(\"instances\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "initializer-failure-recovery",
+      "modules": {
+        "main": "function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}let fail=true;const sentinel={};function touch(c:Reflect.Function){if(fail)throw sentinel;}class C{f:<U:type>(value:U)=>U=function(value:U):U{return value;};g:<V:type>(value:V)=>V=@touch function(value:V):V{return value;};}try{new C();throw new Error(\"accepted\");}catch(e){if(e!==sentinel)throw e;}fail=false;const c=new C();check(c.f,c.g);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-function",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};check(f);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-function",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class C{f:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};}const a=new C(),b=new C();check(a.f);check(b.f);if(a.f===b.f)throw new Error(\"instance\");if(made!==2)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-function",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function make():<U:type>(value:U)=>U{return @touch function(value:U):U{return value;};}check(make());if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-function",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function take(f:<U:type>(value:U)=>U){check(f);}take(@touch function(value:U):U{return value;});if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-parenthesized",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@(touch) (function(value:U):U{return value;});check(f);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-parenthesized",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class C{f:<U:type>(value:U)=>U=@(touch) (function(value:U):U{return value;});}const a=new C(),b=new C();check(a.f);check(b.f);if(a.f===b.f)throw new Error(\"instance\");if(made!==2)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-parenthesized",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function make():<U:type>(value:U)=>U{return @(touch) (function(value:U):U{return value;});}check(make());if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-parenthesized",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function take(f:<U:type>(value:U)=>U){check(f);}take(@(touch) (function(value:U):U{return value;}));if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@(touch) ((value:U):U=>value);check(f);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class C{f:<U:type>(value:U)=>U=@(touch) ((value:U):U=>value);}const a=new C(),b=new C();check(a.f);check(b.f);if(a.f===b.f)throw new Error(\"instance\");if(made!==2)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function make():<U:type>(value:U)=>U{return @(touch) ((value:U):U=>value);}check(make());if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function take(f:<U:type>(value:U)=>U){check(f);}take(@(touch) ((value:U):U=>value));if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-bare-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@touch value=>value;check(f);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-bare-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class C{f:<U:type>(value:U)=>U=@touch value=>value;}const a=new C(),b=new C();check(a.f);check(b.f);if(a.f===b.f)throw new Error(\"instance\");if(made!==2)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-bare-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function make():<U:type>(value:U)=>U{return @touch value=>value;}check(make());if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-bare-arrow",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}function take(f:<U:type>(value:U)=>U){check(f);}take(@touch value=>value);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}let f:<U:type>(value:U)=>U=function(value:U):U{return value;};f=@touch function(value:U):U{return value;};check(f);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-member",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const o:{f:<U:type>(value:U)=>U}={f:@touch function(value:U):U{return value;}};check(o.f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tuple-member",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const t:[<U:type>(value:U)=>U]=[@touch function(value:U):U{return value;}];check(t[0]);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class C{static f:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};}check(C.f);if(made!==1)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited-field",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class Base{f:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};}class Child extends Base{}check(new Child().f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-binder",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@touch function<V:type>(value:V):V{return value;};check(f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-frame",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function make<T:type>(outer:T){const f:<U:type>(value:U)=>{outer:T,own:U}=@touch function(value:U):{outer:T,own:U}{return {outer,own:value};};return f;}const a:any=make.<number>(7),b:any=make.<string>(\"outer\");const x=a.<string>(\"inner\"),y=b.<number>(8);if(x.outer!==7||x.own!==\"inner\"||y.outer!==\"outer\"||y.own!==8)throw new Error(\"capture\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}class Box<T:type>{f:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};}check(new Box.<number>().f);check(new Box.<string>().f);if(made!==2)throw new Error(\"count\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflection-function",
+      "modules": {
+        "main": "function inspect(c:Reflect.Function){const s=c.signatures[0];if(c.kind!==\"Function\"||s.parameters.length!==1||s.parameters[0].name!==\"value\"||s.parameters[0].type===undefined||s.return.type===undefined||s.parameters[0].type!==s.return.type)throw new Error(\"reflection\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@(inspect) function(value:U):U{return value;};check(f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflection-arrow",
+      "modules": {
+        "main": "function inspect(c:Reflect.Function){const s=c.signatures[0];if(c.kind!==\"Function\"||s.parameters.length!==1||s.parameters[0].name!==\"value\"||s.parameters[0].type===undefined||s.return.type===undefined||s.parameters[0].type!==s.return.type)throw new Error(\"reflection\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@(inspect) ((value:U):U=>value);check(f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflection-concrete",
+      "modules": {
+        "main": "function inspect(c:Reflect.Function){const s=c.signatures[0];if(s.parameters[0].type!==number||s.return.type!==number)throw new Error(\"reflection\");}const f:(value:number)=>number=@inspect function(value:number):number{return value;};if(f(7)!==7)throw new Error(\"call\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-expression",
+      "modules": {
+        "main": "function inspect(c:Reflect.Function){if(c.name!==\"named\"||c.type.name!==\"named\")throw new Error(\"name\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@inspect function named(value:U):U{return value;};check(f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-generic",
+      "modules": {
+        "main": "function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}let original;function replace(c:Reflect.Function){original=c.type;return function<V:type>(value:V):V{return value;};}const f:<U:type>(value:U)=>U=@replace function(value:U):U{return value;};check(f);if(f===original)throw new Error(\"replacement\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-identity",
+      "modules": {
+        "main": "function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}let original;function replace(c:Reflect.Function){original=c.type;return c.type;}const f:<U:type>(value:U)=>U=@replace function(value:U):U{return value;};check(f);if(f!==original)throw new Error(\"identity\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-chain",
+      "modules": {
+        "main": "let log=\"\";function inner(c:Reflect.Function){log+=\"i\";return function(value:number):number{return value+1;};}function outer(c:Reflect.Function){log+=\"o\";if(c.type(1)!==2)throw new Error(\"chain\");}const f:(value:number)=>number=@outer @inner function(value:number):number{return value;};if(f(2)!==3||log!==\"io\")throw new Error(\"result\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-bad-value",
+      "modules": {
+        "main": "function replace(c:Reflect.Function):any{return 42;}let caught=false;try{const f:any=@replace function(value:number):number{return value;};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"accepted\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-bad-signature",
+      "modules": {
+        "main": "function replace(c:Reflect.Function):any{return function(value:string):string{return value;};}let caught=false;try{const f:any=@replace function(value:number):number{return value;};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"accepted\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-failure-precedence",
+      "modules": {
+        "main": "let log=\"\";function outer(c:Reflect.Function){log+=\"o\";}function bad(c:Reflect.Function):any{log+=\"b\";return 42;}let caught=false;try{const f:any=@outer @bad function(value:number):number{return value;};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||log!==\"b\")throw new Error(\"order\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "decorator-argument-order",
+      "modules": {
+        "main": "let log=\"\";function mark(s:string){log+=s;return s;}function tag(s:string,c:Reflect.Function){log+=s.toUpperCase();}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@tag(mark(\"a\")) @tag(mark(\"b\")) function(value:U):U{return value;};check(f);if(log!==\"abBA\")throw new Error(\"order\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "throw-identity",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}const sentinel={};function fail(c:Reflect.Function){throw sentinel;}let caught=false;try{const f:<U:type>(value:U)=>U=@fail function(value:U):U{return value;};}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught)throw new Error(\"missing\");function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const good:<U:type>(value:U)=>U=@touch function(value:U):U{return value;};check(good);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reentrant-creation",
+      "modules": {
+        "main": "function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}let depth=0,made=0;function inspect(c:Reflect.Function){made++;if(depth===0){depth++;const inner:<V:type>(value:V)=>V=@inspect function(value:V):V{return value;};check(inner);depth--;}}const f:<U:type>(value:U)=>U=@inspect function(value:U):U{return value;};check(f);if(made!==2)throw new Error(\"reentry\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-alias",
+      "modules": {
+        "dep": "export type Sig=<V:type>(value:V)=>V;",
+        "main": "import {Sig} from \"dep\";let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:Sig=@touch function(value:V):V{return value;};check(f);"
+      },
+      "script": false,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bad-body",
+      "modules": {
+        "main": "function touch(c:Reflect.Function){}const f:<U:type>(value:U)=>U=@touch function(value:U):U{return \"wrong\";};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unhandled-decorator",
+      "modules": {
+        "main": "const sentinel={};function fail(c:Reflect.Function){throw new Error(\"decorator\");}const f:<U:type>(value:U)=>U=@fail function(value:U):U{return value;};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "function-no-context",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}const f=@touch function(value:number):number{return value;};if(f(7)!==7||made!==1)throw new Error(\"call\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-control",
+      "modules": {
+        "main": "let kind=\"\";function touch(c:Reflect.Object){kind=c.kind;}const o=@touch {x:1};if(kind!==\"Object\"||o.x!==1)throw new Error(\"object\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-union",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const o:{kind:1,f:<U:type>(value:U)=>U}|{kind:2,f:string}={kind:1,f:@touch function(value:U):U{return value;}};check(o.f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-context",
+      "modules": {
+        "main": "let made=0;function touch(c:Reflect.Function){made++;if(c.kind!==\"Function\")throw new Error(\"kind\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=true?@touch function(value:U):U{return value;}:function(value:U):U{return value;};check(f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflection-omitted",
+      "modules": {
+        "main": "function inspect(c:Reflect.Function){const s=c.signatures[0];if(c.kind!==\"Function\"||s.parameters.length!==1||s.parameters[0].name!==\"value\"||s.parameters[0].type===undefined||s.return.type===undefined||s.parameters[0].type!==s.return.type)throw new Error(\"reflection\");}function check(f:any){if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"call\");}const f:<U:type>(value:U)=>U=@inspect function(value){return value;};check(f);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-replacement",
+      "modules": {
+        "main": "function replace(c:Reflect.Function){return function(){return \"ok\";};}const f=@replace function(){return \"before\";};if(f()!==\"ok\")throw new Error(\"replacement\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "frozen-context-replacement",
+      "modules": {
+        "main": "let outer=false;function see(c:Reflect.Function){outer=true;}function replace(c:Reflect.Function){Object.freeze(c);return function(value:number):number{return value;};}let caught=false;try{const f=@see @replace function(value:number):number{return value;};}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||outer)throw new Error(\"frozen context\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

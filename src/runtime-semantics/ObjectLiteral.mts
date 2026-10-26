@@ -1,6 +1,7 @@
-import { contextualTypeFor } from '../type-system/runtime.mts';
+import { contextualTypeFor, RuntimeTypeOf, publishedReturnTypeOfFunction } from '../type-system/runtime.mts';
 import { Value } from '../value.mts';
-import { Q, X } from '../completion.mts';
+import { Q, X, EnsureCompletion } from '../completion.mts';
+import { EvaluateResultValue } from '../type-system/result-dependencies.mts';
 import { FreshObjectLiteralTarget } from '../type-system/check.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
@@ -14,6 +15,8 @@ import {
 import { BeginObjectResult, EndObjectResult, CompleteObjectResult, type ObjectValue, surroundingAgent, OrdinaryObjectCreate, GetValue, IsArray, HasProperty, CreateDataProperty } from '#self';
 import { IsComposite } from '../intrinsics/Composite.mts';
 import { Evaluate } from '../evaluator.mts';
+import { FunctionDecoratorContext } from './FunctionDeclaration.mts';
+import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 
 /**
  * The value an unfolded member default evaluated to, keyed by its property
@@ -120,14 +123,31 @@ function* PopulateObjectLiteral(node: ParseNode.ObjectLiteral, obj: ObjectValue)
  * since that is what it is.
  */
 export function* Evaluate_DecoratedExpression({ Decorators, Expression }: ParseNode.DecoratedExpression): ValueEvaluator {
-  const ref = Q(yield* Evaluate(Expression as never));
-  const value = Q(yield* GetValue(ref as never));
+  const result = EnsureCompletion(yield* EvaluateResultValue(Expression as ParseNode.AssignmentExpressionOrHigher));
+  if (result.Type !== 'normal') return result;
+  const value = result.Value;
   if (surroundingAgent.feature('runtime-types') && Decorators?.length) {
+    let target: ParseNode = Expression;
+    while (target.type === 'ParenthesizedExpression') target = target.Expression;
+    if (['FunctionExpression', 'ArrowFunction', 'AsyncFunctionExpression',
+      'AsyncArrowFunction', 'GeneratorExpression', 'AsyncGeneratorExpression'].includes(target.type)) {
+      const name = (target as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name;
+      // Resolve reflection through the created closure, whose effective own
+      // binders and captured frame are available; the bare syntax has neither.
+      const signature = Q(yield* OverloadSignatureOf(value));
+      const context = Q(yield* FunctionDecoratorContext(name === undefined ? Value.undefined : Value(name), value, target, {
+        ...signature, ReturnType: signature.ReturnType ?? publishedReturnTypeOfFunction(value),
+      }));
+      const replacement = Q(yield* ApplyDecorators(Decorators, context, true, RuntimeTypeOf(value)));
+      // Only the original producing completion owns its construction choice.
+      // Even returning the same value as a replacement is a new contribution.
+      return replacement ?? result;
+    }
     let kind = 'Object';
     if (IsComposite(value)) {
       kind = IsArray(value) === Value.true ? 'Tuple' : 'Record';
     }
     Q(yield* ApplyDecorators(Decorators, Q(yield* ObjectMemberDecoratorContext(kind, Value.undefined, value))));
   }
-  return value;
+  return result;
 }

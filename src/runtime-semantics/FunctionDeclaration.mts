@@ -11,6 +11,7 @@ import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { PutValue } from '#self';
 import { CreateDataProperty, OrdinaryObjectCreate, ResolveBinding, X, surroundingAgent } from '#self';
 import { InstantiateFunctionObject } from './all.mts';
+import type { OverloadSignature } from '../type-system/overloads.mts';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-evaluation */
 // FunctionDeclaration :
@@ -82,7 +83,7 @@ export function* Evaluate_FunctionDeclaration(
 }
 
 /** decorators.md's `FunctionReflection`: `name`, `type`, `signatures`, `metadata`. */
-export function* FunctionDecoratorContext(name: Value, fn: Value, node?: ParseNode): ValueEvaluator {
+export function* FunctionDecoratorContext(name: Value, fn: Value, node?: ParseNode, signature?: OverloadSignature): ValueEvaluator {
   const realm = surroundingAgent.currentRealmRecord;
   const context = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   X(CreateDataProperty(context, Value('kind'), Value('Function')));
@@ -95,7 +96,7 @@ export function* FunctionDecoratorContext(name: Value, fn: Value, node?: ParseNo
   // its decoration was written on. Without it an overloaded function reflected
   // as though it had one.
   if (node) {
-    const one = Q(yield* FunctionSignatureReflectionOf(node, realm));
+    const one = Q(yield* FunctionSignatureReflectionOf(node, realm, signature));
     X(CreateDataProperty(context, Value('signatures'), X(CreateArrayFromList([one]))));
   }
   // A function has no base declaration, so its metadata inherits nothing - the

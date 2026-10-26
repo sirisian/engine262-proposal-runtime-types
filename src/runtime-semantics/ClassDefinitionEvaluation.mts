@@ -1,7 +1,8 @@
 import { operatorTableKey } from '../type-system/overloads.mts';
+import type { OverloadSignature } from '../type-system/overloads.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
-import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, IsOfType } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { displayType, typeParameterRecordsOf, parameterFromDeclaration } from '../type-system/records.mts';
 import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '../abstract-ops/runtime-types.mts';
@@ -475,7 +476,7 @@ export function readFieldControls(decorators: readonly ParseNode.Decorator[] | n
  * return replacement", so their callers pass `replaceable` false and a returned
  * value is discarded rather than silently applied somewhere.
  */
-export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined, context: Value, replaceable = false): PlainEvaluator<Value | undefined> {
+export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined, context: Value, replaceable = false, replacementType?: TypeRecord): PlainEvaluator<Value | undefined> {
   const list = decorators ?? [];
   const applicable: ParseNode.Decorator[] = [];
   const evaluated: Value[] = [];
@@ -572,6 +573,12 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
       CloseDecorationContext(context);
     }
     if (replaceable && returned !== Value.undefined && !(returned instanceof UndefinedValue)) {
+      if (replacementType) {
+        const admitted = Q(yield* IsOfType(returned, replacementType));
+        if (!admitted) return Throw.TypeError('a function decorator replacement must preserve the function contract');
+        // Each outer function decorator receives the accepted inner result.
+        Q(yield* CreateDataPropertyOrThrow(context as ObjectValue, Value('type'), returned));
+      }
       replacement = returned;
     }
   }
@@ -2748,7 +2755,7 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value |
  * parameter CONTEXT reports, from the same node, so the two cannot disagree
  * about one declaration.
  */
-export function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof surroundingAgent.currentRealmRecord): ValueEvaluator {
+export function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof surroundingAgent.currentRealmRecord, signature?: OverloadSignature): ValueEvaluator {
   const sig = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
   const n = node as {
     UniqueFormalParameters?: readonly ParseNode[] | null,
@@ -2756,7 +2763,8 @@ export function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof su
     FormalParameters?: readonly ParseNode[] | null,
     TypeAnnotation?: { Type?: ParseNode } | null,
   };
-  const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
+  const formals = (signature?.Function as { FormalParameters?: readonly ParseNode[] } | undefined)?.FormalParameters
+    ?? n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
   const parameters: Value[] = [];
   for (let i = 0; i < formals.length; i += 1) {
     const entry = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -2769,7 +2777,10 @@ export function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof su
     if (binding.BindingIdentifier?.name !== undefined) {
       X(CreateDataProperty(entry, Value('name'), Value(binding.BindingIdentifier.name)));
     }
-    if (binding.TypeAnnotation?.Type) {
+    if (signature) {
+      const type = signature.Parameters[i]?.Type;
+      if (type) X(CreateDataProperty(entry, Value('type'), GetTypeObject(type, realm) as Value));
+    } else if (binding.TypeAnnotation?.Type) {
       const t = EnsureCompletion(yield* TypeNodeToTypeRecord(binding.TypeAnnotation.Type as never));
       if (t.Type === 'normal') {
         X(CreateDataProperty(entry, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
@@ -2781,7 +2792,9 @@ export function* FunctionSignatureReflectionOf(node: ParseNode, realm: typeof su
   }
   X(CreateDataProperty(sig, Value('parameters'), X(CreateArrayFromList(parameters))));
   const ret = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-  if (n.TypeAnnotation?.Type) {
+  if (signature) {
+    if (signature.ReturnType) X(CreateDataProperty(ret, Value('type'), GetTypeObject(signature.ReturnType, realm) as Value));
+  } else if (n.TypeAnnotation?.Type) {
     const t = EnsureCompletion(yield* TypeNodeToTypeRecord(n.TypeAnnotation.Type as never));
     if (t.Type === 'normal') {
       X(CreateDataProperty(ret, Value('type'), GetTypeObject(t.Value as unknown as TypeRecord, realm) as Value));
