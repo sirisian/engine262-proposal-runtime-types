@@ -4259,6 +4259,54 @@ export type TupleDefaultConstruction = {
 };
 export type UnionMemberAdmission = { member?: TypeRecord, construction?: TupleDefaultConstruction };
 
+/** Input observations survive failed membership, but establish no admission,
+ * backing or reference authority. One receiving operation owns this graph. */
+export type StructuralValueObservations = Map<ObjectValue, Map<string | SymbolValue, {
+  value: Value, data?: OrdinaryDataObservation,
+}>>;
+
+export function* ObserveStructuralValue(object: ObjectValue, key: PropertyKeyValue,
+  observations?: StructuralValueObservations): PlainEvaluator<{ value: Value, data?: OrdinaryDataObservation }> {
+  const name = key instanceof JSStringValue ? key.stringValue() : key;
+  const retained = observations?.get(object)?.get(name);
+  if (retained) {
+    if (retained.data && !OrdinaryDataObservationValid(retained.data, key)) {
+      return Throw.TypeError('structural data changed after its receiving observation');
+    }
+    return retained;
+  }
+  const before = ordinaryDataObservation(object, key);
+  const value = Q(yield* Get(object, key));
+  const entry = { value, data: before && SameValue(before.value, value) ? before : undefined };
+  if (observations) {
+    let entries = observations.get(object);
+    if (!entries) observations.set(object, entries = new Map());
+    entries.set(name, entry);
+  }
+  return entry;
+}
+
+/** Only this operation's verified data write advances its input observation.
+ * A setter/Proxy result must be observed afresh during final validation. */
+export function AdvanceStructuralValue(object: ObjectValue, key: PropertyKeyValue, value: Value,
+  observations?: StructuralValueObservations): ThrowCompletion | undefined {
+  const name = key instanceof JSStringValue ? key.stringValue() : key;
+  const entries = observations?.get(object);
+  const old = entries?.get(name);
+  if (!old) return undefined;
+  if (old.data) {
+    if (old.data.path.length > 1 && !OrdinaryDataObservationValid(old.data, key, true)) {
+      return Throw.TypeError('inherited data changed during structural conversion');
+    }
+    const data = ordinaryDataObservation(object, key);
+    if (!data || data.path.length !== 1 || !SameValue(data.value, value)) {
+      return Throw.TypeError('structural conversion did not publish its expected data value');
+    }
+    entries!.set(name, { value, data });
+  } else entries!.delete(name);
+  return undefined;
+}
+
 /** Reads belong to one receiving operation, independently of whether its
  * membership attempt succeeds. They establish no backing or liveness fact. */
 export type SequenceObservation = {
@@ -4286,14 +4334,14 @@ export function* ObserveSequenceElement(object: ObjectValue, index: number, obse
   return entry;
 }
 
-export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections): PlainEvaluator<boolean> {
-  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices);
+export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections, observations?: StructuralValueObservations): PlainEvaluator<boolean> {
+  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices, observations);
   const checkpoint = storage?.length;
   const previousMember = selection?.member;
   const previousConstruction = selection?.construction;
   let admitted = false;
   try {
-    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices));
+    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices, observations));
     if (admitted && storage && selection?.construction) {
       // A copying value boundary owns its evidence. Do not acquire storage on
       // its source while the receiving operation is still choosing a result.
@@ -4357,10 +4405,10 @@ export function OrdinaryDataObservationValid(observation: OrdinaryDataObservatio
   return false;
 }
 
-function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections): PlainEvaluator<boolean> {
+function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections, observations?: StructuralValueObservations): PlainEvaluator<boolean> {
   const isMember = (value: Value, type: TypeRecord, retained?: StructuralStorageAdmission[],
     selected?: UnionMemberAdmission, observed?: SequenceObservation): PlainEvaluator<boolean> =>
-    IsOfType(value, type, retained, selected, observed, choices);
+    IsOfType(value, type, retained, selected, observed, choices, observations);
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
   // reads through to the referent rather than testing the reference itself,
@@ -5186,9 +5234,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           continue;
         }
-        const observedData = storage ? ordinaryDataObservation(value, key) : undefined;
-        const pv = Q(yield* Get(value, key));
-        const data = observedData && SameValue(observedData.value, pv) ? observedData : undefined;
+        let pv: Value;
+        let data: OrdinaryDataObservation | undefined;
+        if (observations) {
+          const input = Q(yield* ObserveStructuralValue(value, key, observations));
+          pv = input.value;
+          data = input.data;
+        } else {
+          const observedData = storage ? ordinaryDataObservation(value, key) : undefined;
+          pv = Q(yield* Get(value, key));
+          data = observedData && SameValue(observedData.value, pv) ? observedData : undefined;
+        }
         const childStart = storage?.length;
         const admitted = storage ? {} as UnionMemberAdmission : undefined;
         if (!Q(yield* isMember(pv, p.type, storage, admitted))) {
@@ -5210,9 +5266,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
           for (const ix of t.IndexSignatures) {
             if (Q(yield* isMember(k, ix.Key))) {
-              const observedData = storage ? ordinaryDataObservation(value, k) : undefined;
-              const kv = Q(yield* Get(value, k));
-              const data = observedData && SameValue(observedData.value, kv) ? observedData : undefined;
+              let kv: Value;
+              let data: OrdinaryDataObservation | undefined;
+              if (observations) {
+                const input = Q(yield* ObserveStructuralValue(value, k, observations));
+                kv = input.value;
+                data = input.data;
+              } else {
+                const observedData = storage ? ordinaryDataObservation(value, k) : undefined;
+                kv = Q(yield* Get(value, k));
+                data = observedData && SameValue(observedData.value, kv) ? observedData : undefined;
+              }
               const childStart = storage?.length;
               const admitted = storage ? {} as UnionMemberAdmission : undefined;
               if (!Q(yield* isMember(kv, ix.Value, storage, admitted))) {

@@ -6,7 +6,7 @@ import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { OrdinaryDataObservationValid, type OrdinaryDataObservation, publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
+import { ObserveStructuralValue, AdvanceStructuralValue, type StructuralValueObservations, OrdinaryDataObservationValid, type OrdinaryDataObservation, publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -203,7 +203,7 @@ function ValidateTupleDefaultConstruction(parts: readonly TupleDefaultConstructi
 
 /** Construct from retained observations, then finish this nested boundary
  * before its result can escape through an enclosing ordinary Set. */
-function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruction[]): ValueEvaluator {
+function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruction[], observations?: StructuralValueObservations): ValueEvaluator {
   Q(ValidateTupleDefaultConstruction(parts));
   const plans = parts.flatMap((part) => part.plans);
   const first = plans[0]!;
@@ -236,7 +236,7 @@ function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruct
     for (const child of entry.descendants ?? []) omitted.add(child);
     const children: StructuralStorageAdmission[] = [];
     const selection: UnionMemberAdmission = {};
-    if (!Q(yield* IsOfType(value, entry.type, children, selection))) {
+    if (!Q(yield* IsOfType(value, entry.type, children, selection, undefined, undefined, observations))) {
       return Throw.TypeError('tuple construction does not satisfy a retained property contract');
     }
     replacements.set(entry, [...children, { ...entry, object: out, value,
@@ -264,7 +264,7 @@ function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruct
       const value = Q(yield* Get(out, propertyKeyValue(contract.key)));
       const selection: UnionMemberAdmission = {};
       const start = storage.length;
-      if (!Q(yield* IsOfType(value, contract.type, storage, selection))) {
+      if (!Q(yield* IsOfType(value, contract.type, storage, selection, undefined, undefined, observations))) {
         return Throw.TypeError('a constructed tuple property does not satisfy its acquired contract');
       }
       storage.push({ kind: 'property', object: out, ...contract, value,
@@ -297,13 +297,13 @@ function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruct
       defaultCheck: !plans.every((plan) => SameType(TuplePrefixElement(plan.type, i)!.Type, type)) });
   }
   storage.push({ kind: 'sequence', object: out, length, positions: values.map((value) => ({ own: true, value })) });
-  Q(yield* CompleteStructuralAdmission(storage));
+  Q(yield* CompleteStructuralAdmission(storage, observations));
   return out;
 }
 
 /** Complete retained structural admission without replaying a Get. Existing
  * backing contracts remain authoritative; ordinary Set owns write effects. */
-function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
+function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmission[], inputs?: StructuralValueObservations): PlainEvaluator<void> {
   // A construction selected on one path also owns non-copying evidence for
   // the same receiving location and observed value. Otherwise that path would
   // stamp the old source while publishing a replacement that violates it.
@@ -495,13 +495,13 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     const plan = initialization.get(object);
     if (plan) Q(checkLength(object, plan));
     if (group.checkDefault) {
-      if (!Q(yield* IsOfType(value, group.type!))) {
+      if (!Q(yield* IsOfType(value, group.type!, undefined, undefined, undefined, undefined, inputs))) {
         return Throw.TypeError('a tuple default does not satisfy all acquired position contracts');
       }
     }
     const constructions = group.constructions.get(value);
     let converted: Value;
-    if (constructions) converted = Q(yield* CompleteTupleDefaultConstruction(constructions));
+    if (constructions) converted = Q(yield* CompleteTupleDefaultConstruction(constructions, inputs));
     else converted = Q(yield* MaterializeGenericCallable(value, group.target!));
     if (group.copy) {
       converted = Q(yield* CopyValueClassInstance(converted));
@@ -546,6 +546,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
         datum.path = writtenData.path;
         datum.value = converted;
       }
+      Q(AdvanceStructuralValue(object, property, converted, inputs));
     }
   }
   // No getter/trap is invoked to validate retained data or its lookup path. Earlier effects,
@@ -609,6 +610,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
   for (const { object, key, value } of missing) {
     Assert(ValidateAndApplyPropertyDescriptor(object, key, object.Extensible,
       Descriptor({ Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }), Value.undefined) === Value.true);
+    Q(AdvanceStructuralValue(object, key, value, inputs));
   }
   // A failure publishes none of this admission's new contracts. Earlier
   // ordinary effects and independently completed nested boundaries survive.
@@ -694,8 +696,8 @@ export function StructuralStorageEstablished(value: Value, type: TypeRecord): bo
 /** The specification's last step of #sec-requiretype, and the last step of the
  * checked conversion: a value already of the type passes, anything else is a
  * TypeError. Kept private so that RequireType has exactly one meaning. */
-function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], sequence?: SequenceObservation): ValueEvaluator {
-  const ok = Q(yield* IsOfType(value, t, storage, undefined, sequence));
+function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], sequence?: SequenceObservation, observations?: StructuralValueObservations): ValueEvaluator {
+  const ok = Q(yield* IsOfType(value, t, storage, undefined, sequence, undefined, observations));
   if (!ok) {
     // proposal-runtime-types #sec-vector-lanes: the broadcast. A value of the
     // lane type is not a MEMBER of the vector type - it converts to one - so
@@ -1110,7 +1112,7 @@ function TypedNumericMismatch(value: Value, record: TypeRecord): ThrowCompletion
   return undefined;
 }
 
-export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObservation, choices?: ConstructionSelections): ValueEvaluator {
+export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObservation, choices?: ConstructionSelections, observations?: StructuralValueObservations): ValueEvaluator {
   // proposal-runtime-types: an UNSUBSTITUTED generic parameter admits any
   // value. At the point a field of type `T` is defined, the application has
   // bound `T` - `new B.<uint8>()` means uint8 - and substituting that binding
@@ -1176,7 +1178,7 @@ export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObs
       }
     }
   }
-  return Q(yield* CheckedConvertValue(value, t, sequence, choices));
+  return Q(yield* CheckedConvertValue(value, t, sequence, choices, observations));
 }
 
 /** #sec-the-conversion-rule */
@@ -1364,18 +1366,18 @@ function representsExactly(v: number | bigint, m: TypeRecord & { Kind: 'primitiv
   return fitsNumericType(v, m.Name, m.Arguments);
 }
 
-export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator): ValueEvaluator {
+export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator, observations?: StructuralValueObservations): ValueEvaluator {
   const members = t.Members;
   for (const m of members) {
     const selection: UnionMemberAdmission = {};
     const storage: StructuralStorageAdmission[] = [];
-    if (Q(yield* IsOfType(value, m, storage, selection))) {
+    if (Q(yield* IsOfType(value, m, storage, selection, undefined, undefined, observations))) {
       // Selection is complete. A declaration-check failure propagates rather
       // than selecting another body from a later member.
       let converted: Value;
-      if (selection.construction) converted = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
+      if (selection.construction) converted = Q(yield* CompleteTupleDefaultConstruction([selection.construction], observations));
       else converted = Q(yield* MaterializeGenericCallable(value, selection.member ?? m));
-      Q(yield* CompleteStructuralAdmission(storage));
+      Q(yield* CompleteStructuralAdmission(storage, observations));
       return converted;
     }
   }
@@ -1407,13 +1409,14 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
   return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
 }
 
-export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
-  const result = Q(yield* ConvertValueUnbacked(value, t));
+export function* ConvertValue(value: Value, t: TypeRecord, observations?: StructuralValueObservations): ValueEvaluator {
+  if (value instanceof ObjectValue) observations ??= new Map();
+  const result = Q(yield* ConvertValueUnbacked(value, t, observations));
   Q(AcquireNominalPrototype(result, t));
   return result;
 }
 
-function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
+function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: StructuralValueObservations): ValueEvaluator {
   value = Q(yield* MaterializeGenericCallable(value, t));
   // #sec-composite-typeobject-call: the typed creation "is the CONSTRUCTION
   // BOUNDARY of the composite types, as calling any parameterized Type Object is
@@ -1699,11 +1702,11 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
   const selection: UnionMemberAdmission = {};
   const sequenceObservation: SequenceObservation | undefined = (t.Kind === 'array' || t.Kind === 'tuple') && value instanceof ObjectValue
     ? { object: value, elements: new Map() } : undefined;
-  const already = Q(yield* IsOfType(value, t, storage, selection, sequenceObservation));
+  const already = Q(yield* IsOfType(value, t, storage, selection, sequenceObservation, undefined, observations));
   if (already) {
-    if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
+    if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction], observations));
     else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
-    Q(yield* CompleteStructuralAdmission(storage));
+    Q(yield* CompleteStructuralAdmission(storage, observations));
     // A typed COLLECTION needs the same stamp for the same reason, and needs it
     // more: an array acquires its element type from the conversion that builds
     // it, but `new Set()` is a CONSTRUCTION rather than a conversion, so
@@ -1791,7 +1794,7 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
   return carryStringType(atBase, t);
   }
   if (t.Kind === 'union') {
-    return yield* ConvertValueToUnion(value, t, ConvertValue);
+    return yield* ConvertValueToUnion(value, t, (v, m) => ConvertValue(v, m, observations), observations);
   }
   if (t.Kind === 'primitive') {
     // proposal-runtime-types #sec-binary-floating-point-types: a float128's
@@ -2102,18 +2105,18 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true
       && SoAStorageOf(value as unknown as object) === undefined) {
     if (t.Kind === 'array') {
-      return Q(yield* ConvertArrayElementwise(value, t, ConvertValue, sequenceObservation));
+      return Q(yield* ConvertArrayElementwise(value, t, (v, m) => ConvertValue(v, m, observations), sequenceObservation));
     }
-    return Q(yield* ConvertTupleElementwise(value, t, ConvertValue, sequenceObservation));
+    return Q(yield* ConvertTupleElementwise(value, t, (v, m) => ConvertValue(v, m, observations), sequenceObservation));
   }
   // The explicit structural-object step of ConvertValue converts each member
   // explicitly, in place. Reuse the observation/write/admission path while
   // retaining that operation instead of falling into checked member admission.
   if ((t.Kind === 'object' || (t.Kind === 'nominal' && t.Declaration.type === 'InterfaceDeclaration'))
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.false) {
-    return Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation, undefined, ConvertValue));
+    return Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation, undefined, (v, m) => ConvertValue(v, m, observations), observations));
   }
-  return Q(yield* RequireType(value, t, sequenceObservation));
+  return Q(yield* RequireType(value, t, sequenceObservation, undefined, observations));
 }
 
 /** Enforces a binding's TypeAnnotation, if any, at initialization. */
@@ -2336,21 +2339,22 @@ function* BoundaryNumericConvert(value: Value, t: TypeRecord & { Kind: 'primitiv
   return converted;
 }
 
-export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation, choices?: ConstructionSelections): ValueEvaluator {
+export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation, choices?: ConstructionSelections, observations?: StructuralValueObservations): ValueEvaluator {
+  if (value instanceof ObjectValue) observations ??= new Map();
   t = PreferredConstructionAlternative(value, t, choices) ?? t;
-  const result = Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation, choices));
+  const result = Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation, choices, undefined, observations));
   Q(AcquireNominalPrototype(result, t));
   return result;
 }
 
 function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation,
-  choices?: ConstructionSelections, objectMemberConversion?: ElementConversion): ValueEvaluator {
+  choices?: ConstructionSelections, objectMemberConversion?: ElementConversion, observations?: StructuralValueObservations): ValueEvaluator {
   const convertChecked = (value: Value, target: TypeRecord, observed?: SequenceObservation): ValueEvaluator =>
-    CheckedConvertValue(value, target, observed, choices);
+    CheckedConvertValue(value, target, observed, choices, observations);
   // Composite members are receiving boundaries in their own right, including
   // the carried-numeric and value-class guards before checked conversion.
   const requireMember = objectMemberConversion
-    ?? ((value: Value, target: TypeRecord): ValueEvaluator => RequireType(value, target, undefined, choices));
+    ?? ((value: Value, target: TypeRecord): ValueEvaluator => RequireType(value, target, undefined, choices, observations));
   value = Q(yield* MaterializeGenericCallable(value, t));
   // Nominal conversion selection follows membership and considers the
   // target's constructor before the source and inbound declarations. Other
@@ -2605,11 +2609,11 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   }
   const storage: StructuralStorageAdmission[] = [];
   const selection: UnionMemberAdmission = {};
-  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection, sequenceObservation, choices));
+  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection, sequenceObservation, choices, observations));
   if (already) {
-    if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
+    if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction], observations));
     else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
-    Q(yield* CompleteStructuralAdmission(storage));
+    Q(yield* CompleteStructuralAdmission(storage, observations));
     // Stable tuple domains are acquired with the retained admission, including
     // nested and union-selected tuples. Preserve existing backing for every
     // view. General rest storage retains its separate legacy path.
@@ -2656,7 +2660,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
     return carryStringType(value, t);
   }
   if (t.Kind === 'union') {
-    return yield* ConvertValueToUnion(value, t, convertChecked);
+    return yield* ConvertValueToUnion(value, t, convertChecked, observations);
   }
   // sec-type-membership: "A value belongs to an intersection if it belongs to
   // EVERY member" - the opposite quantifier to the union above, which is why the
@@ -2992,8 +2996,12 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         }
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
-      const current = Q(yield* Get(value, key));
+      const input = Q(yield* ObserveStructuralValue(value, key, observations));
+      const current = input.value;
       const converted = Q(yield* requireMember(current, prop.type));
+      if (input.data && !OrdinaryDataObservationValid(input.data, key)) {
+        return Throw.TypeError('structural data changed during member conversion');
+      }
       if (converted !== current) {
         // CONVERTING IN
         // PLACE ASSUMES THE PROPERTY CAN BE WRITTEN, and nothing checked.
@@ -3027,6 +3035,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
             Value(displayType(prop.type)),
           );
         }
+        Q(AdvanceStructuralValue(value, key, converted, observations));
       }
     }
     // A property the type admits through an INDEX SIGNATURE crosses the same
@@ -3057,8 +3066,12 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         if (signature === undefined) {
           continue;
         }
-        const current = Q(yield* Get(value, own));
+        const input = Q(yield* ObserveStructuralValue(value, own, observations));
+        const current = input.value;
         const converted = Q(yield* requireMember(current, signature.Value));
+        if (input.data && !OrdinaryDataObservationValid(input.data, own)) {
+          return Throw.TypeError('indexed data changed during member conversion');
+        }
         if (converted !== current) {
           // The same refusal as the declared-member loop above. A property
           // admitted through an INDEX SIGNATURE crosses the same boundary and
@@ -3077,13 +3090,14 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
               Value(displayType(signature.Value)),
             );
           }
+          Q(AdvanceStructuralValue(value, own, converted, observations));
         }
       }
     }
     // Membership can still reject a dependent predicate after member
     // conversion. Publish this object's contracts only after that succeeds.
-    const checked = Q(yield* requireMembership(value, t, storage));
-    Q(yield* CompleteStructuralAdmission(storage));
+    const checked = Q(yield* requireMembership(value, t, storage, undefined, observations));
+    Q(yield* CompleteStructuralAdmission(storage, observations));
     return checked;
   }
   // proposal-runtime-types #sec-array-and-tuple-types: a plain array in a TUPLE
@@ -3145,7 +3159,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // The specification's final step: a target this rule has no conversion for
   // admits only a value already of the type, and otherwise is a TypeError.
   // (This must NOT call RequireType, which delegates here.)
-  return Q(yield* requireMembership(value, t, undefined, sequenceObservation));
+  return Q(yield* requireMembership(value, t, undefined, sequenceObservation, observations));
 }
 
 export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluator<boolean> {

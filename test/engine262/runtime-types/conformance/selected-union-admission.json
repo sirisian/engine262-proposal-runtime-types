@@ -1017,7 +1017,7 @@
     {
       "name": "function-0-failure-no-fallback",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:function(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:function(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
@@ -1173,7 +1173,7 @@
     {
       "name": "function-1-failure-no-fallback",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:function(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:function(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
@@ -1329,7 +1329,7 @@
     {
       "name": "arrow-0-failure-no-fallback",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:(value:U):U=>{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn:(value:U):U=>{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
@@ -1485,7 +1485,7 @@
     {
       "name": "arrow-1-failure-no-fallback",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:(value:U):U=>{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn:(value:U):U=>{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
@@ -1641,7 +1641,7 @@
     {
       "name": "method-0-failure-no-fallback",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate {x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
@@ -1797,7 +1797,7 @@
     {
       "name": "method-1-failure-no-fallback",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}|{readonly x:string,fn:(value:string)=>string}=@mutate {x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
@@ -2057,7 +2057,7 @@
     {
       "name": "boundary-explicit-failure-control",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate{x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,2);verify(escaped,undefined);"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values\");}let reads=0;let escaped:any;const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){reads++;return raw;}});}try{const a:{readonly x:number,fn:<U:type>(value:U)=>U}=@mutate{x:1,fn(value:U):U{return value;}};escaped=a;}catch(error){if(!(error instanceof TypeError))throw error;}verify(reads,1);verify(escaped,undefined);"
       },
       "script": true,
       "expected": {
