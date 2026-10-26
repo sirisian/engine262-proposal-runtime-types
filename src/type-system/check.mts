@@ -38453,6 +38453,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               withProvenance(n.Initializer, () => requireAssignable(locationType(n.Initializer!), declared));
             } else checkInitializerAssignable(n.Initializer, declared);
             initialized = staticType(n.Initializer);
+            // #sec-void-type: "It is a type error if an actual binding
+            // declaration resolves to the void type, independently of whether
+            // it has an initializer or that initializer is statically known."
+            // A `const` adopts a participating initializer's type as its own,
+            // so `const y = f()` for `f(): void` resolves to void and the run
+            // time refused the store; the judgment belongs here, before the
+            // body. A `let` with no annotation stays an untyped binding, which
+            // the clause admits as a position a void value may reach.
+            if (isConstDeclaration && !declared && !(n as { Ref?: boolean }).Ref
+              && constInitializerParticipates(n.Initializer) && initialized?.Kind === 'void') {
+              reportType('rt-void-use', n as ParseNode, 'a binding cannot have type void');
+            }
             if (isConstDeclaration && booleanType(declared ?? (constInitializerParticipates(n.Initializer) ? initialized : null))
               && !(n as { Ref?: boolean }).Ref) {
               predicate = walkTest(n.Initializer, false, false);

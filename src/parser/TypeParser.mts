@@ -1561,6 +1561,23 @@ export abstract class TypeParser extends ExpressionParser {
           this.scope.arrowInfoStack.push(null);
           this.scope.declareTypeParameters(node.TypeParameters);
           node.FormalParameters = this.parseFormalParameters();
+          // #sec-user-defined-operators: "the receiver is the left operand and
+          // the declaration's parameter is the right", and a unary operator has
+          // no parameter. A `static` declaration's receiver is the class object
+          // (operatoroverloading.md), so it takes the same count. A count that
+          // fits no form of the token is a Syntax Error at the declaration; it
+          // used to surface at a use as a missing argument.
+          {
+            const name = node.OperatorName!;
+            const unaryOnly = ['!', '~', '++', '--'].includes(name);
+            const dual = name === '+' || name === '-';
+            const rest = node.FormalParameters.some((p) => p.type === 'BindingRestElement');
+            const count = node.FormalParameters.length - (rest ? 1 : 0);
+            const admitted = unaryOnly ? [0] : dual ? [0, 1] : [1];
+            if (rest || !admitted.includes(count)) {
+              this.addEarlyError(Throw.SyntaxError('$1', `operator ${name} takes ${admitted.map(String).join(' or ')} parameter${admitted.length === 1 && admitted[0] === 1 ? '' : 's'}${unaryOnly ? ': the receiver is its operand' : dual ? ': none as a unary operator, one as a binary operator' : ': the receiver is the left operand'}`), node.FormalParameters.length ? node.FormalParameters[0] : node);
+            }
+          }
           if (this.test(Token.COLON)) {
             node.TypeAnnotation = this.parseTypeAnnotation(true);
           }

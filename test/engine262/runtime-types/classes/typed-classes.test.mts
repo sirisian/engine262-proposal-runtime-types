@@ -77,8 +77,8 @@ test('implements clauses', () => {
 
 test('operator class elements', () => {
   const els = classElements(`class V {
-    operator +(a, b): V { return a; }
-    static operator ==(a, b);
+    operator +(b): V { return this; }
+    static operator ==(b);
     operator float32() { return 0; }
     * operator ...() { yield 1; }
   }`);
@@ -129,7 +129,7 @@ test('classes with proposal elements still evaluate', () => {
   const completion = realm.evaluateScriptSkipDebugger(`
     abstract class Shape {
       abstract area(): float64;
-      operator ==(a, b) { return true; }
+      operator ==(b) { return true; }
       m() { return 'ok'; }
     }
     // An abstract class cannot be instantiated directly (#sec-abstract-classes),
