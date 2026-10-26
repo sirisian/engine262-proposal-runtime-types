@@ -816,4 +816,5 @@ export function bootstrapPromise(realmRec: Realm) {
 
   realmRec.Intrinsics['%Promise%'] = promiseConstructor;
   realmRec.Intrinsics['%Promise.resolve%'] = X(Get(promiseConstructor, Value('resolve'))) as FunctionObject;
+  realmRec.Intrinsics['%Promise.reject%'] = X(Get(promiseConstructor, Value('reject'))) as FunctionObject;
 }

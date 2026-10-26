@@ -686,7 +686,8 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       if (constructor) RegisterGenericBuiltin(constructor);
     }
     for (const [owner, names] of [
-      ['JSON', ['parse']], ['Math', ['random']], ['Promise', ['withResolvers']],
+      ['JSON', ['parse']], ['Math', ['random']], ['Promise', ['withResolvers', 'resolve', 'reject', 'all', 'allSettled', 'race', 'any']],
+      ['Array', ['of', 'from']],
       // `getByIndex` names nothing: the method is `getReflectionByIndex`
       // (#sec-reflection-shapes), so every `Reflect.getReflectionByIndex.<K, T>`
       // was refused - the name in this list and the name on the object had

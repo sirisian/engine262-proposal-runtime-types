@@ -15293,6 +15293,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base.name === 'JSON' && method === 'parse') {
       return (args) => (args.length === 1 ? args[0]! : null);
     }
+    // The generic statics: `Promise.resolve` is written `(value: R): Promise.<R,
+    // any>` (the invariance note under #sec-type-rule-applicability), and
+    // `Promise.reject` the same with its E; `Promise.all`, `race` and `any` over
+    // an iterable of T settle to T's array or T; `Array.of` and `Array.from`
+    // produce `[].<T>`. These threw "type arguments require a generic function"
+    // at evaluation and were ~any~ to the checker.
+    if (base.name === 'Promise' && ['resolve', 'race', 'any'].includes(method)) {
+      return (args) => (args.length === 1 ? libraryTypeRecord('Promise', [args[0]!, anyTypeRecord]) ?? null : null);
+    }
+    if (base.name === 'Promise' && method === 'all') {
+      return (args) => (args.length === 1 ? libraryTypeRecord('Promise', [{ Kind: 'array', Element: args[0]!, Extent: 'dynamic' } as TypeRecord, anyTypeRecord]) ?? null : null);
+    }
+    if (base.name === 'Promise' && method === 'reject') {
+      return (args) => (args.length === 1 ? libraryTypeRecord('Promise', [anyTypeRecord, args[0]!]) ?? null : null);
+    }
+    if (base.name === 'Array' && (method === 'of' || method === 'from')) {
+      return (args) => (args.length === 1 ? ({ Kind: 'array', Element: args[0]!, Extent: 'dynamic' } as Known) : null);
+    }
     if (base.name === 'Promise' && method === 'withResolvers') {
       return (args) => {
         if (args.length !== 2) {
@@ -33699,6 +33717,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // The argument boundary of a generic static written with a type argument:
+  // `Promise.resolve.<R>(v)` takes `v: R` (a thenable is assimilated, so only
+  // a value known not to be an object is judged), `Promise.reject.<E>(r)`
+  // takes `r: E`, `Array.of.<T>(...items)` takes each item as a T, and an
+  // iterable argument of `Array.from.<T>` or `Promise.all/race/any.<T>` is
+  // judged element by element when it is a fresh array literal, as a fresh
+  // literal's positions are known to the checker (#sec-typed-destructuring).
+  const checkTypedStaticArguments = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'TypeArgumentsExpression') return;
+    const inner = callee.Expression;
+    if (inner.type !== 'MemberExpression' || inner.MemberExpression.type !== 'IdentifierReference' || !inner.IdentifierName) return;
+    const base = inner.MemberExpression.name;
+    const method = inner.IdentifierName.name;
+    if (shadowedByProgram(base)) return;
+    const written = callee.TypeArguments.TypeArgumentList;
+    if (written.length !== 1) return;
+    const T = resolveType(written[0] as ParseNode.Type);
+    if (!T || mentionsTypeParameter(T)) return;
+    const items = (argument: ParseNode): void => {
+      if (argument.type === 'AssignmentRestElement' || argument.type === 'NamedArgument') return;
+      // The contract is the written type argument, so a literal argument is
+      // judged against it as it is against a typed parameter.
+      withProvenance(argument, () => requireAssignable(staticTypeIn(argument, T), T));
+    };
+    const elements = (argument: ParseNode | undefined, thenables: boolean): void => {
+      const literal = argument ? patternExpression(argument) : undefined;
+      if (literal?.type !== 'ArrayLiteral') return;
+      for (const element of literal.ElementList) {
+        if (element.type === 'Elision' || element.type === 'SpreadElement') continue;
+        if (thenables) {
+          const type = staticType(element);
+          if (!type || !knownNonObject(type)) continue;
+        }
+        items(element);
+      }
+    };
+    const first = call.Arguments[0];
+    if (base === 'Promise' && method === 'resolve' && first) {
+      const type = staticType(first);
+      if (type && knownNonObject(type)) items(first);
+    } else if (base === 'Promise' && method === 'reject' && first) {
+      items(first);
+    } else if (base === 'Array' && method === 'of') {
+      call.Arguments.forEach(items);
+    } else if (base === 'Array' && method === 'from' && call.Arguments.length === 1) {
+      elements(first, false);
+    } else if (base === 'Promise' && ['all', 'race', 'any'].includes(method)) {
+      elements(first, true);
+    }
+  };
+
   const checkStaticLibraryCall = (call: ParseNode.CallExpression): void => {
     const operation = staticLibraryOperations().get(call);
     if (!operation) return;
@@ -38962,6 +39032,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkLibraryBoundary(n as ParseNode.CallExpression);
         checkCompositeCall(n as ParseNode.CallExpression);
         checkWeakCollectionCall(n as ParseNode.CallExpression);
+        checkTypedStaticArguments(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);

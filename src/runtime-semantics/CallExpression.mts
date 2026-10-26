@@ -22,6 +22,9 @@ import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { NewPromiseCapability } from '../abstract-ops/promise-operations.mts';
+import type { PromiseObject } from '../intrinsics/Promise.mts';
 import { anyType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { setPendingCheckerBindings, pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
@@ -292,6 +295,34 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const argList = Q(yield* PositionalArgumentListEvaluation(args));
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
+    }
+  }
+  // #sec-type-arguments-and-placement-new-in-expression-position: the generic
+  // statics `Promise.resolve.<R>`, `Promise.reject.<E>`, `Array.of.<T>` and
+  // `Array.from.<T>` are written with a type argument in the checker's
+  // signatures, and the run time honours it here, where the type argument and
+  // the resolved function are both in hand. A typed promise validates its
+  // settlement through FulfillTypedPromise, so the argument goes through a
+  // typed capability rather than a check before assimilation; an array adopts
+  // `[].<T>` storage through RequireType, which is the ordinary admission.
+  if (surroundingAgent.feature('runtime-types')
+      && memberExpr.type === 'TypeArgumentsExpression'
+      && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
+    const resolveStatic = !!SameValue(func, surroundingAgent.intrinsic('%Promise.resolve%'));
+    const rejectStatic = !resolveStatic && !!SameValue(func, surroundingAgent.intrinsic('%Promise.reject%'));
+    const arrayStatic = !resolveStatic && !rejectStatic
+      && (!!SameValue(func, surroundingAgent.intrinsic('%Array.of%')) || !!SameValue(func, surroundingAgent.intrinsic('%Array.from%')));
+    if (resolveStatic || rejectStatic || arrayStatic) {
+      const typeRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]!));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
+      if (arrayStatic) {
+        const result = Q(yield* Call(func, surroundingAgent.intrinsic('%Array%'), argList));
+        return Q(yield* RequireType(result, { Kind: 'array', Element: typeRecord, Extent: 'dynamic' } as TypeRecord));
+      }
+      const capability = Q(yield* NewPromiseCapability(surroundingAgent.intrinsic('%Promise%')));
+      (capability.Promise as PromiseObject).PromiseTypeArguments = resolveStatic ? [typeRecord, anyType] : [anyType, typeRecord];
+      Q(yield* Call(resolveStatic ? capability.Resolve : capability.Reject, Value.undefined, [argList[0] ?? Value.undefined]));
+      return capability.Promise;
     }
   }
   // proposal-runtime-types soa.md: `SoA.withCapacity.<T>(n)` - "Empty, capacity

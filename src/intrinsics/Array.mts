@@ -371,5 +371,7 @@ export function bootstrapArray(realmRec: Realm) {
   ]);
 
   realmRec.Intrinsics['%Array%'] = cons;
+  realmRec.Intrinsics['%Array.of%'] = X(Get(cons, Value('of'))) as FunctionObject;
+  realmRec.Intrinsics['%Array.from%'] = X(Get(cons, Value('from'))) as FunctionObject;
   RememberArrayIntrinsics(realmRec, proto);
 }
