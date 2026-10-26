@@ -8574,6 +8574,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const resolution = namespace.ResolveExport(Value(key));
     return resolution && resolution !== 'ambiguous' ? resolution : undefined;
   };
+  /** A qualified annotation names the export's declaration, not an equal Type Object. */
+  const namespaceTypeAlias = (name: ParseNode.TypeName): ParseNode.TypeAliasDeclaration | undefined => {
+    if (!name.MemberNames.length) return undefined;
+    let namespace = importedNamespace(name.IdentifierReference);
+    for (const [index, part] of name.MemberNames.entries()) {
+      if (!namespace) return undefined;
+      const resolution = namespace.ResolveExport(Value(part.name));
+      if (!resolution || resolution === 'ambiguous') return undefined;
+      if (index + 1 < name.MemberNames.length) {
+        namespace = resolution.BindingName === 'namespace' || resolution.BindingName === 'deferred-namespace'
+          ? resolution.Module : undefined;
+        continue;
+      }
+      if (!(resolution.BindingName instanceof JSStringValue) || !('ECMAScriptCode' in resolution.Module)) return undefined;
+      const source = resolution.Module.ECMAScriptCode as ParseNode.Module;
+      const declaration = ExportedTypeAliasNodesOf(source)?.get(resolution.BindingName.stringValue());
+      if (declaration) {
+        importedDeclarationSourceModules.set(source, resolution.Module);
+        retainImportedSources(source);
+      }
+      return declaration;
+    }
+    return undefined;
+  };
   const namespaceClassOrigin = (node: ParseNode.MemberExpression): ImportedConstructorOrigin | undefined => {
     const resolution = importedNamespaceMember(node);
     if (!resolution || !(resolution.BindingName instanceof JSStringValue) || !('ECMAScriptCode' in resolution.Module)) return undefined;
@@ -13465,10 +13489,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     switch (node.type) {
       case 'TypeReference': {
         const intrinsicName = node.TypeName.IdentifierReference.name;
+        const namespaceAlias = namespaceTypeAlias(node.TypeName);
         const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, intrinsicName);
         const parameterInScope = typeParameterInScope(intrinsicName)
           && (!lexicalBinding || lexicalBinding.kind === 'type-parameter');
-        const selected = declarationAt(node.TypeName.IdentifierReference, intrinsicName,
+        const selected = namespaceAlias ?? declarationAt(node.TypeName.IdentifierReference, intrinsicName,
           classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName));
         const aliasDeclaration = selected?.type === 'TypeAliasDeclaration' ? selected : undefined;
         // An immutable class-expression binding denotes the expression's
@@ -13538,9 +13563,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const applyBareGeneric = !node.TypeArguments && genericDeclaration
           && genericParameters.length > 0 && !parameterInScope
           && !higherKindedArgument;
-        if (node.TypeName.MemberNames.length > 0 || node.TypeArguments || applyBareGeneric) {
+        if ((node.TypeName.MemberNames.length > 0 && !namespaceAlias) || node.TypeArguments || applyBareGeneric) {
           const args: (TypeRecord | number)[] = [];
-          if (node.TypeName.MemberNames.length > 0) {
+          if (node.TypeName.MemberNames.length > 0 && !namespaceAlias) {
             // #sec-computed-constraints: `I.length` in a default or a
             // constraint reads a type parameter's BINDING - a value pack's
             // array - which exists per application. Statically the head is a

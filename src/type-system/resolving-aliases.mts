@@ -1,8 +1,9 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, RefBindingHolder, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import type { AbstractModuleRecord } from '../modules.mts';
-import { Value, type JSStringValue } from '../value.mts';
+import { Value, JSStringValue } from '../value.mts';
 import type { TypeRecord } from './records.mts';
+import { isModuleNamespaceObject } from '../abstract-ops/module-namespace-exotic-objects.mts';
 
 /**
  * proposal-runtime-types #sec-type-alias-declarations: "An alias may refer to
@@ -91,6 +92,14 @@ export function resolvedAlias(environment: EnvironmentRecord | null | undefined,
 export function resolvedAliasContext(environment: EnvironmentRecord | null | undefined, name: string): TypeRecord | undefined {
   const published = resolvedPublication(environment, name);
   return published?.declaration.type === 'TypeAliasDeclaration' ? published.context : undefined;
+}
+
+/** Called after the ordinary namespace read, preserving its TDZ and import effects. */
+export function resolvedNamespaceAliasContext(namespace: Value, name: string): TypeRecord | undefined {
+  if (!isModuleNamespaceObject(namespace)) return undefined;
+  const resolution = namespace.Module.ResolveExport(Value(name));
+  if (!resolution || resolution === 'ambiguous' || !(resolution.BindingName instanceof JSStringValue)) return undefined;
+  return resolvedAliasContext(resolution.Module.Environment, resolution.BindingName.stringValue());
 }
 
 function resolvedPublication(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode):

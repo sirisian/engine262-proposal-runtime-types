@@ -1,0 +1,79 @@
+{
+  "cases": [
+    {
+      "name": "plain",
+      "modules": {
+        "main": "interface I<T:type>{get():T;}class E implements I.<E>{get():E{return this;}}const e=new E();if(e.get()!==e)throw new Error(\"self\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-expression",
+      "modules": {
+        "main": "interface I<T:type>{get():T;}const C=class E implements I.<E>{get():E{return this;}};const e=new C();if(e.get()!==e)throw new Error(\"expression\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "separate-activations",
+      "modules": {
+        "main": "interface I<T:type>{get():T;}function make(){class E implements I.<E>{get():E{return this;}}return E;}const A=make(),B=make();const a=new A(),b=new B();if(a.get()!==a||b.get()!==b||Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"activation\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadowed-method-binder",
+      "modules": {
+        "main": "interface I<T:type>{get():T;}class E implements I.<E>{get():E{return this;}id<E:type>(value:E):E{return value;}}const e=new E();const invoke:any=e.id;if(invoke.<number>(7)!==7||invoke.<string>(\"x\")!==\"x\")throw new Error(\"shadow\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "different-class",
+      "modules": {
+        "main": "interface I<T:type>{get():T;}class E implements I.<E>{get():E{return this;}}class F implements I.<E>{get():E{return new E();}}const f=new F();const value:any=f.get();if(!(value instanceof E))throw new Error(\"target\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrong-member",
+      "modules": {
+        "main": "interface I<T:type>{get():T;}class E implements I.<E>{get():number{return 7;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}

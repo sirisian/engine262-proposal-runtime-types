@@ -1,0 +1,882 @@
+{
+  "cases": [
+    {
+      "name": "namespace-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-namespace-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"alpha identity\");}class C{f:ns.child.F=function(value:U):U{return value;};g:ns.child.G=function(value:V):V{return value;};}const c=new C();check(c.f,c.g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.F,g:ns.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export {F as First,G as Second} from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.First=function(value:U):U{return value;};g:ns.Second=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export {F as First,G as Second} from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.First=function(value:U):U{return value;};const g:ns.Second=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export {F as First,G as Second} from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.First,g:ns.Second){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "star-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "star-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "star-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.F,g:ns.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.child.F=function(value:U):U{return value;};g:ns.child.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.child.F=function(value:U):U{return value;};const g:ns.child.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.child.F,g:ns.child.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "deep-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "top": "export * as child from \"bridge\";",
+        "main": "import * as ns from \"top\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.child.child.F=function(value:U):U{return value;};g:ns.child.child.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "top",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "deep-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "top": "export * as child from \"bridge\";",
+        "main": "import * as ns from \"top\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.child.child.F=function(value:U):U{return value;};const g:ns.child.child.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "top",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "deep-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "top": "export * as child from \"bridge\";",
+        "main": "import * as ns from \"top\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.child.child.F,g:ns.child.child.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "top",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-namespace-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "import * as child from \"dep\";export {child};",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.child.F=function(value:U):U{return value;};g:ns.child.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-namespace-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "import * as child from \"dep\";export {child};",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.child.F=function(value:U):U{return value;};const g:ns.child.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-namespace-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "import * as child from \"dep\";export {child};",
+        "main": "import * as ns from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.child.F,g:ns.child.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-namespace-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import {child as ns} from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-namespace-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import {child as ns} from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-namespace-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import {child as ns} from \"bridge\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.F,g:ns.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-alias-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as original from \"dep\";const ns=original;function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\"instances\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-alias-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as original from \"dep\";const ns=original;function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-alias-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as original from \"dep\";const ns=original;function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function take(f:ns.F,g:ns.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reverse-and-warm",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const warm:type=ns.G;class C{g:ns.G=function(value:V):V{return value;};f:ns.F=function(value:U):U{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(ns.F!==ns.G)throw new Error(\"public identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=(value:U):U=>value;const g:ns.G=(value:V):V=>value;check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "decorated-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}let made=0;function touch(c:Reflect.Function){made++;}class C{f:ns.F=@touch function(value:U):U{return value;};g:ns.G=@touch function(value:V):V{return value;};}const c=new C();check(c.f,c.g);if(made!==2)throw new Error(\"decorator\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const o:{f:ns.F,g:ns.G}={f:function(value:U):U{return value;},g:function(value:V):V{return value;}};check(o.f,o.g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "tuple-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const o:[ns.F,ns.G]=[function(value:U):U{return value;},function(value:V):V{return value;}];check(o[0],o[1]);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}function first():ns.F{return function(value:U):U{return value;};}function second():ns.G{return function(value:V):V{return value;};}check(first(),second());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}let f:ns.F=function(value:U):U{return value;};let g:ns.G=function(value:V):V{return value;};f=function(value:U):U{return value;};g=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-dependency",
+      "modules": {
+        "dep": "type Outer=number;export type F=<U:type>(value:U)=>{outer:Outer,own:U};",
+        "main": "import * as ns from \"dep\";type Outer=string;const f:ns.F=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"source scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-import-dependency",
+      "modules": {
+        "base": "export type Outer=number;",
+        "dep": "import {Outer} from \"base\";export type F=<U:type>(value:U)=>{outer:Outer,own:U};",
+        "main": "import * as ns from \"dep\";type Outer=string;const f:ns.F=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"source scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "base",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-explicit",
+      "modules": {
+        "dep": "export type F<T:type>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";const f:ns.F.<number>=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default",
+      "modules": {
+        "dep": "export type F<T:type=number>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-named",
+      "modules": {
+        "dep": "export type F<T:type>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";const f:ns.F.<T:number>=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-chain",
+      "modules": {
+        "dep": "type Local=<V:type>(value:V)=>V;export type F=Local;export type G=F;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:V):V{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-shadowing",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:U):U{return value;};{const ns={F:number};const value:ns.F=7;if(value!==7)throw new Error(\"shadow\");}const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-controls",
+      "modules": {
+        "dep": "export type N=number;export type S=string;",
+        "main": "import * as ns from \"dep\";const n:ns.N=7;const s:ns.S=\"a\";function verify(n:any,s:any){if(n!==7||s!==\"a\")throw new Error(\"values\");}verify(n,s);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-evaluability",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as actual from \"dep\";let reads=0;const holder={get ns(){reads++;return actual;}};const f:holder.ns.F=function<U:type>(value:U):U{return value;};const use:any=f;if(use.<number>(7)!==7||reads!==1)throw new Error(\"read count\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "throwing-getter-evaluability",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as actual from \"dep\";const sentinel={};let reads=0;const holder={get ns(){reads++;throw sentinel;}};let caught=false;try{const f:holder.ns.F=function<U:type>(value:U):U{return value;};}catch(e){if(e!==sentinel)throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"getter\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "wrong-body",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return \"wrong\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "link-missing-export",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {missing} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "SyntaxError"
+      }
+    },
+    {
+      "name": "dependency-failure",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;throw new Error(\"dependency\");",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "import-cycle",
+      "modules": {
+        "dep": "import \"main\";export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\"a\")!==\"a\"||g.<number>(9)!==9||g.<string>(\"b\")!==\"b\")throw new Error(\"binding\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"identity\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-object-control",
+      "modules": {
+        "main": "const holder={F:number};const n:holder.F=7;if(n!==7)throw new Error(\"ordinary\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-wrong-body",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F} from \"dep\";const f:F=function(value:U):U{return \"wrong\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-caller-argument",
+      "modules": {
+        "dep": "type Choice=string;export type F<T:type>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";type Choice=number;const f:ns.F.<Choice>=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"caller scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-declaration-default",
+      "modules": {
+        "dep": "type Choice=number;export type F<T:type=Choice>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";type Choice=string;const f:ns.F=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"default scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "qualified-tdz-cycle",
+      "modules": {
+        "dep": "import * as ns from \"main\";const f:ns.F=function<U:type>(value:U):U{return value;};",
+        "main": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;import \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "named-tdz-cycle",
+      "modules": {
+        "dep": "import {F} from \"main\";const f:F=function<U:type>(value:U):U{return value;};",
+        "main": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;import \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "generic-spread",
+      "modules": {
+        "dep": "export type F<T:type>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";const f:ns.F.<...[number]>=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-bound",
+      "modules": {
+        "dep": "export type F<T:type extends number>=<U:type>(value:U)=>{outer:T,own:U};",
+        "main": "import * as ns from \"dep\";const f:ns.F.<number>=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\"a\");if(v.outer!==7||v.own!==\"a\")throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-bad-bound",
+      "modules": {
+        "dep": "export type F<T:type extends number>=<U:type>(value:U)=>U;",
+        "main": "import * as ns from \"dep\";const f:ns.F.<string>=function(value:U):U{return value;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "ordinary-own-binders",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";const holder={F:ns.F};const f:holder.F=function<X:type>(value:X):X{return value;};const use:any=f;if(use.<number>(7)!==7||use.<string>(\"a\")!==\"a\")throw new Error(\"ordinary\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-own-binders",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";const f:ns.F=function<X:type>(value:X):X{return value;};const use:any=f;if(use.<number>(7)!==7||use.<string>(\"a\")!==\"a\")throw new Error(\"own\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-name-collision",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;",
+        "main": "import * as U from \"dep\";const f:U.F=function(value:U):U{return value;};const use:any=f;if(use.<number>(7)!==7)throw new Error(\"head\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

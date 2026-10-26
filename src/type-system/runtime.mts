@@ -80,7 +80,7 @@ import { PartialClassSelfOf, MergePartialStructures, RuntimePartialContributions
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
-import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot, resolvedAliasContext } from './resolving-aliases.mts';
+import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot, resolvedAliasContext, resolvedNamespaceAliasContext } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { IsAssignable, COLLECTION_LIBRARY_NAMES } from './relations.mts';
@@ -1384,9 +1384,16 @@ export function* GenericAliasDeclarationShape(
 
 /** Resolve written interface arguments before entering the declaration context. */
 export function* ApplyGenericInterface(record: TypeRecord, argumentsList: readonly ParseNode.Type[]): PlainEvaluator<TypeRecord> {
+  Assert(record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration');
+  return yield* ApplyQualifiedGenericDeclaration(record, argumentsList);
+}
+
+/** Written arguments belong to the use site; defaults and bodies to the declaration. */
+function* ApplyQualifiedGenericDeclaration(record: TypeRecord, argumentsList: readonly ParseNode.Type[]): PlainEvaluator<TypeRecord> {
   const records: TypeRecord[] = [];
   const names: (string | undefined)[] = [];
-  Assert(record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration');
+  Assert(record.Kind === 'nominal' && (record.Declaration.type === 'InterfaceDeclaration'
+    || record.Declaration.type === 'TypeAliasDeclaration'));
   const parameters = record.Declaration.TypeParameters?.TypeParameterList ?? [];
   for (const argument of argumentsList) {
     const name = typeArgumentNameOf(argument);
@@ -1402,6 +1409,9 @@ export function* ApplyGenericInterface(record: TypeRecord, argumentsList: readon
       records.push(resolved);
       names.push(typeArgumentNameOf(argument));
     }
+  }
+  if (record.Declaration.type === 'TypeAliasDeclaration') {
+    return yield* InstantiateGenericAlias(record.Declaration, records, record, names);
   }
   return yield* InstantiateGenericInterface(record, records, names);
 }
@@ -5746,6 +5756,20 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       if (self) return self;
     }
   }
+  // A non-generic class also needs its actual self candidate while its
+  // implements graph is formed, before its constructor has a published type.
+  // Match both the source declaration and this lexical activation's family;
+  // an unrelated same-named frame entry cannot make a class binding available.
+  if (node.type === 'TypeReference' && !node.TypeArguments && node.TypeName.MemberNames.length === 0) {
+    const declaration = ResolveBindingDeclaration(node, node.TypeName.IdentifierReference.name)?.node;
+    if ((declaration?.type === 'ClassDeclaration' || declaration?.type === 'ClassExpression')
+      && !declaration.TypeParameters?.TypeParameterList.length) {
+      const family = LexicalClassFamily(declaration, surroundingAgent.runningExecutionContext.LexicalEnvironment);
+      const formation = family && pendingClassInterfaceChecks.findLast(({ candidate }) => candidate.Kind === 'nominal'
+        && candidate.Declaration === declaration && candidate.DeclarationIdentity === ClassFamilyIdentityOf(family));
+      if (formation) return formation.candidate;
+    }
+  }
   // A generic class's bare name in its own body is the class over its own
   // parameters: here, their bindings in the running frames.
   const injected = InjectedClassOf(node);
@@ -5835,11 +5859,14 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
           const baseRef = Q(yield* ResolveTypeName(Value(baseName)));
           base = Q(yield* GetValue(baseRef));
         }
+        let aliasContext: TypeRecord | undefined;
         for (const part of node.TypeName.MemberNames) {
           if (!(base instanceof ObjectValue)) {
             return Throw.TypeError('$1 is not a type', Value(`${baseName}.${part.name}`));
           }
-          base = Q(yield* Get(base, Value(part.name)));
+          const namespace = base;
+          base = Q(yield* Get(namespace, Value(part.name)));
+          aliasContext = resolvedNamespaceAliasContext(namespace, part.name);
         }
         // proposal-runtime-types (temporal.md): the accessed value may itself be a
         // Type Object (a namespaced enum such as Temporal.Unit used as a type), in
@@ -5856,14 +5883,19 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
         // member denotes the ENUMERATOR, so only a real Type Object may take
         // this branch.
         if (base instanceof ObjectValue && isTypeObject(base)) {
-          const record = base.TypeRecord;
+          const record = aliasContext ?? base.TypeRecord;
+          if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration'
+            && record.Declaration.TypeParameters) {
+            if (asDeclaration && !node.TypeArguments) return record;
+            return Q(yield* ApplyQualifiedGenericDeclaration(record, node.TypeArguments?.TypeArgumentList ?? []));
+          }
           if (record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration'
             && record.Declaration.TypeParameters?.TypeParameterList.length
             && (node.TypeArguments || record.Arguments.length === 0
               && !asDeclaration)) {
             return Q(yield* ApplyGenericInterface(record, node.TypeArguments?.TypeArgumentList ?? []));
           }
-          return base.TypeRecord;
+          return record;
         }
         if (base instanceof ObjectValue) {
           const classType = LookupClassType(base);
