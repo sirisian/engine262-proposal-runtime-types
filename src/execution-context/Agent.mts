@@ -1,4 +1,5 @@
 import type { Protocol } from 'devtools-protocol';
+import { ResumeEvaluator } from '../evaluator-trampoline.mts';
 import { shouldStepOnNode } from '../host-defined/debugger-util.mts';
 import {
 } from '../host-defined/engine.mts';
@@ -229,7 +230,7 @@ export class Agent {
     }
     let debuggerStatementCompletion = options?.debuggerStatementCompletion;
     while (true) {
-      const state = evaluator.next({ resume: 'debugger', value: debuggerStatementCompletion });
+      const state = ResumeEvaluator(evaluator, { resume: 'debugger', value: debuggerStatementCompletion });
       debuggerStatementCompletion = undefined;
 
       if (!noBreakpoint && this.breakpointsEnabled && this.hostDefinedOptions.onDebugger && !this.debugger_isPreviewing && !state.done) {

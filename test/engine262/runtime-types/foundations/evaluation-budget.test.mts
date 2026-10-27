@@ -80,39 +80,18 @@ test('record requests leave evaluations with no construction requests unaffected
   expect(runWithBudget(crossing, { records: 1_000_000 })).toMatchObject({ Type: 'normal' });
 });
 
-test('the DEPTH limit is what stops a recursive generic alias', () => {
-  // A step limit meters TOTAL work and cannot bound stack DEPTH. Each level of a
-  // recursive instantiation is a nested call, so a self-referential alias hit the
-  // HOST's stack - a few thousand frames - long before ten million steps, and
-  // `type R<T> = R.<T>; type X = R.<uint8>;` ended in `Maximum call stack size
-  // exceeded`.
-  //
-  // #sec-evaluation-budget rules that out in terms: exhaustion "is not an abrupt
-  // completion the evaluated code can observe" and the evaluation is
-  // "abandoned". A host stack overflow is neither - it escapes the engine
-  // entirely, so no program observes the diagnostic the clause requires and the
-  // surrounding call dies with it. The clause's own comment already named
-  // `type R<T> = R.<T>` as the case metering was added for; metering STEPS did
-  // not reach it.
-  //
-  // Every shape recurses, because every one of them nests: the recursion may sit
-  // directly in the body or inside a member, and the member may be an object, an
-  // array, a tuple, a function parameter, or a union arm.
-  const recursions = [
-    'type R<T: type> = R.<T>; type X = R.<uint8>;',
-    'type N<T: type> = { next: N.<T> }; type X = N.<uint8>;',
-    'type N<T: type> = { next: [].<N.<T>> }; type X = N.<uint8>;',
-    'type N<T: type> = { next: [N.<T>] }; type X = N.<uint8>;',
-    'type N<T: type> = { f: (N.<T>) => void }; type X = N.<uint8>;',
-    'type N<T: type> = { next: N.<T> | null }; type X = N.<uint8>;',
-    // Mutual recursion, which no single declaration's own name would catch.
-    'type A<T: type> = { b: B.<T> }; type B<T: type> = { a: A.<T> }; type X = A.<uint8>;',
-  ];
-  for (const source of recursions) {
-    // A COMPLETION, not a host throw. If the depth limit regresses this line
-    // does not fail - the call escapes vitest's expectation entirely - so the
-    // shape of the assertion matters as much as the assertion.
-    expect(runWithBudget(`${source} String(1);`)).toMatchObject({ Type: 'throw' });
+test('growing alias applications exhaust logical depth without exhausting the host stack', () => {
+  // A completed structural cycle is tested separately. This builder changes
+  // the argument on every application, so there is no repeated application
+  // whose graph edge can close. The callable path used to overflow natively.
+  const source = 'function wrap(T: type): type { return type [].<T>; } '
+    + 'type N<T: type> = { f: (N.<wrap(T)>) => void }; type X = N.<uint8>; String(1);';
+  for (const depth of [undefined, 8, 32, 64, 256]) {
+    const completion = EnsureCompletion(runWithBudget(source, depth === undefined ? undefined : { depth }));
+    expect(completion.Type).toBe('throw');
+    expect(TypeDiagnosticOf(completion.Value)).toMatchObject({
+      code: 'RT_TYPE_EVALUATION_LIMIT', phase: 'pre-evaluation', errorClass: 'StaticTypeError',
+    });
   }
 });
 

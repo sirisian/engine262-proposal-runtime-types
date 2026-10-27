@@ -1260,6 +1260,20 @@ export function FirstInlineCycle(t: TypeRecord): string | null {
       case 'reference':
       case 'shared':
         return walk(record.Target, within, here, memberName);
+      case 'function': {
+        // A callable stores no inline parameter or return payload. Descend
+        // nevertheless: an independent invalid cycle inside a signature is
+        // still invalid, even though reaching this callable crossed a reference.
+        for (const signature of record.Signatures) {
+          const types = [signature.ThisType, ...signature.Parameters.map((p) => p.Type), signature.Return];
+          for (const type of types) {
+            if (!type) continue;
+            const found = walk(type, within, here, memberName);
+            if (found !== null) return found;
+          }
+        }
+        return null;
+      }
       default:
         // Everything else is either a leaf or, like a nominal, a type whose own
         // declaration owns this rule (#sec-typed-classes) and which is not

@@ -28,6 +28,7 @@ import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mt
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X , ThrowCompletion } from '../completion.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
+import { CallEvaluator } from '../evaluator-trampoline.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
@@ -60,7 +61,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
+import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -74,7 +75,8 @@ import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironm
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TupleSuffixLength, TuplePrefixElement, TupleDefaultPlacementError, type TupleStorageShape } from './tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
-import { GenericAliasContextOf } from './generic-alias-context.mts';
+import { CreateGenericAliasRecord, GenericAliasContextOf } from './generic-alias-context.mts';
+import { AliasFormationFor, BeginAliasFormation, EndAliasFormation, MatchingAliasExpansion, CompleteAliasFormation, type AliasExpansion } from './alias-formation.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { PartialClassSelfOf, MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
 import { wrapToType } from './arithmetic.mts';
@@ -1459,7 +1461,7 @@ export function* InstantiateGenericAlias(
     pushTypeParameterFrame(new Map(captured.Bindings));
   }
   try {
-    return yield* InstantiateGenericAliasInContext(declaration, argRecords, argNames);
+    return yield* InstantiateGenericAliasInContext(declaration, argRecords, argNames, captured?.Bindings ?? currentTypeParameterFrame() ?? new Map());
   } finally {
     context.LexicalEnvironment = savedEnvironment;
     if (savedFrames) typeParameterFrames.splice(0, typeParameterFrames.length, ...savedFrames);
@@ -1470,6 +1472,7 @@ function* InstantiateGenericAliasInContext(
   declaration: ParseNode.TypeAliasDeclaration,
   argRecords: readonly TypeRecord[],
   argNames: readonly (string | undefined)[],
+  captures: ReadonlyMap<string, TypeRecord>,
 ): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   // proposal-runtime-types #sec-evaluation-budget: instantiating an alias is
@@ -1518,9 +1521,23 @@ function* InstantiateGenericAliasInContext(
     for (const [captured, record] of caseFrame ?? []) {
       frame.set(captured, record);
     }
+    const context = surroundingAgent.runningExecutionContext;
+    const region = typeResolutionPaths.get(context)?.region ?? context;
+    const enclosing = AliasFormationFor(region);
+    const formation = enclosing ?? BeginAliasFormation(region);
+    const repeated = MatchingAliasExpansion(formation, declaration, context.LexicalEnvironment, captures, argRecords);
+    if (repeated) return repeated.placeholder;
+    const expansion: AliasExpansion = {
+      declaration, environment: context.LexicalEnvironment, captures, arguments: argRecords,
+      placeholder: { Kind: 'object', Properties: [], IndexSignatures: [] },
+    };
+    formation.active.push(expansion);
+    formation.entries.push(expansion);
     typeParameterFrames.push(frame);
     try {
       const body = Q(yield* TypeNodeToTypeRecord(selectedType));
+      expansion.result = body;
+      if (!formation.entries.some((entry) => entry.placeholder === body)) tieAliasKnot(expansion.placeholder, body);
       // The BACKSTOP. #sec-generic-where:
       // a `where` clause is "checked at each specialization once its parameters
       // are bound. Where the expression is *false* for an application's
@@ -1559,9 +1576,19 @@ function* InstantiateGenericAliasInContext(
           }
         }
       }
-      return body;
+      if (!enclosing) {
+        const unproductive = CompleteAliasFormation(formation);
+        if (unproductive) return Throw.TypeError('$1 is defined as itself, so it denotes no type', Value(unproductive.declaration.BindingIdentifier.name));
+        for (const entry of formation.entries) {
+          const cycle = FirstInlineCycle(entry.placeholder);
+          if (cycle !== null) return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', Value(entry.declaration.BindingIdentifier.name), Value(cycle));
+        }
+      }
+      return enclosing ? body : expansion.placeholder;
     } finally {
       typeParameterFrames.pop();
+      formation.active.pop();
+      if (!enclosing) EndAliasFormation(region);
     }
   } finally {
     EndTypeEvaluation();
@@ -5682,7 +5709,35 @@ export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type, expectedArit
   return undefined;
 }
 
-export function* TypeNodeToTypeRecord(node: ParseNode.Type, asDeclaration?: boolean): PlainEvaluator<TypeRecord> {
+const typeResolutionPaths = new WeakMap<object, { nodes: ParseNode.Type[], region: object }>();
+
+export function TypeNodeToTypeRecord(node: ParseNode.Type, asDeclaration?: boolean): PlainEvaluator<TypeRecord> {
+  return CallEvaluator(TypeNodeToTypeRecordScoped(node, asDeclaration));
+}
+
+function* TypeNodeToTypeRecordScoped(node: ParseNode.Type, asDeclaration?: boolean): PlainEvaluator<TypeRecord> {
+  const context = surroundingAgent.runningExecutionContext;
+  const enclosing = typeResolutionPaths.get(context);
+  const path = enclosing ?? { nodes: [], region: {} };
+  typeResolutionPaths.set(context, path);
+  const parent = path.nodes[path.nodes.length - 1];
+  const region = path.region;
+  // A structural back edge cannot supply an unfinished type as an input to
+  // another computation or application. Such dependencies keep their budget.
+  if (['ComputedType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)
+      || parent?.type === 'TypeReference' && parent.TypeArguments?.TypeArgumentList.includes(node)
+      || node.parent?.type === 'TypeOperatorExpression') path.region = {};
+  path.nodes.push(node);
+  try {
+    return yield* TypeNodeToTypeRecordBody(node, asDeclaration);
+  } finally {
+    path.nodes.pop();
+    path.region = region;
+    if (!enclosing) typeResolutionPaths.delete(context);
+  }
+}
+
+function* TypeNodeToTypeRecordBody(node: ParseNode.Type, asDeclaration?: boolean): PlainEvaluator<TypeRecord> {
   const parent = node.parent;
   asDeclaration ??= isHigherKindedArgument(node, (name) => declarationNamed(node, name) ?? undefined)
     || parent?.type === 'TypeParameter' && parent.TypeParameterDefault === node && (parent.Arity ?? 0) > 0;
@@ -6360,6 +6415,14 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
           // EXPRESSION position is untouched: only type positions read
           // declarations this way.
           const aliasDeclaration = declaration as ParseNode.TypeAliasDeclaration;
+          const binding = ResolveBindingDeclaration(node, name);
+          if (aliasDeclaration.TypeParameters && binding?.node === aliasDeclaration
+              && ref.Base instanceof EnvironmentRecord && UninitializedBindingIdentity(resolved.Value) !== undefined
+              && UninitializedBindingIdentity(resolved.Value) === DeclarativeBindingIdentity(ref.Base, Value(name))) {
+            const descriptor = CreateGenericAliasRecord(aliasDeclaration, ref.Base, currentTypeParameterFrame());
+            if (asDeclaration && !node.TypeArguments) return descriptor;
+            return Q(yield* InstantiateGenericAlias(aliasDeclaration, argRecords, descriptor, argNames2));
+          }
           if (!aliasDeclaration.TypeParameters) {
             const placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
             beginResolvingAlias(aliasDeclaration, placeholder);

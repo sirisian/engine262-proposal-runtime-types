@@ -1,4 +1,5 @@
 import { InFragmentEvaluation } from './type-system/fragment-library.mts';
+import { ResumeEvaluator, type EvaluationCall } from './evaluator-trampoline.mts';
 import { Throw } from './host-defined/error-messages.mts';
 import { PatternEnvironmentFor } from './runtime-semantics/PatternEnvironment.mts';
 import { InTypeComputation, CurrentTypeComputationSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
@@ -453,7 +454,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
 export function skipDebugger<T>(iterator: Evaluator<T>, maxSteps = Infinity): T {
   let steps = 0;
   while (true) {
-    const { done, value } = iterator.next({ resume: 'debugger', value: undefined });
+    const { done, value } = ResumeEvaluator(iterator, { resume: 'debugger', value: undefined });
     if (done) {
       return value;
     }
@@ -470,6 +471,7 @@ export type EvaluatorYieldType_Await = { suspend: 'await' }
 export type EvaluatorYieldType_Yield = { suspend: 'yield', value: ObjectValue }
 export type EvaluatorYieldType_AsyncYield = { suspend: 'async-yield' }
 export type EvaluatorYieldType =
+  | EvaluationCall
   | EvaluatorYieldType_Debugger
   | EvaluatorYieldType_Await
   | EvaluatorYieldType_Yield
@@ -480,6 +482,7 @@ export type EvaluatorNextType_Await = { resume: 'await', value: ValueCompletion 
 export type EvaluatorNextType_Yield = { resume: 'yield', value: NormalCompletion<Value> | Value | void | ReturnCompletion | ThrowCompletion }
 export type EvaluatorNextType_AsyncYield = { resume: 'async-yield', value: void | YieldCompletion }
 export type EvaluatorNextType =
+  | { resume: 'evaluation-call', value: unknown }
   | EvaluatorNextType_Debugger
   | EvaluatorNextType_Await
   | EvaluatorNextType_Yield

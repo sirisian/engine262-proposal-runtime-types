@@ -1,4 +1,5 @@
 import type { ExecutionContextHostDefined, GCMarker } from '../host-defined/engine.mts';
+import { ResumeEvaluator } from '../evaluator-trampoline.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -24,7 +25,6 @@ import {
   OutOfRange,
   type EvaluatorNextType,
   type YieldCompletion,
-  type EvaluatorYieldType,
   type YieldEvaluator,
   type ValueEvaluator,
   type AwaitEvaluator,
@@ -219,12 +219,11 @@ export function* RunSuspendedContext(context: ExecutionContext, completionRecord
 
   // Resume the suspended evaluation of context using completionRecord as the result of the operation that suspended it.
   // Let result be the Completion Record returned by the resumed computation.
-  let iter_result: IteratorResult<EvaluatorYieldType, YieldCompletion | void>;
   let result: YieldCompletion | void;
   let completion: EvaluatorNextType = completionRecord;
   while (true) {
     // run the evaluator
-    iter_result = context.CodeEvaluationState!.next(completion);
+    const iter_result = ResumeEvaluator(context.CodeEvaluationState!, completion);
     if (iter_result.done) {
       result = iter_result.value;
       break;

@@ -33,6 +33,7 @@ export * from './host-defined/inspect.mts';
 export { performDevtoolsEval, type DevtoolsEvalReport } from './host-defined/devtoolsEval.mts';
 export { type Formattable, Throw } from './host-defined/error-messages.mts';
 export * from './evaluator.mts';
+export { CallEvaluator, ResumeEvaluator } from './evaluator-trampoline.mts';
 
 // proposal-runtime-types (spec, Provenance): the host-facing channel. A tool
 // resolves a doc comment or a go-to-definition through this; no program can read
