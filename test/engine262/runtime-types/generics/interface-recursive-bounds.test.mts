@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
-import { observeModuleGraph, type ModuleObservation } from '../module-observer.mts';
+import { observeModuleGraph, observeModuleSequence, type ModuleObservation } from '../module-observer.mts';
+import { observeScript } from '../harness.mts';
 import { nativeErrorClass } from '../error-observer.mts';
 
 // #sec-computed-constraints: recursive description does not discharge admission.
 const corpus = JSON.parse(readFileSync(new URL('../conformance/interface-recursive-bounds.json', import.meta.url), 'utf8')) as {
   cases: { name: string; modules: Record<string, string>; expected: Partial<ModuleObservation> }[];
 };
-test.each(corpus.cases)('$name', async ({ modules, expected }) => {
+test.each(corpus.cases)('Module: $name', async ({ modules, expected }) => {
   const result = await observeModuleGraph(modules);
   expect(result).toMatchObject(expected);
   if (!('errorClass' in expected)) expect(result.errorClass).toBeUndefined();
@@ -34,3 +35,30 @@ for (const [name, source] of divergent) for (const depth of [8, 32]) {
     expect((next.Value as { stringValue(): string }).stringValue()).toBe('true');
   });
 }
+
+// Script admission must reject closed annotations before any body effects too.
+for (const { name, modules, expected } of corpus.cases) {
+  if (Object.keys(modules).length !== 1) continue;
+  test(`Script: ${name}`, () => {
+    const result = observeScript(modules.main);
+    expect(result.completion.Type).toBe(expected.status === 'fulfilled' ? 'normal' : 'throw');
+    expect(result.bodyEntered).toBe(expected.bodyEntries!.length > 0);
+    expect(result.errorClass).toBe(expected.errorClass);
+    if (expected.diagnostic) expect(result.diagnostic).toMatchObject(expected.diagnostic);
+    else expect(result.diagnostic).toBeUndefined();
+  });
+}
+
+test('failed recursive class admission clears the unfinished specialization before retry', async () => {
+  const results = await observeModuleSequence({
+    dep: 'export interface I<T:type extends I.<T>>{get():T;}export class E<U:type> implements I.<E.<U>>{}',
+    bad: 'import {E} from "dep";for(let i=0;i<2;i++){let caught=false;try{E.<uint8>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error("unfinished application escaped");}',
+    good: 'import {E,I} from "dep";partial class E{get():E.<U>{return this;}}const e=new E.<uint8>();if(e.get()!==e||E.<uint8>!==E.<uint8>)throw new Error("retry");',
+  }, ['bad', 'good']);
+  expect(results[0]).toMatchObject({ status: 'fulfilled', bodyEntries: ['dep', 'bad'] });
+  expect(results[1]).toMatchObject({ status: 'fulfilled', bodyEntries: ['good'] });
+  for (const result of results) {
+    expect(result.errorClass).toBeUndefined();
+    expect(result.diagnostic).toBeUndefined();
+  }
+});

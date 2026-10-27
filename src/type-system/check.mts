@@ -14982,13 +14982,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const typeParameterConstraint = (parameter: TypeParameterRecord, bindings: ReadonlyMap<string, TypeRecord>): Known => {
+  const typeParameterConstraint = (parameter: TypeParameterRecord, bindings: ReadonlyMap<string, TypeRecord>, parameters: readonly TypeParameterRecord[]): Known => {
     // A returned or member signature already carries its enclosing arguments
     // in the effective constraint. Re-resolving its source in the caller can
     // lose that capture or replace it with an unrelated same-spelled binding.
     const constraint = parameter.Constraint ?? (parameter.ConstraintNode && !importedDeclarationSourceModule(parameter.Declaration)
       ? resolveType(parameter.ConstraintNode) : null);
-    return constraint && substituteFreeTypeParameters(constraint, bindings);
+    // Captured references to this application's own binders must close too;
+    // spelling alone cannot distinguish them from enclosing parameters.
+    return constraint && substituteFreeTypeParameters(constraint, bindings, parameters.map((binder) => binder.Declaration));
   };
 
   const finishTypeArgumentBindings = (typeParams: readonly TypeParameterRecord[], into: Map<string, TypeRecord>,
@@ -15023,7 +15025,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           continue;
         }
-        let bound = typeParameterConstraint(tp, into);
+        let bound = typeParameterConstraint(tp, into, typeParams);
         if (tp.ConstraintNode && (!bound || bound.Kind === 'deferred')) {
           const check: GenericDefaultCheck = { application: validation.application, node: tp.ConstraintNode,
             parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true, sourceModule: importedDeclarationSourceModule(tp.Declaration) };
@@ -15128,7 +15130,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       (index, entry) => {
         const tp = typeParams[index];
         if (!tp.Variadic) return true;
-        const constraint = typeParameterConstraint(tp, into);
+        const constraint = typeParameterConstraint(tp, into, typeParams);
         const record = entry.record ?? (entry.node ? resolveType(entry.node as ParseNode.Type) : null);
         return !constraint || !record || mentionsTypeParameter(constraint) || mentionsTypeParameter(record)
           || packElementAdmits(record, restElementType(constraint));
@@ -35121,7 +35123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (!bound || tp.Variadic) {
                 continue;
               }
-              const closed = typeParameterConstraint(tp, bindings);
+              const closed = typeParameterConstraint(tp, bindings, generic);
               if (!closed || mentionsTypeParameter(closed)) {
                 continue;
               }

@@ -2783,59 +2783,64 @@ function* SpecializeFromFrame(
     specializationsInProgress.set(family, progress);
   }
   progress.set(cacheKey, { declaration });
-  let specialized;
+  // Keep recursive applications attached to this constructor until its
+  // implemented-interface graph and layout have both been admitted.
   try {
-    const className = Value(declaration.BindingIdentifier?.name ?? '');
-    specialized = EnsureCompletion(yield* ClassDefinitionEvaluation(
-      body.ClassTail,
-      className,
-      className,
-      // The declaration's own source text, so that the constructor this
-      // evaluation creates can be matched back to the declaration while its
-      // body is still running - the window in which `AssociateClassType`
-      // below has not happened yet and `LookupClassType` answers nothing.
-      (body as unknown as { sourceText?: string }).sourceText ?? '',
-      [],
-      true,
-      family,
-      cacheKey,
-    ));
-    if (specialized.Type === 'normal') {
-      // Applicable partial members, including computed keys, belong to the
-      // application being admitted. Evaluate them once while the constructor
-      // is still in progress, before verifying its complete declaration graph.
-      for (const extension of partialClassExtensions.get(family) ?? []) {
-        Q(yield* ApplyPartialClass(extension, declaration, specialized.Value as Value, argRecords));
+    let specialized;
+    try {
+      const className = Value(declaration.BindingIdentifier?.name ?? '');
+      specialized = EnsureCompletion(yield* ClassDefinitionEvaluation(
+        body.ClassTail,
+        className,
+        className,
+        // The declaration's own source text, so that the constructor this
+        // evaluation creates can be matched back to the declaration while its
+        // body is still running - the window in which `AssociateClassType`
+        // below has not happened yet and `LookupClassType` answers nothing.
+        (body as unknown as { sourceText?: string }).sourceText ?? '',
+        [],
+        true,
+        family,
+        cacheKey,
+      ));
+      if (specialized.Type === 'normal') {
+        // Applicable partial members, including computed keys, belong to the
+        // application being admitted. Evaluate them once while the constructor
+        // is still in progress, before verifying its complete declaration graph.
+        for (const extension of partialClassExtensions.get(family) ?? []) {
+          Q(yield* ApplyPartialClass(extension, declaration, specialized.Value as Value, argRecords));
+        }
       }
+    } finally {
+      popTypeParameterFrame();
     }
+    if (specialized.Type !== 'normal') {
+      return specialized as never;
+    }
+    const ctor = specialized.Value as Value;
+    const published = PublishedClassTypeOf(body);
+    let conflict: string | undefined;
+    const record = MergePartialStructures({
+      ...(published?.Kind === 'nominal' ? published : {}),
+      Kind: 'nominal', Declaration: declaration as never, DeclarationIdentity: ClassFamilyIdentityOf(family), Arguments: argRecords, Constructor: ctor,
+      Implements: Q(yield* ResolveImplementedInterfaces(body, ctor, argRecords)),
+      Base: RuntimeClassBaseOf(ctor) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
+    } as TypeRecord, RuntimePartialContributions(ClassFamilyIdentityOf(family)), (key) => {
+      conflict ??= key;
+    });
+    if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
+    Q(yield* InstallTypeLayoutProperties(ctor as ObjectValue, record));
+    AssociateClassType(ctor, GetTypeObject(record));
+    byArgs.set(cacheKey, ctor);
+    selectedDeclarations.set(ctor as object, body);
+    if (body !== declaration) {
+      caseBuiltConstructors.add(ctor as object);
+    }
+    return ctor as never;
   } finally {
     progress.delete(cacheKey);
     if (progress.size === 0) specializationsInProgress.delete(family);
-    popTypeParameterFrame();
   }
-  if (specialized.Type !== 'normal') {
-    return specialized as never;
-  }
-  const ctor = specialized.Value as Value;
-  const published = PublishedClassTypeOf(body);
-  let conflict: string | undefined;
-  const record = MergePartialStructures({
-    ...(published?.Kind === 'nominal' ? published : {}),
-    Kind: 'nominal', Declaration: declaration as never, DeclarationIdentity: ClassFamilyIdentityOf(family), Arguments: argRecords, Constructor: ctor,
-    Implements: Q(yield* ResolveImplementedInterfaces(body, ctor, argRecords)),
-    Base: RuntimeClassBaseOf(ctor) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
-  } as TypeRecord, RuntimePartialContributions(ClassFamilyIdentityOf(family)), (key) => {
-    conflict ??= key;
-  });
-  if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
-  Q(yield* InstallTypeLayoutProperties(ctor as ObjectValue, record));
-  AssociateClassType(ctor, GetTypeObject(record));
-  byArgs.set(cacheKey, ctor);
-  selectedDeclarations.set(ctor as object, body);
-  if (body !== declaration) {
-    caseBuiltConstructors.add(ctor as object);
-  }
-  return ctor as never;
 }
 
 /**

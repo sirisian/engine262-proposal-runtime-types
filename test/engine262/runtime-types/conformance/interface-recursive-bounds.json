@@ -475,6 +475,144 @@
           "errorClass": "StaticTypeError"
         }
       }
+    },
+    {
+      "name": "generic-class-identity",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C<U:type> implements I.<C.<U>>{get():C.<U>{return this;}}if(C.<string>!==C.<string>||C.<string>===C.<number>)throw new Error(\"identity\");const c:I.<C.<string>>=new C.<string>();if(c.get()!==c)throw new Error(\"self\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-local-activations",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}function make(){class C<U:type> implements I.<C.<U>>{get():C.<U>{return this;}}return C;}const A:any=make();const B:any=make();if(A.<string>!==A.<string>||A.<string>===B.<string>)throw new Error(\"family identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-dependent-bound",
+      "modules": {
+        "main": "interface I<A:type,T:type extends I.<A,T>>{get():T;value:A;}class C<U:type> implements I.<U,C.<U>>{value:U;get():C.<U>{return this;}}I.<string,C.<string>>;I.<number,C.<number>>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-mutual-bounds",
+      "modules": {
+        "main": "interface I<T:type extends J.<T>>{get():T;}interface J<T:type extends I.<T>>{get():T;}class C<U:type> implements I.<C.<U>>,J.<C.<U>>{get():C.<U>{return this;}}I.<C.<string>>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-named",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}type Bad=I.<T:string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "invalid-spread",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}type Bad=I.<...[string]>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "invalid-inferred",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}function f<T:type extends I.<T>>(x:T):T{return x;}f(\"bad\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unused-invalid-in-generic-body",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}function unused<U:type>(x:I.<string>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "invalid-independent-after-valid",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}type Good=I.<C>;type Bad=I.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-class-missing-mutual-edge",
+      "modules": {
+        "main": "interface I<T:type extends J.<T>>{get():T;}interface J<T:type extends I.<T>>{get():T;}class C<U:type> implements I.<C.<U>>{get():C.<U>{return this;}}I.<C.<string>>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
     }
   ]
 }
