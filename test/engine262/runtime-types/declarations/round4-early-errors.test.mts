@@ -2,7 +2,9 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, observeScript } from '../harness.mts';
 
 /**
- * Round 4 of the early-error survey: void through a pattern, a
+ * Round 4 of the early-error survey: an enumerator read typed before closed
+ * evaluation with coverage over the declared type (#sec-enums, #sec-narrowfrom,
+ * Q7); void through a pattern, a
  * conditional and an object-literal value (#sec-void-type); BigInt zero
  * divisors and negative exponents (#sec-integer-operations); a constructor
  * declaring type parameters (#sec-type-parameters-static-semantics-early-errors);
@@ -13,6 +15,17 @@ import { evaluated, expectEarlyError, observeScript } from '../harness.mts';
 const refused = (source: string, rule: string): void => {
   expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule, phase: 'static' } });
 };
+
+test('an enumerator read is its literal before the body, and coverage keeps the declared type', () => {
+  refused('enum E { A, B } if (E.B) {}', 'rt-constant-condition');
+  refused('enum E { A, B } if (E.A) {}', 'rt-constant-condition');
+  refused('enum E: string { A = "a" } if (E.A) {}', 'rt-constant-condition');
+  refused('enum E { A, B } let z: uint8 = 1; if (E.B === 5) {}', 'rt-impossible-test');
+  refused('enum E { A = 1, B = 2 } let e: E = E.A; switch (e) { case E.A: break; }', 'rt-enum-case');
+  refused('enum E { A = 1, B = 2 } let e: E = E.A; let q = match (e) { when E.A: 1 };', 'rt-nonexhaustive-match');
+  expect(evaluated('enum E { A = 1, B = 2 } let e: E = E.A; let q = match (e) { when E.A: 1; when E.B: 2 }; String(q);')).toBe('1');
+  expect(evaluated('enum E { A, B } function f(e: E) { return e ? 1 : 0; } String(f(E.B));')).toBe('1');
+});
 
 test('void through a pattern, a conditional, and an object-literal value is refused', () => {
   refused('function f(): void {} const [y] = [f()];', 'rt-void-use');

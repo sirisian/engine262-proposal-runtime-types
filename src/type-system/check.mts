@@ -11338,6 +11338,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // records for one enum. Across entries the same holds - without this a later
   // entry resolves an enum name declared earlier to nothing.
   const enumNodes = session ? session.enumNodes : new Map<string, ParseNode>();
+  const enumReadsInProgress = new Set<ParseNode>();
 
   const enumTypeMemo = new Map<ParseNode, Known>();
 
@@ -11524,6 +11525,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const enumRecordOf = (type: Known, seen = new Set<TypeRecord>()): Known => {
     if (!type || seen.has(type)) return null;
     seen.add(type);
+    // Round 4, Q7, direction B: a subject narrowed to an enumerator literal is
+    // still a subject of the enum's type for coverage, as in Rust, where a
+    // variant in hand does not shrink the type a `match` must cover; the
+    // enumerators a `match` covers are the ones the declaration lists.
+    if (type.Kind === 'literal') return enumRecordOf((type as { Base?: TypeRecord }).Base ?? null, seen);
+    if (type.Kind === 'union') {
+      const records = type.Members.map((member) => enumRecordOf(member, seen));
+      return records.length > 0 && records.every((r) => r && r === records[0]) ? records[0] : null;
+    }
     if (type.Kind === 'nominal') {
       if ((type.Declaration as { type?: string } | undefined)?.type === 'EnumDeclaration') return type;
       return enumRecordOf(type.Structure ?? null, seen);
@@ -21083,6 +21093,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const evaluated = declaration ? evaluatedEnums.get(declaration) : undefined;
             const value = evaluated?.members.get(m.IdentifierName.name);
             if (value !== undefined) return { Kind: 'literal', Value: value, Base: evaluated!.record };
+            // Before closed evaluation, the declaration decides what it can
+            // (round 4, Q7, direction B): `enumTypeOf` computes each
+            // enumerator's value from a literal initializer or the sequence,
+            // so a read of a declared enumerator is its literal-of-E here too,
+            // for truthiness, `===` and assignability; coverage judgments read
+            // the subject's declared enum type (see `coverageEnumRecord`). An
+            // initializer that reads its own enum is inside the computation
+            // and gets no type, which keeps the computation finite.
+            if (declaration && !evaluated && !shadowedByProgram(base.name) && !enumReadsInProgress.has(declaration)
+                && ResolveBindingDeclaration(base, base.name)?.node === declaration) {
+              enumReadsInProgress.add(declaration);
+              try {
+                const record = enumTypeOf(base.name, declaration);
+                const names = (declaration as ParseNode.EnumDeclaration).EnumMemberList.map((member) => member.IdentifierName.name);
+                const index = names.indexOf(m.IdentifierName.name);
+                const members = (record as { EnumMembers?: readonly unknown[] } | null)?.EnumMembers;
+                const literal = index >= 0 ? members?.[index] : undefined;
+                if (record && literal !== undefined && literal !== null) return { Kind: 'literal', Value: literal, Base: record } as unknown as TypeRecord;
+              } finally {
+                enumReadsInProgress.delete(declaration);
+              }
+            }
           }
           if (base.type === 'IdentifierReference') {
             const baseName = (base as unknown as { name?: string }).name;
@@ -27971,7 +28003,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       const armTypes: Known[] = [];
       walk(me.Expression as ParseNode);
-      const subjectType = staticType(me.Expression as ParseNode);
+      // Round 4, Q7, direction B: a subject narrowed to one enumerator literal
+      // is matched as a subject of the enum's declared type, so every arm is
+      // needed and every arm is reachable, as in Rust, where a variant in
+      // hand does not shrink the type a `match` must cover.
+      const narrowedSubject = staticType(me.Expression as ParseNode);
+      const subjectType = narrowedSubject?.Kind === 'literal' && enumRecordOf(narrowedSubject) ? enumRecordOf(narrowedSubject) : narrowedSubject;
       let remaining = subjectType;
       let matchEntry = captureIndependentFlow();
       const subjectName = narrowableName(me.Expression);
@@ -38300,7 +38337,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // its value was excluded before the `switch`.
               const subjectName = narrowableName(expression);
               const labelType = label && subjectName !== null ? singleValueOperandType(label, discriminantType) : null;
-              if (labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType), (node as ParseNode));
+              // Round 4, Q7, direction B: a `switch` over an enum subject reads
+              // the declared enum type, so an enumerator label is never judged
+              // against the subject's current value; every arm is needed and
+              // every arm is reachable.
+              const enumSubject = !!enumRecordOf(discriminantType);
+              if (!enumSubject && labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType), (node as ParseNode));
               // #sec-narrowing-flow: a label repeating an earlier effect-free label
               // of this `switch` tests what that one already failed.
               const labelCanon = label && labelType?.Kind !== 'literal' ? testCanon(label, true) : null;
@@ -38359,7 +38401,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         const namedDiscriminant = singleValueOperandType(expression);
-        const subject = booleanType(namedDiscriminant) ? namedDiscriminant : staticType(expression);
+        // Round 4, Q7, direction B: a discriminant narrowed to one enumerator
+        // literal is switched over as a subject of the enum's declared type,
+        // so every enumerator label is reachable and every arm is needed.
+        const narrowedDiscriminant = booleanType(namedDiscriminant) ? namedDiscriminant : staticType(expression);
+        const subject = narrowedDiscriminant?.Kind === 'literal' && enumRecordOf(narrowedDiscriminant) ? enumRecordOf(narrowedDiscriminant) : narrowedDiscriminant;
         if (subject && subject.Kind !== 'any' && !mentionsTypeParameter(subject)) {
           for (const label of caseLabels) {
             if (!label) continue;
