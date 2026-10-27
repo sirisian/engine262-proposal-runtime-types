@@ -1,6 +1,7 @@
 import { BeginTypeEvaluation, EndTypeEvaluation, InTypeComputation, IsBudgetExhausted, CurrentTypeComputationSubject } from '../type-system/budget.mts';
 import { InFragmentEvaluation } from '../type-system/fragment-library.mts';
 import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
+import { RetainFunctionTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { AdoptedReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { SameType } from '../type-system/relations.mts';
 import { NoDefaultValueError } from '../type-system/intern.mts';
@@ -304,6 +305,7 @@ function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: A
         adoptedBindings = true;
       }
     }
+    RetainFunctionTypeParameterEnvironment(F);
     // 1. Return the result of EvaluateBody of the parsed code that is F.[[ECMAScriptCode]] passing F and argumentsList as the arguments.
     return EnsureCompletion(yield* (EvaluateBody(F.ECMAScriptCode!, F, argumentsList)));
   } finally {

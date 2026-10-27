@@ -1,7 +1,7 @@
 import { operatorTableKey } from '../type-system/overloads.mts';
 import type { OverloadSignature } from '../type-system/overloads.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
-import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame, RetainTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord, IsOfType } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { displayType, typeParameterRecordsOf, parameterFromDeclaration } from '../type-system/records.mts';
@@ -621,6 +621,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   const classTypeParameters = (ClassTail as { parent?: { TypeParameters?: ParseNode.TypeParameters | null } }).parent?.TypeParameters;
   if (classTypeParameters && classTypeParameters.TypeParameterList.length > 0) {
     classScope.TypeParameterList = classTypeParameters.TypeParameterList;
+    if (specialization) RetainTypeParameterEnvironment(classScope);
   }
   // The class whose members are about to be evaluated, so their decorator
   // contexts can name it. Restored rather than cleared, since a class may be

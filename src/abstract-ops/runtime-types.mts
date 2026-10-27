@@ -8,7 +8,7 @@ import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { ObserveStructuralValue, AdvanceStructuralValue, type StructuralValueObservations, OrdinaryDataObservationValid, type OrdinaryDataObservation, publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope, RetainFunctionTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletion, ReturnCompletion, type ThrowCompletion } from '../completion.mts';
@@ -5512,6 +5512,7 @@ function annotationMentionsName(node: unknown, name: string): boolean {
 
 /** Converts each annotated parameter's bound value in place at entry. */
 export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(n: Value): PlainEvaluator<import('../value.mts').BooleanValue>, GetBindingValue(n: Value, s: import('../value.mts').BooleanValue): ValueEvaluator, SetMutableBinding(n: Value, v: Value, s: import('../value.mts').BooleanValue): PlainEvaluator }): PlainEvaluator {
+  RetainFunctionTypeParameterEnvironment(fn);
   // #sec-callable-overload-contracts: a specialized case's body, and a
   // bodyless owner, run only through a selection, so reaching one without it
   // is refused rather than run as an ordinary overload. The checker refuses

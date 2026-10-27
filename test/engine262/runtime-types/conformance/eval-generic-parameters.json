@@ -1,0 +1,719 @@
+{
+  "cases": [
+    {
+      "name": "binding-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "binding-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=(value:V):{outer:T,own:V}=>({outer,own:value});f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"const f:G=(value:V):{outer:T,own:V}=>({outer,own:value});f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const f:G=(value:V):{outer:T,own:V}=>({outer,own:value});f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"const f:G=(value:V):{outer:T,own:V}=>({outer,own:value});f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"class C{f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};}new C().f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"class C{f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};}new C().f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"class C{f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};}new C().f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"class C{f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};}new C().f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const o:{f:G}={f(value:V):{outer:T,own:V}{return {outer,own:value};}};o.f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"const o:{f:G}={f(value:V):{outer:T,own:V}{return {outer,own:value};}};o.f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const o:{f:G}={f(value:V):{outer:T,own:V}{return {outer,own:value};}};o.f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"const o:{f:G}={f(value:V):{outer:T,own:V}{return {outer,own:value};}};o.f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"function produce():G{return function(value:V):{outer:T,own:V}{return {outer,own:value};};}const f=produce();f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"function produce():G{return function(value:V):{outer:T,own:V}{return {outer,own:value};};}const f=produce();f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"function produce():G{return function(value:V):{outer:T,own:V}{return {outer,own:value};};}const f=produce();f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"function produce():G{return function(value:V):{outer:T,own:V}{return {outer,own:value};};}const f=produce();f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"function consume(f:G){return f.<string>(\\\"ok\\\");}consume(function(value:V):{outer:T,own:V}{return {outer,own:value};});\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"function consume(f:G){return f.<string>(\\\"ok\\\");}consume(function(value:V):{outer:T,own:V}{return {outer,own:value};});\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"function consume(f:G){return f.<string>(\\\"ok\\\");}consume(function(value:V):{outer:T,own:V}{return {outer,own:value};});\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"function consume(f:G){return f.<string>(\\\"ok\\\");}consume(function(value:V):{outer:T,own:V}{return {outer,own:value};});\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"let f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"let f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"let f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"let f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-binders-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-binders-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"const f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-binders-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "own-binders-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"const f:G=function<W:type>(value:W):{outer:T,own:W}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-alias-immediate",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"type Captured=T;const f:G=function(value:V):{outer:Captured,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-alias-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"type Captured=T;const f:G=function(value:V):{outer:Captured,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-alias-arrow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"type Captured=T;const f:G=function(value:V):{outer:Captured,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-alias-method",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return {run(){return eval(\"type Captured=T;const f:G=function(value:V):{outer:Captured,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}.run;}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const x:number=7;const a=build(x);if(a.outer!==7||a.own!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "defaulted",
+      "modules": {
+        "main": "function build<T:type=number>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const x:number=7;const a=build(x);if(a.outer!==7||a.own!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}run(){const outer=this.value;type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}const n=new C.<number>(7),s=new C.<string>(\"outer\");const a=n.run(),b=s.run(),c=n.run();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "caller-shadow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");};}function invoke<T:type>(fn){return fn();}const n=build.<number>(7),s=build.<string>(\"outer\");const a=invoke.<boolean>(n),b=invoke.<number>(s),c=invoke.<string>(n);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-declaration-recursion",
+      "modules": {
+        "main": "function build<T:type>(outer:T,again:boolean){type G=<V:type>(value:V)=>{outer:T,own:V};const read=()=>eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");if(again){const other=build.<string>(\"other\",false);if(other().outer!==\"other\")throw new Error(\"inner\");}return read;}const read=build.<number>(7,true);if(read().outer!==7)throw new Error(\"outer\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-eval",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function(){return eval(\"eval(\\\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\\\\\"ok\\\\\\\");\\\");\");};}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-eval-function",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f;\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n.<string>(\"ok\"),b=s.<string>(\"ok\"),c=n.<string>(\"ok\");if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "global-alias-shadowed",
+      "modules": {
+        "main": "type T=boolean;function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-own-parameter-shadow",
+      "modules": {
+        "main": "function f<T:type>(){return eval(\"function g<T:type>(x:T):T{return x;}g.<string>(\\\"ok\\\");\");}if(f.<number>()!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-local-alias-shadow",
+      "modules": {
+        "main": "function f<T:type>(){return eval(\"type T=string;const x:T=\\\"ok\\\";x;\");}if(f.<number>()!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closure-own-parameter-shadow",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return function<T:type>(){return eval(\"const x:T=\\\"ok\\\";x;\");};}const read=build.<number>(7);if(read.<string>()!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-default",
+      "modules": {
+        "main": "function f<T:type>(value=eval(\"const x:T=7;x;\")){return value;}if(f.<number>()!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constraint",
+      "modules": {
+        "main": "function f<T:type>(outer:T){type G=<V:T>(value:V)=>T;return eval(\"const g:G=function(value:V):T{return value;};g(outer);\");}if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "adopted-own-shadow",
+      "modules": {
+        "main": "function f<T:type>(outer:T){type Captured=T;type G=<T:type>(value:T)=>{outer:Captured,own:T};return eval(\"const g:G=function(value:T):{outer:Captured,own:T}{return {outer,own:value};};g.<string>(\\\"ok\\\");\");}const a=f.<number>(7);if(a.outer!==7||a.own!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "builtin-name-shadow",
+      "modules": {
+        "main": "function build<string:type>(outer:string){type G=<V:type>(value:V)=>{outer:string,own:V};return eval(\"const f:G=function(value:V):{outer:string,own:V}{return {outer,own:value};};f.<boolean>(true);\");}const a=build.<number>(7);if(a.outer!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-body",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer:false,own:value};};f.<string>(\\\"ok\\\");\");}build.<number>(7);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "invalid-unused-body",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"function unused():T{return false;}\\\"bad\\\";\");}build.<number>(7);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "uninitialized-shadow",
+      "modules": {
+        "main": "function f<T:type>(){return eval(\"const x:T=7;let T=type number;x;\");}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-eval-context",
+      "modules": {
+        "main": "function build<T:type>(outer:T,result=eval(\"type G=<V:type>(value:V)=>{outer:T,own:V};const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\")){return result;}const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-named",
+      "modules": {
+        "dep": "export function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}",
+        "main": "import {build} from \"dep\";const n=build.<number>(7),s=build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-namespace",
+      "modules": {
+        "dep": "export function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};return ()=>eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}",
+        "main": "import * as ns from \"dep\";const n=ns.build.<number>(7),s=ns.build.<string>(\"outer\");const a=n(),b=s(),c=n();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failure-recovery",
+      "modules": {
+        "main": "function build<T:type>(outer:T){type G=<V:type>(value:V)=>{outer:T,own:V};try{eval(\"globalThis.entered=true;const f:G=function(value:V):{outer:T,own:V}{return {outer:false,own:value};};f.<string>(\\\"ok\\\");\");throw new Error(\"accepted\");}catch(e){if(!(e instanceof StaticTypeError))throw e;}return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}globalThis.entered=false;const a=build.<number>(7),b=build.<string>(\"outer\"),c=build.<number>(7);if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");if(globalThis.entered)throw new Error(\"body ran\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

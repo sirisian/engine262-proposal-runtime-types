@@ -3,7 +3,7 @@ import type { ExecutionContext } from '../execution-context/ExecutionContext.mts
 import { Assert } from '../abstract-ops/notational-conventions.mts';
 import { GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import type { PrivateEnvironmentRecord } from '../execution-context/PrivateEnvironment.mts';
-import { EnvironmentRecord, DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
+import { EnvironmentRecord, DeclarativeEnvironmentRecord, FunctionEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
 import { FamilyCasesOf, SpecializedClassConstructor, ResolveInterfaceDeclaration, InterfaceTypeContextOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
@@ -361,6 +361,44 @@ export function takePendingCheckerBindings(): boolean {
 // T, but cannot replace a capture of an outer declaration. Keep identities on
 // frames, never on interned Type Records, and preserve them when copying.
 const declarationBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>>();
+// Newly parsed source (direct eval) has no syntax edge to its outer generic
+// declarations. The selected arguments belong to the actual lexical activation,
+// not an equal Type Object, caller frame or another use of the same declaration.
+const environmentTypeParameters = new WeakMap<EnvironmentRecord, ReadonlyMap<string, TypeRecord>>();
+
+export function RetainTypeParameterEnvironment(environment: EnvironmentRecord,
+  frame: ReadonlyMap<string, TypeRecord> | undefined = currentTypeParameterFrame()): void {
+  if (!frame) return;
+  const parameters = environment instanceof FunctionEnvironmentRecord
+    ? functionTypeParameters(environment.FunctionObject as never) : environment.TypeParameterList;
+  if (parameters?.length) environmentTypeParameters.set(environment, TypeParameterBindingsFor(parameters, frame));
+}
+
+export function RetainFunctionTypeParameterEnvironment(fn: object): void {
+  if (!functionTypeParameters(fn as never)?.length) return;
+  for (let environment: EnvironmentRecord | null = surroundingAgent.runningExecutionContext.LexicalEnvironment; environment; environment = environment.OuterEnv) {
+    if (environment instanceof FunctionEnvironmentRecord) {
+      if (environment.FunctionObject === fn) RetainTypeParameterEnvironment(environment);
+      return;
+    }
+  }
+}
+
+/** Read declaration evidence only: no HasBinding, GetBindingValue, getter or
+ * type computation. A nearer binding or opaque environment blocks fallback. */
+export function LexicalTypeParameterArgument(environment: EnvironmentRecord | undefined, name: string): TypeRecord | undefined {
+  const key = Value(name);
+  for (let at: EnvironmentRecord | null | undefined = environment; at; at = at.OuterEnv) {
+    if (!(at instanceof DeclarativeEnvironmentRecord) || at.bindings.has(key)) return undefined;
+    const parameters = at instanceof FunctionEnvironmentRecord ? functionTypeParameters(at.FunctionObject as never) : at.TypeParameterList;
+    const parameter = parameters?.find((entry) => entry.BindingIdentifier.name === name);
+    if (parameter) {
+      const frame = environmentTypeParameters.get(at);
+      return frame && declarationBindings.get(frame)?.get(parameter);
+    }
+  }
+  return undefined;
+}
 // Adopted binders occupy the literal's lexical scope, although their source
 // declarations belong to its supplying signature. Keep this correspondence
 // with each value's captured context, never on the shared source tree.
@@ -958,6 +996,10 @@ export function* BindTypeArgumentRecordsInto(
   const savedEnvironment = context.LexicalEnvironment;
   const parameterEnvironment = new DeclarativeEnvironmentRecord(savedEnvironment);
   parameterEnvironment.TypeParameterList = params;
+  // This binding procedure fills its own frame left to right. Retain this
+  // particular frame so an as-yet-unbound parameter cannot borrow an argument
+  // from an older activation of the same declaration.
+  environmentTypeParameters.set(parameterEnvironment, frame);
   context.LexicalEnvironment = parameterEnvironment;
   try {
     return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied, interfaceIdentity, parameterRecords);

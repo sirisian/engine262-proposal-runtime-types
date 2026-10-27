@@ -53,6 +53,7 @@ import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type 
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias, resolvedAliasContext, resolvedNamespaceBinding } from './resolving-aliases.mts';
+import { LexicalTypeParameterArgument } from './runtime.mts';
 import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
 import { InstantiateCheckedBindings } from './checked-bindings.mts';
 import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
@@ -13612,6 +13613,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, intrinsicName);
         const parameterInScope = typeParameterInScope(intrinsicName)
           && (!lexicalBinding || lexicalBinding.kind === 'type-parameter');
+        if (!lexicalBinding && !parameterInScope && !node.TypeArguments && node.TypeName.MemberNames.length === 0) {
+          let source: ParseNode = node;
+          while (source.parent) source = source.parent;
+          const argument = source === root ? LexicalTypeParameterArgument(checkingEnvironment, intrinsicName) : undefined;
+          if (argument) return argument;
+        }
         const selected = namespaceAlias ?? declarationAt(node.TypeName.IdentifierReference, intrinsicName,
           classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName));
         const aliasDeclaration = selected?.type === 'TypeAliasDeclaration' ? selected : undefined;
