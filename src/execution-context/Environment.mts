@@ -22,8 +22,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { RequireArrayBorrowLive, PutValue } from '../abstract-ops/reference-operations.mts';
-import { RequireType, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
-import { lookupTypeParameter } from '../type-system/runtime.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { TypeParametersOfEnvironment, TypeParameterArgumentAt, TypeParameterValue } from '../type-system/runtime.mts';
 import { RecordUnavailableModuleInput } from '../type-system/required-module-inputs.mts';
 import {
   Assert,
@@ -50,7 +50,7 @@ export abstract class EnvironmentRecord {
    * parameters a generic CLASS declares, on its class scope. A function's are
    * read from its [[FunctionObject]] instead. See TypeParameterInScopeAt.
    */
-  TypeParameterList?: readonly ParseNode.TypeParameter[];
+  TypeParameterList?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[];
 
   readonly OuterEnv: EnvironmentRecord | null;
 
@@ -1193,23 +1193,13 @@ export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSS
       ThisValue: undefined,
     }));
   } else {
-    // proposal-runtime-types #sec-generic-parameters-as-values: a generic
-    // declaration's type parameters are in scope for its signature and body,
-    // lexically: inside everything that encloses the declaration, and outside
-    // everything the body declares. Their bindings live in the type parameter
-    // frames rather than in this environment, so the walk marks the name
-    // resolved HERE, at the declaration's own environment, and GetValue reads
-    // the frame. Consulting the frames only once the name was otherwise
-    // unresolvable let every enclosing binding win - `let T = 5` outside
-    // `function f<T: type>()` made `T` read 5 in the body - and let a
-    // built-in type name win over a parameter named after it, though the
-    // parameter shadows it everywhere.
-    if (exceptedFromTypeNames !== true && TypeParameterInScopeAt(env, name)) {
+    // A resolved generic name retains its lexical owner. It is not an
+    // unresolved reference that a caller-wide frame search can later satisfy.
+    if (agentForTypeNames.feature('runtime-types') && TypeParametersOfEnvironment(env).some((parameter) => parameter.BindingIdentifier.name === name.stringValue())) {
+      let parameters = parameterEnvironmentViews.get(env);
+      if (!parameters) parameterEnvironmentViews.set(env, parameters = new TypeParameterEnvironmentRecord(env));
       return NormalCompletion(new ReferenceRecord({
-        Base: 'unresolvable',
-        ReferencedName: name,
-        Strict: strict,
-        ThisValue: undefined,
+        Base: parameters, ReferencedName: name, Strict: strict, ThisValue: undefined,
       }));
     }
     // a. Let outer be env.[[OuterEnv]].
@@ -1219,23 +1209,35 @@ export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSS
   }
 }
 
-/**
- * Whether _env_ is the environment of a generic declaration that declares a
- * type parameter named _name_, with a binding for it in the active frames: a
- * function's environment, for the function's own parameters, or a generic
- * class's class scope. A parameter with no active binding is left to the rest
- * of the walk, as before.
- */
-function TypeParameterInScopeAt(env: EnvironmentRecord, name: JSStringValue): boolean {
-  if (!agentForTypeNames.feature('runtime-types')) {
-    return false;
+/** Private read-only view of one lexical parameter environment. No ordinary
+ * storage binding is created, and resolving a name does not read its value. */
+const parameterEnvironmentViews = new WeakMap<EnvironmentRecord, TypeParameterEnvironmentRecord>();
+
+export class TypeParameterEnvironmentRecord extends DeclarativeEnvironmentRecord {
+  constructor(readonly Owner: EnvironmentRecord) {
+    super(null);
   }
-  const list = env instanceof FunctionEnvironmentRecord
-    ? functionTypeParameters(env.FunctionObject as never)
-    : env.TypeParameterList;
-  if (!list) {
-    return false;
+
+  override * HasBinding(N: JSStringValue) {
+    return Value(TypeParametersOfEnvironment(this.Owner).some((parameter) => parameter.BindingIdentifier.name === N.stringValue()));
   }
-  const text = name.stringValue();
-  return list.some((p) => p.BindingIdentifier?.name === text) && lookupTypeParameter(text) !== null;
+
+  override * GetBindingValue(N: JSStringValue, _S: BooleanValue): ValueEvaluator {
+    const bound = TypeParameterArgumentAt(this.Owner, N.stringValue());
+    if (!bound) return Throw.ReferenceError('$1 cannot be used before initialization', N);
+    return yield* TypeParameterValue(bound);
+  }
+
+  override * SetMutableBinding(N: JSStringValue, _V: Value, _S: BooleanValue): PlainEvaluator {
+    return Throw.TypeError('$1 is an immutable generic parameter', N);
+  }
+
+  override * DeleteBinding(_N: JSStringValue) {
+    return Value.false;
+  }
+
+  override mark(m: GCMarker) {
+    super.mark(m);
+    m(this.Owner);
+  }
 }

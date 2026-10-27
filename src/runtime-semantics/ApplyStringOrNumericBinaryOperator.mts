@@ -1,6 +1,6 @@
 import { MetadataKeys, MetadataKey } from '../type-system/metadata-keys.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { SetPendingCalleeContext, markValueParameterBinding, SetMetadataCaptureDomain } from '../type-system/runtime.mts';
+import { FunctionTypeParameterDeclarations, bindTypeParameter, SetPendingCalleeContext, markValueParameterBinding, SetMetadataCaptureDomain } from '../type-system/runtime.mts';
 import {
   isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow, CreateComplexValue,
   type ComplexObject,
@@ -794,6 +794,11 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     // The frame stays pushed for the WHOLE invocation: the operator's own
     // parameter boundary resolves the block's names when the body is entered.
     if (chosen.frame) {
+      for (const parameter of FunctionTypeParameterDeclarations(chosen.entry.fn as object)) {
+        const name = parameter.BindingIdentifier.name;
+        const bound = chosen.frame.get(name);
+        if (bound) bindTypeParameter(chosen.frame, name, bound, parameter);
+      }
       pushTypeParameterFrame(chosen.frame);
     }
     EnterOperatorBody();

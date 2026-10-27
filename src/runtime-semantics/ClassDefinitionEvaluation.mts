@@ -619,8 +619,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   // parameters are in scope for its heritage and every element, just outside
   // the class binding, which is where GetIdentifierReference looks for them.
   const classTypeParameters = (ClassTail as { parent?: { TypeParameters?: ParseNode.TypeParameters | null } }).parent?.TypeParameters;
-  if (classTypeParameters && classTypeParameters.TypeParameterList.length > 0) {
-    classScope.TypeParameterList = classTypeParameters.TypeParameterList;
+  const classParameters = [...classTypeParameters?.TypeParameterList ?? [], ...classTypeParameters?.Captures ?? []];
+  if (classParameters.length > 0) {
+    classScope.TypeParameterList = classParameters;
     if (specialization) RetainTypeParameterEnvironment(classScope);
   }
   // The class whose members are about to be evaluated, so their decorator

@@ -7,7 +7,7 @@ import {
   Value, ReferenceRecord, ReferenceValue, ObjectValue, PrivateName, JSStringValue,
 } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { RebindRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
+import { RebindRefBinding, RefBindingHolder, EnvironmentRecord, TypeParameterEnvironmentRecord } from '../execution-context/Environment.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import { ArrayElementIdentity } from '../type-system/array-borrow.mts';
 import { Get, surroundingAgent } from '#self';
@@ -49,6 +49,9 @@ export function* RequireBorrowableReference(expr: ParseNode.LeftHandSideExpressi
   }
   if (IsUnresolvableReference(ref) === Value.true) {
     return Throw.ReferenceError('$1 is not defined', ref.ReferencedName as Value);
+  }
+  if (ref.Base instanceof TypeParameterEnvironmentRecord) {
+    return Throw.TypeError('cannot take a ref of a generic parameter; it has no storage location');
   }
   if (ref.ReferencedName instanceof PrivateName || IsSuperReference(ref) === Value.true) {
     return Throw.TypeError('cannot take a ref of a private member or a super property');

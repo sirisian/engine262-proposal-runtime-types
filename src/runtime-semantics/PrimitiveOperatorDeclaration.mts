@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
-import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { NewTypeParameterEnvironment, RegisterFunctionTypeParameterScope, TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { MetadataCapturesOf, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
 import { ComponentListTypeNodes, FixedTypeSubtrees } from '../type-system/component-patterns.mts';
@@ -41,6 +41,9 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
   }
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
+  // Use the declarations themselves, including nested component captures;
+  // the component/metadata reader views above do not retain their identity.
+  const headerCaptures = [...node.ComponentParameters?.Captures ?? [], ...node.MetadataParameters?.Captures ?? []];
   for (const e of node.OperatorDefinitionList ?? []) {
     // #sec-primitive-operator-blocks: an IMPLICIT CAST is "an operator whose
     // name is a parameterization of the primitive" - so it carries a [[Type]]
@@ -80,6 +83,8 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       if (blockFrame.size > 0) {
         pushTypeParameterFrame(blockFrame);
         blockFramePushed = true;
+        surroundingAgent.runningExecutionContext.LexicalEnvironment = NewTypeParameterEnvironment(env,
+          headerCaptures, blockFrame);
       }
       let target: TypeRecord;
       try {
@@ -88,6 +93,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         if (blockFramePushed) {
           popTypeParameterFrame();
         }
+        surroundingAgent.runningExecutionContext.LexicalEnvironment = env;
       }
       const castFn = OrdinaryFunctionCreate(
         surroundingAgent.intrinsic('%Function.prototype%'),
@@ -99,6 +105,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         privEnv,
       );
       (castFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
+      RegisterFunctionTypeParameterScope(castFn, headerCaptures);
       RegisterPrimitiveCast(typeName, target, castFn);
       continue;
     }
@@ -218,8 +225,10 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     if (!deferred && e.TypeAnnotation) {
       returnType = Q(yield* TypeNodeToTypeRecord(e.TypeAnnotation.Type));
     }
+    if (!bodyless) RegisterFunctionTypeParameterScope(opFn as object, headerCaptures);
     RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e, returnType, node,
-      { Environment: env, PrivateEnvironment: privEnv, TypeParameterFrame: currentTypeParameterFrame() });
+      { Environment: env, PrivateEnvironment: privEnv, TypeParameterFrame: currentTypeParameterFrame(),
+        TypeParameterList: [...headerCaptures, ...e.TypeParameters?.TypeParameterList ?? []] });
   }
   return undefined;
 }

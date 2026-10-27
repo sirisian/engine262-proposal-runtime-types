@@ -2,8 +2,6 @@ import type { ConstructionSelections } from '../type-system/result-dependencies.
 import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
-import { isValueParameterBinding, lookupTypeParameter, ValuePackView, MetadataCaptureView } from '../type-system/runtime.mts';
-import { GetTypeObject } from '../type-system/intern.mts';
 import {
   ReferenceRecord,
   Value,
@@ -125,48 +123,6 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
       const name = V.ReferencedName.stringValue();
       const missing = intrinsicParameters(name)?.find((p) => p.Default === undefined);
       if (missing) return Throw.TypeError('$1', Value(missingIntrinsicArgument(name, missing.Name)));
-    }
-    // proposal-runtime-types #sec-generic-parameters-as-values: a generic
-    // parameter is reachable AS A VALUE inside its declaration, since a type is
-    // a value here. It is not a value binding, so ResolveBinding cannot find
-    // it and the reference arrives unresolvable; the parameter frames are
-    // where it lives. This is the same lookup a builder-call argument already
-    // performs for a bare parameter name, generalized to any expression.
-    if (surroundingAgent.feature('runtime-types') && typeof V.ReferencedName === 'object' && 'stringValue' in V.ReferencedName) {
-      const bound = lookupTypeParameter((V.ReferencedName as JSStringValue).stringValue());
-      if (bound !== null) {
-        // #sec-generics: a VALUE generic parameter is bound to the literal type
-        // of its argument, "with the value recoverable as that type's one
-        // value". A body that reads it where a value is required - the design's
-        // `y * W + x` - reads that value; one that reads it where a type is
-        // required reads the type, which the value still carries, since the
-        // literal type's single value IS its view of the binding. Handing back
-        // the Type Object for a value parameter made arithmetic over it NaN.
-        // The test is the DECLARATION, not the bound record's kind:
-        // sec-generic-parameters-as-values gives a value parameter its value
-        // here and a type parameter its Type Object, and a type parameter given
-        // a literal argument is bound to a literal record too. Asking the
-        // record made `f.<L>()` with `type L = 'abc'` hand back the string.
-        if (bound.Kind === 'literal' && !isValueParameterBinding(bound)) {
-          (globalThis as { __unmarked?: Set<string> }).__unmarked?.add((V.ReferencedName as JSStringValue).stringValue());
-        }
-        if (bound.Kind === 'literal' && isValueParameterBinding(bound)) {
-          return bound.Value;
-        }
-        // #sec-variadic-parameters: a VALUE pack reads as a frozen
-        // fixed-extent array of its literal elements' values, one per
-        // specialization - the same array on every read, so `I === I` - which
-        // is what makes `I.length` and `I[k]` constants a `where` can test.
-        if (bound.Kind === 'tuple' && isValueParameterBinding(bound)) {
-          return Q(yield* ValuePackView(bound));
-        }
-        // A metadata value parameter reads as its metadata object, the form
-        // a meta type's hooks receive, so a builder call can compute with it.
-        if (bound.Kind === 'object' && isValueParameterBinding(bound)) {
-          return Q(yield* MetadataCaptureView(bound));
-        }
-        return GetTypeObject(bound);
-      }
     }
     return Throw.ReferenceError('$1 is not defined', V.ReferencedName);
   }

@@ -17,7 +17,7 @@
 
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
-import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped, BindTypeArgumentRecordsInto, RuntimeTypeOf, valueArguments as argumentTypeOracle } from '../type-system/runtime.mts';
+import { NewTypeParameterEnvironment, bindTypeParameter, TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped, BindTypeArgumentRecordsInto, RuntimeTypeOf, valueArguments as argumentTypeOracle } from '../type-system/runtime.mts';
 import { resolveOverloadChecked, resolveOverloadByTypes, describeParameters, assignArguments, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, builtinTypeRecord, makePrimitive, anyType, restElementType, type ParameterRecord, type TypeRecord } from '../type-system/records.mts';
 import { IsSubtype } from '../type-system/relations.mts';
@@ -29,7 +29,7 @@ import { ReferenceValue } from '../value.mts';
 import { assignTypeArguments } from '../type-system/type-argument-order.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
 import { Evaluate } from '../evaluator.mts';
-import { SignaturesOf, InferGenericCallBindings, functionWhereClauses, classFrameOfObject, CheckedConvertValue } from './runtime-types.mts';
+import { SignaturesOf, InferGenericCallBindings, functionTypeParameters, functionWhereClauses, classFrameOfObject, CheckedConvertValue } from './runtime-types.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
   Throw, Value, Q, Call, CreateBuiltinFunction, EnsureCompletion, GetValue, ExecutionContext, surroundingAgent, type PlainEvaluator, type ValueEvaluator,
@@ -167,10 +167,10 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
  * `BindTypeParameterTyped`, as a declaration's defaults and a class
  * specialization's arguments do.
  */
-function* TypedFrameOfBindings(declaration: unknown, bindings: readonly { Capture: { Name: string }, Value: Argument }[]): PlainEvaluator<Map<string, TypeRecord>> {
+function* TypedFrameOfBindings(declaration: unknown, bindings: readonly { Capture: { Name: string, Declaration?: ParseNode.CaptureBinding }, Value: Argument }[]): PlainEvaluator<Map<string, TypeRecord>> {
   const frame = FrameOfBindings(bindings);
-  const list = (declaration as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, IsValueParameter?: boolean }[] } | null } | undefined)
-    ?.TypeParameters?.TypeParameterList ?? [];
+  const parameters = (declaration as { TypeParameters?: ParseNode.TypeParameters } | undefined)?.TypeParameters;
+  const list = [...parameters?.TypeParameterList ?? [], ...parameters?.Captures ?? []];
   for (const tp of list) {
     const name = tp.BindingIdentifier?.name;
     const bound = name ? frame.get(name) : undefined;
@@ -184,13 +184,13 @@ function* TypedFrameOfBindings(declaration: unknown, bindings: readonly { Captur
   return frame;
 }
 
-function FrameOfBindings(bindings: readonly { Capture: { Name: string }, Value: Argument }[]): Map<string, TypeRecord> {
+function FrameOfBindings(bindings: readonly { Capture: { Name: string, Declaration?: ParseNode.CaptureBinding }, Value: Argument }[]): Map<string, TypeRecord> {
   const frame = new Map<string, TypeRecord>();
   for (const b of bindings) {
     const record = typeof b.Value === 'number'
       ? markValueParameterBinding({ Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as unknown as TypeRecord)
       : b.Value.Kind === 'object' || b.Value.Kind === 'literal' ? markValueParameterBinding(b.Value) : b.Value;
-    frame.set(b.Capture.Name, record);
+    bindTypeParameter(frame, b.Capture.Name, record, b.Capture.Declaration);
   }
   return frame;
 }
@@ -234,7 +234,7 @@ export function* SelectClassCase(primary: Declaration, cases: readonly Declarati
       Value(result.Cases.map((c) => c.Label).join(' and ')), Value(name));
   }
   if (result.Kind !== 'selected') return undefined;
-  const bindings = result.Bindings as unknown as readonly { Capture: { Name: string }, Value: Argument }[];
+  const bindings = result.Bindings as unknown as readonly { Capture: { Name: string, Declaration?: ParseNode.CaptureBinding }, Value: Argument }[];
   const frame = Q(yield* TypedFrameOfBindings(result.Case.Declaration, bindings));
   return { Declaration: result.Case.Declaration as Declaration, Frame: frame };
 }
@@ -339,7 +339,9 @@ export function* CaseFilterHolds(fn: Value, frame: Map<string, TypeRecord>, clas
   context.Function = Value.null;
   context.Realm = declared.Realm as never;
   context.ScriptOrModule = declared.ScriptOrModule as never;
-  context.LexicalEnvironment = declared.Environment as never;
+  const declaration = (fn as { ECMAScriptCode?: { parent?: Declaration } }).ECMAScriptCode?.parent;
+  const parameters = [...functionTypeParameters(fn as never) ?? [], ...declaration?.TypeParameters?.Captures ?? []];
+  context.LexicalEnvironment = NewTypeParameterEnvironment(declared.Environment as never, parameters, frame);
   context.VariableEnvironment = declared.Environment as never;
   context.PrivateEnvironment = declared.PrivateEnvironment as never;
   surroundingAgent.executionContextStack.push(context);
@@ -404,7 +406,9 @@ export function* InCallableDeclarationContext<T>(fn: Value, frame: Map<string, T
   context.Function = Value.null;
   context.Realm = declared.Realm as never;
   context.ScriptOrModule = declared.ScriptOrModule as never;
-  context.LexicalEnvironment = declared.Environment as never;
+  const declaration = (fn as { ECMAScriptCode?: { parent?: Declaration } }).ECMAScriptCode?.parent;
+  const parameters = [...functionTypeParameters(fn as never) ?? [], ...declaration?.TypeParameters?.Captures ?? []];
+  context.LexicalEnvironment = NewTypeParameterEnvironment(declared.Environment as never, parameters, frame);
   context.VariableEnvironment = declared.Environment as never;
   context.PrivateEnvironment = declared.PrivateEnvironment as never;
   surroundingAgent.executionContextStack.push(context);
@@ -495,7 +499,7 @@ export function* SelectCase(
       if (a.Owner !== owner || !ValueArityAdmits(a.Case.Node, valueCount)) continue;
       const matched = MatchSpecializationList(a.Case.List!, owner.Parameters as never, filled, host as never);
       if (matched === 'no-match') continue;
-      const bindings = (matched as readonly { Capture: { Name: string }, Value: Argument }[])
+      const bindings = (matched as readonly { Capture: { Name: string, Declaration?: ParseNode.CaptureBinding }, Value: Argument }[])
         .map((b) => ({ Name: b.Capture.Name, Value: b.Value }));
       if (yield { Declaration: a.Case.Node, Bindings: bindings }) {
         attached.push({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label });
@@ -503,7 +507,7 @@ export function* SelectCase(
     }
     const result = SelectSpecialization(attached, owner.Parameters as never, filled, host as never);
     if (result.Kind === 'selected') {
-      return { Kind: 'case', Declaration: result.Case.Declaration!, Bindings: (result.Bindings as readonly { Capture: { Name: string }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
+      return { Kind: 'case', Declaration: result.Case.Declaration!, Bindings: (result.Bindings as readonly { Capture: { Name: string, Declaration?: ParseNode.CaptureBinding }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
     }
     if (result.Kind === 'ambiguous') {
       return { Kind: 'error', Message: `${result.Cases.map((c) => c.Label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other; declare a case for their intersection` };
@@ -544,7 +548,7 @@ export function* SelectCase(
       const positions = Array.from({ length: arity }, (_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
       const ranked = SelectSpecialization(matching.map((m) => ({ List: m.list, Declaration: m.d, Label: m.label })), positions as never, matching[0]!.ordered as TypeRecord[], host as never);
       if (ranked.Kind === 'selected') {
-        return { Kind: 'case', Declaration: ranked.Case.Declaration!, Bindings: (ranked.Bindings as readonly { Capture: { Name: string }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
+        return { Kind: 'case', Declaration: ranked.Case.Declaration!, Bindings: (ranked.Bindings as readonly { Capture: { Name: string, Declaration?: ParseNode.CaptureBinding }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
       }
     }
     return { Kind: 'error', Message: `${matching.map((m) => m.label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other` };

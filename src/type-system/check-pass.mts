@@ -16,7 +16,7 @@ import { JSStringValue, ObjectValue, Value, type SymbolValue } from '../value.mt
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  DefaultValueOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  NewTypeParameterEnvironment, DefaultValueOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
   EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import { BeginRequiredModuleInputs, RequireModuleInputs, RequiredModuleInputFailure } from './required-module-inputs.mts';
@@ -1110,14 +1110,16 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // literal value parameter, which a type position - `vector.<..., N>` -
       // reads as the count and an expression as the number; a metadata portion
       // as an object value parameter, which a builder reads as its metadata
-      // object. Bound lexically instead, a count was "not a type".
+      // object. Ordinary storage bindings would lose that distinction, so
+      // retain the selected captures in a private parameter environment.
       const computedFrame = new Map<string, TypeRecord>();
       for (const [name, bound] of obligation.computedAt?.bindings ?? []) {
         computedFrame.set(name, typeof bound === 'number'
           ? markValueParameterBinding({ Kind: 'literal', Value: Value(bound), Base: builtinTypeRecord('number', []) } as unknown as TypeRecord)
           : bound.Kind === 'object' ? markValueParameterBinding(bound) : bound);
       }
-      context.LexicalEnvironment = scope;
+      context.LexicalEnvironment = obligation.computedAt
+        ? NewTypeParameterEnvironment(scope, obligation.computedAt.parameters, computedFrame) : scope;
       try {
         BeginFragmentEvaluation();
         if (obligation.trial) {

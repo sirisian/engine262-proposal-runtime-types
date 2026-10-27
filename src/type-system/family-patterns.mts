@@ -12,6 +12,12 @@ export interface FamilyPatternRecord {
 
 export class FamilyPatternError extends Error {}
 
+const wildcardReferences = new WeakMap<object, string>();
+/** Only a generated hole, never a user-written identifier, has this evidence. */
+export function FamilyWildcardName(node: object): string | undefined {
+  return wildcardReferences.get(node);
+}
+
 let resolvingPattern = 0;
 export function inFamilyPattern(): boolean {
   return resolvingPattern > 0;
@@ -119,7 +125,9 @@ export function prepareFamilyPattern(node: ParseNode.Type, declaration: (name: s
       if (n.parent?.type !== 'TypeArguments') throw new FamilyPatternError('a family wildcard must occupy one type argument position');
       const name = `#family${Wildcards.length}`;
       Wildcards.push(name);
-      return { ...n, TypeName: { ...n.TypeName, IdentifierReference: { ...n.TypeName.IdentifierReference, name } } };
+      const reference = { ...n, TypeName: { ...n.TypeName, IdentifierReference: { ...n.TypeName.IdentifierReference, name } } };
+      wildcardReferences.set(reference, name);
+      return reference;
     }
     return Object.fromEntries(Object.entries(n).map(([key, child]) => [key,
       ['parent', 'location', 'sourceText'].includes(key) ? child : clone(child)]));

@@ -1,3 +1,4 @@
+import { RegisterFunctionTypeParameterScope, copyTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
 import { DeclaredMemberImplements } from '../type-system/implements-member.mts';
 import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import { CreateGenericAliasRecord } from '../type-system/generic-alias-context.mts';
@@ -1676,6 +1677,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration, claim
         const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const fn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'meta hook', params, body, 'non-lexical-this', env, privEnv);
+        RegisterFunctionTypeParameterScope(fn, node.TypeParameters?.TypeParameterList ?? []);
         hooks.set(hookName, fn);
       }
     }
@@ -2783,7 +2785,11 @@ function* SpecializeFromFrame(
     const selected = Q(yield* SelectClassCase(declaration as never, cases as never, argRecords));
     if (selected) {
       body = selected.Declaration as unknown as ParseNode.ClassDeclaration;
-      bodyFrame = new Map([...frame, ...selected.Frame]);
+      bodyFrame = copyTypeParameterFrame(frame);
+      for (const [name, bound] of selected.Frame) {
+        const capture = body.TypeParameters?.Captures?.find((entry) => entry.BindingIdentifier.name === name);
+        bindTypeParameter(bodyFrame, name, bound, capture);
+      }
     }
   }
   pushTypeParameterFrame(bodyFrame);

@@ -3,7 +3,6 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { vectorShape } from '../type-system/vector-ops.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { Q } from '../completion.mts';
-import { lookupTypeParameter } from '../type-system/runtime.mts';
 import {
   Value, ReferenceRecord, UndefinedValue, BigIntValue, BooleanValue, JSStringValue, NullValue, NumberValue, ObjectValue, SymbolValue,
   TypedNumberValue,
@@ -151,21 +150,7 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
   // 2. If Type(val) is Reference, then
   if (_val instanceof ReferenceRecord) {
     // a. If IsUnresolvableReference(val) is true, return "undefined".
-    //
-    // proposal-runtime-types: a TYPE PARAMETER is not an environment
-    // binding - GetValue resolves it against the type-parameter frames - so
-    // `typeof T` in a specialized body read "undefined" for a name that
-    // resolves. Where such a frame binds the name, the value is read as
-    // GetValue reads it: the Type Object for a type parameter, the value for a
-    // value parameter, the array for a value pack.
-    if (IsUnresolvableReference(_val) === Value.true) {
-      const name = _val.ReferencedName;
-      const framedBinding = surroundingAgent.feature('runtime-types') && name instanceof JSStringValue ? lookupTypeParameter(name.stringValue()) : null;
-      const framed = framedBinding !== null && framedBinding !== undefined;
-      if (!framed) {
-        return Value('undefined');
-      }
-    }
+    if (IsUnresolvableReference(_val) === Value.true) return Value('undefined');
   }
   // 3. Set val to ? GetValue(val).
   const val = Q(yield* GetValue(_val));

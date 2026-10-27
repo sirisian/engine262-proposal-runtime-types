@@ -1,0 +1,598 @@
+{
+  "cases": [
+    {
+      "name": "missing-value-indirect",
+      "modules": {
+        "main": "function f<T:type>(){return (0,eval)(\"T\");}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "missing-value-dynamic",
+      "modules": {
+        "main": "function f<T:type>(){return Function(\"return T\")();}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "missing-value-helper",
+      "modules": {
+        "main": "function read(){return T;}function f<T:type>(){return read();}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "missing-value-helper-closure",
+      "modules": {
+        "main": "function read(){return ()=>T;}function f<T:type>(){return read()();}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "missing-typeof-indirect",
+      "modules": {
+        "main": "function f<T:type>(){return (0,eval)(\"typeof T\");}if(f.<number>()!==\"undefined\"||f.<string>()!==\"undefined\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-typeof-dynamic",
+      "modules": {
+        "main": "function f<T:type>(){return Function(\"return typeof T\")();}if(f.<number>()!==\"undefined\"||f.<string>()!==\"undefined\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-typeof-helper",
+      "modules": {
+        "main": "function read(){return typeof T;}function f<T:type>(){return read();}if(f.<number>()!==\"undefined\"||f.<string>()!==\"undefined\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-typeof-helper-closure",
+      "modules": {
+        "main": "function read(){return ()=>typeof T;}function f<T:type>(){return read()();}if(f.<number>()!==\"undefined\"||f.<string>()!==\"undefined\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-annotation-indirect",
+      "modules": {
+        "main": "function f<T:type>(){return (0,eval)(\"const x:T=7;x;\");}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "missing-annotation-dynamic",
+      "modules": {
+        "main": "function f<T:type>(){return Function(\"const x:T=7;return x;\")();}f.<number>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "ordinary-global-indirect",
+      "modules": {
+        "main": "globalThis.T=\"global\";function f<T:type>(){return (0,eval)(\"T\");}if(f.<number>()!==\"global\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-global-dynamic",
+      "modules": {
+        "main": "globalThis.T=\"global\";function f<T:type>(){return Function(\"return T\")();}if(f.<number>()!==\"global\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-block-annotation",
+      "modules": {
+        "main": "function f<T:type>(){{const T=type string;return eval('const x:T=\"ok\";x;');}}if(f.<number>()!==\"ok\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-block-value",
+      "modules": {
+        "main": "function f<T:type>(){{let T=7;const a=eval(\"T\");T=8;return [a,eval(\"T\")];}}const a=f.<number>();if(a[0]!==7||a[1]!==8)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-block-tdz",
+      "modules": {
+        "main": "function f<T:type>(){{let failed=false;try{eval(\"T\");}catch(e){failed=e instanceof ReferenceError;}const T=7;if(!failed||eval(\"T\")!==7)throw new Error(\"scope\");}}f.<number>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "outer-ordinary-loses-to-own-parameter",
+      "modules": {
+        "main": "const T=\"outer\";function f<T:type>(){return eval(\"T\");}if(f.<number>()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "builtin-parameter-value",
+      "modules": {
+        "main": "function f<string:type>(){return eval(\"string\");}if(f.<number>()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-function",
+      "modules": {
+        "main": "function outer<T:type>(){return function(){return eval(\"T\");};}const a=outer.<number>(),b=outer.<string>();function caller<T:type>(f){return f();}if(caller.<boolean>(a)!==type number||caller.<number>(b)!==type string||a()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-arrow",
+      "modules": {
+        "main": "function outer<T:type>(){return ()=>eval(\"T\");}const a=outer.<number>(),b=outer.<string>();function caller<T:type>(f){return f();}if(caller.<boolean>(a)!==type number||caller.<number>(b)!==type string||a()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-method",
+      "modules": {
+        "main": "function outer<T:type>(){return ({read(){return eval(\"T\");}}).read;}const a=outer.<number>(),b=outer.<string>();function caller<T:type>(f){return f();}if(caller.<boolean>(a)!==type number||caller.<number>(b)!==type string||a()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-declaration-recursion",
+      "modules": {
+        "main": "function f<T:type>(depth){const read=()=>eval(\"T\");if(depth){const inner=f.<string>(0);if(inner!==type string)throw new Error(\"inner\");}return read();}if(f.<number>(1)!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-eval-value",
+      "modules": {
+        "main": "function f<T:type>(){return eval('eval(\"T\")');}if(f.<number>()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-created-closure",
+      "modules": {
+        "main": "function f<T:type>(){return eval(\"()=>T\");}const a=f.<number>(),b=f.<string>();if(a()!==type number||b()!==type string||a()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-literal-view",
+      "modules": {
+        "main": "type L=\"x\";function f<T:type>(){return eval(\"T\");}if(f.<L>()!==type L)throw new Error(\"view\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-parameter-view",
+      "modules": {
+        "main": "function f<N:uint32>(){return [eval(\"N\"),eval(\"typeof N\")];}const a=f.<7>();if(a[0]!==7||a[1]!==\"number\")throw new Error(\"view\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-pack-view",
+      "modules": {
+        "main": "function f<...Ns:[].<uint32>>(){return ()=>eval(\"Ns\");}const a=f.<1,2>(),b=f.<3>();if(a()!==a()||a()[0]!==1||a()[1]!==2||b()[0]!==3||a()===b())throw new Error(\"view\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "defaulted-parameter",
+      "modules": {
+        "main": "function f<T:type=number>(){return eval(\"T\");}if(f()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-parameter",
+      "modules": {
+        "main": "function f<T:type>(value:T){return eval(\"T\");}const n:number=7;const s:string=\"ok\";if(f(n)!==type number||f(s)!==type string)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-default",
+      "modules": {
+        "main": "function f<T:type>(value=eval(\"T\")){return value;}if(f.<number>()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependent-generic-default",
+      "modules": {
+        "main": "const identity=(T:type):type=>T;function f<T:type,U:type=identity(T)>(){return eval(\"U\");}if(f.<number>()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependent-value-default",
+      "modules": {
+        "main": "function f<N:uint32,T:type=Reflect.typeOf(N)>(){return eval(\"T\");}if(f.<7>()!==type uint32)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-computation",
+      "modules": {
+        "main": "function identity(T:type):type{return T;}type F<T:type>=identity(T);if(F.<number>!==type number||F.<string>!==type string||F.<number>!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-method",
+      "modules": {
+        "main": "class C<T:type>{read(){return eval(\"T\");}}const a=new C.<number>(),b=new C.<string>();if(a.read()!==type number||b.read()!==type string||a.read()!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generator-suspension",
+      "modules": {
+        "main": "function* f<T:type>(){yield eval(\"T\");yield eval(\"T\");}const a=f.<number>(),b=f.<string>();if(a.next().value!==type number||b.next().value!==type string||a.next().value!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async-suspension",
+      "modules": {
+        "main": "async function f<T:type>(){await 0;return eval(\"T\");}const a=f.<number>(),b=f.<string>();if(await a!==type number||await b!==type string)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async-generator-suspension",
+      "modules": {
+        "main": "async function* f<T:type>(){await 0;yield eval(\"T\");yield eval(\"T\");}const a=f.<number>(),b=f.<string>();if((await a.next()).value!==type number||(await b.next()).value!==type string||(await a.next()).value!==type number)throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-capture-named",
+      "modules": {
+        "main": "import {outer} from \"dep\";const a=outer.<number>(),b=outer.<string>();function caller<T:type>(f){return f();}if(caller.<boolean>(a)!==type number||caller.<number>(b)!==type string||a()!==type number)throw new Error(\"scope\");",
+        "dep": "export function outer<T:type>(){return ()=>eval(\"T\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-capture-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const outer=ns.outer;const a=outer.<number>(),b=outer.<string>();function caller<T:type>(f){return f();}if(caller.<boolean>(a)!==type number||caller.<number>(b)!==type string||a()!==type number)throw new Error(\"scope\");",
+        "dep": "export function outer<T:type>(){return ()=>eval(\"T\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failure-recovery",
+      "modules": {
+        "main": "globalThis.entered=0;function f<T:type>(){let failed=false;try{(0,eval)(\"globalThis.entered++;const x:T=7;x;\");}catch(e){failed=e instanceof StaticTypeError;}if(!failed||globalThis.entered!==0)throw new Error(\"phase\");return eval(\"T\");}if(f.<number>()!==type number||f.<string>()!==type string)throw new Error(\"recovery\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-write-type",
+      "modules": {
+        "main": "function f<T:type>(){let failed=false;try{eval(\"T=type string\");}catch(e){failed=e instanceof TypeError;}if(!failed||eval(\"T\")!==type number)throw new Error(\"scope\");}f.<number>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-borrow-type",
+      "modules": {
+        "main": "function f<T:type>(){let failed=false;try{eval(\"let ref r=T;\");}catch(e){failed=e instanceof TypeError;}if(!failed||eval(\"T\")!==type number)throw new Error(\"scope\");}f.<number>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-write-value",
+      "modules": {
+        "main": "function f<N:uint32>(){let failed=false;try{eval(\"N=8\");}catch(e){failed=e instanceof TypeError;}if(!failed||eval(\"N\")!==7)throw new Error(\"scope\");}f.<7>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-borrow-value",
+      "modules": {
+        "main": "function f<N:uint32>(){let failed=false;try{eval(\"let ref r=N;\");}catch(e){failed=e instanceof TypeError;}if(!failed||eval(\"N\")!==7)throw new Error(\"scope\");}f.<7>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "meta-hook-value",
+      "modules": {
+        "main": "type G<T:type>={g?:boolean};meta G<T:type>{default={g:false};subtype(a,b){return T===type uint8;}}let a:uint8=(5:=uint8);let b:uint8.<{g:false}>=a;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "meta-hook-eval",
+      "modules": {
+        "main": "type G<T:type>={g?:boolean};meta G<T:type>{default={g:false};subtype(a,b){return eval(\"T\")===type uint8;}}let a:uint8=(5:=uint8);let b:uint8.<{g:false}>=a;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bodyless-operator-computation",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){return this;}}function mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;primitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const c:float32.<{m:3}>=a*b;if(String(c)!==\"12\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "operator-capture-value",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){return this;}}function mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;primitive float32<const X:Dim>{operator *(rhs:string):string{return String(X.m);}}if(a*\"q\"!==\"1\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-operator-capture-value",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){return this;}}function mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;type V=vector.<float32.<{m:1}>,4>;const v:V=V(1,2,3,4);primitive vector<float32.<const D:Dim>,const N:uint32>{operator *(rhs:string):string{return String(D.m)+\":\"+String(N);}}if(v*\"q\"!==\"1:4\")throw new Error(\"scope\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

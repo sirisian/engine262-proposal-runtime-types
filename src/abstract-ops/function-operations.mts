@@ -1,7 +1,7 @@
 import { BeginTypeEvaluation, EndTypeEvaluation, InTypeComputation, IsBudgetExhausted, CurrentTypeComputationSubject } from '../type-system/budget.mts';
 import { InFragmentEvaluation } from '../type-system/fragment-library.mts';
 import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
-import { RetainFunctionTypeParameterEnvironment } from '../type-system/runtime.mts';
+import { RetainFunctionTypeParameterEnvironment, FunctionTypeParameterDeclarations } from '../type-system/runtime.mts';
 import { AdoptedReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { SameType } from '../type-system/relations.mts';
 import { NoDefaultValueError } from '../type-system/intern.mts';
@@ -44,7 +44,7 @@ import {
   pushContextualType, popContextualType, contextualTypeFor, SubstituteTypeArguments, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext, TakeBodyContext,
 } from '../type-system/runtime.mts';
 import { resolveOverloadChecked } from '../type-system/overloads.mts';
-import { functionTypeParameters, AdoptTypeParameters, AdoptedTypeParametersOf, InferGenericCallBindings, SignaturesOf } from './runtime-types.mts';
+import { AdoptTypeParameters, AdoptedTypeParametersOf, InferGenericCallBindings, SignaturesOf } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -274,8 +274,7 @@ function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: A
     // class's `T`. The name a method declares is left to the method.
     // A selected case's captures are its own binders as well. Preserve the
     // selection frame instead of restoring a same-named outer parameter.
-    const declaration = F.ECMAScriptCode?.parent as { TypeParameters?: ParseNode.TypeParameters } | undefined;
-    const own = [...functionTypeParameters(F as never) ?? [], ...declaration?.TypeParameters?.Captures ?? []];
+    const own = FunctionTypeParameterDeclarations(F);
     if (own.length > 0) {
       const filtered = copyTypeParameterFrame(captured, own);
       for (const p of own) {

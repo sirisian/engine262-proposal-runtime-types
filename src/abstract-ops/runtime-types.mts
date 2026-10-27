@@ -1,3 +1,4 @@
+import { FunctionTypeParameterDeclarations, bindTypeParameter } from '../type-system/runtime.mts';
 import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
 import { TakeParameterConstruction, ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { contextualParameters } from '../type-system/contextual-parameters.mts';
@@ -4151,7 +4152,10 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
   // vague diagnostic into none.
   const parameterName = base === undefined ? undefined : LookupMetaTypeParameterName(typeObject);
   if (parameterName !== undefined && base !== undefined) {
-    pushTypeParameterFrame(new Map([[parameterName, base]]));
+    const frame = new Map<string, TypeRecord>();
+    const parameter = FunctionTypeParameterDeclarations(fn as object).find((entry) => entry.BindingIdentifier.name === parameterName);
+    bindTypeParameter(frame, parameterName, base, parameter);
+    pushTypeParameterFrame(frame);
   }
   try {
     // Join an enclosing type computation, or open one for a runtime boundary.

@@ -2842,7 +2842,7 @@ export interface DeferredTypeCheck {
    * _node_ with the captures bound as _bindings_ (metadata objects, or
    * numbers), as dispatch would, and the recheck types the site with it.
    */
-  computedAt?: { site: object, bindings: ReadonlyMap<string, number | TypeRecord> };
+  computedAt?: { site: object, bindings: ReadonlyMap<string, number | TypeRecord>, parameters: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] };
   /** An already registered operator retains live declaration identity and inputs. */
   operatorContext?: CapturedTypeContext;
 }
@@ -36612,7 +36612,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             else {
               returns = null;
               resultQuery = { key, obligation: { node: def.TypeAnnotation.Type, constants: new Map(), aliases: new Map(),
-                computedAt: { site: key, bindings: admitted }, operatorContext: registered.context } };
+                computedAt: { site: key, bindings: admitted, parameters: captures }, operatorContext: registered.context } };
             }
           }
         }
@@ -36632,7 +36632,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             else {
               returns = null;
               resultQuery = { key, obligation: { ...deferredTypeCheck(def.TypeAnnotation.Type),
-                computedAt: { site: key, bindings: admitted } } };
+                computedAt: { site: key, bindings: admitted, parameters: captures } } };
             }
           }
         }

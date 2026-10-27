@@ -366,16 +366,58 @@ const declarationBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<Par
 // not an equal Type Object, caller frame or another use of the same declaration.
 const environmentTypeParameters = new WeakMap<EnvironmentRecord, ReadonlyMap<string, TypeRecord>>();
 
+const additionalFunctionParameters = new WeakMap<object, readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[]>();
+
+/** Meta hooks and primitive operators bind their header parameters per call. */
+export function RegisterFunctionTypeParameterScope(fn: object, parameters: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[]): void {
+  additionalFunctionParameters.set(fn, parameters);
+}
+
+export function FunctionTypeParameterDeclarations(fn: object): readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] {
+  const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeParameters?: ParseNode.TypeParameters } } }).ECMAScriptCode?.parent;
+  return [...functionTypeParameters(fn as never) ?? [], ...declaration?.TypeParameters?.Captures ?? [], ...additionalFunctionParameters.get(fn) ?? []];
+}
+
+export function TypeParametersOfEnvironment(environment: EnvironmentRecord): readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] {
+  return environment instanceof FunctionEnvironmentRecord
+    ? FunctionTypeParameterDeclarations(environment.FunctionObject) : environment.TypeParameterList ?? [];
+}
+
+export function TypeParameterArgumentAt(environment: EnvironmentRecord, name: string): TypeRecord | undefined {
+  const parameter = TypeParametersOfEnvironment(environment).find((entry) => entry.BindingIdentifier.name === name);
+  const frame = environmentTypeParameters.get(environment);
+  return parameter && frame ? frame.get(name) : undefined;
+}
+
+/** The caller supplies this declaration's own argument frame. Its slots may
+ * still be filled left to right; an unavailable slot does not borrow a caller. */
+export function NewTypeParameterEnvironment(outer: EnvironmentRecord,
+  parameters: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[],
+  frame: ReadonlyMap<string, TypeRecord>): DeclarativeEnvironmentRecord {
+  const environment = new DeclarativeEnvironmentRecord(outer);
+  environment.TypeParameterList = parameters;
+  environmentTypeParameters.set(environment, frame);
+  return environment;
+}
+
+export function* TypeParameterValue(bound: TypeRecord): PlainEvaluator<Value> {
+  if (isValueParameterBinding(bound)) {
+    if (bound.Kind === 'literal') return bound.Value;
+    if (bound.Kind === 'tuple') return Q(yield* ValuePackView(bound));
+    if (bound.Kind === 'object') return Q(yield* MetadataCaptureView(bound));
+  }
+  return GetTypeObject(bound);
+}
+
 export function RetainTypeParameterEnvironment(environment: EnvironmentRecord,
   frame: ReadonlyMap<string, TypeRecord> | undefined = currentTypeParameterFrame()): void {
   if (!frame) return;
-  const parameters = environment instanceof FunctionEnvironmentRecord
-    ? functionTypeParameters(environment.FunctionObject as never) : environment.TypeParameterList;
+  const parameters = TypeParametersOfEnvironment(environment);
   if (parameters?.length) environmentTypeParameters.set(environment, TypeParameterBindingsFor(parameters, frame));
 }
 
 export function RetainFunctionTypeParameterEnvironment(fn: object): void {
-  if (!functionTypeParameters(fn as never)?.length) return;
+  if (FunctionTypeParameterDeclarations(fn).length === 0) return;
   for (let environment: EnvironmentRecord | null = surroundingAgent.runningExecutionContext.LexicalEnvironment; environment; environment = environment.OuterEnv) {
     if (environment instanceof FunctionEnvironmentRecord) {
       if (environment.FunctionObject === fn) RetainTypeParameterEnvironment(environment);
@@ -390,11 +432,11 @@ export function LexicalTypeParameterArgument(environment: EnvironmentRecord | un
   const key = Value(name);
   for (let at: EnvironmentRecord | null | undefined = environment; at; at = at.OuterEnv) {
     if (!(at instanceof DeclarativeEnvironmentRecord) || at.bindings.has(key)) return undefined;
-    const parameters = at instanceof FunctionEnvironmentRecord ? functionTypeParameters(at.FunctionObject as never) : at.TypeParameterList;
+    const parameters = TypeParametersOfEnvironment(at);
     const parameter = parameters?.find((entry) => entry.BindingIdentifier.name === name);
     if (parameter) {
       const frame = environmentTypeParameters.get(at);
-      return frame && declarationBindings.get(frame)?.get(parameter);
+      return frame?.get(name);
     }
   }
   return undefined;
@@ -541,6 +583,8 @@ export interface CapturedTypeContext {
   readonly Environment: EnvironmentRecord;
   readonly PrivateEnvironment: PrivateEnvironmentRecord | null;
   readonly TypeParameterFrame?: ReadonlyMap<string, TypeRecord>;
+  /** Parameters supplied by the declaration operation, before a call exists. */
+  readonly TypeParameterList?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[];
   readonly Realm?: ExecutionContext['Realm'];
   readonly ScriptOrModule?: ExecutionContext['ScriptOrModule'];
 }
@@ -583,7 +627,9 @@ export function* InCapturedTypeContext<T>(captured: CapturedTypeContext, action:
   const realm = context.Realm;
   const scriptOrModule = context.ScriptOrModule;
   const frames = typeParameterFrames.splice(0);
-  context.LexicalEnvironment = captured.Environment;
+  context.LexicalEnvironment = bindings && captured.TypeParameterList
+    ? NewTypeParameterEnvironment(captured.Environment, captured.TypeParameterList, bindings)
+    : captured.Environment;
   context.VariableEnvironment = captured.Environment;
   context.PrivateEnvironment = captured.PrivateEnvironment;
   if (captured.Realm) context.Realm = captured.Realm;
@@ -802,7 +848,7 @@ export function isValueParameterBinding(record: TypeRecord): boolean {
  * Source-aware annotation reads first exclude nearer lexical declarations.
  */
 export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRecord | null {
-  if (reference) {
+  if (reference && FamilyWildcardName(reference) !== name) {
     const binding = ResolveBindingDeclaration(reference, name, (scope, parameterName) => {
       for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
         const parameters = adoptedParameterScopes.get(typeParameterFrames[i])?.get(scope);
@@ -810,7 +856,8 @@ export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRe
       }
       return false;
     });
-    if (binding && binding.kind !== 'type-parameter') return null;
+    if (!binding) return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
+    if (binding.kind !== 'type-parameter') return null;
   }
   for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
     const bound = typeParameterFrames[i].get(name);
@@ -994,12 +1041,7 @@ export function* BindTypeArgumentRecordsInto(
 ): PlainEvaluator<TypeRecord[]> {
   const context = surroundingAgent.runningExecutionContext;
   const savedEnvironment = context.LexicalEnvironment;
-  const parameterEnvironment = new DeclarativeEnvironmentRecord(savedEnvironment);
-  parameterEnvironment.TypeParameterList = params;
-  // This binding procedure fills its own frame left to right. Retain this
-  // particular frame so an as-yet-unbound parameter cannot borrow an argument
-  // from an older activation of the same declaration.
-  environmentTypeParameters.set(parameterEnvironment, frame);
+  const parameterEnvironment = NewTypeParameterEnvironment(savedEnvironment, params, frame);
   context.LexicalEnvironment = parameterEnvironment;
   try {
     return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied, interfaceIdentity, parameterRecords);
@@ -1576,6 +1618,10 @@ function* InstantiateGenericAliasInContext(
     };
     formation.active.push(expansion);
     formation.entries.push(expansion);
+    const priorEnvironment = context.LexicalEnvironment;
+    const selectedDeclaration = selectedType.parent as { TypeParameters?: ParseNode.TypeParameters } | undefined;
+    context.LexicalEnvironment = NewTypeParameterEnvironment(priorEnvironment,
+      [...params, ...selectedDeclaration?.TypeParameters?.Captures ?? []], frame);
     typeParameterFrames.push(frame);
     try {
       const body = Q(yield* TypeNodeToTypeRecord(selectedType));
@@ -1630,6 +1676,7 @@ function* InstantiateGenericAliasInContext(
       return enclosing ? body : expansion.placeholder;
     } finally {
       typeParameterFrames.pop();
+      context.LexicalEnvironment = priorEnvironment;
       formation.active.pop();
       if (!enclosing) EndAliasFormation(region);
     }
@@ -2161,6 +2208,9 @@ export function* InferGenericBindingsFrom(
     }
   }
 
+  const context = surroundingAgent.runningExecutionContext;
+  const outer = context.LexicalEnvironment;
+  context.LexicalEnvironment = NewTypeParameterEnvironment(outer, typeParameters, frame);
   const checkerSupplied = takePendingCheckerBindings();
   pushTypeParameterFrame(frame);
   try {
@@ -2434,6 +2484,7 @@ export function* InferGenericBindingsFrom(
     }
   } finally {
     popTypeParameterFrame();
+    context.LexicalEnvironment = outer;
   }
   return frame;
 }
@@ -6890,7 +6941,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
           // new representation.
           if (node.ArrayExtent.type === 'IdentifierReference') {
             const extentName = (node.ArrayExtent as { name?: string }).name;
-            const bound = extentName === undefined ? null : lookupTypeParameter(extentName);
+            const bound = extentName === undefined ? null : lookupTypeParameter(extentName, node.ArrayExtent);
             if (bound !== null && bound.Kind === 'parameter') {
               return { Kind: 'array', Element, Extent: bound };
             }
@@ -7913,7 +7964,7 @@ function ExtentNamesOpenParameter(expression: unknown): boolean {
     }
     const n = v as { type?: string, name?: string };
     if (n.type === 'IdentifierReference' && n.name) {
-      const bound = lookupTypeParameter(n.name);
+      const bound = lookupTypeParameter(n.name, v as ParseNode);
       if (bound !== null && bound.Kind === 'parameter') {
         open = true;
         return;
@@ -7928,7 +7979,7 @@ function ExtentNamesOpenParameter(expression: unknown): boolean {
 }
 
 import { intrinsicDeclarationRecord, intrinsicDeclarationName } from './records.mts';
-import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
+import { prepareFamilyPattern, finishFamilyPattern, FamilyWildcardName, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint } from './records.mts';
 
