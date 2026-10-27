@@ -7151,6 +7151,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return value === undefined ? undefined : { key, value };
   };
 
+  const compositeReceiver = (type: Known): boolean => (type?.Kind === 'union'
+    ? type.Members.length > 0 && type.Members.every(compositeReceiver)
+    : type?.Kind === 'primitive' && type.Name === 'Composite');
+
   const requireWritableMember = (expression: ParseNode | null | undefined, operator = '=') => {
     const lhs = patternExpression(expression ?? undefined);
     if (lhs?.type === 'IdentifierReference') {
@@ -7191,6 +7195,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const m = lhs;
     const sealedReceiver = operationalType(staticType(m.MemberExpression));
+    // #sec-composite-types: a composite is frozen from its creation, and the
+    // shape of `Composite.<S>` is read with every member readonly. The top
+    // type `Composite` states no shape, but it is the type of frozen objects
+    // only, so no store through a receiver of any composite type can succeed:
+    // a member store, an index store, or a compound or logical store alike.
+    // The shaped store was a runtime TypeError, the tuple index store and the
+    // top-type store were silent, and a parameter form was never judged.
+    if (compositeReceiver(sealedReceiver) && operator !== '??=') {
+      reportType('rt-readonly-store', expression, 'a composite is frozen, so a member of $1 cannot be assigned', Value(displayType(sealedReceiver)));
+      return;
+    }
     const access = indexAccess(m, sealedReceiver);
     if (access?.get && !access.set) {
       const result = operatorResult(access.get, access.arguments, m);
@@ -38829,6 +38844,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A union proves refusal only when every executing arm does.
           const protectedStorage = (receiver: Known, named: string | SymbolValue): 'property' | 'element' | null => {
             if (fixedStringProperty(receiver, named)) return named === 'length' ? 'property' : 'element';
+            // #sec-composite-types: every composite is frozen, so no member of
+            // one can be deleted, whatever its shape says.
+            if (compositeReceiver(receiver)) return typeof named === 'string' && /^(0|[1-9][0-9]*)$/.test(named) ? 'element' : 'property';
             receiver = erasedForJudgment(receiver);
             if (receiver?.Kind === 'union') {
               const arms = receiver.Members.map((arm) => protectedStorage(arm, named));
@@ -38949,6 +38967,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (conversionTarget !== undefined) {
           const argNodes = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
+          // #sec-vector-types: a vector type declares two construct signatures,
+          // one lane value per position and the cast from one value, so a call
+          // with a count that fits neither is refused where the count is
+          // known; it used to be left to the run time, which reported it after
+          // the body had begun. A spread keeps the runtime count.
+          const vectorRecord = conversionTarget as unknown as { Kind?: string, Name?: string, Arguments?: readonly unknown[] };
+          const laneCount = vectorRecord.Kind === 'primitive' && vectorRecord.Name === 'vector' ? vectorRecord.Arguments?.[1] : undefined;
+          if (typeof laneCount === 'number' && argNodes.length === (c.Arguments ?? []).length
+              && argNodes.length !== laneCount && argNodes.length !== 1) {
+            reportType('rt-vector-argument', n as ParseNode, '$1 lanes were supplied where $2 are wanted, or one value to fill every lane', Value(String(argNodes.length)), Value(String(laneCount)));
+          }
           const vectorLanes = argNodes.length === (c.Arguments ?? []).length
             ? vectorConstructorType(conversionTarget, argNodes as readonly ParseNode[]) : null;
           if (vectorLanes) {

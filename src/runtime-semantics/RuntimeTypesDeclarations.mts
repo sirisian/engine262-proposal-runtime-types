@@ -16,7 +16,8 @@ import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { RequiredModuleInputFailure } from '../type-system/required-module-inputs.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
-import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
+import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols, Descriptor, type PropertyKeyValue } from '../value.mts';
+import { DefinePropertyOrThrow } from '../abstract-ops/all.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf } from '../type-system/check.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
@@ -487,8 +488,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       enumContext.LexicalEnvironment = outerEnvironment;
     }
     const obj = GetTypeObject(enumRecord);
+    // #sec-enums: an enumerator is "a constant of the program", and the enum
+    // switch and match judgments read enumerator values at compile time, so
+    // the enumerator properties are non-writable and non-configurable and the
+    // Type Object admits no further members. They were ordinary data
+    // properties, so `E.A = 5` succeeded and read back 5.
+    const constant = (key: PropertyKeyValue, v: Value): Descriptor => Descriptor({ Value: v, Writable: Value.false, Enumerable: Value.true, Configurable: Value.false });
     for (let i = 0; i < memberNames.length; i += 1) {
-      X(CreateDataPropertyOrThrow(obj, Value(memberNames[i]), memberValues[i]));
+      X(yield* DefinePropertyOrThrow(obj, Value(memberNames[i]), constant(Value(memberNames[i]), memberValues[i])));
       // The design's index operator: `Count[0]` is `Count.Zero` beside
       // `Count['Zero']`. By POSITION rather than by underlying value - the
       // design's own example cannot tell the two apart, since its enumerators
@@ -496,8 +503,9 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       // indexing the ENUMERATION, and position is what `keys()`, `values()`,
       // and `entries()` are ordered by. A lookup by VALUE already exists and
       // is spelled `Count(n)`, the reverse conversion.
-      X(CreateDataPropertyOrThrow(obj, Value(String(i)), memberValues[i]));
+      X(yield* DefinePropertyOrThrow(obj, Value(String(i)), constant(Value(String(i)), memberValues[i])));
     }
+    X(yield* obj.PreventExtensions());
     value = obj;
   } else if (node.type === 'InterfaceDeclaration' && !shapeOnly) {
     value = GetTypeObject(Q(yield* ResolveInterfaceDeclaration(node, env)));
