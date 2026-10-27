@@ -1772,7 +1772,9 @@ function numberLiteralTarget(t: TypeRecord, seen: Set<TypeRecord> = new Set()): 
  */
 function exactBigIntOf(node: ParseNode.NumericLiteral): bigint | null {
   if (typeof node.value === 'bigint') {
-    return null;
+    // A BigInt literal is its own exact value (round 4, Q3: the divisor and
+    // exponent rules read it as they read an integer literal).
+    return node.value;
   }
   const text = node.SourceText;
   if (typeof text !== 'string' || text.length === 0) {
@@ -21083,6 +21085,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const receiver = staticType(m.MemberExpression);
+          // #sec-composite-types: the shape of `Composite.<S>` is read with every
+          // member readonly and every nested shape a composite in turn, which
+          // `compositeTreeShape` already builds; a member read through the
+          // composite type selects from that shape, so `n.p` of a
+          // `Composite.<{ p: { x: uint8 } }>` is `Composite.<{ x: uint8 }>` and a
+          // store through it is refused as a composite store. The read had no
+          // Static Type, which left the nested store to the run time.
+          if (receiver?.Kind === 'primitive' && receiver.Name === 'Composite' && receiver.Arguments.length === 1) {
+            const shape = receiver.Arguments[0] as { Kind?: string, Properties?: readonly { key: string | SymbolValue, type: TypeRecord }[] } | undefined;
+            if (shape?.Kind === 'object') {
+              const property = shape.Properties?.find((candidate) => candidate.key === m.IdentifierName!.name);
+              if (property) return property.type;
+            }
+          }
           const generatorMember = generatorPropertyType(receiver, m.IdentifierName.name);
           if (generatorMember) return generatorMember;
           const rangeProperty = rangePropertyType(receiver, m.IdentifierName.name);
@@ -22165,7 +22181,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the type is.
         {
           const operandType = (leftT ?? rightT) as TypeRecord | null;
-          if (isIntegerValueType(operandType)) {
+          // A `bigint` operand narrowed to its current literal is still a
+          // bigint operand; the literal's value says so.
+          const literalValue = operandType?.Kind === 'literal' ? (operandType as { Value?: unknown }).Value : undefined;
+          const bigintOperand = (operandType?.Kind === 'primitive' && (operandType as { Name?: string }).Name === 'bigint')
+            || typeof literalValue === 'bigint' || literalValue instanceof BigIntValue
+            || (operandType?.Kind === 'literal' && (operandType as { Base?: { Kind?: string, Name?: string } }).Base?.Kind === 'primitive'
+              && (operandType as { Base?: { Name?: string } }).Base?.Name === 'bigint');
+          if (isIntegerValueType(operandType) || bigintOperand) {
             const op = node.type === 'MultiplicativeExpression'
               ? (node as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator
               : (node as unknown as { operator?: string }).operator;
@@ -22180,9 +22203,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `uint8(256)` is the distance 0 it is at run time and not 256.
             const distance = exactIntegerOperand(rightNode);
             if (distance !== null && (op === '/' || op === '%') && distance === 0n) {
-              reportType('rt-zero-divisor', node, 'a literal zero divisor is not a division at $1', Value(displayType(operandType!)));
+              reportType('rt-zero-divisor', node, 'a literal zero divisor is not a division at $1', Value(bigintOperand ? 'bigint' : displayType(operandType!)));
             }
-            if (distance !== null && node.type === 'ShiftExpression') {
+            // #sec-integer-operations extended to `bigint` (round 4, Q3): the
+            // same rule for the integer type the proposal did not add, and the
+            // exponent beside it, since `**` is where BigInt has a throw
+            // `int.<N>` lacks. Checked-only, as every rule on an existing type.
+            if (distance !== null && node.type === 'ExponentiationExpression' && distance < 0n && bigintOperand) {
+              reportType('rt-zero-divisor', node, 'a literal negative exponent of $1 is not a power at $2', Value(String(distance)), Value('bigint'));
+            }
+            if (distance !== null && node.type === 'ShiftExpression' && !bigintOperand) {
               const bits = (operandType as { Arguments?: readonly (TypeRecord | number)[] }).Arguments?.[0];
               if (distance < 0n) {
                 reportType('rt-shift-distance', node, 'a shift distance of $1 is negative', Value(String(distance)));

@@ -3,7 +3,8 @@ import { evaluated, expectEarlyError, observeScript } from '../harness.mts';
 
 /**
  * Round 4 of the early-error survey: void through a pattern, a
- * conditional and an object-literal value (#sec-void-type); a constructor
+ * conditional and an object-literal value (#sec-void-type); BigInt zero
+ * divisors and negative exponents (#sec-integer-operations); a constructor
  * declaring type parameters (#sec-type-parameters-static-semantics-early-errors);
  * and the implicit ToNumber stage of the Math functions
  * (#sec-proved-library-operations).
@@ -18,6 +19,15 @@ test('void through a pattern, a conditional, and an object-literal value is refu
   refused('function f(): void {} const y = true ? f() : f();', 'rt-void-use');
   refused('function f(): void {} const o = { x: f() };', 'rt-void-use');
   expect(evaluated('function f(): void {} let y = f(); "ok";')).toBe('ok');
+});
+
+test('a BigInt known-zero divisor and known-negative exponent are refused; shifts are not', () => {
+  refused('let b: bigint = 1n; b / 0n;', 'rt-zero-divisor');
+  refused('let b: bigint = 1n; b % 0n;', 'rt-zero-divisor');
+  refused('let b: bigint = 2n; b ** -1n;', 'rt-zero-divisor');
+  refused('function f(b: bigint) { return b / 0n; }', 'rt-zero-divisor');
+  expect(evaluated('let b: bigint = 2n; String(b << -1n) + String(b ** 2n) + String(b / 2n);')).toBe('141');
+  expect(evaluated('let n: number = 1; String(n / 0);')).toBe('Infinity');
 });
 
 test('a constructor declares no type parameters', () => {

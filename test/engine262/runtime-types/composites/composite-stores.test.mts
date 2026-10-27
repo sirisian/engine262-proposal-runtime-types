@@ -25,6 +25,13 @@ test('a store through a composite-typed receiver is refused', () => {
   refused('const c = Composite({ x: 1 }); delete c.x;', 'rt-typed-delete');
 });
 
+test('a member read through a composite is typed from its shape, so a nested store is refused', () => {
+  refused('function f(n: Composite.<{ p: { x: uint8 } }>) { n.p.x = 2; }');
+  refused('const n = Composite.<{ p: { x: uint8 } }>({ p: { x: 1 } }); n.p.x = 2;');
+  refused('function f(n: Composite.<{ p: { x: uint8 } }>) { let t: string = n.p.x; }', 'rt-assignability');
+  expect(evaluated('const n = Composite.<{ p: { x: uint8 } }>({ p: { x: 1 } }); String(n.p.x);')).toBe('1');
+});
+
 test('reads and tests of a composite are unchanged', () => {
   expect(evaluated('const c = Composite.<{ x: uint8 }>({ x: 1 }); String(c.x);')).toBe('1');
   expect(evaluated('function f(c: Composite.<{ x: uint8 }> | null) { return c ? c.x : 0; } String(f(Composite.<{ x: uint8 }>({ x: 2 })));')).toBe('2');
