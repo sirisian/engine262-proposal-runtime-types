@@ -1,0 +1,728 @@
+{
+  "cases": [
+    {
+      "name": "function-direct-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-direct-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-direct-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-renamed-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check as allowed} from \"main\";function F<N:uint32>():void where allowed(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-renamed-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check as allowed} from \"main\";function F<N:uint32>():void where allowed(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-renamed-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import {check as allowed} from \"main\";function F<N:uint32>():void where allowed(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-reexport-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check} from \"bridge\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "bridge": "export {check} from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-reexport-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check} from \"bridge\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "bridge": "export {check} from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-reexport-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import {check} from \"bridge\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "bridge": "export {check} from \"main\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "bridge",
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-namespace-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import * as ns from \"main\";function F<N:uint32>():void where ns.check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-namespace-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import * as ns from \"main\";function F<N:uint32>():void where ns.check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-namespace-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import * as ns from \"main\";function F<N:uint32>():void where ns.check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-transitive-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;function inner(n){return n>=minimum;}export function check(n){return inner(n);}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-transitive-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;function inner(n){try{return n>=minimum;}catch(e){return true;}}export function check(n){return inner(n);}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-transitive-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;function inner(n){return true || n>=minimum;}export function check(n){return inner(n);}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-handled-false",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return false;}}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-handled-finally",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}finally{return true;}}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-handled-rethrow",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){throw e;}}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-read-back-consumer",
+      "modules": {
+        "main": "import {minimum} from \"consumer\";export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check} from \"main\";export const minimum=1;function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "function-initialized-producer",
+      "modules": {
+        "dep": "const minimum=1;export function check(n){return n>=minimum;}",
+        "main": "import {check} from \"dep\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-local-helper-state",
+      "modules": {
+        "main": "import \"consumer\";export function check(n){let minimum:uint32=0;minimum++;return n>=minimum;}",
+        "consumer": "import {check} from \"main\";function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-consumer-shadow",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check} from \"main\";const minimum=0;function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-direct-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-direct-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-direct-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-renamed-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check as allowed} from \"main\";type F<N:uint32>=uint8 where allowed(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-renamed-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check as allowed} from \"main\";type F<N:uint32>=uint8 where allowed(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-renamed-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import {check as allowed} from \"main\";type F<N:uint32>=uint8 where allowed(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-reexport-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check} from \"bridge\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}",
+        "bridge": "export {check} from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-reexport-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check} from \"bridge\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}",
+        "bridge": "export {check} from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-reexport-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import {check} from \"bridge\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}",
+        "bridge": "export {check} from \"main\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "bridge",
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-namespace-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import * as ns from \"main\";type F<N:uint32>=uint8 where ns.check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-namespace-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import * as ns from \"main\";type F<N:uint32>=uint8 where ns.check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-namespace-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return true || n>=minimum;}",
+        "consumer": "import * as ns from \"main\";type F<N:uint32>=uint8 where ns.check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-transitive-read",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;function inner(n){return n>=minimum;}export function check(n){return inner(n);}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-transitive-caught",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;function inner(n){try{return n>=minimum;}catch(e){return true;}}export function check(n){return inner(n);}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-transitive-skipped",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;function inner(n){return true || n>=minimum;}export function check(n){return inner(n);}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-handled-false",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){return false;}}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-handled-finally",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}finally{return true;}}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-handled-rethrow",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){try{return n>=minimum;}catch(e){throw e;}}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-read-back-consumer",
+      "modules": {
+        "main": "import {minimum} from \"consumer\";export function check(n){try{return n>=minimum;}catch(e){return true;}}",
+        "consumer": "import {check} from \"main\";export const minimum=1;type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-initialized-producer",
+      "modules": {
+        "dep": "const minimum=1;export function check(n){return n>=minimum;}",
+        "main": "import {check} from \"dep\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-local-helper-state",
+      "modules": {
+        "main": "import \"consumer\";export function check(n){let minimum:uint32=0;minimum++;return n>=minimum;}",
+        "consumer": "import {check} from \"main\";type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "consumer",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-consumer-shadow",
+      "modules": {
+        "main": "import \"consumer\";const minimum=1;export function check(n){return n>=minimum;}",
+        "consumer": "import {check} from \"main\";const minimum=0;type F<N:uint32>=uint8 where check(N);function unused(x:F.<1>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-imported-helper-capture",
+      "modules": {
+        "main": "import \"consumer\";const input=uint8;export function helper():type{try{return input;}catch(e){return string;}}",
+        "consumer": "import {helper} from \"main\";type F<T:type extends helper()> = T;function unused(x:F.<string>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "default-imported-helper-capture",
+      "modules": {
+        "main": "import \"consumer\";const input=uint8;export function helper():type{try{return input;}catch(e){return string;}}",
+        "consumer": "import {helper} from \"main\";type F<T:type=helper()> = T;function unused(x:F.<>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    }
+  ]
+}

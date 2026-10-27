@@ -811,12 +811,20 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // Inspect transitive lexical captures before calling helpers. A caught
         // premature TDZ read is no more evidence than an uncaught one. Imported
         // inputs retain the module boundary's required-failure rule.
+        let importedInputs = false;
         if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
           let source: ParseNode = reference;
           while (source.parent) source = source.parent;
-          if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') return false;
+          if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') {
+            importedInputs = true;
+            return false;
+          }
           if (binding.kind === 'type-parameter') return binding.node !== check.declaration || !frame.has(reference.name);
-          if (check.sourceModule && isModuleBinding(reference)) return false;
+          // A local clause may reach a foreign module through a helper. Its
+          // module-level captures are required inputs too, even though the
+          // clause itself has no foreign sourceModule. Evaluate the real read
+          // so module initialization order and sticky input failure govern it.
+          if ((check.sourceModule || source !== root) && isModuleBinding(reference)) return false;
           if (source !== root) return true;
           if (binding.kind === 'function') return !availableDeclarations.has(binding.node);
           if (binding.kind === 'type') return !preEvaluatedTypeDeclarations.has(binding.node);
@@ -852,16 +860,21 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         }
         context.LexicalEnvironment = scope;
         pushTypeParameterFrame(frame);
+        // An imported helper can read this consumer again through a cycle.
+        // That is a required imported input even when the binding's owning
+        // environment is the checking scope's home. A catch cannot certify it.
+        const endPredicateInputs = importedInputs ? RequireModuleInputs() : () => {};
         BeginFragmentEvaluation();
         let result;
         try {
           result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
+          result = RequiredModuleInputFailure() ?? result;
         } finally {
           EndFragmentEvaluation();
+          endPredicateInputs();
           popTypeParameterFrame();
           context.LexicalEnvironment = outer;
         }
-        result = RequiredModuleInputFailure() ?? result;
         if (result.Type === 'throw') {
           if (IsBudgetExhausted()) return result;
           return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',

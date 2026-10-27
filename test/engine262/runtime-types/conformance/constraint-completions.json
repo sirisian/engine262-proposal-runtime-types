@@ -743,20 +743,39 @@
       }
     },
     {
-      "name": "mutable helper capture remains runtime-dependent",
+      "name": "mutable helper capture violates specialization evaluability",
       "source": "let enabled=true; function check(n){return enabled;} function F<N:uint32>():void where check(N) {} F.<1>();",
       "expected": {
-        "completion": "normal",
-        "bodyEntered": true
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "rule": "rt-compile-time-evaluability",
+          "phase": "static",
+          "location": {
+            "start": 81,
+            "nodeType": "WhereClause"
+          }
+        }
       }
     },
     {
-      "name": "runtime-dependent helper exception stays native",
+      "name": "mutable helper capture is rejected before its exception can execute",
       "source": "let enabled=true; function check(n){if(enabled){throw new Error(\"runtime\");}return true;} function F<N:uint32>():void where check(N) {} F.<1>();",
       "expected": {
         "completion": "throw",
-        "bodyEntered": true,
-        "errorClass": "Error"
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "rule": "rt-compile-time-evaluability",
+          "phase": "static",
+          "location": {
+            "start": 118,
+            "nodeType": "WhereClause"
+          }
+        }
       }
     },
     {
