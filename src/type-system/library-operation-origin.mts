@@ -14,6 +14,7 @@ const groups = {
   '%Reflect%': ['set', 'defineProperty', 'apply', 'construct'],
   '%TypedArrayLike.prototype%': ['capacity', 'set', 'window'],
   '%Span.prototype%': ['set'],
+  '%Math%': ['abs', 'ceil', 'floor', 'round', 'trunc', 'sign', 'sqrt', 'cbrt', 'exp', 'expm1', 'log', 'log1p', 'log2', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'atan2', 'pow', 'max', 'min', 'hypot', 'fround', 'imul', 'clz32'],
   '%FinalizationRegistry.prototype%': ['register', 'unregister'],
   '%WeakMap.prototype%': ['set'],
   '%WeakSet.prototype%': ['add'],

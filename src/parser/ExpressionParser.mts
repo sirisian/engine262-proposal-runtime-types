@@ -4380,8 +4380,14 @@ export abstract class ExpressionParser extends FunctionParser {
           // of constructors to specialize.
           const constructorList = type === 'class element' && !isSpecialMethod && !(node as { static?: boolean }).static
             && this.classElementNameIsConstructor((node as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);
-          if (constructorList && list.ListKind !== 'parameters') {
-            this.addEarlyError(Throw.SyntaxError('a constructor declares parameters only; a specialization list belongs to a method, function, or operator'), list);
+          // Round 4, Q4: a constructor declares no type parameters at all. A
+          // class's type parameters are the ones a construction binds, and a
+          // constructor-local parameter would have no binding step, as in
+          // Rust, TypeScript, C# and Java.
+          if (constructorList) {
+            this.addEarlyError(Throw.SyntaxError(list.ListKind === 'parameters'
+              ? 'a constructor declares no type parameters; declare them on the class, which a construction binds'
+              : 'a constructor declares no type parameters; a specialization list belongs to a method, function, or operator'), list);
           }
           (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = list;
           this.scope.declareTypeParameters(list);

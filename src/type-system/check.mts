@@ -32536,6 +32536,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       journalDelete(inferredConstTypes, node);
       if (declaring && !annotation && !(node as { Ref?: boolean }).Ref && inferred && inferred.Kind !== 'any') {
         journalSet(inferredConstTypes, node, inferred);
+        // #sec-void-type: a `const` member that adopts a contribution's type
+        // resolves to that type, and a binding declaration resolving to void
+        // is a type error "independently of whether it has an initializer";
+        // `const [y] = [f()]` for `f(): void` threw at the store instead.
+        if (inferred.Kind === 'void') reportType('rt-void-use', node as ParseNode, 'a binding cannot have type void');
       }
       declare(node.BindingIdentifier.name, bindingType ?? inferred, frame);
       if (declaring) completePreparedBinding(frame, node.BindingIdentifier.name, bindingType ?? inferred);
@@ -33628,6 +33633,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     } else if (operation.kind === 'stringConversion') {
       checkImplicitString(operation.operand);
+    } else if (operation.kind === 'numberConversions') {
+      // Converted in order, as the ToString stages are.
+      for (const operand of operation.operands) {
+        if (checkPrimitiveConversion(operand, 'number', (result) => result.Kind === 'primitive' && (result.Name === 'symbol' || result.Name === 'bigint'))) break;
+      }
     } else if (operation.kind === 'stringConversions') {
       // Converted in order: a failing operand ends the operation, so the ones
       // after it are not reached.
@@ -37496,6 +37506,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const declared = resolveType(annotation.Type);
           withProvenance(n.AssignmentExpression, () => requireAssignable(staticTypeIn(n.AssignmentExpression, declared), declared));
         }
+        // #sec-void-type (round 4, Q5): an object literal's property value
+        // stores the value, so it is a position that depends on it; the run
+        // time refused the store, and the judgment belongs before the body.
+        if (n.AssignmentExpression && staticType(n.AssignmentExpression)?.Kind === 'void') pushVoidUse('computed with');
         walk(n.PropertyName);
         walk(n.AssignmentExpression);
         return;
