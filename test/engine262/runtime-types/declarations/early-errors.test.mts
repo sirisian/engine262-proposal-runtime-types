@@ -273,7 +273,7 @@ test('an operator declared twice for one invocation is refused at the second', (
   // operator definitions of a class body were not, so two bodies for one
   // invocation stood until the call.
   expectStaticTypeError('class A { operator+(o: A): A { return this; } operator+(o: A): A { return o; } }');
-  expectStaticTypeError('class A { static operator+(a: A, b: A): A { return a; } static operator+(a: A, b: A): A { return b; } }');
+  expectStaticTypeError('class A { static operator+(b: A): A { return b; } static operator+(b: A): A { return b; } }');
   expectStaticTypeError('class A { operator uint8(): uint8 { return 1; } operator uint8(): uint8 { return 2; } }');
   expectStaticTypeError('class A { a: [].<uint8> = [1]; operator[](i: uint32): uint8 { return this.a[i]; } operator[](i: uint32): uint8 { return 0; } }');
 });
@@ -282,7 +282,7 @@ test('distinct operator declarations stand', () => {
   // Different operand types are overloads.
   expect(ok('class A { operator+(o: A): A { return this; } operator+(o: uint8): A { return this; } }')).toBe(true);
   // `static` and instance definitions are different tables.
-  expect(ok('class A { operator+(o: A): A { return this; } static operator+(a: A, b: A): A { return a; } }')).toBe(true);
+  expect(ok('class A { operator+(o: A): A { return this; } static operator+(b: A): A { return b; } }')).toBe(true);
   // Conversions are keyed by target.
   expect(ok("class A { operator uint8(): uint8 { return 1; } operator string(): string { return 'a'; } }")).toBe(true);
   // An untyped definition is the catch-all and stands beside anything.

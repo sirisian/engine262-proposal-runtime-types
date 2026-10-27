@@ -66,8 +66,8 @@ test('interface declarations mix type members and operators', () => {
   const decl = statements(`interface I<T: type> {
     x: uint8;
     m(a: T): T;
-    operator ==(a, b): boolean { return true; };
-    static operator +(a, b);
+    operator ==(b): boolean { return true; };
+    static operator +(b);
     [k: string]: uint8
   }`)[0];
   expect(decl).toMatchObject({
@@ -115,7 +115,7 @@ test('meta declarations', () => {
 
 test('primitive operator declarations', () => {
   const decl = statements(`primitive uint8 {
-    operator +(a, b): uint8 { return a; }
+    operator +(b): uint8 { return b; }
     * operator ...() { yield 1; }
     operator float32() { return 0; }
   }`)[0];
