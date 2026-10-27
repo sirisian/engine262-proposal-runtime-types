@@ -52,7 +52,7 @@ import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
-import { resolvedAlias } from './resolving-aliases.mts';
+import { resolvedAlias, resolvedAliasContext, resolvedNamespaceBinding } from './resolving-aliases.mts';
 import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
 import { InstantiateCheckedBindings } from './checked-bindings.mts';
 import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
@@ -2889,7 +2889,7 @@ export function SetEvaluatedTypeNode(node: object, record: TypeRecord): void {
 
 export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Module): ObjectValue[] {
   if (root.type === 'Script') {
-    return CheckScript(root, true);
+    return CheckScript(root, true, surroundingAgent.runningExecutionContext.LexicalEnvironment);
   }
   const session = CreateCheckSession();
   const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
@@ -2922,6 +2922,11 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
 const inferredConstTypes = new WeakMap<object, TypeRecord>();
 const literalConstantTypes = new WeakMap<object, StringConstantEvidence>();
 const checkingEnvironments = new WeakMap<object, EnvironmentRecord>();
+const pendingAliasContexts = new WeakSet<object>();
+
+export function HasPendingAliasContexts(root: object): boolean {
+  return pendingAliasContexts.has(root);
+}
 
 export function StringConstantEvidenceOf(binding: object): StringConstantEvidence | undefined {
   return literalConstantTypes.get(binding);
@@ -3321,6 +3326,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   referenceStoreTargets?: ReadonlyMap<ParseNode, readonly TypeRecord[]>, collectedReferenceStores?: Map<ParseNode, TypeRecord[]>,
   referenceSyntax: CheckingSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap(), symbolKeys: new WeakMap() },
   bindingContracts?: BindingContractPass, inferenceResources = new InferenceResources()): ObjectValue[] {
+  pendingAliasContexts.delete(root);
   const modulePartials: ModulePartialContribution[] = [];
   if (root.type === 'Module') pendingModulePartials.set(root, modulePartials);
   const trialJournal: (() => void)[] = [];
@@ -8647,6 +8653,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (source === root && hasDirectEval) return undefined;
     const binding = ResolveBindingDeclaration(node, node.name);
     if (binding?.kind === 'import') return moduleCheckInputs.get(source)?.namespaces?.get(node.name);
+    if (!binding && source === root) return resolvedNamespaceBinding(checkingEnvironment, node.name);
     if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
         && !(binding.node as { Ref?: boolean }).Ref) return importedNamespace(binding.initializer, seen);
     return undefined;
@@ -11801,14 +11808,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the same text is initialized by then - which is why the
         // pre-evaluation SUCCEEDS and there is an answer to read.
         if (declared.type === 'ComputedType') {
-          const evaluated = resolvedAlias(
-            surroundingAgent.runningExecutionContext?.LexicalEnvironment,
-            name,
+          const producer = importedDeclarationSourceModule(node);
+          const evaluated = resolvedAliasContext(
+            producer?.Environment ?? checkingEnvironment,
+            producer ? (node as ParseNode.TypeAliasDeclaration).BindingIdentifier.name : name,
             node,
           ) as Known;
           if (evaluated) {
             return evaluated;
           }
+          journalMembership(pendingAliasContexts, root, true);
         }
         const resolved = resolveType(declared);
         // An alias carrying WHERE CLAUSES is a nominal type wrapping its
@@ -11832,8 +11841,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // An alias established by an earlier script or an import can supply its
     // completed record only through the actual visible initialized binding.
     // A local publication with the same spelling is not external evidence.
-    const published = resolvedAlias(
-      surroundingAgent.runningExecutionContext?.LexicalEnvironment,
+    const published = resolvedAliasContext(
+      checkingEnvironment,
       name,
     ) as Known;
     if (published) {

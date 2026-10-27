@@ -26,7 +26,7 @@ import { GetTypeObject } from './intern.mts';
 import { propertyKeyValue, displayType, builtinTypeRecord, BoundTypeRecordForName, neverType } from './records.mts';
 import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
 import {
-  RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
+  RecheckAfterTypeEvaluation, HasDeferredGuardChecks, HasPendingAliasContexts, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredCrossingChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   SourceMetaClaimKeysOf,
   TakeDefaultRequirements, GenericWhereChecksOf, DefaultConversionChecksOf, GenericDefaultChecksOf, SetEvaluatedGenericDefault,
@@ -679,10 +679,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
     }
   }
-  // Operator applicability can depend on a meta declaration's claimed shape
-  // and hooks. The parse-time walk ran before those inputs existed; discover
-  // its now-closed result obligations before taking the evaluation worklist.
-  if (operatorInputsPrepared) {
+  // Refresh obligations after their inputs become available. Besides operator
+  // shapes/hooks, an alias may now supply a literal's contextual binders; its
+  // binder annotations must not be evaluated as stale closed obligations.
+  if (operatorInputsPrepared || computedAliasResolved || HasPendingAliasContexts(root)) {
     const errors = RecheckAfterTypeEvaluation(root);
     if (errors.length > 0) return Throw(errors[0]!);
   }

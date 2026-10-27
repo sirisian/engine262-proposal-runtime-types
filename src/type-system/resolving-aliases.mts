@@ -2,8 +2,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, RefBindingHolder, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import type { AbstractModuleRecord } from '../modules.mts';
 import { Value, JSStringValue } from '../value.mts';
-import type { TypeRecord } from './records.mts';
 import { isModuleNamespaceObject } from '../abstract-ops/module-namespace-exotic-objects.mts';
+import type { TypeRecord } from './records.mts';
 
 /**
  * proposal-runtime-types #sec-type-alias-declarations: "An alias may refer to
@@ -89,9 +89,17 @@ export function resolvedAlias(environment: EnvironmentRecord | null | undefined,
 /** A declaration's resolved signature context is not its interned Type Object.
  * Keep its binders/captures when equal types share a public identity. Ordinary
  * value reads and reflection continue to use the interned object. */
-export function resolvedAliasContext(environment: EnvironmentRecord | null | undefined, name: string): TypeRecord | undefined {
-  const published = resolvedPublication(environment, name);
+export function resolvedAliasContext(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode): TypeRecord | undefined {
+  const published = resolvedPublication(environment, name, declaration);
   return published?.declaration.type === 'TypeAliasDeclaration' ? published.context : undefined;
+}
+
+/** An initialized immutable slot can establish an outer namespace for direct
+ * eval without invoking a binding/property read or accepting a lookalike. */
+export function resolvedNamespaceBinding(environment: EnvironmentRecord | null | undefined, name: string): AbstractModuleRecord | undefined {
+  const binding = resolvedBinding(environment, name);
+  return binding?.mutable === false && binding.value && isModuleNamespaceObject(binding.value)
+    ? binding.value.Module : undefined;
 }
 
 /** Called after the ordinary namespace read, preserving its TDZ and import effects. */
@@ -104,6 +112,13 @@ export function resolvedNamespaceAliasContext(namespace: Value, name: string): T
 
 function resolvedPublication(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode):
   { declaration: ParseNode, record: TypeRecord, context: TypeRecord } | undefined {
+  const binding = resolvedBinding(environment, name);
+  const published = binding && resolvedByBinding.get(binding);
+  return published && (!declaration || published.declaration === declaration) ? published : undefined;
+}
+
+function resolvedBinding(environment: EnvironmentRecord | null | undefined, name: string):
+  ReturnType<DeclarativeEnvironmentRecord['bindings']['get']> {
   let at = environment;
   let key = Value(name);
   let imported = false;
@@ -121,8 +136,7 @@ function resolvedPublication(environment: EnvironmentRecord | null | undefined, 
         imported = true;
         continue;
       }
-      const published = resolvedByBinding.get(binding);
-      return published && (!declaration || published.declaration === declaration) ? published : undefined;
+      return binding;
     }
     // An import target is a direct binding in its Module Environment, not a
     // fresh lexical search through the target module's outer environments.

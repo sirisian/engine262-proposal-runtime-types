@@ -1,0 +1,909 @@
+{
+  "cases": [
+    {
+      "name": "eval-direct-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\\\"instances\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-direct-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-direct-argument",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}function take(f:ns.F,g:ns.G){check(f,g);}take(function(value:U):U{return value;},function(value:V):V{return value;});\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-renamed-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export {F as First,G as Second} from \"dep\";",
+        "main": "import * as ns from \"bridge\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}class C{f:ns.First=function(value:U):U{return value;};g:ns.Second=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\\\"instances\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-star-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * from \"dep\";",
+        "main": "import * as ns from \"bridge\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-nested-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import * as ns from \"bridge\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}class C{f:ns.child.F=function(value:U):U{return value;};g:ns.child.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\\\"instances\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-deep-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "top": "export * as child from \"bridge\";",
+        "main": "import * as ns from \"top\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.child.child.F=function(value:U):U{return value;};const g:ns.child.child.G=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "top",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-local-export-namespace-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "import * as child from \"dep\";export {child};",
+        "main": "import * as ns from \"bridge\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}class C{f:ns.child.F=function(value:U):U{return value;};g:ns.child.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\\\"instances\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-named-namespace-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "bridge": "export * as child from \"dep\";",
+        "main": "import {child as ns} from \"bridge\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-const-alias-field",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as original from \"dep\";eval(\"const ns=original;function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(a.f===b.f||a.g===b.g)throw new Error(\\\"instances\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-reverse-and-warm",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const warm:type=ns.G;class C{g:ns.G=function(value:V):V{return value;};f:ns.F=function(value:U):U{return value;};}const a=new C(),b=new C();check(a.f,a.g);check(b.f,b.g);if(ns.F!==ns.G)throw new Error(\\\"public identity\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-arrow-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.F=(value:U):U=>value;const g:ns.G=(value:V):V=>value;check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-object-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const o:{f:ns.F,g:ns.G}={f:function(value:U):U{return value;},g:function(value:V):V{return value;}};check(o.f,o.g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-tuple-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const o:[ns.F,ns.G]=[function(value:U):U{return value;},function(value:V):V{return value;}];check(o[0],o[1]);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-return-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}function first():ns.F{return function(value:U):U{return value;};}function second():ns.G{return function(value:V):V{return value;};}check(first(),second());\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-assignment-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}let f:ns.F=function(value:U):U{return value;};let g:ns.G=function(value:V):V{return value;};f=function(value:U):U{return value;};g=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-private-dependency",
+      "modules": {
+        "dep": "type Outer=number;export type F=<U:type>(value:U)=>{outer:Outer,own:U};",
+        "main": "import * as ns from \"dep\";eval(\"type Outer=string;const f:ns.F=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\\\"a\\\");if(v.outer!==7||v.own!==\\\"a\\\")throw new Error(\\\"source scope\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-foreign-import-dependency",
+      "modules": {
+        "base": "export type Outer=number;",
+        "dep": "import {Outer} from \"base\";export type F=<U:type>(value:U)=>{outer:Outer,own:U};",
+        "main": "import * as ns from \"dep\";eval(\"type Outer=string;const f:ns.F=function(value:U):{outer:number,own:U}{return {outer:7,own:value};};const use:any=f;const v=use.<string>(\\\"a\\\");if(v.outer!==7||v.own!==\\\"a\\\")throw new Error(\\\"source scope\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "base",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-alias-chain",
+      "modules": {
+        "dep": "type Local=<V:type>(value:V)=>V;export type F=Local;export type G=F;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.F=function(value:V):V{return value;};const g:ns.G=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-namespace-shadowing",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"function check(f:any,g:any){if(f.<number>(7)!==7||f.<string>(\\\"a\\\")!==\\\"a\\\"||g.<number>(9)!==9||g.<string>(\\\"b\\\")!==\\\"b\\\")throw new Error(\\\"binding\\\");if(Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"identity\\\");}const f:ns.F=function(value:U):U{return value;};{const ns={F:number};const value:ns.F=7;if(value!==7)throw new Error(\\\"shadow\\\");}const g:ns.G=function(value:V):V{return value;};check(f,g);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-literal-controls",
+      "modules": {
+        "dep": "export type N=number;export type S=string;",
+        "main": "import * as ns from \"dep\";eval(\"const n:ns.N=7;const s:ns.S=\\\"a\\\";function verify(n:any,s:any){if(n!==7||s!==\\\"a\\\")throw new Error(\\\"values\\\");}verify(n,s);\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-ordinary-own-binders",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"const holder={F:ns.F};const f:holder.F=function<X:type>(value:X):X{return value;};const use:any=f;if(use.<number>(7)!==7||use.<string>(\\\"a\\\")!==\\\"a\\\")throw new Error(\\\"ordinary\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-explicit-own-binders",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"const f:ns.F=function<X:type>(value:X):X{return value;};const use:any=f;if(use.<number>(7)!==7||use.<string>(\\\"a\\\")!==\\\"a\\\")throw new Error(\\\"own\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-namespace-name-collision",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;",
+        "main": "import * as U from \"dep\";eval(\"const f:U.F=function(value:U):U{return value;};const use:any=f;if(use.<number>(7)!==7)throw new Error(\\\"head\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-named-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F,G} from \"dep\";eval(\"const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-renamed-binding",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F as First,G as Second} from \"dep\";eval(\"const f:First=function(value:U):U{return value;};const g:Second=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-outer-immutable-namespace",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";const other=ns;eval(\"const f:other.F=function(value:U):U{return value;};const g:other.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-outer-alias-shadow",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F,G} from \"dep\";function run(){type F=<A:type>(x:A)=>A;type G=<B:type>(x:B)=>B;eval(\"const f:F=function(value:A):A{return value;};const g:G=function(value:B):B{return value;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");}run();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-local-alias-shadow",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F,G} from \"dep\";eval(\"type F=<A:type>(x:A)=>A;type G=<B:type>(x:B)=>B;const f:F=function(value:A):A{return value;};const g:G=function(value:B):B{return value;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-outer-namespace-shadow",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "other": "export type F=<A:type>(x:A)=>A;export type G=<B:type>(x:B)=>B;",
+        "main": "import * as ns from \"dep\";import * as actual from \"other\";function run(){const ns=actual;eval(\"const f:ns.F=function(value:A):A{return value;};const g:ns.G=function(value:B):B{return value;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");}run();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "other",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-named-wrong-body",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {F,G} from \"dep\";eval(\"globalThis.entered=true;const f:F=function(value:U):U{return \\\"wrong\\\";};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "eval-namespace-wrong-body",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"globalThis.entered=true;const f:ns.F=function(value:U):U{return \\\"wrong\\\";};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "computed-named-binding",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import {F} from \"dep\";const f:F=function(value:U):U{return value;};if(f.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-computed-named-binding",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import {F} from \"dep\";eval(\"const f:F=function(value:U):U{return value;};if(f.<number>(7)!==7)throw new Error(\\\"value\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-named-field",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import {F} from \"dep\";class C{f:F=function(value:U):U{return value;};}const f=new C().f;if(f.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-computed-named-field",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import {F} from \"dep\";eval(\"class C{f:F=function(value:U):U{return value;};}const f=new C().f;if(f.<number>(7)!==7)throw new Error(\\\"value\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-named-wrong-body",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import {F} from \"dep\";const f:F=function(value:U):U{return \"wrong\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-namespace-binding",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};if(f.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-computed-namespace-binding",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import * as ns from \"dep\";eval(\"const f:ns.F=function(value:U):U{return value;};if(f.<number>(7)!==7)throw new Error(\\\"value\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-namespace-field",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};}const f=new C().f;if(f.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-computed-namespace-field",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import * as ns from \"dep\";eval(\"class C{f:ns.F=function(value:U):U{return value;};}const f=new C().f;if(f.<number>(7)!==7)throw new Error(\\\"value\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-namespace-wrong-body",
+      "modules": {
+        "dep": "function make():type{type R=<U:type>(value:U)=>U;return R;}export type F=make();",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return \"wrong\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "eval-local-computed-alias",
+      "modules": {
+        "main": "eval(\"function make():type{type R=<U:type>(value:U)=>U;return R;}type F=make();const f:F=function(value:U):U{return value;};if(f.<number>(7)!==7)throw new Error(\\\"value\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-value-no-provenance",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {G} from \"dep\";const F=G;eval(\"const f:F=function(value:V):V{return value;};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "tdz-blocks-outer",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {G as F} from \"dep\";function run(){eval(\"const f:F=function(value:V):V{return value;};\");let F;}run();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "indirect-global-only",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {G as F} from \"dep\";(0,eval)(\"const f:F=function(value:V):V{return value;};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "mutable-namespace",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";let local=ns;eval(\"const f:local.G=function(value:V):V{return value;};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "proxy-namespace",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";const local=new Proxy(ns,{});eval(\"const f:local.G=function(value:V):V{return value;};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "object-namespace",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";const local={G:ns.G};eval(\"const f:local.G=function(value:V):V{return value;};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "local-eval-mutable-shadow",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import {G as F} from \"dep\";eval(\"const f:F=function(value:V):V{return value;};let F;\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "getter-no-provenance-reads",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";let reads=0;const local={get G(){reads++;return ns.G;}};let failed=false;try{eval(\"const f:local.G=function(value:V):V{return value;};\");}catch(e){failed=true;}if(!failed||reads!==0)throw new Error(\"early read\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-no-provenance-reads",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";let reads=0;const local=new Proxy(ns,{get(){reads++;return ns.G;}});let failed=false;try{eval(\"const f:local.G=function(value:V):V{return value;};\");}catch(e){failed=true;}if(!failed||reads!==0)throw new Error(\"early read\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-eval-namespace",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";eval(\"eval(\\\"const f:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7)throw new Error(\\\\\\\"value\\\\\\\");\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-same-realm-recovery",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";globalThis.entered=false;let failed=false;try{eval(\"globalThis.entered=true;const f:ns.G=function(value:V):V{return \\\"wrong\\\";};\");}catch(e){if(e.name!==\"StaticTypeError\")throw e;failed=true;}if(!failed||globalThis.entered)throw new Error(\"phase\");eval(\"const f:ns.G=function(value:V):V{return value;};if(f.<string>(\\\"ok\\\")!==\\\"ok\\\")throw new Error(\\\"context\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-activation-context",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;",
+        "main": "import * as ns from \"dep\";function outer(){type G=<V:type>(value:V)=>V;return function(){eval(\"const f:G=function(value:V):V{return value;};if(f.<number>(7)!==7)throw new Error(\\\"context\\\");\");};}const first=outer(),second=outer();first();second();first();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-failed-producer",
+      "modules": {
+        "dep": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;throw new Error(\"dependency\");",
+        "main": "import * as ns from \"dep\";eval(\"const f:ns.G=function(value:V):V{return value;};\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "eval-named-tdz-cycle",
+      "modules": {
+        "dep": "import {G} from \"main\";eval(\"const f:G=function<V:type>(value:V):V{return value;};\");",
+        "main": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;import \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "eval-namespace-tdz-cycle",
+      "modules": {
+        "dep": "import * as ns from \"main\";eval(\"const f:ns.G=function<V:type>(value:V):V{return value;};\");",
+        "main": "export type F=<U:type>(value:U)=>U;export type G=<V:type>(value:V)=>V;import \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "eval-captured-context",
+      "modules": {
+        "main": "function outer<T:type>(outer:T){ type G=<V:type>(value:V)=>{outer:T,own:V};return function(){const result=eval(\"const f:G=function(value:V){return {outer,own:value};};f.<string>(\\\"ok\\\");\");if(result.outer!==outer||result.own!==\"ok\")throw new Error(\"capture\");};}const first=outer.<number>(7),second=outer.<string>(\"other\");first();second();first();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-captured-alias-context",
+      "modules": {
+        "main": "function outer<T:type>(outer:T){type Captured=T; type G=<V:type>(value:V)=>{outer:T,own:V};return function(){const result=eval(\"const f:G=function(value:V):{outer:Captured,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");if(result.outer!==outer||result.own!==\"ok\")throw new Error(\"capture\");};}const first=outer.<number>(7),second=outer.<string>(\"other\");first();second();first();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

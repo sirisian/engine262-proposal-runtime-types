@@ -663,7 +663,7 @@
       ]
     },
     {
-      "name": "generic recursive budget then independent",
+      "name": "nonproductive generic alias then independent",
       "steps": [
         {
           "source": "type R<T:type>=R.<T>;function build(){return type R.<uint8>;}type Known=build();\"bad\";",
@@ -673,7 +673,7 @@
             "scriptBodies": 0,
             "errorClass": "StaticTypeError",
             "diagnostic": {
-              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "code": "RT_TYPE_EVALUATION",
               "phase": "pre-evaluation"
             }
           }
