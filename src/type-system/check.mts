@@ -5,7 +5,8 @@ import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, Place
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import { EnsureCompletion } from '../completion.mts';
-import { skipDebugger } from '../evaluator.mts';
+import { skipDebugger, type Evaluator } from '../evaluator.mts';
+import { CallEvaluator } from '../evaluator-trampoline.mts';
 import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { AbstractModuleRecord, ResolvedBindingRecord } from '../modules.mts';
@@ -55,6 +56,7 @@ import { resolvedAlias } from './resolving-aliases.mts';
 import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
 import { InstantiateCheckedBindings } from './checked-bindings.mts';
 import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
+import { BeginTypeEvaluation, EndTypeEvaluation, ConsumeEvaluationSteps, IsBudgetExhausted, BudgetExhaustionKind } from './budget.mts';
 import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
 import { ReusableCheckingContext, SnapshotCheckingContext, SameCheckingContext } from './checking-context.mts';
 import {
@@ -2959,8 +2961,15 @@ export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
     ScriptBody: { type: 'ScriptBody', StatementList: [statement], location: expression.location } } as unknown as ParseNode.Script;
   dynamicFunctionRoots.set(expression, root);
   const errors = checkCompletedDeclarations([statement] as never, root, CreateCheckSession());
-  return errors.length > 0 && !errors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-inference-limit')
+  return errors.length > 0 && !hasCheckingResourceFailure(errors)
     && TakeNarrowingRequests(root).length > 0 ? [] : errors;
+}
+
+function hasCheckingResourceFailure(errors: readonly ObjectValue[]): boolean {
+  return errors.some((error) => {
+    const rule = TypeDiagnosticOf(error)?.rule;
+    return rule === 'rt-inference-limit' || rule === 'rt-type-evaluation-limit';
+  });
 }
 
 export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = false, environment?: EnvironmentRecord): ObjectValue[] {
@@ -3069,7 +3078,7 @@ function checkCompletedDeclarationPasses(statementList: readonly ParseNode[] | n
   const host = surroundingAgent.currentRealmRecord?.HostDefined as { returnInferenceBudget?: InferenceLimits } | undefined;
   const inferenceResources = new InferenceResources(host?.returnInferenceBudget);
   const finish = (errors: ObjectValue[]): ObjectValue[] => {
-    if (!inferenceResources.exhausted) return errors;
+    if (!inferenceResources.exhausted && !hasCheckingResourceFailure(errors)) return errors;
     // Literal and earlier-pass publications belong to this failed check too.
     // Source nodes keep their identities; no runtime object has been created.
     const pending: unknown[] = [root];
@@ -3092,7 +3101,7 @@ function checkCompletedDeclarationPasses(statementList: readonly ParseNode[] | n
   };
   const identities: CheckingSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap(), symbolKeys: new WeakMap() };
   const initialErrors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities, undefined, inferenceResources);
-  if (inferenceResources.exhausted) return finish(initialErrors);
+  if (inferenceResources.exhausted || hasCheckingResourceFailure(initialErrors)) return finish(initialErrors);
   if (initialErrors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-layout'
     || TypeDiagnosticOf(error)?.rule === 'rt-unproductive-type')) return initialErrors;
   const sourceBindings = new WeakSet<ParseNode>();
@@ -3125,7 +3134,7 @@ function checkCompletedDeclarationPasses(statementList: readonly ParseNode[] | n
     const bindings: BindingContractPass = { sourceBindings, rootScope, scopeFor, available: new Map(contracts), completed: new Map(), pending: false };
     const referenceStores = new Map<ParseNode, TypeRecord[]>();
     const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities, bindings, inferenceResources);
-    if (inferenceResources.exhausted) return finish(errors);
+    if (inferenceResources.exhausted || hasCheckingResourceFailure(errors)) return finish(errors);
     const previousSize = contracts.size;
     for (const [node, type] of bindings.completed) if (!contracts.has(node)) contracts.set(node, type);
     // Rebuild every transfer and diagnostic from source. A newly completed
@@ -3433,6 +3442,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const typeArgumentApplicationChecks = new Map<ParseNode, TypeArgumentApplicationCheck[]>();
   const pendingStoredApplications = new WeakMap<ParseNode, readonly TypeArgumentApplicationCheck[]>();
   const activeAliasApplications = new Map<TypeArgumentApplicationCheck, ReadonlyMap<ParseNode.TypeParameter, TypeRecord>[]>();
+  const specializationPath: ParseNode[] = [];
+  let specializationFailure: { kind: string, outer: ParseNode, deepest: ParseNode } | undefined;
   const genericApplicationInputs = new WeakMap<ParseNode, PreparedBinding>();
   const observePendingApplication = (application: ParseNode.TypeArgumentsExpression): void => {
     if (!genericDefaults.some((check) => check.application === application)) return;
@@ -5474,11 +5485,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** #sec-generic-specialization: close obligations when an outer parameter binds. */
   const checkSpecializedDeclaration = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>,
     enclosingInputs?: ReadonlyMap<ParseNode.TypeParameter, TypeRecord>): void => {
-    const inputs = new Map(enclosingInputs);
-    for (const parameter of (declaration as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList ?? []) {
-      const bound = bindings.get(parameter.BindingIdentifier.name);
-      if (bound) inputs.set(parameter, bound);
+    if (!specializationFailure) skipDebugger(checkSpecializedDeclarationWork(declaration, bindings, enclosingInputs));
+  };
+
+  const specializationExhausted = (declaration: ParseNode): boolean => {
+    if (!IsBudgetExhausted()) return false;
+    specializationFailure ??= { kind: BudgetExhaustionKind() ?? 'steps', outer: specializationPath[0], deepest: declaration };
+    invalidTypeGraph = true;
+    return true;
+  };
+
+  const checkSpecializedDeclarationWork = function* (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>,
+    enclosingInputs?: ReadonlyMap<ParseNode.TypeParameter, TypeRecord>, activeCheck?: TypeArgumentApplicationCheck): Evaluator<void> {
+    if (specializationFailure) return;
+    BeginTypeEvaluation();
+    specializationPath.push(declaration);
+    let entered: ReadonlyMap<ParseNode.TypeParameter, TypeRecord>[] | undefined;
+    try {
+      // Retained argument/default/constraint obligations are type computation,
+      // even in the static pass and even when the result erases its arguments.
+      // Charge before recurrence lookup; an unfinished obligation is no result.
+      ConsumeEvaluationSteps(1);
+      if (specializationExhausted(declaration)) return;
+      const inputs = new Map(enclosingInputs);
+      for (const parameter of (declaration as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList ?? []) {
+        const bound = bindings.get(parameter.BindingIdentifier.name);
+        if (bound) inputs.set(parameter, bound);
+      }
+      if (activeCheck) {
+        const active = activeAliasApplications.get(activeCheck) ?? [];
+        if (active.some((previous) => previous.size === inputs.size && [...inputs].every(([parameter, bound]) =>
+          previous.has(parameter) && SameType(bound, previous.get(parameter)!)))) return;
+        active.push(inputs);
+        activeAliasApplications.set(activeCheck, active);
+        entered = active;
+      }
+      yield* checkSpecializedDeclarationBody(declaration, bindings, inputs);
+      specializationExhausted(declaration);
+    } finally {
+      if (entered) {
+        entered.pop();
+        if (!entered.length) activeAliasApplications.delete(activeCheck!);
+      }
+      specializationPath.pop();
+      EndTypeEvaluation();
     }
+  };
+
+  const checkSpecializedDeclarationBody = function* (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>,
+    inputs: ReadonlyMap<ParseNode.TypeParameter, TypeRecord>): Evaluator<void> {
     if (declaration.type === 'ClassDeclaration' && declaration.TypeParameters?.ListKind === 'parameters') {
       const instance = instanceTypeOf(declaration);
       const arguments_ = declaration.TypeParameters.TypeParameterList.map((parameter) => bindings.get(parameter.BindingIdentifier.name));
@@ -5487,7 +5542,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
 
-    const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
+    const visit = function* (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): Evaluator<void> {
+      if (specializationFailure) return;
       const scoped = new Map(available);
       typeParameterArguments.set(scoped, inputs);
       if (node !== declaration) for (const name of effectiveTypeParameterNamesOf(node)) scoped.delete(name);
@@ -5528,6 +5584,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         finishTypeArgumentBindings(signature.Signatures[0].TypeParameters!, closed, {
           complete: false, application: check.stored?.application ?? node as GenericDefaultCheck['application'], pendingArguments,
         });
+        if (specializationExhausted(declaration)) return;
         const freeApplicationScope = new Map(applicationScope);
         for (const parameter of check.parameters) freeApplicationScope.delete(parameter.Name);
         // Default completion closes the argument contract too. Keep the
@@ -5559,17 +5616,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const bound = closed.get(parameter.Name);
           if (bound) applicationInputs.set(parameter.Declaration, bound);
         }
-        const active = activeAliasApplications.get(check) ?? [];
-        if (active.some((previous) => previous.size === applicationInputs.size && [...applicationInputs].every(([parameter, bound]) =>
-          previous.has(parameter) && SameType(bound, previous.get(parameter)!)))) continue;
-        active.push(applicationInputs);
-        activeAliasApplications.set(check, active);
-        try {
-          checkSpecializedDeclaration(check.declaration, new Map([...scoped, ...closed]), applicationInputs);
-        } finally {
-          active.pop();
-          if (!active.length) activeAliasApplications.delete(check);
-        }
+        yield* CallEvaluator(checkSpecializedDeclarationWork(check.declaration, new Map([...scoped, ...closed]), applicationInputs, check));
+        if (specializationFailure) return;
       }
       // An alias can erase its parameters from its result type while its
       // predicate still depends on them. Close that retained obligation too.
@@ -5627,13 +5675,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       for (const [key, child] of Object.entries(node)) {
         if (['parent', 'location', 'sourceText'].includes(key)) continue;
-        if (Array.isArray(child)) child.forEach((part) => {
-          if (part && typeof part === 'object' && 'type' in part) visit(part, scoped);
-        });
-        else if (child && typeof child === 'object' && 'type' in child) visit(child as ParseNode, scoped);
+        if (Array.isArray(child)) {
+          for (const part of child) {
+            if (part && typeof part === 'object' && 'type' in part) yield* visit(part, scoped);
+          }
+        } else if (child && typeof child === 'object' && 'type' in child) yield* visit(child as ParseNode, scoped);
       }
     };
-    visit(declaration, bindings);
+    yield* visit(declaration, bindings);
   };
 
   const checkAdjacentRestTypes = (parameters: readonly ParameterRecord[], declaration?: ParseNode): void => {
@@ -40387,15 +40436,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   if (!invalidTypeGraph && !inferenceResources.exhausted) finishBindingContracts();
   if (!invalidTypeGraph && !inferenceResources.exhausted) finishTestObligations();
   if (!invalidTypeGraph && !inferenceResources.exhausted) finishInitializerObligations();
-  if (inferenceResources.exhausted) {
-    const { kind, declaration } = inferenceResources.exhausted;
+  if (specializationFailure || inferenceResources.exhausted) {
     for (const item of pendingBySignature.values()) {
       withdrawInferredReturn(item);
       item.signature.ProvisionalReturn = undefined;
     }
     errors.length = 0;
-    reportType('rt-inference-limit', declaration, 'return inference exhausted its $1 resource limit while checking $2; no result was inferred',
-      Value(kind), Value(nameOfDeclaration(declaration) ?? 'this function'));
+    if (specializationFailure) {
+      const { kind, outer, deepest } = specializationFailure;
+      reportType('rt-type-evaluation-limit', outer,
+        'the type evaluation budget was exhausted ($1) while specializing $2; the deepest obligation was $3',
+        Value(kind), Value(nameOfDeclaration(outer) ?? 'this declaration'), Value(nameOfDeclaration(deepest) ?? 'this declaration'));
+    } else {
+      const { kind, declaration } = inferenceResources.exhausted!;
+      reportType('rt-inference-limit', declaration, 'return inference exhausted its $1 resource limit while checking $2; no result was inferred',
+        Value(kind), Value(nameOfDeclaration(declaration) ?? 'this function'));
+    }
   }
   if (!invalidTypeGraph) collectCompletedBindings();
   if (invalidTypeGraph) {
