@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, observeScript } from '../harness.mts';
 
 /**
  * Spec: #sec-enums.
@@ -13,8 +13,14 @@ import { evaluated } from '../harness.mts';
 
 test('enumerator properties are constant and the Type Object is non-extensible', () => {
   expect(evaluated('enum E { A } String(Object.isExtensible(E)) + ":" + String(Object.getOwnPropertyDescriptor(E, "A").writable) + ":" + String(Object.getOwnPropertyDescriptor(E, "0").configurable);')).toBe('false:false:false');
-  expect(evaluated('enum E { A } E.A = 5; String(E.A);')).toBe('0');
-  expect(evaluated('enum E { A } E.B = 2; String(E.B);')).toBe('undefined');
+  expect(evaluated('enum E { A } function f(k) { E[k] = 5; } f("A"); String(E.A);')).toBe('0');
+  expect(evaluated('enum E { A } function f(k) { E[k] = 2; } f("B"); String(E.B);')).toBe('undefined');
+});
+
+test('a store to an enumerator, or one adding a member, is refused before the body', () => {
+  expect(observeScript('enum E { A } E.A = 5;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-readonly-store', phase: 'static' } });
+  expect(observeScript('enum E { A } E[0] = 5;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-readonly-store', phase: 'static' } });
+  expect(observeScript('enum E { A } E.B = 2;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-undeclared-member', phase: 'static' } });
 });
 
 test('the enumeration surface is unchanged', () => {

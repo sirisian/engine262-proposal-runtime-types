@@ -7202,6 +7202,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // a member store, an index store, or a compound or logical store alike.
     // The shaped store was a runtime TypeError, the tuple index store and the
     // top-type store were silent, and a parameter form was never judged.
+    // #sec-enums: an enumerator is a constant of the program, so a store to
+    // an enumerator property of an enum's Type Object is refused, and a store
+    // that would add a member names one the enum does not declare. The enum
+    // binding is identified by its declaration; a shadowing or reassignment
+    // leaves the receiver to its own type.
+    const enumDeclaration = m.MemberExpression.type === 'IdentifierReference' && !assignedNames.has(m.MemberExpression.name)
+      && !assignedGlobalProperties.has(m.MemberExpression.name) && !hasDirectEval ? enumNodes.get(m.MemberExpression.name) : undefined;
+    if (enumDeclaration && enumDeclaration.type === 'EnumDeclaration'
+        && ResolveBindingDeclaration(m.MemberExpression, m.MemberExpression.name)?.node === enumDeclaration && operator !== '??=') {
+      const names = (enumDeclaration as ParseNode.EnumDeclaration).EnumMemberList.map((member) => member.IdentifierName.name);
+      const written = memberKeys(m);
+      const key = written?.length === 1 && typeof written[0] === 'string' ? written[0] : null;
+      if (key !== null && (names.includes(key) || /^(0|[1-9][0-9]*)$/.test(key))) {
+        reportType('rt-readonly-store', expression, '$1 is an enumerator of $2, a constant of the program, and cannot be assigned', Value(key), Value(m.MemberExpression.name));
+      } else if (key !== null) {
+        reportType('rt-undeclared-member', expression, '$1 is not an enumerator of $2, and an enum admits no further members', Value(key), Value(m.MemberExpression.name));
+      }
+      return;
+    }
     if (compositeReceiver(sealedReceiver) && operator !== '??=') {
       reportType('rt-readonly-store', expression, 'a composite is frozen, so a member of $1 cannot be assigned', Value(displayType(sealedReceiver)));
       return;
@@ -11883,7 +11902,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!type || mentionsTypeParameter(type)) return null;
     if (binding?.kind === 'type') return type;
     if (binding) return null;
-    for (let parent = base.parent; parent; parent = parent.parent) if (/Function|Arrow|Method|Class/.test(parent.type)) return null;
+    // A built-in name inside a function or class body is not proved: the body
+    // may run after the global was reassigned. A class's own heritage is the
+    // exception, since it is evaluated once, in the enclosing scope, in
+    // statement order (#sec-typed-classes), so the owning class and its tail
+    // are transparent to this scan; `class B extends uint8 {}` reached here as
+    // an unproved name and was refused only at evaluation.
+    let tail: ParseNode | null = null;
+    for (let child: ParseNode = base, parent = base.parent; parent; child = parent, parent = parent.parent) {
+      if (parent.type === 'ClassTail' && (parent as { ClassHeritage?: ParseNode | null }).ClassHeritage === child) { tail = parent; break; }
+      if (/Function|Arrow|Method|Class/.test(parent.type)) break;
+    }
+    const owning = tail?.parent && /^Class(Declaration|Expression)$/.test(tail.parent.type) ? tail.parent : null;
+    for (let parent = base.parent; parent; parent = parent.parent) {
+      if (owning && (parent === tail || parent === owning)) continue;
+      if (/Function|Arrow|Method|Class/.test(parent.type)) return null;
+    }
     const realm = surroundingAgent.currentRealmRecord;
     if (realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(base.name))) return null;
     const actual = intrinsicData(realm.GlobalObject, Value(base.name));
@@ -24747,6 +24781,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (core.type === 'TemplateLiteral' && templateAlwaysTruthy(core)) {
       reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value('a template with text'), Value('truthy'));
+      return;
+    }
+    // #sec-narrowfrom: a class binding that no assignment in the program
+    // rebinds holds its constructor, so it is always truthy; it has no Static
+    // Type of its own here, so it reached the scalar judgment undecided.
+    if (!t && core.type === 'IdentifierReference' && classNodes.has(core.name)
+        && ResolveBindingDeclaration(core, core.name)?.kind === 'class'
+        && !assignedNames.has(core.name) && !assignedGlobalProperties.has(core.name) && !hasDirectEval) {
+      reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value(`the class ${core.name}`), Value('truthy'));
       return;
     }
     if (!t || t.Kind === 'any') return;
