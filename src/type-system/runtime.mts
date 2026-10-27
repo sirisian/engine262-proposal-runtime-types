@@ -83,6 +83,7 @@ import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot, resolvedAliasContext, resolvedNamespaceAliasContext } from './resolving-aliases.mts';
+import { TypeResultContextOf } from './type-result-context.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
 import { IsAssignable, COLLECTION_LIBRARY_NAMES } from './relations.mts';
@@ -7284,9 +7285,11 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       if (pendingDefault) return { ...pendingDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
       // #sec-evaluatebuildercall: the callee evaluates and is called with the
       // evaluated arguments; the result must be a Type Object.
-      const result = Q(yield* evaluateComputedType(node));
+      const completion = EnsureCompletion(yield* evaluateComputedType(node));
+      if (completion.Type !== 'normal') return completion;
+      const result = completion.Value;
       if (isTypeObject(result)) {
-        return result.TypeRecord;
+        return TypeResultContextOf(completion) ?? result.TypeRecord;
       }
       return Throw.TypeError('$1 is not a type', result);
     }
@@ -7764,7 +7767,7 @@ function* evaluateTypeInitializer(node: ParseNode, type: TypeRecord, subject: st
 function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Value> {
   BeginFragmentEvaluation();
   try {
-    return Q(yield* EvaluateWithTypeBudget(node.sourceText || 'a computed type', evaluateComputedTypeBody(node)));
+    return yield* EvaluateWithTypeBudget(node.sourceText || 'a computed type', evaluateComputedTypeBody(node));
   } finally {
     EndFragmentEvaluation();
   }
@@ -7834,7 +7837,7 @@ function* evaluateComputedTypeBody(node: ParseNode.ComputedType): PlainEvaluator
       }
     }
   }
-  return Q(yield* Call(callee as never, Value.undefined, args));
+  return yield* Call(callee as never, Value.undefined, args);
 }
 
 // CANONICALIZED, not merely substituted. A value argument arrives as the

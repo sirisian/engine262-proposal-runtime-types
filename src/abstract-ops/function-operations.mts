@@ -1,5 +1,6 @@
 import { BeginTypeEvaluation, EndTypeEvaluation, InTypeComputation, IsBudgetExhausted, CurrentTypeComputationSubject } from '../type-system/budget.mts';
 import { InFragmentEvaluation } from '../type-system/fragment-library.mts';
+import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
 import { AdoptedReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { SameType } from '../type-system/relations.mts';
 import { NoDefaultValueError } from '../type-system/intern.mts';
@@ -703,7 +704,7 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   if (result.Type === 'return') {
     // a. If Type(result.[[Value]]) is Object, return NormalCompletion(result.[[Value]]).
     if (result.Value instanceof ObjectValue) {
-      return NormalCompletion(result.Value);
+      return TransferTypeResultContext(result, NormalCompletion(result.Value));
     }
     // b. If kind is base, return NormalCompletion(thisArgument).
     if (kind === 'base') {
@@ -1080,8 +1081,11 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
     const returned = NormalCompletion(completion.Value || Value.undefined);
     // Dispatch/specialization wrappers forward the selected invocation's
     // checked result. The built-in call frame is not another value boundary.
-    return forwardsArguments || SelectionOfValue(F) !== undefined
-      ? TransferResultDependency(completion, returned) : returned;
+    if (forwardsArguments || SelectionOfValue(F) !== undefined) return TransferResultDependency(completion, returned);
+    // Reflective calls can forward a type-producing completion without
+    // forwarding an ordinary value's admitted contract or reference rights.
+    TransferTypeResultContext(completion, returned);
+    return returned;
   }
 }
 

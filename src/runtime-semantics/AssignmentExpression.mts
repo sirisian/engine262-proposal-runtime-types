@@ -4,7 +4,7 @@ import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, ObjectEnvironmentRecord } from '../execution-context/Environment.mts';
-import { Q, X, EnsureCompletion } from '../completion.mts';
+import { Q, X, EnsureCompletion, NormalCompletion } from '../completion.mts';
 import {
   IsAnonymousFunctionDefinition,
   IsIdentifierRef,
@@ -29,7 +29,8 @@ import {
   ToBoolean,
   surroundingAgent,
 } from '#self';
-import { ConstructionSelectionsOf, EvaluateResultValue } from '../type-system/result-dependencies.mts';
+import { ConstructionSelectionsOf, EvaluateResultValue, GetResultValue } from '../type-system/result-dependencies.mts';
+import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
 import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { isArrayIndex } from '../abstract-ops/all.mts';
 import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
@@ -337,28 +338,32 @@ export function* Evaluate_AssignmentExpression({
       // e. Perform ? PutValue(lref, rval).
       Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
       // f. Return rval.
-      return rval;
+      // The expression produces the selected RHS; the stored slot itself
+      // acquires no alias provenance or additional admitted-value contract.
+      return TransferTypeResultContext(result, NormalCompletion(rval));
     }
     // 2. Let assignmentPattern be the AssignmentPattern that is covered by LeftHandSideExpression.
     const assignmentPattern = refineLeftHandSideExpression(LeftHandSideExpression);
-    // 3. Let rref be the result of evaluating AssignmentExpression.
-    const rref = Q(yield* Evaluate(AssignmentExpression));
-    // 3. Let rval be ? GetValue(rref).
-    const rval = Q(yield* GetValue(rref));
+    // 3. Evaluate AssignmentExpression and get its value.
+    const result = EnsureCompletion(yield* EvaluateResultValue(AssignmentExpression));
+    if (result.Type !== 'normal') return result;
+    const rval = result.Value;
     // 4. Perform ? DestructuringAssignmentEvaluation of assignmentPattern using rval as the argument.
     Q(yield* DestructuringAssignmentEvaluation(assignmentPattern as ParseNode.ObjectAssignmentPattern | ParseNode.ArrayAssignmentPattern, rval));
     // 5. Return rval.
-    return rval;
+    return TransferTypeResultContext(result, NormalCompletion(rval));
   } else if (AssignmentOperator === '&&=') {
     // 1. Let lref be the result of evaluating LeftHandSideExpression.
     const lref = Q(LocationOfAssignmentTarget(LeftHandSideExpression, Q(yield* Evaluate(LeftHandSideExpression))));
     // 2. Let lval be ? GetValue(lref).
-    const lval = Q(yield* GetValue(lref));
+    const left = EnsureCompletion(yield* GetResultValue(NormalCompletion(lref)));
+    if (left.Type !== 'normal') return left;
+    const lval = left.Value;
     // 3. Let lbool be ! ToBoolean(lval).
     const lbool = X(ToBoolean(lval));
     // 4. If lbool is false, return lval.
     if (lbool === Value.false) {
-      return lval;
+      return TransferTypeResultContext(left, NormalCompletion(lval));
     }
     const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
     if (result.Type !== 'normal') return result;
@@ -366,17 +371,19 @@ export function* Evaluate_AssignmentExpression({
     // Admission remains at the ordinary store, after the selected RHS.
     Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
     // 8. Return rval.
-    return rval;
+    return TransferTypeResultContext(result, NormalCompletion(rval));
   } else if (AssignmentOperator === '||=') {
     // 1. Let lref be the result of evaluating LeftHandSideExpression.
     const lref = Q(LocationOfAssignmentTarget(LeftHandSideExpression, Q(yield* Evaluate(LeftHandSideExpression))));
     // 2. Let lval be ? GetValue(lref).
-    const lval = Q(yield* GetValue(lref));
+    const left = EnsureCompletion(yield* GetResultValue(NormalCompletion(lref)));
+    if (left.Type !== 'normal') return left;
+    const lval = left.Value;
     // 3. Let lbool be ! ToBoolean(lval).
     const lbool = X(ToBoolean(lval));
     // 4. If lbool is true, return lval.
     if (lbool === Value.true) {
-      return lval;
+      return TransferTypeResultContext(left, NormalCompletion(lval));
     }
     const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
     if (result.Type !== 'normal') return result;
@@ -384,15 +391,17 @@ export function* Evaluate_AssignmentExpression({
     // Admission remains at the ordinary store, after the selected RHS.
     Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
     // 8. Return rval.
-    return rval;
+    return TransferTypeResultContext(result, NormalCompletion(rval));
   } else if (AssignmentOperator === '??=') {
     // 1.Let lref be the result of evaluating LeftHandSideExpression.
     const lref = Q(LocationOfAssignmentTarget(LeftHandSideExpression, Q(yield* Evaluate(LeftHandSideExpression))));
     // 2. Let lval be ? GetValue(lref).
-    const lval = Q(yield* GetValue(lref));
+    const left = EnsureCompletion(yield* GetResultValue(NormalCompletion(lref)));
+    if (left.Type !== 'normal') return left;
+    const lval = left.Value;
     // 3. If lval is not undefined nor null, return lval.
     if (lval !== Value.undefined && lval !== Value.null) {
-      return lval;
+      return TransferTypeResultContext(left, NormalCompletion(lval));
     }
     const result = EnsureCompletion(yield* assignmentResult(lref, LeftHandSideExpression, AssignmentExpression));
     if (result.Type !== 'normal') return result;
@@ -400,7 +409,7 @@ export function* Evaluate_AssignmentExpression({
     // Admission remains at the ordinary store, after the selected RHS.
     Q(yield* PutValue(lref, rval, ConstructionSelectionsOf(result)));
     // 7. Return rval.
-    return rval;
+    return TransferTypeResultContext(result, NormalCompletion(rval));
   } else {
     // 1. Let lref be the result of evaluating LeftHandSideExpression.
     const lref = Q(LocationOfAssignmentTarget(LeftHandSideExpression, Q(yield* Evaluate(LeftHandSideExpression))));

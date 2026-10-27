@@ -1,5 +1,6 @@
 import { anyType, makePrimitive, mentionsTypeParameter, type TypeRecord, type PropertyTypeRecord, type SignatureRecord } from './records.mts';
 import { SameArgumentList, SameType } from './relations.mts';
+import { ReadTypeResultContext, TransferTypeResultContext } from './type-result-context.mts';
 import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
   EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, SymbolValue, NormalCompletion, type Value,
   type ValueEvaluator, type ParseNode, IsSymbolicPropertyKey, InitializedSymbolKey,
@@ -415,6 +416,7 @@ export function RetainCheckedResult(completion: object | undefined, type: TypeRe
 
 /** Preserve an admitted contract when the interpreter wraps the same result. */
 export function TransferResultDependency<T extends object>(from: object, to: T, construction = true): T {
+  TransferTypeResultContext(from, to);
   const selections = construction && constructionSelections.get(from);
   if (selections) constructionSelections.set(to, selections);
   else constructionSelections.delete(to);
@@ -519,6 +521,7 @@ export function ReadPropertyResult(reference: ReferenceRecord, key: PropertyKeyV
 
 /** A returned call contributes evidence, not an exemption from admission. */
 export function ForwardResultDependency<T extends object>(from: object, to: T): T {
+  TransferTypeResultContext(from, to);
   const selections = constructionSelections.get(from);
   if (selections) constructionSelections.set(to, selections);
   else constructionSelections.delete(to);
@@ -533,7 +536,10 @@ export function* GetResultValue(result: NormalCompletion<ReferenceRecord | Value
   if (read.Type !== 'normal') return read;
   // A binding read supplies its own evidence after TDZ/reference checks. Do not
   // transfer metadata from a reference evaluated before the value was read.
-  if (result.Value instanceof ReferenceRecord) return read;
+  if (result.Value instanceof ReferenceRecord) {
+    ReadTypeResultContext(result.Value, read);
+    return read;
+  }
   return TransferResultDependency(result, read);
 }
 

@@ -1,0 +1,1390 @@
+{
+  "cases": [
+    {
+      "name": "direct-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-expression-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return type R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return type R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-expression-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return type R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return type R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-expression-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return type R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return type R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-expression-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return type R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return type R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (number,R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (number,R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (number,R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (number,R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (number,R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (number,R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return (number,R);}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return (number,R);}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag ? R : number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag ? R : number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag ? R : number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag ? R : number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag ? R : number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag ? R : number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag ? R : number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag ? R : number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag && R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag && R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag && R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag && R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag && R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag && R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return flag && R;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return flag && R;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R ?? number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R ?? number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R ?? number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R ?? number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R ?? number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R ?? number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;return R ?? number;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;return R ?? number;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "try-finally-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return R;}finally{type Ignored=number;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return R;}finally{type Ignored=number;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "try-finally-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return R;}finally{type Ignored=number;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return R;}finally{type Ignored=number;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "try-finally-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return R;}finally{type Ignored=number;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return R;}finally{type Ignored=number;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "try-finally-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return R;}finally{type Ignored=number;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return R;}finally{type Ignored=number;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-finally-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return number;}finally{return R;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return number;}finally{return R;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-finally-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return number;}finally{return R;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return number;}finally{return R;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-finally-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return number;}finally{return R;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return number;}finally{return R;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-finally-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;try{return number;}finally{return R;}}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;try{return number;}finally{return R;}}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "helper-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner():type{return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner():type{return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "helper-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner():type{return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner():type{return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "helper-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner():type{return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner():type{return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "helper-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner():type{return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner():type{return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unannotated-helper-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner(){return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner(){return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unannotated-helper-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner(){return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner(){return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unannotated-helper-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner(){return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner(){return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unannotated-helper-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner(){return R;}return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner(){return R;}return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-helper-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;const inner=()=>R;return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;const inner=()=>R;return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-helper-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;const inner=()=>R;return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;const inner=()=>R;return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-helper-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;const inner=()=>R;return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;const inner=()=>R;return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow-helper-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;const inner=()=>R;return inner();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;const inner=()=>R;return inner();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-helper-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner<T:type>():type{return R;}return inner.<number>();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner<T:type>():type{return R;}return inner.<number>();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-helper-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner<T:type>():type{return R;}return inner.<number>();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner<T:type>():type{return R;}return inner.<number>();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-helper-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner<T:type>():type{return R;}return inner.<number>();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner<T:type>():type{return R;}return inner.<number>();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-helper-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;function inner<T:type>():type{return R;}return inner.<number>();}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;function inner<T:type>():type{return R;}return inner.<number>();}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-chain-named-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;type Alias=R;return Alias;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;type Alias=R;return Alias;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";const f:F=function(value:U):U{return value;};const g:G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-chain-named-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;type Alias=R;return Alias;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;type Alias=R;return Alias;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import {F,G} from \"dep\";class C{f:F=function(value:U):U{return value;};g:G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-chain-namespace-binding",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;type Alias=R;return Alias;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;type Alias=R;return Alias;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(value:U):U{return value;};const g:ns.G=function(value:V):V{return value;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-chain-namespace-field",
+      "modules": {
+        "dep": "function makeF(flag:boolean):type{type R=<U:type>(value:U)=>U;type Alias=R;return Alias;}function makeG(flag:boolean):type{type R=<V:type>(value:V)=>V;type Alias=R;return Alias;}export type F=makeF(true);export type G=makeG(true);",
+        "main": "import * as ns from \"dep\";class C{f:ns.F=function(value:U):U{return value;};g:ns.G=function(value:V):V{return value;};}const c=new C();const f=c.f,g=c.g;if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-branch",
+      "modules": {
+        "dep": "type A=<U:type>(x:U)=>U;type B=<V:type>(x:V)=>V;function choose(flag:boolean):type{return flag?A:B;}export type F=choose(true);export type G=choose(false);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(x:U):U{return x;};const g:ns.G=function(x:V):V{return x;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reverse-and-warm",
+      "modules": {
+        "dep": "type A=<U:type>(x:U)=>U;type B=<V:type>(x:V)=>V;function choose(flag:boolean):type{return flag?A:B;}export type G=choose(false);export type F=choose(true);type Warm=choose(false);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(x:U):U{return x;};const g:ns.G=function(x:V):V{return x;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "re-exported-namespace",
+      "modules": {
+        "dep": "type A=<U:type>(x:U)=>U;type B=<V:type>(x:V)=>V;function choose(flag:boolean):type{return flag?A:B;}export type F=choose(true);export type G=choose(false);",
+        "middle": "export * as ns from \"dep\";",
+        "main": "import {ns} from \"middle\";const f:ns.F=function(x:U):U{return x;};const g:ns.G=function(x:V):V{return x;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "middle",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "eval-consumer",
+      "modules": {
+        "dep": "type A=<U:type>(x:U)=>U;type B=<V:type>(x:V)=>V;function choose(flag:boolean):type{return flag?A:B;}export type F=choose(true);export type G=choose(false);",
+        "main": "import * as ns from \"dep\";eval(\"const f:ns.F=function(x:U):U{return x;};const g:ns.G=function(x:V):V{return x;};if(f.<number>(7)!==7||g.<string>(\\\"ok\\\")!==\\\"ok\\\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\\\"context\\\");\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-builder-result-named",
+      "modules": {
+        "source": "export type F=<U:type>(x:U)=>U;export type G=<V:type>(x:V)=>V;",
+        "dep": "import {F as A,G as B} from \"source\";function choose(flag:boolean):type{return flag?A:B;}export type F=choose(true);export type G=choose(false);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(x:U):U{return x;};const g:ns.G=function(x:V):V{return x;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "source",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-builder-result-namespace",
+      "modules": {
+        "source": "export type F=<U:type>(x:U)=>U;export type G=<V:type>(x:V)=>V;",
+        "dep": "import * as ns from \"source\";function choose(flag:boolean):type{return flag?ns.F:ns.G;}export type F=choose(true);export type G=choose(false);",
+        "main": "import * as ns from \"dep\";const f:ns.F=function(x:U):U{return x;};const g:ns.G=function(x:V):V{return x;};if(f.<number>(7)!==7||g.<string>(\"ok\")!==\"ok\"||Reflect.typeOf(f)!==Reflect.typeOf(g))throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "source",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "barrier-const-copy",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy=R;return copy;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "barrier-const-copy-own-binders",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy=R;return copy;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function<V:type>(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "barrier-let-copy",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy=R;return copy;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "barrier-let-copy-own-binders",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy=R;return copy;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function<V:type>(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "barrier-object-copy",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy={value:R};return copy.value;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "barrier-object-copy-own-binders",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy={value:R};return copy.value;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function<V:type>(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "barrier-array-copy",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy=[R];return copy[0];}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "barrier-array-copy-own-binders",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy=[R];return copy[0];}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function<V:type>(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "barrier-parameter-copy",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function id(x:type):type{return x;}return id(R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "barrier-parameter-copy-own-binders",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function id(x:type):type{return x;}return id(R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function<V:type>(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-body",
+      "modules": {
+        "dep": "function make():type{type R=<V:type>(x:V)=>V;return R;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return \"wrong\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "result-path-call",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner():type{return R;}return inner.call(null);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-apply",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner():type{return R;}return inner.apply(null,[]);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-reflect",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner():type{return R;}return Reflect.apply(inner,null,[]);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-bind",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner():type{return R;}const bound=inner.bind(null);return bound();}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-getter",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const holder={get value(){return R;}};return holder.value;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-ignored",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function other():type{type S=<Z:type>(x:Z)=>Z;return S;}other();return R;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-thrown",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;try{throw R;}catch(e){return e;}}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "specialized-type-expression-captures",
+      "modules": {
+        "dep": "type Result<T:type>=<V:type>(value:V)=>{outer:T,own:V};function numberResult():type{return type Result.<number>;}function stringResult():type{return type Result.<string>;}export type N=numberResult();export type S=stringResult();export type N2=numberResult();",
+        "main": "import {N,S,N2} from \"dep\";const n:N=function(value:V):{outer:number,own:V}{return {outer:7,own:value};};const s:S=function(value:V):{outer:string,own:V}{return {outer:\"outer\",own:value};};const n2:N2=function(value:V):{outer:number,own:V}{return {outer:9,own:value};};const a=n.<string>(\"a\"),b=s.<number>(3),c=n2.<boolean>(true);if(a.outer!==7||a.own!==\"a\"||b.outer!==\"outer\"||b.own!==3||c.outer!==9||c.own!==true)throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-assignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy;return (copy=R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-propertyAssignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;const copy={};return (copy.value=R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-destructuringAssignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;return ({}=R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-logicalAndAssignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy=true;return (copy&&=R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-logicalOrAssignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy=false;return (copy||=R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-logicalNullishAssignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy;return (copy??=R);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-logicalOrAlias",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;return (R||=undefined);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-logicalNullishAlias",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;return (R??=undefined);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-optionalCall",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner():type{return R;}return inner?.();}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-construct",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;return new function(){return R;}();}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-reflect-construct",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner(){return R;}return Reflect.construct(inner,[]);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-bound-construct",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;function inner(){return R;}const bound=inner.bind(null);return new bound();}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "result-path-stored-assignment",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy;copy=R;return copy;}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "result-path-logical-stored-left",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;let copy=R;return (copy||=undefined);}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:V):V{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "result-path-failed-store",
+      "modules": {
+        "dep": "export type Warm=<U:type>(x:U)=>U;function make():type{type R=<V:type>(x:V)=>V;type Other=<Z:type>(x:Z)=>Z;const holder={set value(v){throw new Error(\"store\");}};try{return (holder.value=R);}catch(e){return Other;}}export type G=make();",
+        "main": "import {G} from \"dep\";const g:G=function(x:Z):Z{return x;};if(g.<number>(7)!==7)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

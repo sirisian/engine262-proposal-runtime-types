@@ -32,7 +32,8 @@ import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { IsAssignable, SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
-import { EnsureCompletion, Q, X } from '../completion.mts';
+import { EnsureCompletion, NormalCompletion, Q, X } from '../completion.mts';
+import { RetainTypeResultContext } from '../type-system/type-result-context.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from '../type-system/evaluable-fragment.mts';
@@ -1526,7 +1527,7 @@ export function* Evaluate_TypedConversionExpression({ Expression, Type }: ParseN
 
 export function* Evaluate_TypeOperatorExpression({ Type }: ParseNode.TypeOperatorExpression): ValueEvaluator {
   const record = Q(yield* TypeNodeToTypeRecord(Type));
-  return GetTypeObject(record);
+  return RetainTypeResultContext(NormalCompletion(GetTypeObject(record)), record);
 }
 /**
  * proposal-runtime-types #sec-meta-declarations: evaluate the `default` hook and

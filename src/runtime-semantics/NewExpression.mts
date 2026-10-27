@@ -4,7 +4,8 @@ import { SetPendingProxyRuntimeType } from '../intrinsics/Proxy.mts';
 import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { SetPendingThreadLocalTypeArguments } from '../intrinsics/Synchronization.mts';
 import { SetPendingPromiseTypes } from '../type-system/promise-contracts.mts';
-import { Q } from '../completion.mts';
+import { Q, EnsureCompletion, NormalCompletion } from '../completion.mts';
+import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
 import { TargetTypedNewType } from '../type-system/check.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { libraryConstructParameters } from '../type-system/std-signatures.mts';
@@ -192,7 +193,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     SetPendingPlacement(placementBacking);
   }
   // 8. Return ? Construct(constructor, argList).
-  let constructed;
+  let completion;
   // The context is handed to [[Construct]] as the placement is: set just
   // before, taken at the constructor's entry, cleared whatever happened.
   if (surroundingAgent.feature('runtime-types')) {
@@ -210,7 +211,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     SetPendingCalleeContext(constructionContext);
   }
   try {
-    constructed = Q(yield* Construct(constructor, argList));
+    completion = EnsureCompletion(yield* Construct(constructor, argList));
+    if (completion.Type !== 'normal') return completion;
   } finally {
     // Cleared whatever happened, so a failed construction cannot leave a
     // placement waiting for the next unrelated one.
@@ -220,6 +222,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       SetPendingPromiseTypes(undefined);
     }
   }
+  const constructed = completion.Value;
   // proposal-runtime-types, the PLACEMENT forms: `new(buffer, byteOffset,
   // byteLength) Type(args)`. The parser has built these arguments since the
   // form was added and NOTHING consumed them, so a placement construction
@@ -291,7 +294,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       Q(yield* StampTypedCollection(constructed, inherited));
     }
   }
-  return constructed;
+  return TransferTypeResultContext(completion, NormalCompletion(constructed));
 }
 
 /** https://tc39.es/ecma262/#sec-new-operator-runtime-semantics-evaluation */
