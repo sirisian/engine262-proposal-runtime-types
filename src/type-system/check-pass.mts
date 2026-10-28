@@ -782,7 +782,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     const endRequiredInputs = check.sourceModule ? RequireModuleInputs() : () => {};
     try {
-      const parameters = check.declaration.TypeParameters!.TypeParameterList;
+      const parameters = check.declaration.TypeParameters?.TypeParameterList ?? [];
       const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
@@ -791,7 +791,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // different verification keys for the same bound parameter.
         Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
       }
-      const available = new Set(frame.keys());
+      // A value parameter bound to a literal argument (round 5, Gap 1) is as
+      // available to the predicate as a bound generic parameter.
+      const available = new Set([...frame.keys(), ...(check.values?.keys() ?? [])]);
       for (const clause of check.clauses) {
         const predicate = clause.RefinementPredicate;
         if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate)) continue;
@@ -813,6 +815,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // inputs retain the module boundary's required-failure rule.
         let importedInputs = false;
         if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
+          if (check.values?.has(reference.name) && binding.kind === 'parameter') return false;
           let source: ParseNode = reference;
           while (source.parent) source = source.parent;
           if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') {
@@ -858,6 +861,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           X(scope.CreateImmutableBinding(Value(name), Value.true));
           X(scope.InitializeBinding(Value(name), value));
         }
+        for (const [name, literal] of check.values ?? []) {
+          const raw = (literal as { Value: unknown }).Value;
+          const value = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+          X(scope.CreateImmutableBinding(Value(name), Value.true));
+          X(scope.InitializeBinding(Value(name), value));
+        }
         context.LexicalEnvironment = scope;
         pushTypeParameterFrame(frame);
         // An imported helper can read this consumer again through a cycle.
@@ -880,7 +889,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
             'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
         }
-        if (!result.Value) return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
+        if (!result.Value) {
+          return check.values
+            ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+            : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
+        }
         MarkGenericWhereVerified(clause, frame);
       }
     } finally {

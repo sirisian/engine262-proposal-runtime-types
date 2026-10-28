@@ -847,6 +847,13 @@ export interface GenericWhereCheck {
   readonly declaration: ParseNode.FunctionDeclaration | ParseNode.TypeAliasDeclaration;
   readonly clauses: readonly ParseNode.WhereClause[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
+  /**
+   * Round 5, Gap 1: a runtime-subject predicate over value parameters, decided
+   * at a call whose arguments are compile-time evaluable. Each named parameter
+   * is bound to its argument's literal; #sec-where-checks-are-inserted leaves
+   * to the boundary only "a where clause that cannot be decided statically".
+   */
+  readonly values?: ReadonlyMap<string, TypeRecord>;
 }
 const genericWhereChecks = new WeakMap<object, readonly GenericWhereCheck[]>();
 export function GenericWhereChecksOf(root: object): readonly GenericWhereCheck[] {
@@ -3551,6 +3558,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!)))) return;
     checks.push({ declaration, clauses, bindings: new Map(bindings), sourceModule: importedDeclarationSourceModule(declaration) });
     whereChecks.set(application, checks);
+  };
+  /**
+   * A call of a declaration whose `where` clauses read its value parameters,
+   * with every parameter a clause reads bound to a literal argument: the clause
+   * is decided here, as a specialization predicate is, and refused at the call
+   * before the body rather than by the runtime contract at first execution.
+   */
+  const recordRuntimeSubjectWhereCheck = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'IdentifierReference') return;
+    const binding = ResolveBindingDeclaration(callee, callee.name);
+    const declaration = binding?.kind === 'function' ? binding.node : undefined;
+    if (!declaration || declaration.type !== 'FunctionDeclaration' || assignedNames.has(callee.name)) return;
+    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+    if (!clauses?.length || (declaration as { TypeParameters?: unknown }).TypeParameters) return;
+    const formals = (declaration as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? [];
+    const names: string[] = [];
+    for (const formal of formals) {
+      if (formal.type !== 'SingleNameBinding' || (formal as { Ref?: boolean }).Ref) return;
+      names.push((formal as ParseNode.SingleNameBinding).BindingIdentifier.name);
+    }
+    const written = call.Arguments;
+    if (written.some((argument) => argument.type === 'AssignmentRestElement' || argument.type === 'NamedArgument')) return;
+    const values = new Map<string, TypeRecord>();
+    const decided: ParseNode.WhereClause[] = [];
+    for (const clause of clauses) {
+      const predicate = clause.RefinementPredicate;
+      const reads = LexicalFreeReferences(predicate).map((reference) => reference.name).filter((name) => names.includes(name));
+      if (reads.length === 0 || whereClauseNamesReturn(predicate)) continue;
+      let complete = true;
+      for (const name of reads) {
+        const index = names.indexOf(name);
+        const argument = written[index];
+        const formal = formals[index] as ParseNode.SingleNameBinding;
+        const type = argument ? staticType(argument) : (!formal.Initializer && !(formal as { Optional?: boolean }).Optional ? undefined : null);
+        if (type?.Kind === 'literal') { values.set(name, type); continue; }
+        // A `const` of an integer type with a known value, or a `let` the flow
+        // narrowed to one, decides the clause as a literal does.
+        const folded = argument ? foldConstant(argument) : null;
+        if (folded === null || !type) { complete = false; break; }
+        const bigint = type.Kind === 'primitive' && (type as { Name?: string }).Name === 'bigint';
+        values.set(name, { Kind: 'literal', Value: bigint ? folded : Number(folded), Base: type } as unknown as TypeRecord);
+      }
+      if (complete) decided.push(clause);
+    }
+    if (decided.length === 0) return;
+    const checks = whereChecks.get(call) ?? [];
+    if (checks.some((check) => check.declaration === declaration && check.values)) return;
+    checks.push({ declaration: declaration as ParseNode.FunctionDeclaration, clauses: decided, bindings: new Map(), values, sourceModule: importedDeclarationSourceModule(declaration) });
+    whereChecks.set(call, checks);
   };
   const signatureDeclarations = new WeakMap<object, ParseNode>();
   const formalPatternBindings = new WeakMap<object, ReadonlyMap<string, TypeRecord>>();
@@ -39376,6 +39433,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkCompositeCall(n as ParseNode.CallExpression);
         checkWeakCollectionCall(n as ParseNode.CallExpression);
         checkTypedStaticArguments(n as ParseNode.CallExpression);
+        recordRuntimeSubjectWhereCheck(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);
