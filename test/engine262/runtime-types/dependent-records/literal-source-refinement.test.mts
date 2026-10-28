@@ -19,6 +19,9 @@ test('a literal source failing a refinement is refused before the body', () => {
   refused('type Q = { p: { a: uint8 } } where this.p.a > 0; let q: Q = { p: { a: 0 } };');
   refused('type T = { a: uint8 } where this.a > 5 where this.a < 5; let t: T = { a: 1 };');
   refused('type D = { c: "A" | "B" } where if (this.c == "A") { this is { p: string } } else { this is { q: string } }; let d: D = { c: "A", q: "s" };');
+  // A refined parameter type decides a literal argument the same way.
+  refused('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) {} g({ a: 0 });');
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) { return p.a; } String(g({ a: 1 }));')).toBe('1');
 });
 
 test('a literal source satisfying the refinement, and a source the checker cannot value, are unchanged', () => {

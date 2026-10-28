@@ -20,6 +20,16 @@ test('a literal argument the clause rejects is refused before the body', () => {
   refused('function h(a: uint32, b: uint32) where a < b { return a; } h(5, 5);');
   refused('function s(t: string) where t.length > 2 { return t; } s("a");');
   refused('function f(i: uint32) where i > 10 { return i; } function g() { return f(5); }');
+  // A const whose initializer is a literal decides the clause as the literal does.
+  refused('function f(i: uint32) where i > 10 { return i; } const n: uint32 = 5; f(n);');
+  refused('function f(i: uint32) where i > 10 { return i; } const n = 5; f(n);');
+  expect(evaluated('function f(i: uint32) where i > 10 { return i; } const n: uint32 = 50; String(f(n));')).toBe('50');
+});
+
+test('a result contract on an unannotated function is a contract (round 5, Gap 7, Q3)', () => {
+  expect(observeScript('function f() where return > 10 { return 5; } f();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-return-contract' } });
+  expect(observeScript('let k = 5; function f() where return > 10 { return k; } f();')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+  expect(evaluated('function f() where return > 10 { return 20; } String(f());')).toBe('20');
 });
 
 test('a method specialization predicate is judged as a function one is (round 5, Gap 10)', () => {

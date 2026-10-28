@@ -3659,8 +3659,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const declaration = binding?.kind === 'function' ? binding.node : undefined;
     if (!declaration || declaration.type !== 'FunctionDeclaration' || assignedNames.has(callee.name)) return;
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
-    if (!clauses?.length || (declaration as { TypeParameters?: unknown }).TypeParameters) return;
     const formals = (declaration as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? [];
+    if (!clauses?.length || (declaration as { TypeParameters?: unknown }).TypeParameters) {
+      // No clause of its own: the parameters' refined types still decide a literal argument.
+      formals.forEach((formal, index) => {
+        const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        const argument = call.Arguments[index];
+        if (annotation && argument && argument.type !== 'AssignmentRestElement' && argument.type !== 'NamedArgument') recordRefinementCheck(call, annotation, argument);
+      });
+      return;
+    }
     const names: string[] = [];
     for (const formal of formals) {
       if (formal.type !== 'SingleNameBinding' || (formal as { Ref?: boolean }).Ref) return;
@@ -3668,6 +3676,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const written = call.Arguments;
     if (written.some((argument) => argument.type === 'AssignmentRestElement' || argument.type === 'NamedArgument')) return;
+    // A refined parameter type decides a literal argument as a declaration's
+    // annotation decides its literal initializer (round 5, Gap 5).
+    formals.forEach((formal, index) => {
+      const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+      const argument = written[index];
+      if (annotation && argument) recordRefinementCheck(call, annotation, argument);
+    });
     const values = new Map<string, TypeRecord>();
     const decided: ParseNode.WhereClause[] = [];
     for (const clause of clauses) {
@@ -3681,8 +3696,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const formal = formals[index] as ParseNode.SingleNameBinding;
         const type = argument ? staticType(argument) : (!formal.Initializer && !(formal as { Optional?: boolean }).Optional ? undefined : null);
         if (type?.Kind === 'literal') { values.set(name, type); continue; }
-        // A `const` of an integer type with a known value, or a `let` the flow
-        // narrowed to one, decides the clause as a literal does.
+        // A `const` whose initializer is a literal decides the clause as the
+        // literal does; a `const` of an integer type with a known value too.
+        if (argument?.type === 'IdentifierReference') {
+          const origin = ResolveBindingDeclaration(argument, argument.name);
+          const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer) : null;
+          const initial = initializer ? staticType(initializer) : null;
+          if (initial?.Kind === 'literal') { values.set(name, initial); continue; }
+        }
         const folded = argument ? foldConstant(argument) : null;
         if (folded === null || !type) { complete = false; break; }
         const bigint = type.Kind === 'primitive' && (type as { Name?: string }).Name === 'bigint';

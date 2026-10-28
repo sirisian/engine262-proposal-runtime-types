@@ -5192,6 +5192,15 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
   if (code?.parent && PublishedReturnTypeOf(code.parent)) {
     return true;
   }
+  // A `where` clause is a contract on the function's parameters or result
+  // (#sec-generic-where), so a function that writes one is evaluated with
+  // boundaries whatever else it annotates; `function f() where return > 10`
+  // used to take the fast path and its contract was never checked (round 5,
+  // Gap 7, Q3).
+  const clauses = functionWhereClauses(fn);
+  if (clauses && clauses.length > 0) {
+    return true;
+  }
   return ((fn.FormalParameters as readonly ParseNode[] | undefined) ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation);
 }
 
