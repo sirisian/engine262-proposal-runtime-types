@@ -139,32 +139,52 @@ function declarationInList(items: readonly unknown[], name: string): BindingDecl
   return undefined;
 }
 
-/** A `var` of _name_ anywhere in _root_ outside nested functions: the hoisted binding. */
-function hoistedVarIn(root: unknown, name: string): AnyNode | undefined {
+/**
+ * Every `var` hoisted into _root_ (a function body, a Script or a Module),
+ * outside nested functions, by name, each name to the first declaration in
+ * source order. Built once per root and kept: the binding-resolution path asks
+ * for a hoisted `var` for every identifier it cannot place lexically, which is
+ * every reference to a global, and a walk of the whole body per reference made
+ * a 13 KB untyped script take two minutes to check (the test262 `deepEqual.js`
+ * harness file, imported at playground start-up, held the console for that
+ * long). The walk is now one per root.
+ */
+const hoistedVarsByRoot = new WeakMap<object, Map<string, AnyNode>>();
+
+function collectHoistedVars(root: unknown, into: Map<string, AnyNode>): void {
   if (Array.isArray(root)) {
-    for (const r of root) {
-      const found = hoistedVarIn(r, name);
-      if (found) return found;
-    }
-    return undefined;
+    for (const r of root) collectHoistedVars(r, into);
+    return;
   }
-  if (!isNode(root)) return undefined;
-  if (isFunctionLike(root)) return undefined;
+  if (!isNode(root)) return;
+  if (isFunctionLike(root)) return;
   if (root.type === 'VariableStatement' || root.type === 'VariableDeclaration') {
-    if (boundNamesOf(root).includes(name)) return root;
+    for (const name of boundNamesOf(root)) if (!into.has(name)) into.set(name, root);
   }
   if (FOR_STATEMENTS.has(root.type)) {
     if (isNode(root.VariableDeclarationList) || Array.isArray(root.VariableDeclarationList)) {
-      if (boundNamesOf(root.VariableDeclarationList).includes(name)) return root;
+      for (const name of boundNamesOf(root.VariableDeclarationList)) if (!into.has(name)) into.set(name, root);
     }
-    if (isNode(root.ForBinding) && boundNamesOf(root.ForBinding).includes(name)) return root;
+    if (isNode(root.ForBinding)) {
+      for (const name of boundNamesOf(root.ForBinding)) if (!into.has(name)) into.set(name, root);
+    }
   }
   for (const key of Object.keys(root)) {
     if (skipKey(key)) continue;
-    const found = hoistedVarIn(root[key], name);
-    if (found) return found;
+    collectHoistedVars(root[key], into);
   }
-  return undefined;
+}
+
+/** A `var` of _name_ anywhere in _root_ outside nested functions: the hoisted binding. */
+function hoistedVarIn(root: unknown, name: string): AnyNode | undefined {
+  if (root === null || typeof root !== 'object') return undefined;
+  let vars = hoistedVarsByRoot.get(root);
+  if (!vars) {
+    vars = new Map();
+    collectHoistedVars(root, vars);
+    hoistedVarsByRoot.set(root, vars);
+  }
+  return vars.get(name);
 }
 
 /**

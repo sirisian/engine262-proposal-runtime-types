@@ -22156,7 +22156,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LogicalANDExpression':
       case 'LogicalORExpression':
       case 'CoalesceExpression':
-        return guardedLogicalResultType(node, staticType);
+        if (logicalOperandTypes?.has(node)) return logicalOperandTypes.get(node)!;
+        {
+          const logical = guardedLogicalResultType(node, staticType);
+          if (logicalOperandTypes) logicalOperandTypes.set(node, logical);
+          return logical;
+        }
       // ARITHMETIC. A literal operand is routed through `staticTypeIn` so that
       // it takes the other operand's type EXACTLY, `let s: string = a + 1` is
       // refused rather than making `s` the string "2", and the Early Error the
@@ -26887,7 +26892,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Evaluate each operand once, retaining separate facts for both answers. */
+  // The flow-sensitive type of a logical operand, kept for the duration of
+  // one outermost test walk. Walking `a || b` asks for the Static Type of the
+  // left operand (for the constant-truthiness judgment) and then walks it, and
+  // typing a logical expression walks its own operands in turn, so each level
+  // of a left-nested chain recursed twice into the level below: an
+  // eleven-term `||` chain of `typeof` tests took 49 seconds, and the test262
+  // `deepEqual.js` harness file, which has one, held the playground console
+  // for over a minute. Within one test walk every operand is typed under the
+  // same entry flow, so its type is the same both times it is asked for.
+  let logicalOperandTypes: Map<ParseNode, Known> | null = null;
+  let testWalkDepth = 0;
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
+    if (testWalkDepth === 0) logicalOperandTypes = new Map();
+    testWalkDepth += 1;
+    try {
+      return walkTestInner(test, deciding, truthiness, visit);
+    } finally {
+      testWalkDepth -= 1;
+      if (testWalkDepth === 0) logicalOperandTypes = null;
+    }
+  };
+  const walkTestInner = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     const incomplete = flowNeedsReplay;
     // A test can retain completed values while unrelated flow is unfinished.
     // Calls apply their ordinary effects, revoking affected input proofs.
