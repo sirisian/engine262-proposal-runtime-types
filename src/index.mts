@@ -63,7 +63,7 @@ export { DiscriminatingChainOf, DenotedUnionOf, SetAssertedTypeResolver, type Di
 export { Atoms, AtomsOfType, type Atom } from './type-system/Atoms.mts';
 export { CreateTokenStream, TokenStreamText, isTokenStream } from './intrinsics/TokenStream.mts';
 export { TokensOf, tokenizeText, sourceTextOf, type TokenRecord, type SpanRecord, type SourceRefRecord, type TokenKind } from './parser/TokensOf.mts';
-export { createTest262Intrinsics, boostTest262Harness, importBundledTest262Harness } from './host-defined/test262-intrinsics.mts';
+export { createTest262Intrinsics, boostTest262Harness, importBundledTest262Harness, bundledTest262HarnessEntries, importTest262HarnessFile } from './host-defined/test262-intrinsics.mts';
 export { type Mutable, OutOfRange } from './utils/language.mts';
 export { kInternal } from './utils/internal.mts';
 export { JSStringMap, JSStringSet, PropertyKeyMap } from './utils/container.mts';

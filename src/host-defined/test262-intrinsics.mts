@@ -110,19 +110,41 @@ export function createTest262Intrinsics(realm: ManagedRealm, printCompatMode: bo
   };
 }
 
-export function importBundledTest262Harness(
-  realm: ManagedRealm,
-  nameMapper = (str: string) => `https://github.com/tc39/test262/blob/main/harness/${str}`,
-) {
+const defaultHarnessNameMapper = (str: string) => `https://github.com/tc39/test262/blob/main/harness/${str}`;
+
+/**
+ * The bundled harness files in import order, each a specifier and its source
+ * text, so a host can import them one at a time, on its own schedule: the
+ * synchronous import below takes the better part of a minute, and a host that
+ * runs it on the thread that also answers its console has to hold the console
+ * for that long unless it can interleave the two.
+ */
+export function bundledTest262HarnessEntries(): [string, string][] {
   // The bundled harness is generated JSON, whose values TypeScript widens to
   // `unknown`; each is a source text. This surfaces only when the file is real,
   // so it went unseen while the generated file was absent.
-  for (const [specifier, file] of Object.entries(harness) as [string, string][]) {
-    if (specifier.includes('atomicsHelper.js')) continue;
-    const completion = realm.evaluateScriptSkipDebugger(file, { specifier: nameMapper(specifier) });
-    if (completion instanceof ThrowCompletion) {
-      throw completion;
-    }
+  return (Object.entries(harness) as [string, string][]).filter(([specifier]) => !specifier.includes('atomicsHelper.js'));
+}
+
+/** Import one bundled harness file; throws the completion when the file fails. */
+export function importTest262HarnessFile(
+  realm: ManagedRealm,
+  specifier: string,
+  file: string,
+  nameMapper = defaultHarnessNameMapper,
+) {
+  const completion = realm.evaluateScriptSkipDebugger(file, { specifier: nameMapper(specifier) });
+  if (completion instanceof ThrowCompletion) {
+    throw completion;
+  }
+}
+
+export function importBundledTest262Harness(
+  realm: ManagedRealm,
+  nameMapper = defaultHarnessNameMapper,
+) {
+  for (const [specifier, file] of bundledTest262HarnessEntries()) {
+    importTest262HarnessFile(realm, specifier, file, nameMapper);
   }
 }
 
