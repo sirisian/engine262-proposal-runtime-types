@@ -7265,21 +7265,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // that would add a member names one the enum does not declare. The enum
     // binding is identified by its declaration; a shadowing or reassignment
     // leaves the receiver to its own type.
-    const enumDeclaration = m.MemberExpression.type === 'IdentifierReference' && !assignedNames.has(m.MemberExpression.name)
-      && !assignedGlobalProperties.has(m.MemberExpression.name) && !hasDirectEval ? enumNodes.get(m.MemberExpression.name) : undefined;
-    if (enumDeclaration && enumDeclaration.type === 'EnumDeclaration'
-        && ResolveBindingDeclaration(m.MemberExpression, m.MemberExpression.name)?.node === enumDeclaration && operator !== '??=') {
+    const enumBase = m.MemberExpression.type === 'IdentifierReference' ? m.MemberExpression as ParseNode.IdentifierReference : null;
+    const enumDeclaration = enumBase && !assignedNames.has(enumBase.name)
+      && !assignedGlobalProperties.has(enumBase.name) && !hasDirectEval ? enumNodes.get(enumBase.name) : undefined;
+    if (enumBase && enumDeclaration && enumDeclaration.type === 'EnumDeclaration'
+        && ResolveBindingDeclaration(enumBase, enumBase.name)?.node === enumDeclaration && operator !== '??=') {
       const names = (enumDeclaration as ParseNode.EnumDeclaration).EnumMemberList.map((member) => member.IdentifierName.name);
       const written = memberKeys(m);
       const key = written?.length === 1 && typeof written[0] === 'string' ? written[0] : null;
       if (key !== null && (names.includes(key) || /^(0|[1-9][0-9]*)$/.test(key))) {
-        reportType('rt-readonly-store', expression, '$1 is an enumerator of $2, a constant of the program, and cannot be assigned', Value(key), Value(m.MemberExpression.name));
+        reportType('rt-readonly-store', expression, '$1 is an enumerator of $2, a constant of the program, and cannot be assigned', Value(key), Value(enumBase.name));
       } else if (key !== null) {
-        reportType('rt-undeclared-member', expression, '$1 is not an enumerator of $2, and an enum admits no further members', Value(key), Value(m.MemberExpression.name));
+        reportType('rt-undeclared-member', expression, '$1 is not an enumerator of $2, and an enum admits no further members', Value(key), Value(enumBase.name));
       }
       return;
     }
-    if (compositeReceiver(sealedReceiver) && operator !== '??=') {
+    if (sealedReceiver && compositeReceiver(sealedReceiver) && operator !== '??=') {
       reportType('rt-readonly-store', expression, 'a composite is frozen, so a member of $1 cannot be assigned', Value(displayType(sealedReceiver)));
       return;
     }

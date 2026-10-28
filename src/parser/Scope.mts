@@ -1,10 +1,9 @@
-import type { PendingEarlyError } from './Lexer.mts';
 import {
-  Assert, Parser, Throw, type ErrorObject,
+  Assert, Parser, Throw,
 } from '../index.mts';
 import { isArray, OutOfRange } from '../utils/language.mts';
 import { surroundingAgent } from '#self';
-import type { TokenData } from './Lexer.mts';
+import type { PendingEarlyError, TokenData } from './Lexer.mts';
 import type { ParseNode } from './ParseNode.mts';
 
 export enum Flag {

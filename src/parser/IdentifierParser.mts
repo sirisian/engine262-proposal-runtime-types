@@ -93,7 +93,8 @@ export abstract class IdentifierParser extends BaseParser {
       }
     }
     if (this.isStrictMode() && (node.name === 'eval' || node.name === 'arguments')) {
-      this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', node.name), token);
+      const identifierName = node.name;
+      this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', identifierName), token);
     }
     this.validateIdentifierReference(node.name, token);
     return this.finishNode(node, 'BindingIdentifier');

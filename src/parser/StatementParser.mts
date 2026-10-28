@@ -1969,7 +1969,7 @@ export abstract class StatementParser extends TypeParser {
       node.LabelIdentifier = LabelIdentifier;
 
       if (this.scope.labels.find((l) => l.name === LabelIdentifier.name)) {
-        this.addEarlyError(() => Throw.SyntaxError('$1 is already declared', node.LabelIdentifier.name), node.LabelIdentifier);
+        this.addEarlyError(() => Throw.SyntaxError('$1 is already declared', LabelIdentifier.name), node.LabelIdentifier);
       }
       let type: LabelType | null = null;
       switch (this.peek().type) {

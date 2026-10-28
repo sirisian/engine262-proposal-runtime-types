@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { Agent, EnsureCompletion, ManagedRealm, setSurroundingAgent } from '#self';
 import { expectEarlyError, evaluated } from '../harness.mts';
 
 /**
@@ -18,6 +18,6 @@ test('an early error reported under an agent is unchanged', () => {
 test('a parse with early errors under an agent realises each once, with its location', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  const completion = realm.evaluateScriptSkipDebugger('class C { constructor<uint8>() {} constructor<T: type>() {} }');
+  const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger('class C { constructor<uint8>() {} constructor<T: type>() {} }'));
   expect(completion.Type).toBe('throw');
 });

@@ -177,7 +177,8 @@ export abstract class FunctionParser extends IdentifierParser {
 
       if (node.BindingIdentifier) {
         if (body.strict && (node.BindingIdentifier.name === 'eval' || node.BindingIdentifier.name === 'arguments' || isReservedWordStrict(node.BindingIdentifier.name))) {
-          this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', node.BindingIdentifier.name), node.BindingIdentifier);
+          const bindingName = node.BindingIdentifier.name;
+          this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', bindingName), node.BindingIdentifier);
         }
         if (isExpression) {
           if (this.scope.hasYield() && node.BindingIdentifier.name === 'yield') {

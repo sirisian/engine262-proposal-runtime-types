@@ -228,7 +228,7 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
     // with ToNumber, which throws for a Symbol and a BigInt, so a participating
     // operand holding only those is judged as one at a ToString stage is.
     const mathNames = ['abs', 'ceil', 'floor', 'round', 'trunc', 'sign', 'sqrt', 'cbrt', 'exp', 'expm1', 'log', 'log1p', 'log2', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'atan2', 'pow', 'max', 'min', 'hypot', 'fround', 'imul', 'clz32'];
-    if (receiver.type === 'IdentifierReference' && receiver.name === 'Math' && global('Math') && mathNames.includes(name)
+    if (receiver.type === 'IdentifierReference' && receiver.name === 'Math' && global('Math') && name !== null && mathNames.includes(name)
         && args.length >= 1 && args.every((arg) => scalar(arg) || annotated(arg)) && OriginalLibraryFunction(realm, '%Math%', name)) {
       operation = { kind: 'numberConversions', operands: args };
     }
