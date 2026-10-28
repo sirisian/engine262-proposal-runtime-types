@@ -3498,6 +3498,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  /** Whether a predicate reads `this`, the value a record refinement tests. */
+  const whereClauseNamesThis = (predicate: ParseNode): boolean => {
+    let found = false;
+    const visit = (value: unknown): void => {
+      if (found || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'ThisExpression') { found = true; return; }
+      if (/Function|Arrow|Method|Class/.test(node.type)) return;
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
   /** Whether a predicate reads `return`, the result a contract constrains. */
   const whereClauseNamesReturn = (predicate: ParseNode): boolean => {
     let found = false;
@@ -3559,6 +3575,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     checks.push({ declaration, clauses, bindings: new Map(bindings), sourceModule: importedDeclarationSourceModule(declaration) });
     whereChecks.set(application, checks);
   };
+  /**
+   * #sec-generic-where: "Omitting an argument list where defaults supply all
+   * arguments creates the same checking obligation as an explicit empty
+   * argument list." A plain call of a generic function whose parameters all
+   * default wrote no type arguments and never reached the clause check
+   * (round 5, Gap 9); it records one now, and `recordWhereCheck` binds the
+   * defaults.
+   */
+  const recordDefaultedWhereCheck = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'IdentifierReference' || assignedNames.has(callee.name)) return;
+    const binding = ResolveBindingDeclaration(callee, callee.name);
+    const declaration = binding?.kind === 'function' ? binding.node : undefined;
+    if (!declaration || declaration.type !== 'FunctionDeclaration') return;
+    const list = (declaration as { TypeParameters?: { TypeParameterList: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList;
+    if (!list?.length || !(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) return;
+    if (!list.every((parameter) => (parameter as { TypeParameterDefault?: unknown }).TypeParameterDefault)) return;
+    recordWhereCheck(call, declaration as ParseNode.FunctionDeclaration, new Map());
+  };
+
   /**
    * A call of a declaration whose `where` clauses read its value parameters,
    * with every parameter a clause reads bound to a literal argument: the clause
@@ -33513,6 +33549,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+      // Round 5, Gap 4: a `where` predicate over the parameters is walked here,
+      // as an expression in the parameter scope, so the comparison and
+      // truthiness judgments that apply to any test apply to it: a predicate
+      // no value of the parameter's type satisfies (`i > 300` on a uint8) is
+      // `rt-numeric-range`, and one every value satisfies is
+      // `rt-constant-condition`. Its narrowing is dropped afterwards, since
+      // the body sees the parameter's declared type, not the clause's.
+      {
+        const owner = (Array.isArray(body) ? body[0] : body)?.parent as ParseNode | undefined;
+        const clauses = owner && owner.type === 'FunctionDeclaration'
+          ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
+        const formalNames = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
+        for (const clause of clauses ?? []) {
+          const predicate = clause.RefinementPredicate;
+          if (predicate.type !== 'ConditionalRefinement' && !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate)
+              && LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))) {
+            const before = captureFlow();
+            try {
+              walkTest(predicate as ParseNode);
+            } finally {
+              restoreFlow(before);
+            }
+          }
+        }
+      }
       walk(body);
     }
     const proven = returnsProven.pop();
@@ -39434,6 +39495,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkWeakCollectionCall(n as ParseNode.CallExpression);
         checkTypedStaticArguments(n as ParseNode.CallExpression);
         recordRuntimeSubjectWhereCheck(n as ParseNode.CallExpression);
+        recordDefaultedWhereCheck(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);
