@@ -8,7 +8,9 @@ import { evaluated, expectEarlyError } from '../harness.mts';
  * it belongs to ... the declaration of a variable, a constructor, an
  * accessor, or an enumeration." A constructor reached the method branch,
  * which may declare a case, so `constructor<uint8>()` parsed and was
- * silently a method case of a member that has no family to specialize.
+ * silently a method case of a member that has no family to specialize. Round
+ * 4 (Q4) then refused a parameter list on a constructor as well: a class's
+ * type parameters are the ones a construction binds.
  */
 
 test('a specialization or mixed list on a class constructor is refused', () => {
@@ -17,7 +19,7 @@ test('a specialization or mixed list on a class constructor is refused', () => {
   expectEarlyError('const C = class { constructor<>() {} };', 'SyntaxError');
 });
 
-test('a parameter list on a constructor, and an object literal\'s constructor method, are unchanged', () => {
-  expect(evaluated('class C { constructor<T: type>(x: T) {} } "ok";')).toBe('ok');
+test('a parameter list on a constructor is refused too (round 4, Q4), and an object literal\'s constructor method is unchanged', () => {
+  expectEarlyError('class C { constructor<T: type>(x: T) {} }', 'SyntaxError');
   expect(evaluated('const o = { constructor<uint8>() { return 1; } }; "ok";')).toBe('ok');
 });

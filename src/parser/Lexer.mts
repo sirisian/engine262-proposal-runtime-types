@@ -199,6 +199,11 @@ export class TokenData {
   }
 }
 
+/** An early error whose error object is created on demand (see `addEarlyError`). */
+export interface PendingEarlyError {
+  realize(): ErrorObject;
+}
+
 export abstract class Lexer {
   protected abstract readonly source: string;
 
@@ -236,7 +241,13 @@ export abstract class Lexer {
 
   protected abstract readonly specifier?: string;
 
-  earlyErrors = new Set<ErrorObject>();
+  // #sec-type-errors, parse-time Early Errors (round 4, Q6): an early error
+  // is kept as a pending record and its error object is created when the
+  // early errors are collected, under the agent that parses the source; a
+  // parse-only caller with no agent therefore never constructs one. The
+  // record's identity is what the arrow-info rollbacks and the object-literal
+  // registrations hold.
+  earlyErrors = new Set<PendingEarlyError>();
 
   decorateSyntaxError(error: Pick<ErrorObject, 'HostDefinedMessageString' | 'HostDefinedStack'>, location: number | Locatable) {
     let startIndex: number;
@@ -337,13 +348,28 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
 
   // parseFailure(completion: ThrowCompletion): never;
 
-  addEarlyError({ Value: error }: ThrowCompletion, location: Locatable = this.peek()) {
-    if (!isErrorObject(error)) {
+  addEarlyError(completion: ThrowCompletion | (() => ThrowCompletion), location: Locatable = this.peek()): PendingEarlyError {
+    const realized = typeof completion === 'function' ? null : completion.Value;
+    if (realized !== null && !isErrorObject(realized)) {
       throw new RangeError('Non-syntax error added as early error');
     }
-    this.decorateSyntaxError(error, location);
-    this.earlyErrors.add(error);
-    return error;
+    if (realized !== null) this.decorateSyntaxError(realized, location);
+    let error: ErrorObject | null = realized as ErrorObject | null;
+    const pending: PendingEarlyError = {
+      realize: () => {
+        if (error === null) {
+          const { Value: created } = (completion as () => ThrowCompletion)();
+          if (!isErrorObject(created)) {
+            throw new RangeError('Non-syntax error added as early error');
+          }
+          this.decorateSyntaxError(created, location);
+          error = created;
+        }
+        return error;
+      },
+    };
+    this.earlyErrors.add(pending);
+    return pending;
   }
 
   abstract isStrictMode(position?: number): boolean;

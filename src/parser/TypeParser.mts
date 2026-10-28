@@ -509,7 +509,7 @@ export abstract class TypeParser extends ExpressionParser {
       // ComputedType already checked.
       if (result.type === 'TypeReference' && this.specializationEntryDepth > 0) {
         for (const capture of CollectCaptures([result.TypeArguments as unknown as ParseNode])) {
-          this.addEarlyError(Throw.SyntaxError('$1', `\`const ${capture.BindingIdentifier.name}\` stands in the arguments of a builder call, which exposes no component; bind \`${capture.BindingIdentifier.name}\` at a structural position and compute the builder forward from it`), capture);
+          this.addEarlyError(() => Throw.SyntaxError('$1', `\`const ${capture.BindingIdentifier.name}\` stands in the arguments of a builder call, which exposes no component; bind \`${capture.BindingIdentifier.name}\` at a structural position and compute the builder forward from it`), capture);
         }
       }
       result = this.finishNode(computed, 'ComputedType');
@@ -606,7 +606,7 @@ export abstract class TypeParser extends ExpressionParser {
       const name = (argument as { ArgumentName?: string }).ArgumentName;
       if (name === undefined) continue;
       if (seen.has(name)) {
-        this.addEarlyError(Throw.SyntaxError('$1', `the type argument ${name} is supplied twice in one list`), argument);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `the type argument ${name} is supplied twice in one list`), argument);
       }
       seen.add(name);
     }
@@ -624,7 +624,7 @@ export abstract class TypeParser extends ExpressionParser {
     for (const argument of args.TypeArgumentList) {
       const name = (argument as { ArgumentName?: string }).ArgumentName;
       if (name !== undefined) {
-        this.addEarlyError(Throw.SyntaxError('$1', `an array type declares no parameters, so the named type argument ${name} names nothing`), argument);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `an array type declares no parameters, so the named type argument ${name} names nothing`), argument);
       }
     }
     return args;
@@ -728,7 +728,7 @@ export abstract class TypeParser extends ExpressionParser {
       const name = tp.BindingIdentifier?.name;
       if (name === undefined) continue;
       if (declaredNames.has(name)) {
-        this.addEarlyError(Throw.SyntaxError('$1', `the type parameter ${name} is declared twice in one list`), tp);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `the type parameter ${name} is declared twice in one list`), tp);
       }
       declaredNames.add(name);
     }
@@ -769,7 +769,7 @@ export abstract class TypeParser extends ExpressionParser {
     param.HigherKindedDomainWritten = Arity > 0 ? typeKind : undefined;
     const bound = this.eat(Token.EXTENDS) ? this.parseType() : null;
     if (bound && !typeKind) {
-      this.addEarlyError(Throw.SyntaxError('$1', 'a value parameter has no `extends` bound; narrow its values with a `where` clause'), bound);
+      this.addEarlyError(() => Throw.SyntaxError('$1', 'a value parameter has no `extends` bound; narrow its values with a `where` clause'), bound);
     }
     param.IsValueParameter = !typeKind;
     param.TypeParameterDomain = domain;
@@ -796,7 +796,7 @@ export abstract class TypeParser extends ExpressionParser {
     // admits everything, so the second could never receive an argument
     // positionally. The rest-parameter sentence, restated for packs.
     if (previous && previous.IsVariadic && param.IsVariadic && !previous.TypeParameterConstraint) {
-      this.addEarlyError(Throw.SyntaxError('$1', 'two variadic parameters with nothing typed between them have no boundary'), previous);
+      this.addEarlyError(() => Throw.SyntaxError('$1', 'two variadic parameters with nothing typed between them have no boundary'), previous);
     }
     return this.finishNode(param, 'TypeParameter');
   }
@@ -840,7 +840,7 @@ export abstract class TypeParser extends ExpressionParser {
     const entry = this.startNode<ParseNode.SpecializationEntry>(start as unknown as ParseNode);
     const variadic = !!start.IsVariadic;
     if (start.Variance) {
-      this.addEarlyError(Throw.SyntaxError('$1', 'a variance modifier is a promise a parameter makes; an argument of a specialization list has none'), start as unknown as ParseNode);
+      this.addEarlyError(() => Throw.SyntaxError('$1', 'a variance modifier is a promise a parameter makes; an argument of a specialization list has none'), start as unknown as ParseNode);
     }
     this.specializationEntryDepth += 1;
     try {
@@ -858,19 +858,19 @@ export abstract class TypeParser extends ExpressionParser {
         // The grammar spreads only a capture at the top of a list; a pack of
         // arguments is written `...const Ts` there, and `...Ts` inside a nested
         // application reuses one.
-        this.addEarlyError(Throw.SyntaxError('$1', bareName
+        this.addEarlyError(() => Throw.SyntaxError('$1', bareName
           ? `\`...${bareName}\` has no domain, so it is not a parameter, and an argument list spreads only a capture; a type parameter is declared as \`...${bareName}: [].<type>\``
           : 'an argument list spreads only a capture, `...const Ts`'), entry.Pattern);
       }
       if (this.eat(Token.EXTENDS)) {
         const bound = this.parseType();
-        this.addEarlyError(Throw.SyntaxError('$1', bareName
+        this.addEarlyError(() => Throw.SyntaxError('$1', bareName
           ? `a parameter states its domain before its bound: write \`${pack}${bareName}: ${domain} extends ...\``
           : 'an argument has no `extends` bound'), bound);
       }
       if (this.eat(Token.ASSIGN)) {
         const fallback = this.parseType();
-        this.addEarlyError(Throw.SyntaxError('$1', bareName
+        this.addEarlyError(() => Throw.SyntaxError('$1', bareName
           ? `a parameter states its domain before its default: write \`${pack}${bareName}: ${domain} = ...\``
           : 'an argument has no default'), fallback);
       }
@@ -907,11 +907,11 @@ export abstract class TypeParser extends ExpressionParser {
     // belongs to a specialization entry. An ordinary application supplies
     // arguments and never introduces a name.
     if (this.specializationEntryDepth === 0) {
-      this.addEarlyError(Throw.SyntaxError('$1', `a capture, \`const ${name}\`, belongs in a declaration's specialization list; supply an argument here`), finished);
+      this.addEarlyError(() => Throw.SyntaxError('$1', `a capture, \`const ${name}\`, belongs in a declaration's specialization list; supply an argument here`), finished);
     } else if (this.builderArgumentDepth > 0) {
       // #sec-capture-scope: a builder is evaluated forward and never run
       // backwards, so a capture in its arguments observes nothing.
-      this.addEarlyError(Throw.SyntaxError('$1', `\`const ${name}\` stands in the arguments of a builder call, which exposes no component; bind \`${name}\` at a structural position and compute the builder forward from it`), finished);
+      this.addEarlyError(() => Throw.SyntaxError('$1', `\`const ${name}\` stands in the arguments of a builder call, which exposes no component; bind \`${name}\` at a structural position and compute the builder forward from it`), finished);
     }
     return finished;
   }
@@ -933,7 +933,7 @@ export abstract class TypeParser extends ExpressionParser {
     for (const capture of list.Captures ?? []) {
       const name = capture.BindingIdentifier.name;
       if (seen.has(name)) {
-        this.addEarlyError(Throw.SyntaxError('$1', `\`${name}\` is already captured in this list; write \`${name}\` to require the same argument, or choose another capture name`), capture);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `\`${name}\` is already captured in this list; write \`${name}\` to require the same argument, or choose another capture name`), capture);
       } else {
         seen.set(name, capture);
       }
@@ -947,7 +947,7 @@ export abstract class TypeParser extends ExpressionParser {
     // declaration has one primary elsewhere, so its list never declares
     // parameters of its own.
     if (list.ListKind === 'parameters' && context === 'partial') {
-      this.addEarlyError(Throw.SyntaxError('$1', 'a `partial` declaration adds to a family whose primary declares its parameters; its list must be a specialization pattern'), list);
+      this.addEarlyError(() => Throw.SyntaxError('$1', 'a `partial` declaration adds to a family whose primary declares its parameters; its list must be a specialization pattern'), list);
       return;
     }
     if (list.ListKind === 'parameters') {
@@ -956,7 +956,7 @@ export abstract class TypeParser extends ExpressionParser {
     if (parametersOnly) {
       // `context === 'accessor'` has its own error at the call site.
       if (context !== 'accessor') {
-        this.addEarlyError(Throw.SyntaxError('$1', context === 'meta'
+        this.addEarlyError(() => Throw.SyntaxError('$1', context === 'meta'
           ? 'a meta declaration declares parameters only; its list may not hold arguments'
           : 'a list here describes or introduces a generic, so it declares parameters only; a specialization belongs to a named declaration'), list);
       }
@@ -964,13 +964,13 @@ export abstract class TypeParser extends ExpressionParser {
     }
     if (list.ListKind === 'mixed') {
       if (!callable) {
-        this.addEarlyError(Throw.SyntaxError('$1', 'a list mixing parameters and arguments declares a selector-prefixed overload, which only a function, method, or operator may; use `const T` to capture an open position of a specialization'), list);
+        this.addEarlyError(() => Throw.SyntaxError('$1', 'a list mixing parameters and arguments declares a selector-prefixed overload, which only a function, method, or operator may; use `const T` to capture an open position of a specialization'), list);
         return;
       }
       const topCapture = (list.SpecializationEntryList ?? []).find((e) => e.Pattern.type === 'CaptureBinding');
       if (topCapture) {
         const name = (topCapture.Pattern as ParseNode.CaptureBinding).BindingIdentifier.name;
-        this.addEarlyError(Throw.SyntaxError('$1', `a capture at the top of a list that also declares parameters observes nothing a caller could not name; declare \`${name}: type\`, or a value domain, as a parameter`), topCapture);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `a capture at the top of a list that also declares parameters observes nothing a caller could not name; declare \`${name}: type\`, or a value domain, as a parameter`), topCapture);
         return;
       }
     }
@@ -1003,7 +1003,7 @@ export abstract class TypeParser extends ExpressionParser {
     } else if (!first) {
       message = '`<>` specializes a declared family at its defaults, and specialization is not supported yet';
     }
-    this.addEarlyError(Throw.SyntaxError('$1', message), list);
+    this.addEarlyError(() => Throw.SyntaxError('$1', message), list);
   }
 
   // proposal-runtime-types: ArrowFunction : ArrowParameters TypeAnnotation? [no LineTerminator here] `=>`
@@ -1412,7 +1412,7 @@ export abstract class TypeParser extends ExpressionParser {
     // not a Type's, so `(uint8 = 1)` with no `=>` matches nothing; it used to
     // refine to `uint8` with the default silently dropped.
     if (only.Initializer !== null) {
-      this.addEarlyError(Throw.SyntaxError('A parenthesized type carries no default; write a function type, or drop the initializer'), only.Initializer);
+      this.addEarlyError(() => Throw.SyntaxError('A parenthesized type carries no default; write a function type, or drop the initializer'), only.Initializer);
     }
     // #sec-type-expressions: `ref` PrimaryType is a ReferenceType, itself a
     // PrimaryType, so `(ref uint8)` is a well-formed `( Type )`. The cover
@@ -1575,7 +1575,7 @@ export abstract class TypeParser extends ExpressionParser {
             const count = node.FormalParameters.length - (rest ? 1 : 0);
             const admitted = unaryOnly ? [0] : dual ? [0, 1] : [1];
             if (rest || !admitted.includes(count)) {
-              this.addEarlyError(Throw.SyntaxError('$1', `operator ${name} takes ${admitted.map(String).join(' or ')} parameter${admitted.length === 1 && admitted[0] === 1 ? '' : 's'}${unaryOnly ? ': the receiver is its operand' : dual ? ': none as a unary operator, one as a binary operator' : ': the receiver is the left operand'}`), node.FormalParameters.length ? node.FormalParameters[0] : node);
+              this.addEarlyError(() => Throw.SyntaxError('$1', `operator ${name} takes ${admitted.map(String).join(' or ')} parameter${admitted.length === 1 && admitted[0] === 1 ? '' : 's'}${unaryOnly ? ': the receiver is its operand' : dual ? ': none as a unary operator, one as a binary operator' : ': the receiver is the left operand'}`), node.FormalParameters.length ? node.FormalParameters[0] : node);
             }
           }
           if (this.test(Token.COLON)) {

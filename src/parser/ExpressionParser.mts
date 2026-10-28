@@ -286,7 +286,7 @@ export abstract class ExpressionParser extends FunctionParser {
     const merge = (child: ParseNode.MatchPattern) => {
       for (const name of this.validateMatchBindings(child)) {
         if (names.has(name)) {
-          this.addEarlyError(Throw.SyntaxError('duplicate pattern binding $1', Value(name)), child);
+          this.addEarlyError(() => Throw.SyntaxError('duplicate pattern binding $1', Value(name)), child);
         }
         names.add(name);
       }
@@ -297,7 +297,7 @@ export abstract class ExpressionParser extends FunctionParser {
         const left = this.validateMatchBindings(pattern.Left);
         const right = this.validateMatchBindings(pattern.Right);
         if (left.size !== right.size || [...left].some((name) => !right.has(name))) {
-          this.addEarlyError(Throw.SyntaxError('or pattern alternatives must bind the same names'), pattern);
+          this.addEarlyError(() => Throw.SyntaxError('or pattern alternatives must bind the same names'), pattern);
         }
         for (const name of left) names.add(name);
         break;
@@ -803,7 +803,7 @@ export abstract class ExpressionParser extends FunctionParser {
       case 'ArrayLiteral':
         node.ElementList.forEach((p, i) => {
           if (p.type === 'SpreadElement' && (i !== node.ElementList.length - 1 || node.hasTrailingComma)) {
-            this.addEarlyError(Throw.SyntaxError('Spread element must be last element'), p);
+            this.addEarlyError(() => Throw.SyntaxError('Spread element must be last element'), p);
           }
           if (p.type === 'AssignmentExpression') {
             this.validateAssignmentTarget(p.LeftHandSideExpression);
@@ -816,7 +816,7 @@ export abstract class ExpressionParser extends FunctionParser {
         node.PropertyDefinitionList.forEach((p, i) => {
           if (p.type === 'PropertyDefinition' && !p.PropertyName
               && i !== node.PropertyDefinitionList.length - 1) {
-            this.addEarlyError(Throw.SyntaxError('Invalid assignment target'), p);
+            this.addEarlyError(() => Throw.SyntaxError('Invalid assignment target'), p);
           }
           this.validateAssignmentTarget(p);
         });
@@ -855,7 +855,7 @@ export abstract class ExpressionParser extends FunctionParser {
     if (this.markLocationConsuming(node)) {
       return;
     }
-    this.addEarlyError(Throw.SyntaxError('Invalid assignment target'), node);
+    this.addEarlyError(() => Throw.SyntaxError('Invalid assignment target'), node);
   }
 
   // YieldExpression :
@@ -864,7 +864,7 @@ export abstract class ExpressionParser extends FunctionParser {
   //   `yield` [no LineTerminator here] `*` AssignmentExpression
   parseYieldExpression(): ParseNode.YieldExpression {
     if (this.scope.inParameters()) {
-      this.addEarlyError(Throw.SyntaxError('yield cannot be used in formal parameters'));
+      this.addEarlyError(() => Throw.SyntaxError('yield cannot be used in formal parameters'));
     }
     const node = this.startNode<ParseNode.YieldExpression>();
     this.expect(Token.YIELD);
@@ -935,7 +935,7 @@ export abstract class ExpressionParser extends FunctionParser {
       // body, so `a |> f(b |> g(%))` is refused and `a |> f(%, b |> g(%))` is
       // how it is written.
       if (!containsOwnTopic(node.Body)) {
-        this.addEarlyError(Throw.SyntaxError('a pipeline step must use the topic'), node.Body);
+        this.addEarlyError(() => Throw.SyntaxError('a pipeline step must use the topic'), node.Body);
       }
       left = this.finishNode(node, 'PipelineExpression') as ParseNode.Expression;
     }
@@ -1372,10 +1372,10 @@ export abstract class ExpressionParser extends FunctionParser {
               target = target.Expression;
             }
             if (this.isStrictMode() && target.type === 'IdentifierReference') {
-              this.addEarlyError(Throw.SyntaxError('Cannot delete an identifier in strict mode'), target);
+              this.addEarlyError(() => Throw.SyntaxError('Cannot delete an identifier in strict mode'), target);
             }
             if (target.type === 'MemberExpression' && target.PrivateIdentifier) {
-              this.addEarlyError(Throw.SyntaxError('Cannot delete private names'), target);
+              this.addEarlyError(() => Throw.SyntaxError('Cannot delete private names'), target);
             }
           }
           return this.finishNode(node, 'UnaryExpression');
@@ -1389,9 +1389,9 @@ export abstract class ExpressionParser extends FunctionParser {
   // AwaitExpression : `await` UnaryExpression
   parseAwaitExpression(): ParseNode.AwaitExpression {
     if (this.scope.inParameters()) {
-      this.addEarlyError(Throw.SyntaxError('await cannot be used in formal parameters'));
+      this.addEarlyError(() => Throw.SyntaxError('await cannot be used in formal parameters'));
     } else if (this.scope.inClassStaticBlock()) {
-      this.addEarlyError(Throw.SyntaxError('await cannot be used in class static block'));
+      this.addEarlyError(() => Throw.SyntaxError('await cannot be used in class static block'));
     }
     const node = this.startNode<ParseNode.AwaitExpression>();
     this.expect(Token.AWAIT);
@@ -1473,13 +1473,13 @@ export abstract class ExpressionParser extends FunctionParser {
         this.next();
         if (this.test(Token.LPAREN)) {
           if (!this.scope.hasSuperCall()) {
-            this.addEarlyError(Throw.SyntaxError('Invalid use of super'), node);
+            this.addEarlyError(() => Throw.SyntaxError('Invalid use of super'), node);
           }
           node.Arguments = this.parseArguments().Arguments;
           result = this.finishNode(node, 'SuperCall');
         } else {
           if (!this.scope.hasSuperProperty()) {
-            this.addEarlyError(Throw.SyntaxError('Invalid use of super'), node);
+            this.addEarlyError(() => Throw.SyntaxError('Invalid use of super'), node);
           }
           if (this.eat(Token.LBRACK)) {
             node.Expression = this.parseExpression();
@@ -1794,7 +1794,7 @@ export abstract class ExpressionParser extends FunctionParser {
     const violation = FirstFreeReference(node.Block);
     if (violation !== undefined) {
       this.addEarlyError(
-        Throw.SyntaxError('a constant expression may not read $1 from outside itself', Value(violation.name)),
+        () => Throw.SyntaxError('a constant expression may not read $1 from outside itself', Value(violation.name)),
         violation.node,
       );
     }
@@ -1827,7 +1827,7 @@ export abstract class ExpressionParser extends FunctionParser {
       // or a declaration and the design's motivating example does.
       const tail = endsInIterationOrDeclaration(node.Block.StatementList);
       if (tail) {
-        this.addEarlyError(Throw.SyntaxError('a do expression may not end in $1', Value(tail)), node.Block);
+        this.addEarlyError(() => Throw.SyntaxError('a do expression may not end in $1', Value(tail)), node.Block);
       }
       // The two context-sensitive errors, which need to know WHERE the `do`
       // sits rather than what it ends with.
@@ -1835,13 +1835,13 @@ export abstract class ExpressionParser extends FunctionParser {
       // A `var` inside a `do` in a parameter expression has no function body to
       // hoist into yet - the one it would reach is the one being declared.
       if (this.scope.inParameters() && containsVarStatement(node.Block)) {
-        this.addEarlyError(Throw.SyntaxError('a var declaration may not appear in a do expression in a parameter'), node.Block);
+        this.addEarlyError(() => Throw.SyntaxError('a var declaration may not appear in a do expression in a parameter'), node.Block);
       }
       // An unlabelled `break` or `continue` in a loop head targets a loop that
       // is not yet entered, so which one it means is a puzzle rather than a
       // rule.
       if (this.inIterationHead && containsUnlabelledBreakOrContinue(node.Block)) {
-        this.addEarlyError(Throw.SyntaxError('an unlabelled break or continue may not appear in a do expression in a loop head'), node.Block);
+        this.addEarlyError(() => Throw.SyntaxError('an unlabelled break or continue may not appear in a do expression in a loop head'), node.Block);
       }
     } else {
       node.GeneratorBody = this.parseFunctionBody(isAsync, true, false) as ParseNode.FunctionBodyLike;
@@ -2164,7 +2164,7 @@ export abstract class ExpressionParser extends FunctionParser {
           && PropertyDefinition.PropertyName.type !== 'NumericLiteral'
           && StringValue(PropertyDefinition.PropertyName).stringValue() === '__proto__') {
         if (hasProto) {
-          this.scope.registerObjectLiteralEarlyError(this.addEarlyError(Throw.SyntaxError('Duplicate __proto__ property'), PropertyDefinition.PropertyName));
+          this.scope.registerObjectLiteralEarlyError(this.addEarlyError(() => Throw.SyntaxError('Duplicate __proto__ property'), PropertyDefinition.PropertyName));
         } else {
           hasProto = true;
         }
@@ -2225,7 +2225,7 @@ export abstract class ExpressionParser extends FunctionParser {
       this.unexpected(this.peek());
     }
     if (this.test(Token.CONDITIONAL)) {
-      this.addEarlyError(Throw.SyntaxError('A ref member may not be optional'), this.peek());
+      this.addEarlyError(() => Throw.SyntaxError('A ref member may not be optional'), this.peek());
     }
     this.expect(Token.RPAREN);
     (node as ParseNode.Unfinished<ParseNode.PropertyDefinition> & { RefTarget?: unknown }).RefTarget = target;
@@ -2281,7 +2281,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // refused rather than admitted and useless, because it reads as though
         // the pipe were transparent to the place it came from.
         if (refNode.Expression.type === 'TopicReference') {
-          this.addEarlyError(Throw.SyntaxError('the topic is a value, not a reference'), refNode);
+          this.addEarlyError(() => Throw.SyntaxError('the topic is a value, not a reference'), refNode);
         }
         // proposal-runtime-types #sec-location-consuming-contexts: `g(ref
         // first(a))` re-borrows the location a call returned, so the call keeps
@@ -2498,13 +2498,13 @@ export abstract class ExpressionParser extends FunctionParser {
       writes.set(indices, e);
       const read = reads.get(indices);
       if (read && this.readDirectionYieldsReference(read)) {
-        this.addEarlyError(Throw.SyntaxError('an index accessor that returns a ref needs no set operator[], and declaring both gives the write two meanings'), e);
+        this.addEarlyError(() => Throw.SyntaxError('an index accessor that returns a ref needs no set operator[], and declaring both gives the write two meanings'), e);
       }
       return;
     }
     reads.set(indices, e);
     if (writes.has(indices) && this.readDirectionYieldsReference(e)) {
-      this.addEarlyError(Throw.SyntaxError('an index accessor that returns a ref needs no set operator[], and declaring both gives the write two meanings'), e);
+      this.addEarlyError(() => Throw.SyntaxError('an index accessor that returns a ref needs no set operator[], and declaring both gives the write two meanings'), e);
     }
   }
 
@@ -2622,14 +2622,14 @@ export abstract class ExpressionParser extends FunctionParser {
             const write = initializer ? firstWriteIn(initializer) : undefined;
             if (write) {
               this.addEarlyError(
-                Throw.SyntaxError('a declared zero may not $1', Value(write)),
+                () => Throw.SyntaxError('a declared zero may not $1', Value(write)),
                 m,
               );
             }
             const violation = initializer ? FirstEvaluabilityViolation(initializer) : undefined;
             if (violation) {
               this.addEarlyError(
-                Throw.SyntaxError(
+                () => Throw.SyntaxError(
                   'a declared zero is not compile-time evaluable: it names $1',
                   Value(violation.name),
                 ),
@@ -2668,13 +2668,13 @@ export abstract class ExpressionParser extends FunctionParser {
             if (type === 'get' || type === 'set') {
               if (m.static) {
                 if (instancePrivates.has(m.ClassElementName.name)) {
-                  this.addEarlyError(Throw.SyntaxError('A class cannot have static and instance private methods with the same name'), m);
+                  this.addEarlyError(() => Throw.SyntaxError('A class cannot have static and instance private methods with the same name'), m);
                 } else {
                   staticPrivates.add(m.ClassElementName.name);
                 }
               } else {
                 if (staticPrivates.has(m.ClassElementName.name)) {
-                  this.addEarlyError(Throw.SyntaxError('A class cannot have static and instance private methods with the same name'), m);
+                  this.addEarlyError(() => Throw.SyntaxError('A class cannot have static and instance private methods with the same name'), m);
                 } else {
                   instancePrivates.add(m.ClassElementName.name);
                 }
@@ -2682,7 +2682,7 @@ export abstract class ExpressionParser extends FunctionParser {
             }
             this.scope.declare(m.ClassElementName, 'private', type);
             if (m.ClassElementName.name === 'constructor') {
-              this.addEarlyError(Throw.SyntaxError('A class element cannot be named as "constructor"'), m);
+              this.addEarlyError(() => Throw.SyntaxError('A class element cannot be named as "constructor"'), m);
             }
           }
 
@@ -2701,17 +2701,17 @@ export abstract class ExpressionParser extends FunctionParser {
               anyConstructorParamAnnotated = true;
             }
             if (hasConstructor && !surroundingAgent.feature('runtime-types')) {
-              this.addEarlyError(Throw.SyntaxError('Duplicate constructor'), m);
+              this.addEarlyError(() => Throw.SyntaxError('Duplicate constructor'), m);
             } else if (!hasConstructor) {
               hasConstructor = true;
             }
           }
           if ((m.static && name === 'prototype')
               || (!m.static && !isActualConstructor && name === 'constructor')) {
-            this.addEarlyError(Throw.SyntaxError('A class element cannot be named as "prototype" or "constructor"'), m);
+            this.addEarlyError(() => Throw.SyntaxError('A class element cannot be named as "prototype" or "constructor"'), m);
           }
           if (m.static && m.type === 'FieldDefinition' && name === 'constructor') {
-            this.addEarlyError(Throw.SyntaxError('A class static field cannot be named as "constructor"'), m);
+            this.addEarlyError(() => Throw.SyntaxError('A class static field cannot be named as "constructor"'), m);
           }
         }
 
@@ -2723,7 +2723,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // with no types in it behaves as it does today, and overloading is
         // reached by annotating rather than by arity alone.
         if (constructorNodes.length > 1 && !anyConstructorParamAnnotated) {
-          this.addEarlyError(Throw.SyntaxError('Duplicate constructor'), constructorNodes[1]!);
+          this.addEarlyError(() => Throw.SyntaxError('Duplicate constructor'), constructorNodes[1]!);
         }
         // Reported HERE and not at the `return`, because this is the first
         // point that knows whether the class is TYPED: an annotation may come
@@ -2757,7 +2757,7 @@ export abstract class ExpressionParser extends FunctionParser {
             const returns = (element as { ConstructorReturns?: readonly ParseNode.ReturnStatement[] }).ConstructorReturns;
             for (const offending of returns || []) {
               this.addEarlyError(
-                Throw.SyntaxError('A constructor yields its class and may return only `this`; write the expression as a statement followed by `return;`, or use a static method to return something else'),
+                () => Throw.SyntaxError('A constructor yields its class and may return only `this`; write the expression as a statement followed by `return;`, or use a static method to return something else'),
                 offending,
               );
             }
@@ -2881,7 +2881,7 @@ export abstract class ExpressionParser extends FunctionParser {
         const bounds = literal as ParseNode.RangeExpression;
         for (const bound of [bounds.RangeStart, bounds.RangeEnd]) {
           if (bound && !this.validMatchLiteral(bound, true)) {
-            this.addEarlyError(Throw.SyntaxError('a range pattern endpoint must be a literal or a name'), bound);
+            this.addEarlyError(() => Throw.SyntaxError('a range pattern endpoint must be a literal or a name'), bound);
           }
         }
         const range = this.startNode<ParseNode.MatchRangePattern>(literal);
@@ -2889,7 +2889,7 @@ export abstract class ExpressionParser extends FunctionParser {
         return this.finishNode(range, 'MatchRangePattern');
       }
       if (!this.validMatchLiteral(literal)) {
-        this.addEarlyError(Throw.SyntaxError('a literal pattern cannot contain this expression; use an interpolation'), literal);
+        this.addEarlyError(() => Throw.SyntaxError('a literal pattern cannot contain this expression; use an interpolation'), literal);
       }
       node.Literal = literal;
       return this.finishNode(node, 'MatchLiteralPattern');
@@ -3095,7 +3095,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // refused, and the message names the spelling that does what the author
         // wanted.
         if (node.All) {
-          this.addEarlyError(Throw.SyntaxError('a `match all` has no `default`: a clause that always contributes is `when _`'), clause);
+          this.addEarlyError(() => Throw.SyntaxError('a `match all` has no `default`: a clause that always contributes is `when _`'), clause);
         }
         clause.Pattern = null;
       } else if (this.test('when')) {
@@ -3140,7 +3140,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // Decorators reached, and what followed was not a block. Nothing else in
         // an arm takes them, so say which rule was broken rather than reporting
         // whatever token turned up.
-        this.addEarlyError(Throw.SyntaxError('a decorator in a match arm must be followed by a block'), clause as never);
+        this.addEarlyError(() => Throw.SyntaxError('a decorator in a match arm must be followed by a block'), clause as never);
       }
       if (clause.IsBlock) {
         const armBlock = (this as unknown as { parseBlock(): ParseNode.Block }).parseBlock();
@@ -3161,7 +3161,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // the match's value; it names the declaration now.
         const armTail = endsInIterationOrDeclaration(armBlock.StatementList);
         if (armTail) {
-          this.addEarlyError(Throw.SyntaxError('a match arm may not end in $1', Value(armTail)), armBlock);
+          this.addEarlyError(() => Throw.SyntaxError('a match arm may not end in $1', Value(armTail)), armBlock);
         }
       } else {
         clause.Body = this.parseAssignmentExpression();
@@ -3178,7 +3178,7 @@ export abstract class ExpressionParser extends FunctionParser {
     // MatchClauses."
     Clauses.forEach((clause, index) => {
       if (clause.Pattern === null && index !== Clauses.length - 1) {
-        this.addEarlyError(Throw.SyntaxError('A `default` clause must be last'), clause);
+        this.addEarlyError(() => Throw.SyntaxError('A `default` clause must be last'), clause);
       }
     });
     node.Clauses = Clauses;
@@ -3538,7 +3538,7 @@ export abstract class ExpressionParser extends FunctionParser {
       // it had been a SyntaxError - so the refusal is restored here rather than
       // falling out of the parse by accident.
       if (element.type === 'ClassStaticBlock') {
-        this.addEarlyError(Throw.SyntaxError('A class static block takes no decorator'), element);
+        this.addEarlyError(() => Throw.SyntaxError('A class static block takes no decorator'), element);
       }
       (element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators = leadingDecorators;
     }
@@ -3929,7 +3929,7 @@ export abstract class ExpressionParser extends FunctionParser {
         }
         // A ref parameter may not carry a default, as in a declared list.
         if (this.test(Token.ASSIGN)) {
-          this.addEarlyError(Throw.SyntaxError('A ref parameter may not have a default value'), this.peek());
+          this.addEarlyError(() => Throw.SyntaxError('A ref parameter may not have a default value'), this.peek());
           this.next();
           this.parseAssignmentExpression();
         }
@@ -4053,7 +4053,7 @@ export abstract class ExpressionParser extends FunctionParser {
       if (type !== 'DoExpression' || (node as ParseNode.DoExpression).star) return false;
       return containsMatching((node as ParseNode.DoExpression).Block, (childType) => childType === 'ReturnStatement');
     })) {
-      this.addEarlyError(Throw.SyntaxError('a do expression in a computed class name may not return'), name);
+      this.addEarlyError(() => Throw.SyntaxError('a do expression in a computed class name may not return'), name);
     }
     return name;
   }
@@ -4293,7 +4293,7 @@ export abstract class ExpressionParser extends FunctionParser {
         node.Initializer = this.scope.with({ superProperty: true, await: false, yield: false }, () => this.parseInitializerOpt());
         const argumentNode = node.Initializer && ContainsArguments(node.Initializer);
         if (argumentNode) {
-          this.addEarlyError(Throw.SyntaxError('Invalid use of arguments'), argumentNode);
+          this.addEarlyError(() => Throw.SyntaxError('Invalid use of arguments'), argumentNode);
         }
         const finished = this.finishNode(node, 'FieldDefinition');
         this.semicolon();
@@ -4305,7 +4305,7 @@ export abstract class ExpressionParser extends FunctionParser {
         node.IdentifierReference = this.repurpose(firstName, 'IdentifierReference');
         node.Initializer = this.parseInitializerOpt();
         const finished = this.finishNode(node, 'CoverInitializedName');
-        this.scope.registerObjectLiteralEarlyError(this.addEarlyError(Throw.SyntaxError('Invalid assignment target'), finished));
+        this.scope.registerObjectLiteralEarlyError(this.addEarlyError(() => Throw.SyntaxError('Invalid assignment target'), finished));
         return finished;
       }
 
@@ -4348,7 +4348,7 @@ export abstract class ExpressionParser extends FunctionParser {
       classStaticBlock: false,
     }, () => {
       if (isSpecialMethod && (isGetter || isSetter) && this.test(Token.LT)) {
-        this.addEarlyError(Throw.SyntaxError('an accessor may not declare type parameters; use a method'), this.peek());
+        this.addEarlyError(() => Throw.SyntaxError('an accessor may not declare type parameters; use a method'), this.peek());
         this.parseTypeParameters(false, 'accessor');
       }
       if (isSpecialMethod && isGetter) {
@@ -4385,7 +4385,7 @@ export abstract class ExpressionParser extends FunctionParser {
           // constructor-local parameter would have no binding step, as in
           // Rust, TypeScript, C# and Java.
           if (constructorList) {
-            this.addEarlyError(Throw.SyntaxError(list.ListKind === 'parameters'
+            this.addEarlyError(() => Throw.SyntaxError(list.ListKind === 'parameters'
               ? 'a constructor declares no type parameters; declare them on the class, which a construction binds'
               : 'a constructor declares no type parameters; a specialization list belongs to a method, function, or operator'), list);
           }
@@ -4422,7 +4422,7 @@ export abstract class ExpressionParser extends FunctionParser {
         && this.classElementNameIsConstructor((node as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);
       if (surroundingAgent.feature('runtime-types') && isClassConstructor && this.test(Token.COLON)) {
         this.addEarlyError(
-          Throw.SyntaxError('A constructor declares no return type; the class is the type a construction yields'),
+          () => Throw.SyntaxError('A constructor declares no return type; the class is the type a construction yields'),
           this.peek(),
         );
         // Parsed and discarded, so the rest of the class still parses and the

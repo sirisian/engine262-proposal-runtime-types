@@ -49,7 +49,7 @@ export abstract class StatementParser extends TypeParser {
           this.state.strict = true;
           directiveData.forEach((d) => {
             if (/\\([1-9]|0\d)/.test(d.directive)) {
-              this.addEarlyError(Throw.SyntaxError('Illegal octal escape'), d.token);
+              this.addEarlyError(() => Throw.SyntaxError('Illegal octal escape'), d.token);
             }
           });
         }
@@ -329,14 +329,14 @@ export abstract class StatementParser extends TypeParser {
     // most one parameter.
     if (node.TypeParameters && (node.TypeParameters.TypeParameterList?.length ?? 0) > 1) {
       this.addEarlyError(
-        Throw.SyntaxError('a meta declaration may declare at most one type parameter, which names its base'),
+        () => Throw.SyntaxError('a meta declaration may declare at most one type parameter, which names its base'),
         node.TypeParameters,
       );
     }
     const named = builtinTypeRecord(node.TypeName.IdentifierReference.name);
     if (node.TypeParameters && node.TypeName.MemberNames.length === 0
         && named !== undefined && named !== null && named.Kind === 'primitive') {
-      this.addEarlyError(Throw.SyntaxError('a base-form meta type has no type parameters to bind'), node.TypeParameters);
+      this.addEarlyError(() => Throw.SyntaxError('a base-form meta type has no type parameters to bind'), node.TypeParameters);
     }
     // #sec-meta-declarations: at most one meta declaration per type.
     const typeKey = node.TypeName.IdentifierReference.name + node.TypeName.MemberNames.map((m) => `.${m.name}`).join('');
@@ -344,7 +344,7 @@ export abstract class StatementParser extends TypeParser {
       this.declaredMetaTypes = new Set();
     }
     if (this.declaredMetaTypes.has(typeKey)) {
-      this.addEarlyError(Throw.SyntaxError('Duplicate meta declaration'), node);
+      this.addEarlyError(() => Throw.SyntaxError('Duplicate meta declaration'), node);
     } else {
       this.declaredMetaTypes.add(typeKey);
     }
@@ -400,10 +400,10 @@ export abstract class StatementParser extends TypeParser {
           if (!isMethod) {
             // A `default` that is neither the assignment form (handled above)
             // nor a method is some third spelling; the name check reports it.
-            this.addEarlyError(Throw.SyntaxError('Invalid meta hook name'), hook);
+            this.addEarlyError(() => Throw.SyntaxError('Invalid meta hook name'), hook);
           } else {
             this.addEarlyError(
-              Throw.SyntaxError('$1 is an assignment, not a method', Value('default')),
+              () => Throw.SyntaxError('$1 is an assignment, not a method', Value('default')),
               hook,
             );
           }
@@ -412,15 +412,15 @@ export abstract class StatementParser extends TypeParser {
           // and optional hooks alike: the grammar draws no line between them,
           // so `validate = 5` is exactly as ungrammatical as `subtype = 5`.
           this.addEarlyError(
-            Throw.SyntaxError('$1 is a method, not an assignment', Value(hookName)),
+            () => Throw.SyntaxError('$1 is a method, not an assignment', Value(hookName)),
             hook,
           );
         } else if (typeof hookName !== 'string' || !(hookName in hookArity)) {
-          this.addEarlyError(Throw.SyntaxError('Invalid meta hook name'), hook);
+          this.addEarlyError(() => Throw.SyntaxError('Invalid meta hook name'), hook);
         } else {
           const params = (hook as { UniqueFormalParameters?: readonly ParseNode.FormalParameter[] }).UniqueFormalParameters;
           if (Array.isArray(params) && params.length !== hookArity[hookName]) {
-            this.addEarlyError(Throw.SyntaxError('Meta hook signature does not match the table'), hook);
+            this.addEarlyError(() => Throw.SyntaxError('Meta hook signature does not match the table'), hook);
           }
         }
         MetaHookList.push(hook);
@@ -516,7 +516,7 @@ export abstract class StatementParser extends TypeParser {
           ? argument.TypeName.IdentifierReference.name
           : undefined;
         if (capture !== undefined && metadataCaptures.has(capture)) {
-          this.addEarlyError(Throw.SyntaxError('$1', `\`${capture}\` stands in a component of \`${name}\` in this cast's name, which is not a metadata position: a cast's name is a type, so \`${name}.<${capture}>\` names a \`${name}\` whose parts are \`${capture}\`. A cast into the metadata of every \`${name}\` captures the component and names it: \`primitive ${name}<const E><const ${capture}: ${metadataCaptures.get(capture)}> { operator ${name}.<E>.<${capture}>() }\``), argument as unknown as ParseNode);
+          this.addEarlyError(() => Throw.SyntaxError('$1', `\`${capture}\` stands in a component of \`${name}\` in this cast's name, which is not a metadata position: a cast's name is a type, so \`${name}.<${capture}>\` names a \`${name}\` whose parts are \`${capture}\`. A cast into the metadata of every \`${name}\` captures the component and names it: \`primitive ${name}<const E><const ${capture}: ${metadataCaptures.get(capture)}> { operator ${name}.<E>.<${capture}>() }\``), argument as unknown as ParseNode);
         }
       }
     }
@@ -535,18 +535,18 @@ export abstract class StatementParser extends TypeParser {
     (node as Mutable<ParseNode.PrimitiveOperatorDeclaration>).MetadataParameters = metadata;
     const unsupported = 'other patterns over a primitive are not supported yet';
     if (!declares && second) {
-      this.addEarlyError(Throw.SyntaxError('$1', `\`${name}\` declares no parameters, so its first list is already its metadata, and a block takes one metadata list`), second);
+      this.addEarlyError(() => Throw.SyntaxError('$1', `\`${name}\` declares no parameters, so its first list is already its metadata, and a block takes one metadata list`), second);
     }
     if (components) {
       if (components.ListKind === 'parameters') {
         const p = components.TypeParameterList[0];
         const domain = p.TypeParameterDomain?.sourceText ?? 'M';
-        this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's lists match the receiver rather than declare parameters, and \`${name}\` takes its components first; to capture its metadata write \`primitive ${name}<_><const ${p.BindingIdentifier.name}: ${domain}>\``), components);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `a primitive block's lists match the receiver rather than declare parameters, and \`${name}\` takes its components first; to capture its metadata write \`primitive ${name}<_><const ${p.BindingIdentifier.name}: ${domain}>\``), components);
       } else {
         const kinds = PrimitiveParameterKinds(name);
         const entries = components.SpecializationEntryList ?? [];
         if (entries.length > kinds.length) {
-          this.addEarlyError(Throw.SyntaxError('$1', `\`${name}\` declares ${kinds.length} parameter${kinds.length === 1 ? '' : 's'}, and its component list supplies ${entries.length}`), components);
+          this.addEarlyError(() => Throw.SyntaxError('$1', `\`${name}\` declares ${kinds.length} parameter${kinds.length === 1 ? '' : 's'}, and its component list supplies ${entries.length}`), components);
         }
         entries.forEach((entry, q) => {
           const pattern = entry.Pattern;
@@ -563,7 +563,7 @@ export abstract class StatementParser extends TypeParser {
               return;
             }
             const capture = pattern.BindingIdentifier.name;
-            this.addEarlyError(Throw.SyntaxError('$1', kind === 'type' && !second
+            this.addEarlyError(() => Throw.SyntaxError('$1', kind === 'type' && !second
               ? `\`${capture}\` stands in a component of \`${name}\`, which is not a metadata position; metadata follows the components in a list of its own: \`primitive ${name}<const E><const ${capture}: ${pattern.TypeParameterDomain!.sourceText}>\`, or \`<_>\` where the component is not needed`
               : `\`${capture}\` stands in a ${kind} component of \`${name}\`, and \`${pattern.TypeParameterDomain!.sourceText}\` restates that slot's domain as another; a capture takes its slot's domain, so it needs none written`), entry);
             return;
@@ -585,19 +585,19 @@ export abstract class StatementParser extends TypeParser {
               return;
             }
           }
-          this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's component list is supported only as \`_\`, a capture, a fixed type, or a primitive with one metadata capture, \`float32.<const D: Dim>\`, in each position; ${unsupported}`), entry);
+          this.addEarlyError(() => Throw.SyntaxError('$1', `a primitive block's component list is supported only as \`_\`, a capture, a fixed type, or a primitive with one metadata capture, \`float32.<const D: Dim>\`, in each position; ${unsupported}`), entry);
         });
       }
     }
     if (metadata) {
       if (metadata.ListKind === 'parameters') {
         const p = metadata.TypeParameterList[0];
-        this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's list captures the receiver's metadata rather than declaring parameters; write \`const ${p.BindingIdentifier.name}: ${p.TypeParameterDomain?.sourceText ?? 'M'}\``), metadata);
+        this.addEarlyError(() => Throw.SyntaxError('$1', `a primitive block's list captures the receiver's metadata rather than declaring parameters; write \`const ${p.BindingIdentifier.name}: ${p.TypeParameterDomain?.sourceText ?? 'M'}\``), metadata);
       } else {
         for (const entry of metadata.SpecializationEntryList ?? []) {
           const capture = entry.Pattern.type === 'CaptureBinding' ? entry.Pattern : null;
           if (!capture || capture.IsVariadic || !capture.TypeParameterDomain) {
-            this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's metadata list is supported only as captures that name their meta type, \`const D: Dim\`; ${unsupported}`), entry);
+            this.addEarlyError(() => Throw.SyntaxError('$1', `a primitive block's metadata list is supported only as captures that name their meta type, \`const D: Dim\`; ${unsupported}`), entry);
           }
         }
       }
@@ -662,13 +662,13 @@ export abstract class StatementParser extends TypeParser {
       // does not consult the declaration kind, and immutability is carried by
       // the binding's Const-ness rather than by how it was initialized.
       if (node.LetOrConst === 'const' && !b.Initializer && !b.TypedInitializer && !b.TypeAnnotation) {
-        this.addEarlyError(Throw.SyntaxError('Missing initializer in const declaration'), b);
+        this.addEarlyError(() => Throw.SyntaxError('Missing initializer in const declaration'), b);
       }
       // proposal-runtime-types (references extension): a ref binding aliases
       // its initializer's storage location, so it cannot be declared without
       // one.
       if (b.Ref === true && !b.Initializer && !b.TypedInitializer) {
-        this.addEarlyError(Throw.SyntaxError('Missing initializer in ref declaration'), b);
+        this.addEarlyError(() => Throw.SyntaxError('Missing initializer in ref declaration'), b);
       }
       // proposal-runtime-types #sec-reference-syntax: a ref binding takes a
       // TypeAnnotation, not a TypedInitializer. `:=` infers a binding's type
@@ -676,7 +676,7 @@ export abstract class StatementParser extends TypeParser {
       // forms contradict, so `let ref b := e` is refused at parse rather than
       // left to fail at evaluation.
       if (b.Ref === true && b.TypedInitializer) {
-        this.addEarlyError(Throw.SyntaxError('A ref binding takes a type annotation, not a typed initializer'), b);
+        this.addEarlyError(() => Throw.SyntaxError('A ref binding takes a type annotation, not a typed initializer'), b);
       }
     });
 
@@ -884,7 +884,7 @@ export abstract class StatementParser extends TypeParser {
           element.Ref = true;
         }
       } else if (ref || annotation) {
-        this.addEarlyError(Throw.SyntaxError('A typed destructuring member must bind a single name'), element);
+        this.addEarlyError(() => Throw.SyntaxError('A typed destructuring member must bind a single name'), element);
       }
       node.BindingElement = element as ParseNode.BindingElement;
       return this.finishNode(node, 'BindingProperty');
@@ -901,13 +901,13 @@ export abstract class StatementParser extends TypeParser {
     }
     node.Initializer = this.parseInitializerOpt();
     if (ref && node.Initializer) {
-      this.addEarlyError(Throw.SyntaxError('A ref member may not have a default value'), node.Initializer);
+      this.addEarlyError(() => Throw.SyntaxError('A ref member may not have a default value'), node.Initializer);
     }
     // proposal-runtime-types: nor an optional marker. A `ref` member borrows the
     // property's LOCATION, which is there whether or not the property is, so
     // `?` distinguished nothing - `(ref x)` and `(ref x?)` behaved identically.
     if (ref && optional) {
-      this.addEarlyError(Throw.SyntaxError('A ref member may not be optional'), node);
+      this.addEarlyError(() => Throw.SyntaxError('A ref member may not be optional'), node);
     }
     return this.finishNode(node, 'SingleNameBinding');
   }
@@ -1442,7 +1442,7 @@ export abstract class StatementParser extends TypeParser {
           if (inner.LetOrConst === 'const') {
             list.forEach((b) => {
               if (!b.Initializer) {
-                this.addEarlyError(Throw.SyntaxError('Missing initializer in const declaration'), b);
+                this.addEarlyError(() => Throw.SyntaxError('Missing initializer in const declaration'), b);
               }
             });
           }
@@ -1454,7 +1454,7 @@ export abstract class StatementParser extends TypeParser {
           // specified.
           list.forEach((b) => {
             if (b.Ref === true) {
-              this.addEarlyError(Throw.SyntaxError('A ref binding may not appear in a for statement initializer'), b);
+              this.addEarlyError(() => Throw.SyntaxError('A ref binding may not appear in a for statement initializer'), b);
             }
           });
           inner.BindingList = list;
@@ -1483,7 +1483,7 @@ export abstract class StatementParser extends TypeParser {
         getDeclarations(node.ForDeclaration)
           .forEach((d) => {
             if (d.name === 'let') {
-              this.addEarlyError(Throw.SyntaxError('Unexpected token let'), d.node);
+              this.addEarlyError(() => Throw.SyntaxError('Unexpected token let'), d.node);
             }
           });
         if (!isAwait && this.eat(Token.IN)) {
@@ -1491,7 +1491,7 @@ export abstract class StatementParser extends TypeParser {
           // borrow of an ELEMENT SLOT, which a for-of over an array supplies
           // and a for-in, which walks property KEYS as strings, does not.
           if (inner.ForBinding.Ref === true) {
-            this.addEarlyError(Throw.SyntaxError('A ref binding requires a for-of loop'), inner.ForBinding);
+            this.addEarlyError(() => Throw.SyntaxError('A ref binding requires a for-of loop'), inner.ForBinding);
           }
           node.Expression = this.parseExpression();
           // The head ends here; the body is parsed after it.
@@ -1506,7 +1506,7 @@ export abstract class StatementParser extends TypeParser {
         // iterator protocol, which yields VALUES and has no element slot a
         // borrow could alias.
         if (isAwait && inner.ForBinding.Ref === true) {
-          this.addEarlyError(Throw.SyntaxError('A ref binding is not allowed in a for await loop'), inner.ForBinding);
+          this.addEarlyError(() => Throw.SyntaxError('A ref binding is not allowed in a for await loop'), inner.ForBinding);
         }
         this.expect('of');
         node.AssignmentExpression = this.parseAssignmentExpression();
@@ -1569,7 +1569,7 @@ export abstract class StatementParser extends TypeParser {
       const expression = this.scope.with({ in: false }, () => this.parseExpression());
       const validateLHS = (n: ParseNode) => {
         if (n.type === 'AssignmentExpression') {
-          this.addEarlyError(Throw.SyntaxError('Invalid left-hand side in for-in/of statement'), n);
+          this.addEarlyError(() => Throw.SyntaxError('Invalid left-hand side in for-in/of statement'), n);
         } else {
           this.validateAssignmentTarget(n);
         }
@@ -1778,7 +1778,7 @@ export abstract class StatementParser extends TypeParser {
       }
     }
     if (i === this.scope.labels.length) {
-      this.addEarlyError(Throw.SyntaxError('Label $1 not found', node.LabelIdentifier?.name ?? ''), node.LabelIdentifier || node);
+      this.addEarlyError(() => Throw.SyntaxError('Label $1 not found', node.LabelIdentifier?.name ?? ''), node.LabelIdentifier || node);
     }
   }
 
@@ -1838,7 +1838,7 @@ export abstract class StatementParser extends TypeParser {
   //   `with` `(` Expression `)` Statement
   parseWithStatement(): ParseNode.WithStatement {
     if (this.isStrictMode()) {
-      this.addEarlyError(Throw.SyntaxError('with statement cannot be used in strict mode'));
+      this.addEarlyError(() => Throw.SyntaxError('with statement cannot be used in strict mode'));
     }
     const node = this.startNode<ParseNode.WithStatement>();
     this.expect(Token.WITH);
@@ -1969,7 +1969,7 @@ export abstract class StatementParser extends TypeParser {
       node.LabelIdentifier = LabelIdentifier;
 
       if (this.scope.labels.find((l) => l.name === LabelIdentifier.name)) {
-        this.addEarlyError(Throw.SyntaxError('$1 is already declared', node.LabelIdentifier.name), node.LabelIdentifier);
+        this.addEarlyError(() => Throw.SyntaxError('$1 is already declared', node.LabelIdentifier.name), node.LabelIdentifier);
       }
       let type: LabelType | null = null;
       switch (this.peek().type) {

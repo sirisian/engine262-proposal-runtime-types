@@ -306,7 +306,7 @@ function ReportOrphanClassCases(root: unknown, p: Parser): void {
         const hint = first?.type === 'CaptureBinding'
           ? `a capture, \`const ${first.BindingIdentifier?.name ?? ''}\`, belongs to a specialization list, and ${orphan}`
           : d.TypeParameters!.OrphanHint?.replace(', and specialization is not supported yet;', `, and ${orphan};`);
-        p.addEarlyError(Throw.SyntaxError('$1', hint
+        p.addEarlyError(() => Throw.SyntaxError('$1', hint
           ?? `a case of \`${name}\` specializes a family declared in the same statement list, and none is declared there; the primary is written \`class ${name}<T: type> { ... }\``),
         d.TypeParameters as never);
       }
@@ -341,8 +341,8 @@ export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T): 
       ReportOrphanClassCases(r, p);
     }
     const errors = [];
-    for (const error of p.earlyErrors) {
-      errors.push(error);
+    for (const pending of p.earlyErrors) {
+      errors.push(pending.realize());
     }
     if (errors.length > 0) {
       return errors;

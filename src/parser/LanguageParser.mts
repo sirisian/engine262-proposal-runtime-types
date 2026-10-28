@@ -66,7 +66,7 @@ export abstract class LanguageParser extends ModuleParser {
         node.ModuleBody = this.parseModuleBody();
       }
       this.scope.undefinedExports.forEach((importNode, name) => {
-        this.addEarlyError(Throw.SyntaxError('Module undefined export $1', name), importNode);
+        this.addEarlyError(() => Throw.SyntaxError('Module undefined export $1', name), importNode);
       });
       node.hasTopLevelAwait = this.state.hasTopLevelAwait;
       node.admitsTypeNames = this.state.admitsTypeNames
@@ -122,7 +122,7 @@ export abstract class LanguageParser extends ModuleParser {
             // was the only thing refusing that shape. Measured against the
             // previous behaviour rather than assumed.
             if (decorators?.length && this.peekAhead().type === Token.AT) {
-              this.addEarlyError(Throw.SyntaxError('Decorators cannot appear on both sides of the export keyword'), decorators[0]);
+              this.addEarlyError(() => Throw.SyntaxError('Decorators cannot appear on both sides of the export keyword'), decorators[0]);
             }
             // ModuleItem: DecoratorList `export` Declaration
             const exports = this.parseExportDeclaration(decorators);
@@ -151,7 +151,7 @@ export abstract class LanguageParser extends ModuleParser {
             // ExportDeclaration : DecoratorList? export default ClassDeclaration
             //   It is a Syntax Error if DecoratorList is present and the DecoratorList of ClassDeclaration is present.
             if (exports.ClassDeclaration && exports.ClassDeclaration.Decorators?.length) {
-              this.addEarlyError(Throw.SyntaxError('Decorators cannot appear on both sides of the export keyword'), exports.ClassDeclaration.Decorators[0]);
+              this.addEarlyError(() => Throw.SyntaxError('Decorators cannot appear on both sides of the export keyword'), exports.ClassDeclaration.Decorators[0]);
             }
             moduleItemList.push(exports);
           } else {

@@ -177,14 +177,14 @@ export abstract class FunctionParser extends IdentifierParser {
 
       if (node.BindingIdentifier) {
         if (body.strict && (node.BindingIdentifier.name === 'eval' || node.BindingIdentifier.name === 'arguments' || isReservedWordStrict(node.BindingIdentifier.name))) {
-          this.addEarlyError(Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', node.BindingIdentifier.name), node.BindingIdentifier);
+          this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', node.BindingIdentifier.name), node.BindingIdentifier);
         }
         if (isExpression) {
           if (this.scope.hasYield() && node.BindingIdentifier.name === 'yield') {
-            this.addEarlyError(Throw.SyntaxError('yield cannot be used as an identifier inside generator functions'), node.BindingIdentifier);
+            this.addEarlyError(() => Throw.SyntaxError('yield cannot be used as an identifier inside generator functions'), node.BindingIdentifier);
           }
           if (this.scope.hasAwait() && node.BindingIdentifier.name === 'await') {
-            this.addEarlyError(Throw.SyntaxError('await cannot be used as an identifier inside async functions'), node.BindingIdentifier);
+            this.addEarlyError(() => Throw.SyntaxError('await cannot be used as an identifier inside async functions'), node.BindingIdentifier);
           }
         }
       }
@@ -219,7 +219,7 @@ export abstract class FunctionParser extends IdentifierParser {
           const typedHere = (here as { TypeAnnotation?: unknown }).TypeAnnotation;
           const typedNext = (next as { TypeAnnotation?: unknown }).TypeAnnotation;
           if (!typedHere || !typedNext) {
-            this.addEarlyError(Throw.SyntaxError('$1', 'two rests with nothing typed between them have no boundary'), next);
+            this.addEarlyError(() => Throw.SyntaxError('$1', 'two rests with nothing typed between them have no boundary'), next);
           }
         }
       }
@@ -236,7 +236,7 @@ export abstract class FunctionParser extends IdentifierParser {
         // makes the list non-simple (see IsSimpleParameterList), so it joins
         // defaults and patterns in refusing the directive.
         if (p.type !== 'SingleNameBinding' || p.Initializer || p.Ref === true) {
-          this.addEarlyError(Throw.SyntaxError('Non-simple parameter cannot be used with "use strict" directive'), p);
+          this.addEarlyError(() => Throw.SyntaxError('Non-simple parameter cannot be used with "use strict" directive'), p);
         }
       });
     }
@@ -246,15 +246,15 @@ export abstract class FunctionParser extends IdentifierParser {
       .forEach((d) => {
         if (isStrict) {
           if (d.name === 'arguments' || d.name === 'eval') {
-            this.addEarlyError(Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', d.name), d.node);
+            this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', d.name), d.node);
           }
           if (isReservedWordStrict(d.name)) {
-            this.addEarlyError(Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', d.name), d.node);
+            this.addEarlyError(() => Throw.SyntaxError('$1 cannot be used as an identifier in strict mode', d.name), d.node);
           }
         }
         if (isStrict || wantsUnique) {
           if (names.has(d.name)) {
-            this.addEarlyError(Throw.SyntaxError('Identifier has already been declared'), d.node);
+            this.addEarlyError(() => Throw.SyntaxError('Identifier has already been declared'), d.node);
           } else {
             names.add(d.name);
           }
@@ -296,7 +296,7 @@ export abstract class FunctionParser extends IdentifierParser {
         if (!candidate) {
           // The text after the colon was not a type, so this was a genuine
           // named argument in a position that turned out to be an arrow head.
-          this.addEarlyError(Throw.SyntaxError(
+          this.addEarlyError(() => Throw.SyntaxError(
             'an async arrow parameter must be a binding, optionally with a type annotation',
           ));
         }
@@ -330,7 +330,7 @@ export abstract class FunctionParser extends IdentifierParser {
       // parameter reading and is refused.
       case 'RefExpression': {
         if (node.Expression.type !== 'IdentifierReference') {
-          this.addEarlyError(Throw.SyntaxError('A ref parameter must be a single name'), node);
+          this.addEarlyError(() => Throw.SyntaxError('A ref parameter must be a single name'), node);
           return node;
         }
         const BindingIdentifier = this.repurpose(node.Expression, 'BindingIdentifier');
@@ -351,7 +351,7 @@ export abstract class FunctionParser extends IdentifierParser {
             const c = this.convertArrowParameter(p);
             if (c.type === 'BindingRestElement') {
               if (i !== asOld.ElementList.length - 1) {
-                this.addEarlyError(Throw.SyntaxError('Rest element must be last element'), c);
+                this.addEarlyError(() => Throw.SyntaxError('Rest element must be last element'), c);
               }
               asNew.BindingRestElement = c;
             } else {
@@ -418,7 +418,7 @@ export abstract class FunctionParser extends IdentifierParser {
         const BindingRestElement = this.repurpose(node, 'BindingRestElement', (asNew, asOld, asPartial) => {
           const { AssignmentExpression } = asOld;
           if (AssignmentExpression.type === 'AssignmentExpression') {
-            this.addEarlyError(Throw.SyntaxError('Invalid assignment in rest element'), node);
+            this.addEarlyError(() => Throw.SyntaxError('Invalid assignment in rest element'), node);
           } else if (AssignmentExpression.type === 'IdentifierReference') {
             asNew.BindingIdentifier = this.repurpose(AssignmentExpression, 'BindingIdentifier');
           } else {
@@ -436,7 +436,7 @@ export abstract class FunctionParser extends IdentifierParser {
         return BindingRestElement;
       }
       default:
-        this.addEarlyError(Throw.SyntaxError('Unexpected token'), node);
+        this.addEarlyError(() => Throw.SyntaxError('Unexpected token'), node);
         return node;
     }
   }
@@ -448,14 +448,14 @@ export abstract class FunctionParser extends IdentifierParser {
       const beforeArrow = <T extends { location: { startIndex: number } }>(nodes: readonly T[]) => nodes
         .filter((n) => n.location.startIndex < this.currentToken.startIndex);
       beforeArrow(arrowInfo.awaitExpressions).forEach((e) => {
-        this.addEarlyError(Throw.SyntaxError('await cannot be used inside parameters of arrow functions'), e);
+        this.addEarlyError(() => Throw.SyntaxError('await cannot be used inside parameters of arrow functions'), e);
       });
       beforeArrow(arrowInfo.yieldExpressions).forEach((e) => {
-        this.addEarlyError(Throw.SyntaxError('yield cannot be used inside parameters of arrow functions'), e);
+        this.addEarlyError(() => Throw.SyntaxError('yield cannot be used inside parameters of arrow functions'), e);
       });
       if (isAsync) {
         beforeArrow(arrowInfo.awaitIdentifiers).forEach((e) => {
-          this.addEarlyError(Throw.SyntaxError('await cannot be used as an identifier inside parameters of async functions'), e);
+          this.addEarlyError(() => Throw.SyntaxError('await cannot be used as an identifier inside parameters of async functions'), e);
         });
       }
     }
@@ -542,7 +542,7 @@ export abstract class FunctionParser extends IdentifierParser {
           // bind; it is refused at parse rather than at the first defaulted
           // call.
           if (node.Initializer) {
-            this.addEarlyError(Throw.SyntaxError('A ref parameter may not have a default value'), node.Initializer);
+            this.addEarlyError(() => Throw.SyntaxError('A ref parameter may not have a default value'), node.Initializer);
           }
           // proposal-runtime-types: nor an OPTIONAL marker, for the same
           // reason. `?` says the argument may be omitted, and a `ref`
@@ -553,7 +553,7 @@ export abstract class FunctionParser extends IdentifierParser {
           // exists only because `?` comes from SingleNameBinding and `ref`
           // from FormalParameter and neither production knows of the other.
           if ((node as { Optional?: boolean }).Optional === true) {
-            this.addEarlyError(Throw.SyntaxError('A ref parameter may not be optional'), node);
+            this.addEarlyError(() => Throw.SyntaxError('A ref parameter may not be optional'), node);
           }
           return node;
         }
