@@ -145,6 +145,20 @@ export abstract class Inspector {
       resolve(f(params, this.#debugContext));
     }).then((result = {}) => {
       this.send({ id, result });
+    }, (error: unknown) => {
+      // A method that throws a host exception used to reject this promise with
+      // nothing attached, so the frontend never received a response for the
+      // request: a console entry whose compileScript or evaluate threw was
+      // cleared and silently dropped. Answer with a protocol error, and say
+      // what threw in the console, so the failure is visible where it happened.
+      const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+      this.send({ id, error: { code: -32000, message: `engine262 internal error in ${methodArg}: ${message}` } });
+      this.sendEvent['Runtime.consoleAPICalled']({
+        timestamp: Date.now(),
+        type: 'error',
+        executionContextId: 0,
+        args: [{ type: 'string', value: `engine262 internal error in ${methodArg}: ${message}` }],
+      });
     });
   }
 
