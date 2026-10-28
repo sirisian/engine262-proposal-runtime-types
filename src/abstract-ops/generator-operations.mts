@@ -17,7 +17,7 @@ import {
 } from '../evaluator.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { AdmitGeneratorReturn, EnforceResumableReturn, IsAdmittedGeneratorReturn } from './runtime-types.mts';
+import { AdmitGeneratorReturn, EnforceResumableReturn, IsAdmittedGeneratorReturn, VerifyContracts } from './runtime-types.mts';
 import {
   Assert,
   AsyncGeneratorYield,
@@ -82,6 +82,12 @@ export function GeneratorStart(generator: GeneratorObject, generatorBody: ParseN
         result.Type === 'return' ? result.Value : Value.undefined, 'generator'));
       result = converted.Type === 'throw' ? converted
         : new Completion({ Type: 'return', Value: converted.Value, Target: undefined });
+      // #sec-generic-where (round 5, Q3): a result contract on a generator
+      // constrains the generator's return value; a failure is the generator's throw.
+      if (result.Type === 'return' && acGenContext.Function !== Value.null) {
+        const contract = EnsureCompletion(yield* VerifyContracts(acGenContext.Function as unknown as object, result.Value as Value));
+        if (contract.Type === 'throw') result = contract;
+      }
     }
     // e. Assert: If we return here, the generator either threw an exception or performed either
     //    an implicit or explicit return.

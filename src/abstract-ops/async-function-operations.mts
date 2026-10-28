@@ -1,6 +1,6 @@
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { RunPreEvaluationTypeCheck } from '../type-system/check-pass.mts';
-import { EnforceResumableReturn } from './runtime-types.mts';
+import { EnforceResumableReturn, VerifyContracts } from './runtime-types.mts';
 import {
   EnsureCompletion, Completion, X, ExecutionContext, surroundingAgent, Evaluate, Value, type ParseNode, Assert, Call, PromiseCapabilityRecord, RunSuspendedContext,
   type AsyncBuiltinSteps, UndefinedValue,
@@ -42,6 +42,12 @@ export function* AsyncBlockStart(promiseCapability: PromiseCapabilityRecord, asy
         result.Type === 'return' ? result.Value : Value.undefined, 'async'));
       result = converted.Type === 'throw' ? converted
         : new Completion({ Type: 'return', Value: converted.Value, Target: undefined });
+      // #sec-generic-where (round 5, Q3): a result contract on an async function
+      // constrains the fulfilled value of its promise, which is the value the body returns; a failure rejects.
+      if (result.Type === 'return' && acAsyncContext.Function !== Value.null) {
+        const contract = EnsureCompletion(yield* VerifyContracts(acAsyncContext.Function as unknown as object, result.Value as Value));
+        if (contract.Type === 'throw') result = contract;
+      }
     }
     // Assert: If we return here, the async function either threw an exception or performed an implicit or explicit return; all awaiting is done.
     surroundingAgent.executionContextStack.pop(acAsyncContext);

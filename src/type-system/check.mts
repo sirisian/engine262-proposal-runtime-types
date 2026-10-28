@@ -40244,8 +40244,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // is at its application; it used to be checked at run time only.
         if (expr) {
           let owner: ParseNode | undefined = n.parent;
-          while (owner && !/^(FunctionDeclaration|MethodDefinition|FunctionExpression|ArrowFunction|AsyncFunctionDeclaration|GeneratorDeclaration)$/.test(owner.type)) owner = owner.parent;
-          const clauses = owner?.type === 'FunctionDeclaration' ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
+          while (owner && !/^(FunctionDeclaration|MethodDefinition|FunctionExpression|ArrowFunction|AsyncFunctionDeclaration|GeneratorDeclaration|AsyncGeneratorDeclaration|AsyncArrowFunction|GeneratorExpression|AsyncFunctionExpression|AsyncGeneratorExpression)$/.test(owner.type)) owner = owner.parent;
+          const clauses = owner && /^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration)$/.test(owner.type)
+            ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
           const literal = clauses?.length ? staticType(expr) : null;
           if (literal?.Kind === 'literal') {
             const decided = clauses!.filter((clause) => whereClauseNamesReturn(clause.RefinementPredicate)
