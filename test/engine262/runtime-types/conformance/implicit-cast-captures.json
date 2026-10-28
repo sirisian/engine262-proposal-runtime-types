@@ -1,0 +1,376 @@
+{
+  "cases": [
+    {
+      "name": "destination-metadata-value",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destination-metadata-domain",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(Reflect.typeOf(X.m)!==type int32)throw new Error(\"domain\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "different-applications",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){return Number(this)+Number(X.m);}}const source:float32=3;const a:float32.<{m:1}>=source;const b:float32.<{m:2}>=source;if(String(a)!==\"4\"||String(b)!==\"5\")throw new Error(\"arguments\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-capture-closures",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}globalThis.readers=[];primitive float32<const X:Dim>{operator float32.<X>(){globalThis.readers.push(()=>String(X.m));return this;}}const source:float32=3;const a:float32.<{m:1}>=source;const b:float32.<{m:2}>=source;if(globalThis.readers.length!==2||globalThis.readers[0]()!==\"1\"||globalThis.readers[1]()!==\"2\"||globalThis.readers[0]()!==\"1\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-eval-capture",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(eval(\"X\").m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "indirect-eval-no-capture",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if((0,eval)(\"typeof X\")!==\"undefined\"||String(X.m)!==\"1\")throw new Error(\"scope\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nearer-ordinary-shadow",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){{const X=\"local\";if(eval(\"X\")!==\"local\")throw new Error(\"shadow\");}if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-write-authority",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){let failed=false;try{eval(\"X=type number\");}catch(e){failed=e instanceof TypeError;}if(!failed||String(X.m)!==\"1\")throw new Error(\"authority\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-borrow-authority",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){let failed=false;try{eval(\"let ref r=X;\");}catch(e){failed=e instanceof TypeError;}if(!failed||String(X.m)!==\"1\")throw new Error(\"authority\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "caller-generic-shadow",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;function apply<X:type>(){const a:float32.<{m:1}>=source;return eval(\"X\");}if(apply.<boolean>()!==type boolean)throw new Error(\"caller\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-only-metadata-default",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<{m:1}>(){if(String(X.m)!==\"0\")throw new Error(\"receiver\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "destination-portion-only",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}globalThis.seen=0;primitive float32<const X:Dim>{operator float32.<X>(){globalThis.seen++;if(Object.keys(X).join(\",\")!==\"m\"||String(X.m)!==\"1\")throw new Error(\"portion\");return this;}}type Extra={lo:int32};meta Extra{default={lo:0};subtype(a,b){return a.lo===b.lo;}}primitive float32{operator float32.<Extra>(){return this;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(globalThis.seen!==1)throw new Error(\"body\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-wide-metadata",
+      "modules": {
+        "main": "type M={n:int64};meta M{default={n:0};subtype(a,b){return a.n===b.n;}}primitive float32<const X:M>{operator float32.<X>(){if(Reflect.typeOf(X.n)!==type int64||String(X.n)!==\"9007199254740993\")throw new Error(\"domain\");return this;}}const source:float32=3;const a:float32.<{n:9007199254740993}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "component-type-and-metadata",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}globalThis.seen=[];primitive complex<const E><const X:Dim>{operator complex.<E>.<X>(){globalThis.seen.push(String(E)+\"/\"+String(X.m));return this;}}const s1:complex128=1+2i;const s2:complex64=3+4i;const a:complex.<float64>.<{m:1}>=s1;const b:complex.<float32>.<{m:2}>=s2;if(globalThis.seen.join(\",\")!==\"float64/1,float32/2\")throw new Error(\"components\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "component-width-and-metadata",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}globalThis.seen=[];primitive rational<const W><const X:Dim>{operator rational.<W>.<X>(){globalThis.seen.push(String(W)+\"/\"+String(X.m));return this;}}const s1:rational64=1/3;const s2:rational128=1/5;const a:rational.<64>.<{m:1}>=s1;const b:rational.<128>.<{m:2}>=s2;if(globalThis.seen.join(\",\")!==\"64/1,128/2\")throw new Error(\"components\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "component-mismatch-remains-static",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive complex<const E><const X:Dim>{operator complex.<E>.<X>(){if(E!==type float32)throw new Error(\"destination\");return complex.<E>(1,2);}}const s:complex128=1+2i;const a:complex.<float32>.<{m:1}>=s;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "width-mismatch-remains-static",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive rational<const W><const X:Dim>{operator rational.<W>.<X>(){if(String(W)!==\"128\")throw new Error(\"destination\");return rational.<W>(1,3);}}const s:rational64=1/3;const a:rational.<128>.<{m:1}>=s;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "receiver-only-component",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive rational<const W><const X:Dim>{operator rational.<64>.<X>(){if(String(W)!==\"64\")throw new Error(\"receiver\");return rational64(1,3);}}const s:rational64=1/3;const a:rational.<64>.<{m:1}>=s;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-initialization",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}let a:float32.<{m:1}>;if(String(a)!==\"0\")throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "completed-destination-portion",
+      "modules": {
+        "main": "type Dim={m:int32,s:int32};meta Dim{default={m:0,s:7};subtype(a,b){return a.m===b.m&&a.s===b.s;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\"||String(X.s)!==\"7\")throw new Error(\"completion\");return this;}}const source:float32=3;const a:float32.<{m:1}>=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-assignment",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;let a:float32.<{m:1}>=source;a=source;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-argument",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;function take(a:float32.<{m:1}>){return a;}take(source);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-return",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;function make():float32.<{m:1}>{return source;}make();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "boundary-field",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;class C{a:float32.<{m:1}>;constructor(){this.a=source;}}new C();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "abrupt-recovery",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)===\"1\")throw new Error(\"first\");if(String(X.m)!==\"2\")throw new Error(\"capture\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1}>=source;}catch(e){failed=e.message===\"first\";}if(!failed)throw new Error(\"failure\");const b:float32.<{m:2}>=source;if(String(b)!==\"3\")throw new Error(\"recovery\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-target-control",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32{operator float32.<{m:1}>(){return this;}}const source:float32=3;const a:float32.<{m:1}>=source;if(String(a)!==\"3\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-number-block",
+      "modules": {
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive number<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const a:float32.<{m:1}>=3;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-cast-named",
+      "modules": {
+        "main": "import {Target} from \"dep\";type Dim={wrong:string};const X=type boolean;const source:float32=3;const a:Target=source;if(String(a)!==\"3\")throw new Error(\"value\");",
+        "dep": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}export type Target=float32.<{m:1}>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-cast-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Target=ns.Target;type Dim={wrong:string};const X=type boolean;const source:float32=3;const a:Target=source;if(String(a)!==\"3\")throw new Error(\"value\");",
+        "dep": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}export type Target=float32.<{m:1}>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-helper-scope",
+      "modules": {
+        "main": "import {Target} from \"dep\";function check(){throw new Error(\"consumer\");}const source:float32=3;const a:Target=source;if(String(a)!==\"3\")throw new Error(\"value\");",
+        "dep": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}function check(x:Dim){if(String(x.m)!==\"1\")throw new Error(\"capture\");}primitive float32<const X:Dim>{operator float32.<X>(){check(X);return this;}}export type Target=float32.<{m:1}>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

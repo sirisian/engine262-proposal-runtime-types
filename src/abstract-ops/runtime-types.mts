@@ -1,4 +1,6 @@
-import { FunctionTypeParameterDeclarations, bindTypeParameter } from '../type-system/runtime.mts';
+import { FunctionTypeParameterDeclarations, bindTypeParameter, markValueParameterBinding } from '../type-system/runtime.mts';
+import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
+import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
 import { TakeParameterConstruction, ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { contextualParameters } from '../type-system/contextual-parameters.mts';
@@ -4217,9 +4219,15 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
  * a bare `number` into the dimensions meta type; a cast declared on `number` is
  * what supplies it.
  */
+export type PrimitiveCastCapture = {
+  readonly Declaration: ParseNode.CaptureBinding,
+  readonly FromDestination: boolean,
+} & ({ readonly Kind: 'component', readonly Index: number } | { readonly Kind: 'metadata', readonly Domain: TypeRecord });
+
 interface PrimitiveCast {
   readonly target: TypeRecord;
   readonly fn: Value;
+  readonly captures: readonly PrimitiveCastCapture[];
 }
 
 const primitiveCasts = new WeakMap<object, Map<string, PrimitiveCast[]>>();
@@ -4234,16 +4242,41 @@ function castsForAgent(): Map<string, PrimitiveCast[]> {
   return table;
 }
 
-export function RegisterPrimitiveCast(typeName: string, target: TypeRecord, fn: Value): void {
+export function RegisterPrimitiveCast(typeName: string, target: TypeRecord, fn: Value, captures: readonly PrimitiveCastCapture[] = []): void {
   const table = castsForAgent();
   const list = table.get(typeName) ?? [];
-  list.push({ target, fn });
+  list.push({ target, fn, captures });
   table.set(typeName, list);
 }
 
 /** The casts a primitive declares, in declaration order. */
 export function PrimitiveCastsFor(typeName: string): readonly PrimitiveCast[] {
   return castsForAgent().get(typeName) ?? [];
+}
+
+/** Read only the already established source/target descriptors. No type
+ * producer, ordinary getter or body is evaluated to recover capture arguments. */
+function PrimitiveCastBindings(cast: PrimitiveCast, source: TypeRecord, target: TypeRecord): Map<string, TypeRecord> {
+  const frame = new Map<string, TypeRecord>();
+  for (const capture of cast.captures) {
+    const subject = capture.FromDestination ? target : source;
+    const base = subject.Kind === 'parameterized' ? subject.Base : subject;
+    let bound: TypeRecord | undefined;
+    if (capture.Kind === 'component' && base.Kind === 'primitive') {
+      const argument = base.Arguments?.[capture.Index] ?? PrimitiveParameterDefault(base.Name, capture.Index);
+      bound = typeof argument === 'number'
+        ? markValueParameterBinding({ Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') }) : argument;
+    } else if (capture.Kind === 'metadata') {
+      const owner = MetaTypeForConstraint(capture.Domain);
+      if (owner) {
+        const metadata = subject.Kind === 'parameterized' ? subject.Metadata : {} as MetadataRecord;
+        bound = markValueParameterBinding(metadataAsObjectRecord(MetadataPortion(metadata, owner, base),
+          MetadataShape(owner, base) ?? capture.Domain));
+      }
+    }
+    if (bound) bindTypeParameter(frame, capture.Declaration.BindingIdentifier.name, bound, capture.Declaration);
+  }
+  return frame;
 }
 
 /**
@@ -4425,6 +4458,8 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
         // it becomes: the result is stamped with the target's type rather than
         // checked against it. That is the clause's division of labour - a cast
         // "supplies the conversion", it does not perform a check.
+        const frame = PrimitiveCastBindings(cast, RuntimeTypeOf(value), t);
+        pushTypeParameterFrame(frame);
         EnterOperatorBody();
         let raw;
         try {
@@ -4434,6 +4469,7 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
           raw = Q(yield* RequireType(WithoutMetadata(primitive), RawOperatorResultType(t)));
         } finally {
           LeaveOperatorBody();
+          popTypeParameterFrame();
         }
         // A cast body is ordinary code, so in sloppy mode its `this` is the
         // BOXED value and `return this;` - the usual whole body - hands back a

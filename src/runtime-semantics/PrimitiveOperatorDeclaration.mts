@@ -4,6 +4,8 @@ import { NewTypeParameterEnvironment, RegisterFunctionTypeParameterScope, TypeNo
 import type { TypeRecord } from '../type-system/records.mts';
 import { MetadataCapturesOf, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
 import { ComponentListTypeNodes, FixedTypeSubtrees } from '../type-system/component-patterns.mts';
+import { LexicalFreeReferences, ResolveBindingDeclaration } from '../type-system/compile-time-evaluability.mts';
+import type { PrimitiveCastCapture } from '../abstract-ops/runtime-types.mts';
 import { surroundingAgent, EnsureCompletion, Q, Value, type PlainEvaluator } from '#self';
 
 /**
@@ -106,7 +108,25 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       );
       (castFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
       RegisterFunctionTypeParameterScope(castFn, headerCaptures);
-      RegisterPrimitiveCast(typeName, target, castFn);
+      // A cast's destination references select destination arguments. Other
+      // header captures keep their receiver role. Preserve declaration identity,
+      // including the second header list, rather than rediscovering names at a call.
+      const destinationCaptures = new Set(LexicalFreeReferences(e.Type).filter((reference) =>
+        ResolveBindingDeclaration(reference, reference.name, (scope, name) => scope === node
+          && headerCaptures.some((capture) => capture.BindingIdentifier.name === name))?.node === node)
+        .map((reference) => reference.name));
+      const captures: PrimitiveCastCapture[] = [];
+      for (const component of ComponentCapturesOf(node)) {
+        const name = component.BindingIdentifier.name;
+        captures.push({ Kind: 'component', Declaration: headerCaptures.find((capture) => capture.BindingIdentifier.name === name)!,
+          Index: component.Index, FromDestination: destinationCaptures.has(name) });
+      }
+      for (const metadata of MetadataCapturesOf(node)) {
+        const name = metadata.BindingIdentifier.name;
+        captures.push({ Kind: 'metadata', Declaration: headerCaptures.find((capture) => capture.BindingIdentifier.name === name)!,
+          Domain: blockFrame.get(name)!, FromDestination: destinationCaptures.has(name) });
+      }
+      RegisterPrimitiveCast(typeName, target, castFn, captures);
       continue;
     }
     if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FormalParameters) {
