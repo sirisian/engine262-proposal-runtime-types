@@ -3465,9 +3465,87 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     observeBindingInput(input);
   };
   const whereChecks = new Map<object, GenericWhereCheck[]>();
-  const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], bindings: ReadonlyMap<string, TypeRecord>): void => {
+  /**
+   * A free name in a `where` predicate that resolves to no declaration and to
+   * no property of the global object: a predicate naming it could never be
+   * evaluated, at compile time or at any boundary. The predicate's own
+   * subjects, the declaration's parameters, `this` and `return`, are names
+   * the clause supplies.
+   */
+  const whereClauseUnresolvedName = (predicate: ParseNode, declaration: ParseNode): string | undefined => {
+    const globalObject = surroundingAgent.currentRealmRecord.GlobalObject;
+    for (const reference of LexicalFreeReferences(predicate)) {
+      const binding = ResolveBindingDeclaration(reference, reference.name);
+      if (binding) continue;
+      if (globalObject.properties.has(Value(reference.name))) continue;
+      if (surroundingAgent.currentRealmRecord.GlobalEnv.DeclarativeRecord.bindings.has(Value(reference.name))) continue;
+      if (reference.name === 'return' || reference.name === 'this') continue;
+      // A name in a type position (`this is { p: string }`) is a type, not a
+      // binding the predicate reads: a built-in type, or a declared alias,
+      // interface, class or enum of the program.
+      if (builtinTypeRecord(reference.name) || aliasNodes.has(reference.name) || interfaceNodes.has(reference.name)
+          || classNodes.has(reference.name) || enumNodes.has(reference.name) || lookupAlias(reference.name)) continue;
+      void declaration;
+      return reference.name;
+    }
+    return undefined;
+  };
+
+  /** Whether a predicate reads `return`, the result a contract constrains. */
+  const whereClauseNamesReturn = (predicate: ParseNode): boolean => {
+    let found = false;
+    const visit = (value: unknown): void => {
+      if (found || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'ContractReturn') { found = true; return; }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
+  /** An assignment or update whose target is rooted at `this` or `return`: a predicate that changes what it tests. */
+  const whereClauseStoreThroughSubject = (predicate: ParseNode): string | undefined => {
+    const rooted = (target: unknown): boolean => {
+      let node = target as ParseNode | null | undefined;
+      while (node && (node.type === 'MemberExpression' || node.type === 'ParenthesizedExpression')) {
+        node = (node as { MemberExpression?: ParseNode, Expression?: ParseNode }).MemberExpression ?? (node as { Expression?: ParseNode }).Expression;
+      }
+      return node?.type === 'ThisExpression' || node?.type === 'ContractReturn';
+    };
+    let found: string | undefined;
+    const visit = (value: unknown): void => {
+      if (found !== undefined || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'AssignmentExpression' && rooted((node as { LeftHandSideExpression?: ParseNode }).LeftHandSideExpression)) found = 'a store to the value under test';
+      if (node.type === 'UpdateExpression' && rooted((node as { LeftHandSideExpression?: ParseNode, UnaryExpression?: ParseNode }).LeftHandSideExpression ?? (node as { UnaryExpression?: ParseNode }).UnaryExpression)) found = 'an update of the value under test';
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
+  const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>): void => {
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
-    if (!clauses?.length || declaration.TypeParameters?.TypeParameterList.some((parameter) => !bindings.has(parameter.BindingIdentifier.name))) return;
+    if (!clauses?.length) return;
+    // #sec-generic-where: "Omitting an argument list where defaults supply all
+    // arguments creates the same checking obligation as an explicit empty
+    // argument list." A parameter the application left to its default is
+    // bound to that default here, as the explicit path binds it; it used to
+    // leave the clause unchecked and the call to the runtime contract.
+    const bindings = new Map(given);
+    for (const parameter of declaration.TypeParameters?.TypeParameterList ?? []) {
+      const name = parameter.BindingIdentifier.name;
+      if (bindings.has(name)) continue;
+      const fallback = (parameter as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault;
+      const resolved = fallback ? resolveType(fallback) : null;
+      if (!resolved || mentionsTypeParameter(resolved)) return;
+      bindings.set(name, resolved);
+    }
     const checks = whereChecks.get(application) ?? [];
     if (checks.some((check) => check.declaration === declaration && check.bindings.size === bindings.size
       && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!)))) return;
@@ -12848,24 +12926,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (tp.TypeParameterConstraint) checkTypePositionEvaluability(tp.TypeParameterConstraint);
       if (tp.TypeParameterDefault) checkTypePositionEvaluability(tp.TypeParameterDefault);
     }
-    if (n.TypeParameters && Array.isArray(n.WhereClauses)) {
+    if (Array.isArray(n.WhereClauses)) {
       for (const clause of n.WhereClauses as readonly ParseNode.WhereClause[]) {
         const predicate = clause.RefinementPredicate;
-        const runtimeSubject = (value: unknown): boolean => {
-          if (Array.isArray(value)) return value.some(runtimeSubject);
-          if (!value || typeof value !== 'object') return false;
-          const part = value as ParseNode;
-          if (typeof part.type !== 'string') return false;
-          if (part.type === 'ThisExpression' || part.type === 'ContractReturn') return true;
-          return Object.entries(part).some(([key, child]) => !['parent', 'location', 'sourceText', 'strict'].includes(key) && runtimeSubject(child));
-        };
-        // Value/result contracts have their own evaluation boundary. A generic
-        // specialization predicate cannot acquire permission to read ambient
-        // mutable state merely because its arguments are not bound yet.
-        if (runtimeSubject(predicate) || LexicalFreeReferences(predicate).some((reference) => {
-          const binding = ResolveBindingDeclaration(reference, reference.name);
-          return binding?.kind === 'parameter' && binding.node === n;
-        })) continue;
+        // #sec-where-clauses: "It is an early error for a RefinementPredicate
+        // not to be compile-time evaluable as a function of `this`", and
+        // #sec-generic-where refuses a specialization predicate that reads
+        // ambient mutable state or mutates through a helper. The screen used
+        // to run only for a specialization predicate, so a predicate over a
+        // parameter, `this` or `return` could read a `let`, run a side effect
+        // at every boundary, or name a binding declared nowhere.
+        const unresolved = whereClauseUnresolvedName(predicate, n);
+        if (unresolved !== undefined) {
+          reportType('rt-compile-time-evaluability', clause, 'a where clause must be compile-time evaluable: $1', Value(`a reference to ${unresolved}, which is declared nowhere`));
+          continue;
+        }
+        const store = whereClauseStoreThroughSubject(predicate);
+        if (store !== undefined) {
+          reportType('rt-compile-time-evaluability', clause, 'a where clause must be compile-time evaluable: $1', Value(store));
+          continue;
+        }
+        // #sec-generic-where: a `where` naming `return` is a contract over the
+        // function's result; a function declared `void` has none to constrain.
+        const returnAnnotation = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        if (whereClauseNamesReturn(predicate) && returnAnnotation && resolveType(returnAnnotation.Type)?.Kind === 'void') {
+          reportType('rt-return-contract', clause, 'a result contract constrains a result this function declares it has none of');
+          continue;
+        }
         const violation = TypeExpressionEvaluabilityViolation(predicate, Value.undefined, () => false, moduleCheckInputs.get(root)?.sourceModule);
         if (violation !== undefined) reportType('rt-compile-time-evaluability', clause,
           'a specialization predicate must be compile-time evaluable: $1', Value(violation));
