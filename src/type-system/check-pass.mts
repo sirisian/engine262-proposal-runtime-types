@@ -843,7 +843,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
               : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
           });
         };
-        if (hasRuntimeSubject(predicate) && !check.returnValue) continue;
+        if (hasRuntimeSubject(predicate) && !check.returnValue && !check.thisLiteral) continue;
         const context = surroundingAgent.runningExecutionContext;
         const outer = context.LexicalEnvironment;
         const scope = new DeclarativeEnvironmentRecord(outer);
@@ -880,8 +880,16 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
             const raw = (check.returnValue as { Value: unknown }).Value;
             PushContractReturn(raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint));
           }
+          let self: Value = Value.undefined;
+          if (check.thisLiteral) {
+            const evaluated = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.thisLiteral as never))));
+            if (evaluated.Type !== 'normal') {
+              return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation', 'a $1 clause could not be evaluated: $2', Value('where'), inspect(evaluated.Value));
+            }
+            self = evaluated.Value;
+          }
           try {
-            result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
+            result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, self));
           } finally {
             if (check.returnValue) PopContractReturn();
           }
@@ -902,6 +910,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
             ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : check.returnValue
               ? CreateTypeDiagnostic('rt-return-contract', clause, 'pre-evaluation', 'a result contract is not satisfied by this return: $1', Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+            : check.thisLiteral
+              ? CreateTypeDiagnostic('rt-assignability', clause, 'pre-evaluation', 'this value is not a $1: it fails the refinement $2', Value(check.targetName ?? 'refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
         }
         MarkGenericWhereVerified(clause, frame);

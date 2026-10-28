@@ -856,6 +856,14 @@ export interface GenericWhereCheck {
   readonly values?: ReadonlyMap<string, TypeRecord>;
   /** Round 5, Gap 8: a result contract decided at a `return` whose operand is a literal; `return` is bound to it. */
   readonly returnValue?: TypeRecord;
+  /**
+   * Round 5, Gap 5: a dependent record type's refinement decided for a source
+   * that is a fresh object literal of literal values; the literal is evaluated
+   * at the checking boundary (it has no effects) and bound to `this`.
+   */
+  readonly thisLiteral?: ParseNode;
+  /** The name of the refined type, for the diagnostic. */
+  readonly targetName?: string;
 }
 const genericWhereChecks = new WeakMap<object, readonly GenericWhereCheck[]>();
 export function GenericWhereChecksOf(root: object): readonly GenericWhereCheck[] {
@@ -3595,6 +3603,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!list?.length || !(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) return;
     if (!list.every((parameter) => (parameter as { TypeParameterDefault?: unknown }).TypeParameterDefault)) return;
     recordWhereCheck(call, declaration as ParseNode.FunctionDeclaration, new Map());
+  };
+
+  /** An object literal every value of which is a literal (or such a literal in turn): evaluable at the checking boundary without effects. */
+  const literalObject = (node: ParseNode | null | undefined): boolean => {
+    if (!node) return false;
+    if (node.type === 'ParenthesizedExpression') return literalObject((node as { Expression?: ParseNode }).Expression);
+    if (['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(node.type)) return true;
+    if (node.type === 'UnaryExpression') {
+      const u = node as { operator?: string, UnaryExpression?: ParseNode };
+      return (u.operator === '-' || u.operator === '+') && !!u.UnaryExpression && literalObject(u.UnaryExpression);
+    }
+    if (node.type === 'ArrayLiteral') return (node as { ElementList: readonly ParseNode[] }).ElementList.every((element) => element.type !== 'Elision' && element.type !== 'SpreadElement' && literalObject(element));
+    if (node.type !== 'ObjectLiteral') return false;
+    return (node as { PropertyDefinitionList: readonly ParseNode[] }).PropertyDefinitionList.every((property) => {
+      if (property.type !== 'PropertyDefinition') return false;
+      const p = property as { PropertyName?: ParseNode, AssignmentExpression?: ParseNode, TypeAnnotation?: unknown };
+      const name = p.PropertyName as { type?: string, ComputedPropertyName?: unknown } | undefined;
+      const plainName = !!name && (name.type === 'IdentifierName' || name.type === 'StringLiteral' || name.type === 'NumericLiteral'
+        || (name.type === 'PropertyName' && !name.ComputedPropertyName));
+      return plainName && !p.TypeAnnotation && literalObject(p.AssignmentExpression);
+    });
+  };
+
+  /**
+   * #sec-where-clauses: a refinement predicate is compile-time evaluable as a
+   * function of `this` by requirement, and a fresh literal source supplies
+   * `this`; a value failing the refinement is refused where it is written
+   * rather than by the boundary at run time (round 5, Gap 5).
+   */
+  const recordRefinementCheck = (site: ParseNode, annotation: ParseNode.TypeAnnotation, source: ParseNode): void => {
+    const written = annotation.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] }, TypeArguments?: unknown };
+    const typeName = written.type === 'TypeReference' ? written.TypeName : null;
+    if (!typeName?.IdentifierReference?.name || typeName.MemberNames?.length || written.TypeArguments) return;
+    const name = typeName.IdentifierReference.name;
+    const alias = aliasNodes.get(name);
+    if (!alias || alias.type !== 'TypeAliasDeclaration' || (alias as { TypeParameters?: unknown }).TypeParameters) return;
+    const clauses = (alias as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+    if (!clauses?.length || !literalObject(source)) return;
+    const checks = whereChecks.get(site) ?? [];
+    checks.push({ declaration: alias as unknown as ParseNode.TypeAliasDeclaration, clauses, bindings: new Map(), thisLiteral: source, targetName: name, sourceModule: importedDeclarationSourceModule(alias) });
+    whereChecks.set(site, checks);
   };
 
   /**
@@ -39035,6 +39084,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if ((n as { Ref?: boolean }).Ref) {
               withProvenance(n.Initializer, () => requireAssignable(locationType(n.Initializer!), declared));
             } else checkInitializerAssignable(n.Initializer, declared);
+            if (n.TypeAnnotation && !(n as { Ref?: boolean }).Ref) recordRefinementCheck(n as ParseNode, n.TypeAnnotation, n.Initializer);
             initialized = staticType(n.Initializer);
             // #sec-void-type: "It is a type error if an actual binding
             // declaration resolves to the void type, independently of whether
