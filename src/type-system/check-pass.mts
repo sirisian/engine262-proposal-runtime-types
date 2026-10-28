@@ -4,7 +4,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity, RefBindingHolder } from '../execution-context/Environment.mts';
 import { BoundNames } from '../static-semantics/BoundNames.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
+import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PlanBareImplicitCasts } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   BeginTypeDeclarationPreparation,
@@ -1284,18 +1284,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     // "userId" and refuses "user" - and falls through to the crossing below.
     const parameterizedBase = (target as { Base?: TypeRecord }).Base;
     if (target.Kind === 'parameterized' && parameterizedBase && parameterizedBase.Kind === 'primitive' && isNumericTypeName(parameterizedBase.Name)) {
-      const name = parameterizedBase.Arguments && parameterizedBase.Arguments.length > 0
-        ? `${parameterizedBase.Name}${parameterizedBase.Arguments[0]}`
-        : parameterizedBase.Name;
-      // A bare Number is spelled `number`; a typed value names its own base.
-      // Both are tried, as `ApplyImplicitCast` tries both.
-      // `CastCoversTarget`, not `SameType`: the documented form declares the
-      // cast against a META TYPE while a crossing's target is one
-      // parameterization of it, so an exact-type test matched nothing and
-      // declaring the cast changed nothing.
-      const declared = ['number', name].some((key) => PrimitiveCastsFor(key)
-        .some((cast) => CastCoversTarget(cast.target, target)));
-      if (!declared) {
+      // A single matching cast cannot authorize metadata owned by another
+      // meta type. Selection is pure: no body runs during literal checking.
+      const plan = PlanBareImplicitCasts(target, true);
+      if (plan.failure || plan.casts.length === 0) {
         return CreateTypeDiagnostic('rt-assignability', crossing.node, 'pre-evaluation', '$1 is not assignable to $2', Value(inspect(crossing.value)), Value(displayType(target)));
       }
       continue;

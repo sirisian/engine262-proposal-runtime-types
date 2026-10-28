@@ -1,0 +1,542 @@
+{
+  "cases": [
+    {
+      "name": "two-identity-bodies",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(globalThis.calls.join(\",\")===\"D,B\"&&String(a)===\"3\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "three-identity-bodies",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];type C={tag:int32};meta C{default={tag:0};subtype(a,b){return a.tag===b.tag;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return this;}}const source:float32=3;const a:float32.<{m:1,lo:2,tag:3}>=source;if(!(globalThis.calls.join(\",\")===\"D,B,C\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pipeline-keeps-both-transformations",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"8\"&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-order-reverses-pipeline",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"7\"&&globalThis.calls.join(\",\")===\"B,D\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "metadata-key-order-does-not-order-bodies",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;const a:float32.<{lo:2,m:1}>=source;if(!(String(a)===\"8\"&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-is-not-mutated",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(source)===\"3\"&&Reflect.typeOf(source)===type float32&&String(a)===\"8\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-owner-fails-before-body",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.length===0))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-owner-literal-is-static",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}const a:float32.<{m:1,lo:2}>=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "irrelevant-owner-does-not-supply-missing-cast",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];type C={tag:int32};meta C{default={tag:0};subtype(a,b){return a.tag===b.tag;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.length===0))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "written-default-needs-no-owner-cast",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}const source:float32=3;const a:float32.<{m:1,lo:0}>=source;if(!(globalThis.calls.join(\",\")===\"D\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "whole-target-cast-runs-once",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<{m:1,lo:2}>(){globalThis.calls.push(\"exact\");return Number(this)+4;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"7\"&&globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exact-target-preferred-last",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<{m:1,lo:2}>(){globalThis.calls.push(\"exact\");return Number(this)+4;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"7\"&&globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exact-target-preferred-first",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<{m:1,lo:2}>(){globalThis.calls.push(\"exact\");return Number(this)+4;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"7\"&&globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-single-portion-does-not-cover-combined",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<{m:1}>(){globalThis.calls.push(\"exact\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.length===0))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "equal-candidates-fail-before-body",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.length===0))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "equal-candidates-literal-is-static",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}const a:float32.<{m:1,lo:2}>=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "number-source-precedence-is-per-owner",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive number{operator float32.<D>(){globalThis.calls.push(\"number\");return this;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const a:float32.<{m:1,lo:2}>=3;if(!(globalThis.calls.join(\",\")===\"number,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-order-spans-lookup-buckets",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}primitive number{operator float32.<D>(){globalThis.calls.push(\"number\");return Number(this)+1;}}const a:float32.<{m:1,lo:2}>=3;if(!(String(a)===\"7\"&&globalThis.calls.join(\",\")===\"B,number\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-width-block-precedes-family",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive uint<const W>{operator uint.<W>.<D>(){globalThis.calls.push(\"family\");return this;}operator uint.<W>.<B>(){globalThis.calls.push(\"B\");return this;}}primitive uint8{operator uint8.<D>(){globalThis.calls.push(\"fixed\");return this;}}const source:uint8=3;const a:uint8.<{m:1,lo:2}>=source;if(!(globalThis.calls.join(\",\")===\"B,fixed\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "each-body-binds-own-destination-capture",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];globalThis.readers=[];primitive float32<const X:D>{operator float32.<X>(){globalThis.calls.push(\"D\"+String(X.m));globalThis.readers.push(()=>String(X.m));return Number(this)+Number(X.m);}}primitive float32<const X:B>{operator float32.<X>(){globalThis.calls.push(\"B\"+String(X.lo));globalThis.readers.push(()=>String(X.lo));return Number(this)*Number(X.lo);}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"8\"&&globalThis.calls.join(\",\")===\"D1,B2\"&&globalThis.readers[0]()===\"1\"&&globalThis.readers[1]()===\"2\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "repeated-pipelines-retain-distinct-closures",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];globalThis.readers=[];primitive float32<const X:D>{operator float32.<X>(){globalThis.calls.push(\"D\"+String(X.m));globalThis.readers.push(()=>String(X.m));return Number(this)+Number(X.m);}}primitive float32<const X:B>{operator float32.<X>(){globalThis.calls.push(\"B\"+String(X.lo));globalThis.readers.push(()=>String(X.lo));return Number(this)*Number(X.lo);}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;const b:float32.<{m:2,lo:3}>=source;if(!(String(a)===\"8\"&&String(b)===\"15\"&&globalThis.readers.map(f=>f()).join(\",\")===\"1,2,2,3\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "receiver-only-capture-stays-original-source",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32<const X:B>{operator float32.<D>(){if(String(X.lo)!==\"0\")throw new Error(\"receiver\");globalThis.calls.push(\"D\");return Number(this)+1;}}primitive float32<const X:D>{operator float32.<B>(){if(String(X.m)!==\"0\")throw new Error(\"receiver\");globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"8\"&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "first-abrupt-stops-pipeline",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];globalThis.fail=true;primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");throw new Error(\"first\");}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof Error;}if(!(failed&&globalThis.calls.join(\",\")===\"D\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "second-abrupt-restores-context",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];globalThis.fail=true;primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");if(globalThis.fail)throw new Error(\"second\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof Error;}if(!(failed&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));globalThis.fail=false;globalThis.calls=[];const a:float32.<{m:1,lo:2}>=source;if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "intermediate-base-failure-stops-next-body",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];globalThis.bad=\"bad\";primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return globalThis.bad;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"D\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "last-base-failure-keeps-earlier-effects",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];globalThis.bad=\"bad\";primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return globalThis.bad;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "validation-sees-final-payload",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}validate(v,c){return Number(v)>=Number(c.lo);}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)-3;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+5;}}const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"5\"&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-body-cannot-bypass-final-validation",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}validate(v,c){return Number(v)>=Number(c.lo);}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+5;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)-8;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-boundary",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;function f(x:float32.<{m:1,lo:2}>){return String(x);}if(f(source)!==\"8\")throw new Error(\"value\");if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-boundary",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;function f():float32.<{m:1,lo:2}>{return source;}if(String(f())!==\"8\")throw new Error(\"value\");if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-boundary",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;let a:float32.<{m:1,lo:2}>=source;globalThis.calls=[];a=source;if(String(a)!==\"8\")throw new Error(\"value\");if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-boundary",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;class Box{x:float32.<{m:1,lo:2}>=source;}const b=new Box();if(String(b.x)!==\"8\")throw new Error(\"value\");if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-boundary",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){return Number(this)+1;}operator float32.<B>(){return Number(this)*2;}}const source:float32=3;let a:float32.<{m:1,lo:2}>;if(String(a)!==\"2\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "negative-zero-survives-composition",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source:float32=-0;const a:float32.<{m:1,lo:2}>=source;if(!(Object.is(Number(a),-0)&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-family-decimal128",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive decimal128{operator decimal128.<D>(){globalThis.calls.push(\"D\");return this;}operator decimal128.<B>(){globalThis.calls.push(\"B\");return this;}}const source:decimal128=3;const a:decimal128.<{m:1,lo:2}>=source;if(!(globalThis.calls.join(\",\")===\"D,B\"&&a instanceof decimal128))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-family-rational64",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive rational64{operator rational64.<D>(){globalThis.calls.push(\"D\");return this;}operator rational64.<B>(){globalThis.calls.push(\"B\");return this;}}const source:rational64=3;const a:rational64.<{m:1,lo:2}>=source;if(!(globalThis.calls.join(\",\")===\"D,B\"&&a instanceof rational64))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "object-family-complex",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive complex<const E>{operator complex.<E>.<D>(){globalThis.calls.push(\"D\");return this;}operator complex.<E>.<B>(){globalThis.calls.push(\"B\");return this;}}const source:complex.<float64>=3+2i;const a:complex.<float64>.<{m:1,lo:2}>=source;if(!(globalThis.calls.join(\",\")===\"D,B\"&&a instanceof complex.<float64>))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-named",
+      "modules": {
+        "lib": "export type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}export type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}",
+        "main": "import {D,B} from \"lib\";globalThis.calls=[];const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"8\"&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-namespace",
+      "modules": {
+        "lib": "export type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}export type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}",
+        "main": "import * as lib from \"lib\";globalThis.calls=[];const source:float32=3;const a:float32.<{m:1,lo:2}>=source;if(!(String(a)===\"8\"&&globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exact-base-form-target",
+      "modules": {
+        "main": "meta float32{default={};subtype(a,b){return true;}}globalThis.calls=[];primitive float32{operator float32.<{brand:1}>(){globalThis.calls.push(\"exact\");return this;}}const source:float32=3;const a:float32.<{brand:1}>=source;if(!(globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owner-cast-cannot-grant-unclaimed-portion",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];meta float32{default={};subtype(a,b){return true;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}}const source:float32=3;let failed=false;try{const a:float32.<{m:1,brand:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.length===0))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exact-default-target-still-runs",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<{m:0,lo:0}>(){globalThis.calls.push(\"exact\");return this;}}const source:float32=3;const a:float32.<{m:0,lo:0}>=source;if(!(globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "whole-target-cannot-be-split-across-levels",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive number{operator float32.<D>(){globalThis.calls.push(\"number\");return this;}}primitive float32{operator float32.<{m:1,lo:2}>(){globalThis.calls.push(\"exact\");return Number(this)+4;}}const source:any=3;let failed=false;try{const a:float32.<{m:1,lo:2}>=source;}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.length===0))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "whole-source-target-cast-wins-all-portions",
+      "modules": {
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive number{operator float32.<{m:1,lo:2}>(){globalThis.calls.push(\"exact\");return this;}}primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return this;}operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const a:float32.<{m:1,lo:2}>=3;if(!(globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

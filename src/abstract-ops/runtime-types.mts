@@ -4225,12 +4225,16 @@ export type PrimitiveCastCapture = {
 } & ({ readonly Kind: 'component', readonly Index: number } | { readonly Kind: 'metadata', readonly Domain: TypeRecord });
 
 interface PrimitiveCast {
+  readonly order: number;
+  readonly declaration: object;
+  readonly environment: object;
   readonly target: TypeRecord;
   readonly fn: Value;
   readonly captures: readonly PrimitiveCastCapture[];
 }
 
 const primitiveCasts = new WeakMap<object, Map<string, PrimitiveCast[]>>();
+const nextPrimitiveCastOrder = new WeakMap<object, number>();
 
 function castsForAgent(): Map<string, PrimitiveCast[]> {
   const agent = surroundingAgent as unknown as object;
@@ -4242,10 +4246,15 @@ function castsForAgent(): Map<string, PrimitiveCast[]> {
   return table;
 }
 
-export function RegisterPrimitiveCast(typeName: string, target: TypeRecord, fn: Value, captures: readonly PrimitiveCastCapture[] = []): void {
+export function RegisterPrimitiveCast(typeName: string, target: TypeRecord, fn: Value, declaration: object, environment: object, captures: readonly PrimitiveCastCapture[] = []): void {
   const table = castsForAgent();
   const list = table.get(typeName) ?? [];
-  list.push({ target, fn, captures });
+  // Checking and evaluation can prepare the same declaration again. That is
+  // one candidate, not an ambiguous pair, and retains its original position.
+  if (list.some((cast) => cast.declaration === declaration && cast.environment === environment)) return;
+  const order = nextPrimitiveCastOrder.get(surroundingAgent) ?? 0;
+  nextPrimitiveCastOrder.set(surroundingAgent, order + 1);
+  list.push({ order, declaration, environment, target, fn, captures });
   table.set(typeName, list);
 }
 
@@ -4352,6 +4361,49 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
   return MetaTypeGoverns(metadata, metaType, target.Base);
 }
 
+/** Select a complete bare crossing before running any cast body. */
+export function PlanBareImplicitCasts(target: TypeRecord, fromNumber: boolean): {
+  casts: readonly PrimitiveCast[];
+  failure?: 'missing' | 'ambiguous';
+} {
+  if (target.Kind !== 'parameterized' || target.Base.Kind !== 'primitive') return { casts: [] };
+  const base = target.Base;
+  const first = base.Arguments?.[0];
+  const name = typeof first === 'number' ? `${base.Name}${first}` : base.Name;
+  const keys = [...new Set(fromNumber ? ['number', name, base.Name] : [name, base.Name])];
+  const candidates = keys.map((key) => PrimitiveCastsFor(key).filter((cast) => CastCoversTarget(cast.target, target)));
+  const governing = GoverningMetaTypes(target.Metadata);
+  const owners: (object | undefined)[] = governing.types.filter((owner) => MetaTypeGoverns(target.Metadata, owner, base));
+  // Unclaimed/base-form metadata needs an exact declaration. A written default
+  // needs no per-owner cast, but retains the existing exact-target route.
+  if (governing.unclaimed.length > 0 || owners.length === 0) owners.push(undefined);
+  const selected = new Set<PrimitiveCast>();
+  let missing = false;
+  for (const owner of owners) {
+    let matches: PrimitiveCast[] = [];
+    for (const bucket of candidates) {
+      matches = bucket.filter((cast) => SameType(cast.target, target)
+        || owner !== undefined && (cast.target as { MetaType?: object }).MetaType === owner);
+      if (matches.length > 0) {
+        const exact = matches.filter((cast) => SameType(cast.target, target));
+        if (exact.length > 0) matches = exact;
+        break;
+      }
+    }
+    if (matches.length > 1) return { casts: [], failure: 'ambiguous' };
+    if (matches.length === 0) missing = true;
+    else selected.add(matches[0]);
+  }
+  // An exact declaration supplies the complete destination. It cannot be
+  // sliced into a missing owner's contribution beside another selected body.
+  if (selected.size > 1 && [...selected].some((cast) => SameType(cast.target, target))) {
+    return { casts: [], failure: 'ambiguous' };
+  }
+  // A whole-target declaration may cover several owners; invoke that body once.
+  const casts = [...selected].sort((a, b) => a.order - b.order);
+  return { casts, ...(missing ? { failure: 'missing' as const } : {}) };
+}
+
 /** Retain an admitted numeric payload without mutating a source carrier. */
 function StampNumericType(value: Value, t: TypeRecord): Value | ThrowCompletion | undefined {
   if (isTypedNumber(value)) {
@@ -4422,122 +4474,35 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
   if (base.Kind !== 'primitive') {
     return undefined;
   }
-  // The name a cast is registered under. A WIDTH argument spells the familiar
-  // name - `int` with 32 is `int32`, `decimal` with 128 is `decimal128` - but a
-  // TYPE argument does not: `complex` with `float64` is not `complexfloat64`,
-  // and interpolating the record gave the literal string
-  // `"complex[object Object]"`, which matched nothing.
-  //
-  // So a cast declared for `complex` was invisible to every complex
-  // parameterization: `const p: complex.<float64>.<{ phase: 1 }> = c` fell past
-  // the cast arm to the membership test and was refused, while `c := Ph`
-  // succeeded by the converting route. Two spellings of one crossing disagreed,
-  // and the cast the program declared was never consulted.
-  const firstArgument = base.Arguments?.[0];
-  const name = typeof firstArgument === 'number'
-    ? `${base.Name}${firstArgument}`
-    : base.Name;
-  // A bare Number is spelled `number`; a typed value names its own base.
-  const declaredOn = [...new Set(value instanceof NumberValue ? ['number', name, base.Name] : [name, base.Name])];
-  for (const key of declaredOn) {
-    for (const cast of PrimitiveCastsFor(key)) {
-      // The cast is chosen by whether it produces the metadata the target
-      // requires. Where a target constrains several meta types and several
-      // casts apply, each runs in declaration order and the last result stands,
-      // which is the clause's "one is invoked for each meta type" read
-      // literally: a cast supplies its own meta type's portion.
-      if (CastCoversTarget(cast.target, t)) {
-        // "An operator body evaluates on RAW VALUES: no operator declared by
-        // any block is re-entered within one." A cast body returning `this`
-        // returns the bare value, and checking that return against the cast's
-        // own target would re-enter the crossing it is defining - which is the
-        // failure the rule exists to prevent, and which showed up immediately
-        // as the body's return boundary refusing the value.
-        //
-        // So the body computes the raw value and the DECLARED TARGET says what
-        // it becomes: the result is stamped with the target's type rather than
-        // checked against it. That is the clause's division of labour - a cast
-        // "supplies the conversion", it does not perform a check.
-        const frame = PrimitiveCastBindings(cast, RuntimeTypeOf(value), t);
-        pushTypeParameterFrame(frame);
-        EnterOperatorBody();
-        let raw;
-        try {
-          raw = Q(yield* Call(cast.fn as never, value, []));
-          const primitive = raw instanceof ObjectValue && 'NumberData' in raw
-            ? (raw as unknown as { NumberData: Value }).NumberData : raw;
-          raw = Q(yield* RequireType(WithoutMetadata(primitive), RawOperatorResultType(t)));
-        } finally {
-          LeaveOperatorBody();
-          popTypeParameterFrame();
-        }
-        // A cast body is ordinary code, so in sloppy mode its `this` is the
-        // BOXED value and `return this;` - the usual whole body - hands back a
-        // Number wrapper rather than a Number. Unwrapping it here is what lets
-        // the plainest cast anyone will write work; a body that computes
-        // returns a primitive and takes the branch above.
-        const unwrapped = raw instanceof ObjectValue && 'NumberData' in raw
-          ? (raw as unknown as { NumberData: Value }).NumberData
-          : raw;
-        // A FAMILY WITH ITS OWN REPRESENTATION is BUILT, not stamped. A
-        // `TypedNumberValue` is the representation of an integer or a float, and
-        // stamping one with the target's type is enough for those. A decimal is
-        // a decimal OBJECT carrying [[DecimalWidth]], and a complex and a
-        // rational likewise carry their own slots.
-        //
-        // Stamping regardless produced a plain typed number wearing a decimal
-        // type, which `RequireTypeAfterCast` then refused at its own guard -
-        // "the value must still be one of the BASE" - because it was not a
-        // decimal at all. So `const p: Cents = 19.9` was refused with
-        // `19.9 (typed) is not assignable to "decimal128.<{ scale: 2 }>"` while
-        // the float equivalent `const m: Meter = 5` worked, and every step
-        // before this one was correct for both: the literal pass, the cast
-        // lookup, the selection, and the body's own return.
-        const targetBase = t.Base as { Name?: string, Arguments?: readonly unknown[] };
-        const baseName = targetBase?.Name;
-        if (baseName === 'decimal' || (typeof baseName === 'string' && baseName.startsWith('decimal'))) {
-          const width = typeof targetBase.Arguments?.[0] === 'number'
-            ? targetBase.Arguments[0] as 32 | 64 | 128
-            : Number(String(baseName).slice('decimal'.length)) as 32 | 64 | 128;
-          // The value reaching a cast is still a raw Number - the crossing runs
-          // before the decimal literal pass builds anything - so the digits come
-          // from its own shortest representation, which is what the literal
-          // would have read.
-          const digits = isDecimalObject(unwrapped)
-            ? {
-              sig: (unwrapped as unknown as { DecimalSignificand: bigint }).DecimalSignificand,
-              exp: (unwrapped as unknown as { DecimalExponent: number }).DecimalExponent,
-            }
-            : (() => {
-              const n = isTypedNumber(unwrapped) ? Number(unwrapped.value) : (unwrapped instanceof NumberValue ? R(unwrapped) as number : undefined);
-              if (n === undefined || !Number.isFinite(n)) { return undefined; }
-              const parsed = ParseDecimalDigits(String(n));
-              return parsed === undefined ? undefined : { sig: parsed.significand, exp: parsed.exponent };
-            })();
-          if (digits !== undefined && (width === 32 || width === 64 || width === 128)) {
-            return CreateDecimalValue(digits.sig, digits.exp, width,
-              surroundingAgent.currentRealmRecord, t);
-          }
-        }
-        if (isDecimalObject(unwrapped) || isRationalObject(unwrapped) || isComplexObject(unwrapped)) {
-          // The body handed back a value of the family already; it carries its
-          // own representation and must not be flattened into a typed number.
-          // It is copied carrying the target, as a typed number is rewrapped:
-          // the metadata rides the value, and the value the cast was given is
-          // left as it was.
-          return StampFamilyValue(unwrapped, t) ?? unwrapped;
-        }
-        if (isTypedNumber(unwrapped)) {
-          return new TypedNumberValue(unwrapped.value, t);
-        }
-        if (unwrapped instanceof NumberValue) {
-          return new TypedNumberValue(R(unwrapped) as number, t);
-        }
-        return unwrapped;
-      }
+  const plan = PlanBareImplicitCasts(t, value instanceof NumberValue);
+  if (plan.failure === 'ambiguous') {
+    return Throw.TypeError('more than one implicit cast supplies $1', Value(displayType(t)));
+  }
+  if (plan.casts.length === 0) return undefined;
+  if (plan.failure === 'missing') {
+    return Throw.TypeError('no implicit cast supplies every constrained meta type of $1', Value(displayType(t)));
+  }
+  const source = RuntimeTypeOf(value);
+  let result: Value = value;
+  for (const cast of plan.casts) {
+    // Arguments retain the original crossing's source and destination. The raw
+    // payload, unlike the capture roles, advances through the selected bodies.
+    const frame = PrimitiveCastBindings(cast, source, t);
+    pushTypeParameterFrame(frame);
+    EnterOperatorBody();
+    try {
+      const raw: Value = Q(yield* Call(cast.fn as never, WithoutMetadata(result), []));
+      const primitive: Value = raw instanceof ObjectValue && 'NumberData' in raw
+        ? (raw as unknown as { NumberData: Value }).NumberData : raw;
+      result = Q(yield* RequireType(WithoutMetadata(primitive), RawOperatorResultType(t)));
+    } finally {
+      LeaveOperatorBody();
+      popTypeParameterFrame();
     }
   }
-  return undefined;
+  // Every intermediate result has its actual base representation. Attach the
+  // destination only after the complete pipeline; the caller validates it.
+  return StampNumericType(result, t) ?? result;
 }
 
 /**

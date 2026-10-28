@@ -126,7 +126,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         captures.push({ Kind: 'metadata', Declaration: headerCaptures.find((capture) => capture.BindingIdentifier.name === name)!,
           Domain: blockFrame.get(name)!, FromDestination: destinationCaptures.has(name) });
       }
-      RegisterPrimitiveCast(typeName, target, castFn, captures);
+      RegisterPrimitiveCast(typeName, target, castFn, e, env, captures);
       continue;
     }
     if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FormalParameters) {
