@@ -844,7 +844,7 @@ export function SetEvaluatedGenericDefault(check: GenericDefaultCheck, type: Typ
 
 export interface GenericWhereCheck {
   readonly sourceModule?: AbstractModuleRecord;
-  readonly declaration: ParseNode.FunctionDeclaration | ParseNode.TypeAliasDeclaration;
+  readonly declaration: ParseNode.FunctionDeclaration | ParseNode.TypeAliasDeclaration | ParseNode.MethodDefinition;
   readonly clauses: readonly ParseNode.WhereClause[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   /**
@@ -854,6 +854,8 @@ export interface GenericWhereCheck {
    * to the boundary only "a where clause that cannot be decided statically".
    */
   readonly values?: ReadonlyMap<string, TypeRecord>;
+  /** Round 5, Gap 8: a result contract decided at a `return` whose operand is a literal; `return` is bound to it. */
+  readonly returnValue?: TypeRecord;
 }
 const genericWhereChecks = new WeakMap<object, readonly GenericWhereCheck[]>();
 export function GenericWhereChecksOf(root: object): readonly GenericWhereCheck[] {
@@ -20396,9 +20398,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const declaration = signatureDeclarations.get(signature) ?? genericOwner;
           if (declaration) checkSpecializedDeclaration(declaration, bindings);
           const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] } | undefined)?.WhereClauses;
-          if (base.Signatures.length === 1 && declaration?.type === 'FunctionDeclaration'
+          // A method's specialization predicate is judged as a function's is
+          // (round 5, Gap 10); the clause environment at pre-evaluation binds
+          // the declaration's own parameters, and a class's are closed over by
+          // the application's bindings where they are known.
+          const whereDeclaration = declaration?.type === 'FunctionDeclaration' || declaration?.type === 'MethodDefinition'
+            || declaration?.type === 'AsyncMethod' || declaration?.type === 'GeneratorMethod' || declaration?.type === 'AsyncGeneratorMethod';
+          if (base.Signatures.length === 1 && whereDeclaration
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
-            recordWhereCheck(node, declaration, bindings);
+            recordWhereCheck(node, declaration as ParseNode.FunctionDeclaration, bindings);
           }
           // Complete the declaration-owned dependency before copying its
           // signature. The private approximation is instantiated separately;
@@ -40160,6 +40168,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ReturnStatement': {
         const expr = (n as { Expression?: ParseNode | null }).Expression;
+        // Round 5, Gap 8: a result contract (`where return > 10`) is decided at
+        // a `return` whose operand is a literal, as a specialization predicate
+        // is at its application; it used to be checked at run time only.
+        if (expr) {
+          let owner: ParseNode | undefined = n.parent;
+          while (owner && !/^(FunctionDeclaration|MethodDefinition|FunctionExpression|ArrowFunction|AsyncFunctionDeclaration|GeneratorDeclaration)$/.test(owner.type)) owner = owner.parent;
+          const clauses = owner?.type === 'FunctionDeclaration' ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
+          const literal = clauses?.length ? staticType(expr) : null;
+          if (literal?.Kind === 'literal') {
+            const decided = clauses!.filter((clause) => whereClauseNamesReturn(clause.RefinementPredicate)
+              && LexicalFreeReferences(clause.RefinementPredicate).every((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind !== 'parameter'));
+            if (decided.length) {
+              const checks = whereChecks.get(n) ?? [];
+              checks.push({ declaration: owner as ParseNode.FunctionDeclaration, clauses: decided, bindings: new Map(), returnValue: literal, sourceModule: importedDeclarationSourceModule(owner!) });
+              whereChecks.set(n, checks);
+            }
+          }
+        }
         if (asyncReturns.at(-1)) checkAwaitAssimilation(expr);
         const context = returnTypes[returnTypes.length - 1] ?? null;
         if (expr) {

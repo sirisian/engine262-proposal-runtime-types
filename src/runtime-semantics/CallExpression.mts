@@ -22,6 +22,7 @@ import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { NewPromiseCapability } from '../abstract-ops/promise-operations.mts';
 import type { PromiseObject } from '../intrinsics/Promise.mts';
@@ -1206,18 +1207,27 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         }
         pushTypeParameterFrame(frame);
         try {
-          for (const clause of whereClauses) {
-            if (GenericWhereVerified(clause, frame)) continue;
-            const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
-            if (!predicate) {
-              continue;
+          // The predicate reads the callee's type parameters by name, so it is
+          // evaluated in the callee's declaration context, where a
+          // TypeParameterEnvironment exposes them, as SpecializeGenericFunction
+          // does; evaluated in the caller's environment, a method's own
+          // parameter was "not defined" (round 5, Gap 10).
+          const verdict = Q(yield* InCallableDeclarationContext(func, frame, classFrame, function* evaluateClauses(): ValueEvaluator {
+            for (const clause of whereClauses) {
+              if (GenericWhereVerified(clause, frame)) continue;
+              const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
+              if (!predicate) {
+                continue;
+              }
+              const result = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+              if (result === Value.false || result === Value.undefined || result === Value.null) {
+                return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+              }
+              MarkGenericWhereVerified(clause, frame);
             }
-            const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
-            if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
-              return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
-            }
-            MarkGenericWhereVerified(clause, frame);
-          }
+            return Value.undefined;
+          }));
+          void verdict;
         } finally {
           popTypeParameterFrame();
           if (classFrame) {

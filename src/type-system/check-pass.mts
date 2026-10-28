@@ -4,7 +4,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity, RefBindingHolder } from '../execution-context/Environment.mts';
 import { BoundNames } from '../static-semantics/BoundNames.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PlanBareImplicitCasts } from '../abstract-ops/runtime-types.mts';
+import { RequireType, ConvertValue, PushContractReturn, PopContractReturn, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PlanBareImplicitCasts } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   BeginTypeDeclarationPreparation,
@@ -843,7 +843,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
               : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
           });
         };
-        if (hasRuntimeSubject(predicate)) continue;
+        if (hasRuntimeSubject(predicate) && !check.returnValue) continue;
         const context = surroundingAgent.runningExecutionContext;
         const outer = context.LexicalEnvironment;
         const scope = new DeclarativeEnvironmentRecord(outer);
@@ -876,7 +876,15 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         BeginFragmentEvaluation();
         let result;
         try {
-          result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
+          if (check.returnValue) {
+            const raw = (check.returnValue as { Value: unknown }).Value;
+            PushContractReturn(raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint));
+          }
+          try {
+            result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
+          } finally {
+            if (check.returnValue) PopContractReturn();
+          }
           result = RequiredModuleInputFailure() ?? result;
         } finally {
           EndFragmentEvaluation();
@@ -892,6 +900,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         if (!result.Value) {
           return check.values
             ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+            : check.returnValue
+              ? CreateTypeDiagnostic('rt-return-contract', clause, 'pre-evaluation', 'a result contract is not satisfied by this return: $1', Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
         }
         MarkGenericWhereVerified(clause, frame);
