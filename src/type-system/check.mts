@@ -3508,6 +3508,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  /** Whether a predicate contains a `match` expression, whose refinement reading has an implicit false default. */
+  const whereClauseContainsMatch = (predicate: ParseNode): boolean => {
+    let found = false;
+    const visit = (value: unknown): void => {
+      if (found || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'MatchExpression') { found = true; return; }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
   /** Whether a predicate reads `this`, the value a record refinement tests. */
   const whereClauseNamesThis = (predicate: ParseNode): boolean => {
     let found = false;
@@ -38275,6 +38290,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Capture its declaration independently of whether its body resolved.
         if (n.BindingIdentifier.name === 'Identity' && n.TypeParameters && !getParsedIdentityDeclaration()) {
           setParsedIdentityDeclaration({ Kind: 'nominal', Declaration: n, Arguments: [] } as TypeRecord);
+        }
+        // Round 5, Gap 4 and Q4: a refinement predicate over `this` is walked as
+        // an expression with `this` typed as the base, so the comparison,
+        // truthiness and member-read judgments that apply to any test apply
+        // to it: `where this.a > 300` on a `uint8` member is `rt-numeric-range`,
+        // `where this.a >= 0` is a constant condition, and a member the base
+        // declares nothing like is an undeclared read where the base is closed
+        // and admitted where it is open. The walk's narrowing is dropped.
+        if (isPlainAlias && resolved && !mentionsTypeParameter(placeholder)) {
+          const base = resolved.Kind === 'parameterized' ? ((resolved as { Base?: TypeRecord }).Base ?? resolved) : resolved;
+          for (const clause of ((n as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [])) {
+            const predicate = clause.RefinementPredicate;
+            // A `match` in a refinement has an implicit `default: false`
+            // (#sec-discriminated-where-chains: a value no clause matches is
+            // refused at the boundary), so the exhaustiveness judgment of an
+            // ordinary `match` does not apply to it; such a predicate is not
+            // walked here.
+            if (predicate.type === 'ConditionalRefinement' || !whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate)
+                || whereClauseContainsMatch(predicate)) continue;
+            const before = captureFlow();
+            thisTypeFrames.push(base);
+            try {
+              walkTest(predicate as ParseNode);
+            } finally {
+              thisTypeFrames.pop();
+              restoreFlow(before);
+            }
+          }
         }
         if (resolved) {
           // proposal-runtime-types `sec-dependent-record-types`: an alias

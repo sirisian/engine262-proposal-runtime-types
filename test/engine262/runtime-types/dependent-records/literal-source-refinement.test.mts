@@ -24,6 +24,16 @@ test('a literal source failing a refinement is refused before the body', () => {
   expect(evaluated('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) { return p.a; } String(g({ a: 1 }));')).toBe('1');
 });
 
+test('a refinement predicate is walked with this typed as the base (round 5, Gap 4 and Q4)', () => {
+  expect(observeScript('type Pos = { a: uint8 } where this.a > 300;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-numeric-range', phase: 'static' } });
+  expect(observeScript('type Z = { a: uint8 } where this.a >= 0;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-impossible-test', phase: 'static' } });
+  expect(observeScript('type S = uint8 where this > 300;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-numeric-range', phase: 'static' } });
+  // An open object base admits a member it does not declare, and a chain is left to its arms.
+  expect(evaluated('type Pos = { a: uint8 } where this.b > 0; "ok";')).toBe('ok');
+  expect(evaluated('type D = { c: "A" | "B" } where if (this.c == "A") { this is { p: string } } else { this is { q: string } }; "ok";')).toBe('ok');
+  expect(evaluated('const limit: uint8 = 10; type Q = { a: uint8 } where this.a > limit; let q: Q = { a: 11 }; String(q.a);')).toBe('11');
+});
+
 test('a literal source satisfying the refinement, and a source the checker cannot value, are unchanged', () => {
   expect(evaluated('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: 1 }; String(p.a);')).toBe('1');
   expect(evaluated('type D = { c: "A" | "B" } where if (this.c == "A") { this is { p: string } } else { this is { q: string } }; let d: D = { c: "A", p: "s" }; "ok";')).toBe('ok');
