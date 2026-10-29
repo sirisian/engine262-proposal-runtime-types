@@ -3017,7 +3017,12 @@ export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: 
   let bound: TypeRecord[];
   if (preBound) bound = params.map((p) => preBound.get(p.BindingIdentifier.name)!);
   else bound = Q(yield* BindTypeArgumentsInto(params, node!.TypeArguments.TypeArgumentList, frame, fnName, fn as never));
-  return yield* InCallableDeclarationContext(fn, new Map(), classFrameOfMethod(fn), function* specialize(): ValueEvaluator {
+  // The declaration context's TypeParameterEnvironment answers a read of a
+  // parameter from the frame it is given; given an empty one, an
+  // object-literal method's `const s = o.f.<0>` reported `N` "cannot be used
+  // before initialization" (round 5, Q6). The bound frame is what the clause
+  // and the body read.
+  return yield* InCallableDeclarationContext(fn, frame, classFrameOfMethod(fn), function* specialize(): ValueEvaluator {
     const key = bound.map(specializationKeyOf).join('|');
     let table = genericFunctionSpecializations.get(fn as unknown as object);
     if (!table) {
