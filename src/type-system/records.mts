@@ -2084,8 +2084,12 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   if (withOperands.Operands?.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord, seen))) {
     return true;
   }
-  const withElement = t as { Element?: TypeRecord };
+  const withElement = t as { Element?: TypeRecord, Extent?: number | 'dynamic' | TypeRecord };
   if (withElement.Element && mentionsTypeParameter(withElement.Element, seen)) {
+    return true;
+  }
+  // The extent of `[N].<T>` is a parameter position too (round 5, Q8).
+  if (withElement.Extent && typeof withElement.Extent === 'object' && mentionsTypeParameter(withElement.Extent, seen)) {
     return true;
   }
   // A TUPLE's elements, beside the array's singular [[Element]] one line above.
@@ -2346,7 +2350,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         const done = walk(nextExtent as Known);
         const lit = done as { Kind?: string, Value?: unknown } | null;
         const raw = lit && lit.Kind === 'literal' ? lit.Value : undefined;
-        const asNumber = raw instanceof NumberValue ? R(raw) : undefined;
+        const asNumber = raw instanceof NumberValue ? R(raw) : (typeof raw === 'number' ? raw : undefined);
         nextExtent = typeof asNumber === 'number' ? asNumber : (done as TypeRecord | undefined) ?? nextExtent;
       }
       return {

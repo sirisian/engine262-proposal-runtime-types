@@ -3647,7 +3647,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `this`; a value failing the refinement is refused where it is written
    * rather than by the boundary at run time (round 5, Gap 5).
    */
-  const recordRefinementCheck = (site: ParseNode, annotation: ParseNode.TypeAnnotation, source: ParseNode): void => {
+  const recordRefinementCheck = (site: ParseNode, annotation: ParseNode.TypeAnnotation, sourceNode: ParseNode): void => {
+    let source = sourceNode;
     const written = annotation.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] }, TypeArguments?: unknown };
     const typeName = written.type === 'TypeReference' ? written.TypeName : null;
     if (!typeName?.IdentifierReference?.name || typeName.MemberNames?.length || written.TypeArguments) return;
@@ -3655,10 +3656,74 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const alias = aliasNodes.get(name);
     if (!alias || alias.type !== 'TypeAliasDeclaration' || (alias as { TypeParameters?: unknown }).TypeParameters) return;
     const clauses = (alias as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
-    if (!clauses?.length || !literalObject(source)) return;
+    if (!clauses?.length) return;
+    // A `const` bound to a fresh literal supplies `this` as the literal does.
+    if (source.type === 'IdentifierReference' && !assignedNames.has(source.name)) {
+      const origin = ResolveBindingDeclaration(source, source.name);
+      const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer) : null;
+      if (initializer && literalObject(initializer)) source = initializer;
+    }
+    if (!literalObject(source)) return;
     const checks = whereChecks.get(site) ?? [];
     checks.push({ declaration: alias as unknown as ParseNode.TypeAliasDeclaration, clauses, bindings: new Map(), thisLiteral: source, targetName: name, sourceModule: importedDeclarationSourceModule(alias) });
     whereChecks.set(site, checks);
+  };
+
+  /**
+   * The argument list of a call by parameter position, or null when a form
+   * leaves a position undecidable: a spread of a fresh array literal of plain
+   * elements is expanded, a named argument is placed on the parameter it names.
+   */
+  const positionalArguments = (list: readonly ParseNode[], names: readonly string[]): (ParseNode | undefined)[] | null => {
+    const positional: (ParseNode | undefined)[] = [];
+    const named = new Map<string, ParseNode>();
+    for (const argument of list) {
+      if (argument.type === 'AssignmentRestElement') {
+        const spread = (argument as ParseNode.AssignmentRestElement).AssignmentExpression;
+        if (spread.type !== 'ArrayLiteral') return null;
+        for (const element of (spread as { ElementList: readonly ParseNode[] }).ElementList) {
+          if (element.type === 'Elision' || element.type === 'SpreadElement') return null;
+          positional.push(element);
+        }
+      } else if (argument.type === 'NamedArgument') {
+        const { Name, AssignmentExpression } = argument as ParseNode.NamedArgument;
+        if (!names.includes(Name)) return null;
+        named.set(Name, AssignmentExpression);
+      } else {
+        positional.push(argument);
+      }
+    }
+    for (const [name, argument] of named) positional[names.indexOf(name)] = argument;
+    return positional;
+  };
+
+  /**
+   * The compile-time-evaluable value an argument supplies to a parameter, as
+   * a literal record, or null: a literal, a constant expression over literals,
+   * a `const` bound to one, a parameter its default supplies, and an omitted
+   * optional parameter, which binds `undefined` so the predicate decides as the
+   * run time does (round 5, Q9, direction A).
+   */
+  const decidedArgumentValue = (argument: ParseNode | undefined, formal: ParseNode.SingleNameBinding): TypeRecord | null => {
+    if (!argument) {
+      if (formal.Initializer) return decidedArgumentValue(formal.Initializer, { ...formal, Initializer: null } as ParseNode.SingleNameBinding);
+      if ((formal as { Optional?: boolean }).Optional) return { Kind: 'literal', Value: undefined, Base: makePrimitive('undefined') } as unknown as TypeRecord;
+      return null;
+    }
+    const type = staticType(argument);
+    if (type?.Kind === 'literal') return type;
+    if (argument.type === 'IdentifierReference') {
+      const origin = ResolveBindingDeclaration(argument, argument.name);
+      const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer) : null;
+      if (initializer && !assignedNames.has(argument.name)) return decidedArgumentValue(initializer, formal);
+    }
+    const folded = foldConstant(argument);
+    if (folded === null) return null;
+    const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+    const declared = annotation ? resolveType(annotation.Type) : null;
+    const base = type ?? declared ?? makePrimitive('number');
+    const bigint = base.Kind === 'primitive' && (base as { Name?: string }).Name === 'bigint';
+    return { Kind: 'literal', Value: bigint ? folded : Number(folded), Base: base } as unknown as TypeRecord;
   };
 
   /**
@@ -3689,10 +3754,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (formal.type !== 'SingleNameBinding' || (formal as { Ref?: boolean }).Ref) return;
       names.push((formal as ParseNode.SingleNameBinding).BindingIdentifier.name);
     }
-    const written = call.Arguments;
-    if (written.some((argument) => argument.type === 'AssignmentRestElement' || argument.type === 'NamedArgument')) return;
-    // A refined parameter type decides a literal argument as a declaration's
-    // annotation decides its literal initializer (round 5, Gap 5).
+    // The call's arguments by parameter position (round 5, Q9): a spread of a
+    // fresh array literal of plain elements contributes its positions, and a
+    // named argument lands on the parameter it names; any other spread, or a
+    // name no parameter carries, leaves the call to the run time.
+    const written = positionalArguments(call.Arguments, names);
+    if (written === null) return;
     formals.forEach((formal, index) => {
       const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
       const argument = written[index];
@@ -3707,22 +3774,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let complete = true;
       for (const name of reads) {
         const index = names.indexOf(name);
-        const argument = written[index];
-        const formal = formals[index] as ParseNode.SingleNameBinding;
-        const type = argument ? staticType(argument) : (!formal.Initializer && !(formal as { Optional?: boolean }).Optional ? undefined : null);
-        if (type?.Kind === 'literal') { values.set(name, type); continue; }
-        // A `const` whose initializer is a literal decides the clause as the
-        // literal does; a `const` of an integer type with a known value too.
-        if (argument?.type === 'IdentifierReference') {
-          const origin = ResolveBindingDeclaration(argument, argument.name);
-          const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer) : null;
-          const initial = initializer ? staticType(initializer) : null;
-          if (initial?.Kind === 'literal') { values.set(name, initial); continue; }
-        }
-        const folded = argument ? foldConstant(argument) : null;
-        if (folded === null || !type) { complete = false; break; }
-        const bigint = type.Kind === 'primitive' && (type as { Name?: string }).Name === 'bigint';
-        values.set(name, { Kind: 'literal', Value: bigint ? folded : Number(folded), Base: type } as unknown as TypeRecord);
+        const value = decidedArgumentValue(written[index], formals[index] as ParseNode.SingleNameBinding);
+        if (!value) { complete = false; break; }
+        values.set(name, value);
       }
       if (complete) decided.push(clause);
     }

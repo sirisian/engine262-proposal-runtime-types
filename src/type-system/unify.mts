@@ -1,3 +1,4 @@
+import { Value } from '../value.mts';
 import { joinTypes } from './logical-types.mts';
 import { CanonicalizeType } from './intern.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
@@ -96,6 +97,13 @@ export function mentionsParameterNamed(t: TypeRecord | null, names: ReadonlySet<
     return true;
   }
   if (r.Arguments?.some((a) => typeof a !== 'number' && mentionsParameterNamed(a, names, seen))) {
+    return true;
+  }
+  // The extent of `[N].<T>` is a parameter position too (round 5, Q8): a
+  // shape that mentions `N` only there was read as mentioning no parameter,
+  // and structural inference returned before binding it.
+  const extent = (r as { Extent?: number | 'dynamic' | TypeRecord }).Extent;
+  if (extent && typeof extent === 'object' && mentionsParameterNamed(extent, names, seen)) {
     return true;
   }
   if (r.Element && mentionsParameterNamed(r.Element, names, seen)) {
@@ -360,6 +368,26 @@ export function unifyTypeParameters(
     const pEl = (param as { Element?: TypeRecord }).Element;
     const aEl = (arg as { Element?: TypeRecord }).Element;
     if (pEl && aEl) {
+      // A value parameter in the extent position, `[N].<T>`, binds to the
+      // argument's stated extent as a literal (#sec-constraint-and-argument-
+      // environments: an extent is a value argument), as Rust infers a const
+      // generic from `[u8; N]`. Only the element was matched, so `N` stayed
+      // unbound and a later read of it failed as "[Function] is not a type"
+      // (round 5, Q8).
+      const pExtent = (param as { Extent?: number | 'dynamic' | TypeRecord }).Extent;
+      const aExtent = (arg as { Extent?: number | 'dynamic' | TypeRecord }).Extent;
+      if (pExtent && typeof pExtent === 'object' && pExtent.Kind === 'parameter' && typeof aExtent === 'number') {
+        // Bound directly, not through `match`, which widens a literal to its
+        // base: an extent is a value, and `N` must stay the literal 2, not
+        // `uint32`, for the body to read it as a number.
+        const name = (pExtent as { Name: string }).Name;
+        if (names.has(name) && !into.has(name)) {
+          into.set(name, { Kind: 'literal', Value: Value(aExtent), Base: makePrimitive('uint', [32]) } as unknown as TypeRecord);
+          writtenHere.add(name);
+        }
+      } else if (pExtent && typeof pExtent === 'object' && aExtent && typeof aExtent === 'object') {
+        match(pExtent, aExtent);
+      }
       match(pEl, aEl);
       return;
     }

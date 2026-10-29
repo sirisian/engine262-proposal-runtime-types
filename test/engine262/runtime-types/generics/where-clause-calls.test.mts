@@ -26,6 +26,20 @@ test('a literal argument the clause rejects is refused before the body', () => {
   expect(evaluated('function f(i: uint32) where i > 10 { return i; } const n: uint32 = 50; String(f(n));')).toBe('50');
 });
 
+test('every compile-time-evaluable argument form decides the clause (round 5, Q9)', () => {
+  refused('function f(i: uint32) where i > 10 { return i; } f(i: 5);');
+  refused('function f(i: uint32) where i > 10 { return i; } f(...[5]);');
+  refused('function f(i: uint32) where i > 10 { return i; } f(2 + 3);');
+  refused('function f(i: uint32) where i > 10 { return i; } const n = 2 + 3; f(n);');
+  refused('function f(i: uint32 = 5) where i > 10 { return i; } f();');
+  // An omitted optional parameter binds undefined and the predicate decides, as the run time does.
+  refused('function f(i?: uint32) where i > 10 { return i; } f();');
+  expect(evaluated('function f(i?: uint32) where i === undefined || i > 10 { return 1; } String(f());')).toBe('1');
+  expect(evaluated('function f(a: uint32, b: uint32) where a < b { return a; } String(f(b: 5, a: 1));')).toBe('1');
+  // A union-typed argument is not decided.
+  expect(observeScript('function f(i: uint32) where i > 10 { return i; } f(true ? 5 : 6);')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+});
+
 test('a result contract on an unannotated function is a contract (round 5, Gap 7, Q3)', () => {
   expect(observeScript('function f() where return > 10 { return 5; } f();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-return-contract' } });
   expect(observeScript('let k = 5; function f() where return > 10 { return k; } f();')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });

@@ -22,6 +22,9 @@ test('a literal source failing a refinement is refused before the body', () => {
   // A refined parameter type decides a literal argument the same way.
   refused('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) {} g({ a: 0 });');
   expect(evaluated('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) { return p.a; } String(g({ a: 1 }));')).toBe('1');
+  // A const bound to a fresh literal supplies this as the literal does (round 5, Q9).
+  refused('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) {} const q = { a: 0 }; g(q);');
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; function g(p: Pos) { return p.a; } const q = { a: 1 }; String(g(q));')).toBe('1');
 });
 
 test('a refinement predicate is walked with this typed as the base (round 5, Gap 4 and Q4)', () => {

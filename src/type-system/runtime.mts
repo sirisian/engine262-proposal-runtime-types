@@ -856,7 +856,21 @@ export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRe
       }
       return false;
     });
-    if (!binding) return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
+    if (!binding) {
+      // The active frames first: an inference in progress binds the
+      // parameters it is inferring to open placeholders there, and the
+      // declaration environment retains the unapplied `any` of the
+      // declaration-time check, which used to answer first and made
+      // `[N].<uint8>` evaluate its extent as the `any` Type Object (round 5,
+      // Q8: "[Function] is not a type" on every `g(t)`).
+      for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
+        const bound = typeParameterFrames[i].get(name);
+        if (bound !== undefined) {
+          return bound;
+        }
+      }
+      return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
+    }
     if (binding.kind !== 'type-parameter') return null;
   }
   for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
@@ -6944,6 +6958,16 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
             const bound = extentName === undefined ? null : lookupTypeParameter(extentName, node.ArrayExtent);
             if (bound !== null && bound.Kind === 'parameter') {
               return { Kind: 'array', Element, Extent: bound };
+            }
+            // A type parameter of the declaration that is unbound here, or
+            // bound to the unapplied `any` of a declaration-time reading, is an
+            // open extent, not a value to evaluate: the signature of
+            // `g<N: uint32>(x: [N].<uint8>)` is read before any application
+            // binds `N`, and evaluating `N` then yielded the `any` Type Object
+            // and "[Function] is not a type" on every plain call (round 5, Q8).
+            if (extentName !== undefined && (bound === null || bound.Kind === 'any')
+                && ResolveBindingDeclaration(node.ArrayExtent, extentName)?.kind === 'type-parameter') {
+              return { Kind: 'array', Element, Extent: { Kind: 'parameter', Name: extentName } as unknown as TypeRecord };
             }
           }
           // A computed extent evaluates; #sec-compile-time-evaluability's
