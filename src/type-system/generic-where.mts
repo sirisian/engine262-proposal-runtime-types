@@ -42,5 +42,10 @@ export function GenericWhereVerified(clause: object, bindings: ReadonlyMap<strin
 
 export function MarkGenericWhereVerified(clause: object, bindings: ReadonlyMap<string, TypeRecord>): void {
   if (RequiredModuleInputFailure()) return;
-  entry(clause, bindings, true)!.verified = true;
+  // A clause verified at pre-evaluation over a method's own parameters and
+  // its class's (round 5, Q7) is keyed by both; a run-time frame holding only
+  // the method's own finds no entry, and the verification is simply not
+  // reused there, rather than crashing the host.
+  const verified = entry(clause, bindings, true);
+  if (verified) verified.verified = true;
 }

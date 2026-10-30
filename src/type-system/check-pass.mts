@@ -782,7 +782,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     const endRequiredInputs = check.sourceModule ? RequireModuleInputs() : () => {};
     try {
-      const parameters = check.declaration.TypeParameters?.TypeParameterList ?? [];
+      // The method's own parameters shadow its class's of the same name, and
+      // each name is bound once.
+      const parameters = [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
+        .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()];
       const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
@@ -822,7 +825,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
             importedInputs = true;
             return false;
           }
-          if (binding.kind === 'type-parameter') return binding.node !== check.declaration || !frame.has(reference.name);
+          // A class parameter a method clause reads is available when the
+          // receiver's class arguments bound it (round 5, Q7).
+          if (binding.kind === 'type-parameter') return !(binding.node === check.declaration
+            || (check.outerParameters?.some((parameter) => parameter.BindingIdentifier.name === reference.name) ?? false)) || !frame.has(reference.name);
           // A local clause may reach a foreign module through a helper. Its
           // module-level captures are required inputs too, even though the
           // clause itself has no foreign sourceModule. Evaluate the real read

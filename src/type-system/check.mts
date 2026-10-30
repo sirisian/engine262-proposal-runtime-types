@@ -864,6 +864,13 @@ export interface GenericWhereCheck {
   readonly thisLiteral?: ParseNode;
   /** The name of the refined type, for the diagnostic. */
   readonly targetName?: string;
+  /**
+   * Round 5, Q7: a method clause may read its class's parameters; the
+   * receiver's class arguments bind them, and these name the class's
+   * declaration and parameters for the evaluator.
+   */
+  readonly outerDeclaration?: ParseNode;
+  readonly outerParameters?: readonly ParseNode.TypeParameter[];
 }
 const genericWhereChecks = new WeakMap<object, readonly GenericWhereCheck[]>();
 export function GenericWhereChecksOf(root: object): readonly GenericWhereCheck[] {
@@ -3577,7 +3584,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return found;
   };
 
-  const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>): void => {
+  /** The receiver's class parameters bound from its Static Type's arguments, when every one is known (round 5, Q7). */
+  const receiverClassBindings = (receiverNode: ParseNode): { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: Map<string, TypeRecord> } | null => {
+    const t = staticType(receiverNode);
+    if (t?.Kind !== 'nominal') return null;
+    const decl = (t as { Declaration?: ParseNode }).Declaration;
+    const list = (decl as { TypeParameters?: { TypeParameterList: readonly ParseNode.TypeParameter[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
+    const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+    if (!decl || !list?.length || !args || args.length !== list.length) return null;
+    const bindings = new Map<string, TypeRecord>();
+    list.forEach((tp, i) => {
+      const arg = args[i];
+      let bound: TypeRecord | null = null;
+      if (typeof arg === 'number') bound = { Kind: 'literal', Value: Value(arg), Base: makePrimitive('uint', [32]) } as unknown as TypeRecord;
+      else if (arg && typeof arg === 'object' && !mentionsTypeParameter(arg)) {
+        const raw = (arg as { Value?: unknown }).Value;
+        bound = arg.Kind === 'literal' && !(raw instanceof Value) ? { ...arg, Value: Value(raw as number) } as TypeRecord : arg;
+      }
+      if (bound) bindings.set(tp.BindingIdentifier.name, bound);
+    });
+    return bindings.size === list.length ? { declaration: decl, parameters: list, bindings } : null;
+  };
+
+  /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
+  const recordClassParameterWhereCheck = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'MemberExpression') return;
+    const fnType = callableForm(staticType(callee));
+    if (fnType?.Kind !== 'function' || fnType.Signatures.length !== 1) return;
+    const declaration = signatureDeclarations.get(fnType.Signatures[0]) as ParseNode.FunctionDeclaration | undefined;
+    if (!declaration || (declaration as { TypeParameters?: unknown }).TypeParameters) return;
+    if (!(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) return;
+    const outer = receiverClassBindings((callee as ParseNode.MemberExpression).MemberExpression as ParseNode);
+    if (outer) recordWhereCheck(call, declaration, new Map(), outer);
+  };
+
+  const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
+    outer?: { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: ReadonlyMap<string, TypeRecord> } | null): void => {
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
     if (!clauses?.length) return;
     // #sec-generic-where: "Omitting an argument list where defaults supply all
@@ -3595,9 +3638,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       bindings.set(name, resolved);
     }
     const checks = whereChecks.get(application) ?? [];
+    for (const [name, bound] of outer?.bindings ?? []) if (!bindings.has(name)) bindings.set(name, bound);
     if (checks.some((check) => check.declaration === declaration && check.bindings.size === bindings.size
       && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!)))) return;
-    checks.push({ declaration, clauses, bindings: new Map(bindings), sourceModule: importedDeclarationSourceModule(declaration) });
+    checks.push({ declaration, clauses, bindings: new Map(bindings), sourceModule: importedDeclarationSourceModule(declaration),
+      ...(outer ? { outerDeclaration: outer.declaration, outerParameters: outer.parameters } : {}) });
     whereChecks.set(application, checks);
   };
   /**
@@ -13187,6 +13232,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           reportType('rt-return-contract', clause, 'a result contract constrains a result this function declares it has none of');
           continue;
         }
+        // A contract on a function's own values, its parameters or its result,
+        // is a run-time check at every evaluation and may observe it
+        // (where-clause-evaluation.test.mts: "a CONTRACT still runs at every
+        // evaluation, which is a different rule"); compile-time evaluability is
+        // the rule for a specialization predicate and a type refinement.
+        if (n.type !== 'TypeAliasDeclaration' && (whereClauseNamesReturn(predicate) || LexicalFreeReferences(predicate).some((reference) => {
+          const binding = ResolveBindingDeclaration(reference, reference.name);
+          return binding?.kind === 'parameter' && binding.node === n;
+        }))) continue;
         const violation = TypeExpressionEvaluabilityViolation(predicate, Value.undefined, () => false, moduleCheckInputs.get(root)?.sourceModule);
         if (violation !== undefined) reportType('rt-compile-time-evaluability', clause,
           'a specialization predicate must be compile-time evaluable: $1', Value(violation));
@@ -20545,7 +20599,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || declaration?.type === 'AsyncMethod' || declaration?.type === 'GeneratorMethod' || declaration?.type === 'AsyncGeneratorMethod';
           if (base.Signatures.length === 1 && whereDeclaration
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
-            recordWhereCheck(node, declaration as ParseNode.FunctionDeclaration, bindings);
+            const member = declaration?.type !== 'FunctionDeclaration' ? patternExpression(specialization.Expression) : null;
+            const outer = member?.type === 'MemberExpression' ? receiverClassBindings((member as ParseNode.MemberExpression).MemberExpression as ParseNode) : null;
+            recordWhereCheck(node, declaration as ParseNode.FunctionDeclaration, bindings, outer);
           }
           // Complete the declaration-owned dependency before copying its
           // signature. The private approximation is instantiated separately;
@@ -27319,22 +27375,98 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return result;
   };
+  /**
+   * Round 5, Q5, direction A: an ordered comparison of an integer-typed place
+   * against a constant narrows the place to an interval on each branch, kept
+   * as `lo` and `hi` facts beside the recorded test outcomes; a later ordered
+   * comparison of the same place is decided against that interval, so
+   * `i > 5 && i < 5`, a nested `if (i < 5)` under `if (i > 5)`, and two `where`
+   * clauses that contradict are refused as tests that can never succeed, and a
+   * comparison the interval already settles as one that can never fail.
+   */
+  const orderedComparison = (test: ParseNode): { place: string, op: string, bound: bigint, min: bigint, max: bigint } | null => {
+    const t = unparenthesized(test);
+    if (t.type !== 'RelationalExpression') return null;
+    const rel = t as ParseNode.RelationalExpression;
+    if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
+    const mirrored: Record<string, string> = { '<': '>', '>': '<', '<=': '>=', '>=': '<=' };
+    let subject = unparenthesized(rel.RelationalExpression as ParseNode);
+    let constant = unparenthesized(rel.ShiftExpression as ParseNode);
+    let op = rel.operator as string;
+    if (narrowableName(subject) === null && narrowableName(constant) !== null) {
+      [subject, constant] = [constant, subject];
+      op = mirrored[op]!;
+    }
+    const place = narrowableName(subject);
+    if (place === null || changesPlace(t, place)) return null;
+    const bound = foldConstant(constant);
+    if (bound === null) return null;
+    const type = operationalType(lookup(place) ?? staticType(subject)) as TypeRecord | null;
+    if (!type || !isIntegerValueType(type)) return null;
+    const prim = type as unknown as { Name?: string, Arguments?: readonly (TypeRecord | number)[] };
+    const bits = prim.Arguments?.[0];
+    if (typeof bits !== 'number') return null;
+    const [min, max] = prim.Name === 'int' ? [-(1n << BigInt(bits - 1)), (1n << BigInt(bits - 1)) - 1n] : [0n, (1n << BigInt(bits)) - 1n];
+    return { place, op, bound, min, max };
+  };
+  const intervalFact = (place: string, which: 'lo' | 'hi'): bigint | undefined => {
+    const t = lookup(`${place}.\u0000${which}`);
+    if (!t) return undefined;
+    const values = (t.Kind === 'union' ? t.Members : [t]).map((m) => {
+      const raw = (m as unknown as { Value?: unknown }).Value;
+      return m.Kind === 'literal' && typeof raw === 'bigint' ? raw : undefined;
+    });
+    if (values.some((v) => v === undefined)) return undefined;
+    const known = values as bigint[];
+    return known.reduce((a, b) => (which === 'lo' ? (a < b ? a : b) : (a > b ? a : b)));
+  };
+  /** The values of the place satisfying `place op bound` (`outcome` true) or its negation, as an inclusive interval. */
+  const comparisonRegion = (c: { op: string, bound: bigint, min: bigint, max: bigint }, outcome: boolean): [bigint, bigint] => {
+    const below: [bigint, bigint] = [c.min, c.op === '<' || c.op === '>=' ? c.bound - 1n : c.bound];
+    const above: [bigint, bigint] = [c.op === '<' || c.op === '>=' ? c.bound : c.bound + 1n, c.max];
+    const satisfied = c.op === '<' || c.op === '<=' ? below : above;
+    return outcome ? satisfied : (satisfied === below ? above : below);
+  };
+  const currentInterval = (c: { place: string, min: bigint, max: bigint }): [bigint, bigint, boolean] => {
+    const lo = intervalFact(c.place, 'lo');
+    const hi = intervalFact(c.place, 'hi');
+    return [lo !== undefined && lo > c.min ? lo : c.min, hi !== undefined && hi < c.max ? hi : c.max, lo !== undefined || hi !== undefined];
+  };
   const walkTestOutcomes = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     const live = flowLive;
     const canon = live && visit ? testCanon(test) : null;
-    const repeated = canon && deciding ? recordedOutcome(canon) : undefined;
+    const ordered = live && visit ? orderedComparison(test) : null;
+    let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
+    if (repeated === undefined && deciding && ordered) {
+      const [lo, hi, narrowed] = currentInterval(ordered);
+      if (narrowed) {
+        const [tlo, thi] = comparisonRegion(ordered, true);
+        const [flo, fhi] = comparisonRegion(ordered, false);
+        if ((tlo > lo ? tlo : lo) > (thi < hi ? thi : hi)) repeated = false;
+        else if ((flo > lo ? flo : lo) > (fhi < hi ? fhi : hi)) repeated = true;
+      }
+    }
     const errorsBefore = errors.length;
     const result = walkTestResult(test, deciding, truthiness, visit);
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
-    if (!canon) return result;
+    // A comparison against a negative literal has no canonical form, but its
+    // interval is as exact as any other's.
+    if (!canon && !ordered) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon.key, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? `${ordered!.op} ${ordered!.bound}`, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
       if (!facts) return facts;
       restoreFlow(facts);
-      for (const place of canon.places) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon.key}`, anyTypeRecord);
+      for (const place of canon?.places ?? []) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon!.key}`, anyTypeRecord);
+      if (ordered) {
+        const [lo, hi] = currentInterval(ordered);
+        const [rlo, rhi] = comparisonRegion(ordered, outcome);
+        const bigintBase = makePrimitive('bigint');
+        declareNarrowed(`${ordered.place}.\u0000lo`, { Kind: 'literal', Value: rlo > lo ? rlo : lo, Base: bigintBase } as unknown as TypeRecord);
+        declareNarrowed(`${ordered.place}.\u0000hi`, { Kind: 'literal', Value: rhi < hi ? rhi : hi, Base: bigintBase } as unknown as TypeRecord);
+      }
       return captureFlow();
     };
     const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };
@@ -33708,17 +33840,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const clauses = owner && owner.type === 'FunctionDeclaration'
           ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
         const formalNames = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
-        for (const clause of clauses ?? []) {
-          const predicate = clause.RefinementPredicate;
-          if (predicate.type !== 'ConditionalRefinement' && !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate)
-              && LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))) {
-            const before = captureFlow();
-            try {
-              walkTest(predicate as ParseNode);
-            } finally {
-              restoreFlow(before);
+        // Each clause is walked under the clauses before it (round 5, Q5): a
+        // conjunction of clauses no value satisfies is a test that can never
+        // succeed, and the narrowing is dropped before the body.
+        const beforeClauses = captureFlow();
+        try {
+          for (const clause of clauses ?? []) {
+            const predicate = clause.RefinementPredicate;
+            if (predicate.type !== 'ConditionalRefinement' && !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate)
+                && LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))) {
+              const outcome = walkTest(predicate as ParseNode);
+              if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
             }
           }
+        } finally {
+          restoreFlow(beforeClauses);
         }
       }
       walk(body);
@@ -39672,6 +39808,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkTypedStaticArguments(n as ParseNode.CallExpression);
         recordRuntimeSubjectWhereCheck(n as ParseNode.CallExpression);
         recordDefaultedWhereCheck(n as ParseNode.CallExpression);
+        recordClassParameterWhereCheck(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);

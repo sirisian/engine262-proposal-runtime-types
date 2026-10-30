@@ -27,12 +27,15 @@ test('a name declared nowhere is refused in every where form', () => {
   refused('type Pos = { a: uint8 } where a > 0; let p: Pos = { a: 1 };', 'rt-compile-time-evaluability');
 });
 
-test('a side effect, a store to the subject, or a mutable read is refused on a runtime-subject predicate', () => {
-  refused('let seen = 0; function f(i: uint32) where (seen++, i > 10) { return i; } f(20);', 'rt-compile-time-evaluability');
+test('a function contract may observe its evaluation; a type refinement may not', () => {
+  expect(evaluated('let seen = 0; function f(i: uint32) where (seen++, i > 10) { return i; } f(20); f(30); String(seen);')).toBe('2');
+  expect(evaluated('let limit: uint32 = 10; function f(i: uint32) where i > limit { return i; } String(f(20));')).toBe('20');
+});
+
+test('a side effect, a store to the subject, or a mutable read is refused on a type refinement', () => {
   refused('type Pos = { a: uint8 } where this.a++ > 0; let p: Pos = { a: 1 };', 'rt-compile-time-evaluability');
   refused('type Q = { a: uint8 } where (this.a = 1, true); let q: Q = { a: 1 };', 'rt-compile-time-evaluability');
   refused('let limit = 0; type Pos = { a: uint8 } where this.a > limit; let p: Pos = { a: 1 };', 'rt-compile-time-evaluability');
-  refused('let limit = 10; function f(i: uint32) where i > limit { return i; } f(20);', 'rt-compile-time-evaluability');
 });
 
 test('a predicate the parameter type can never satisfy, or always satisfies, is judged as any test is', () => {
