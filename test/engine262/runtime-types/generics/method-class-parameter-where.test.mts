@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, observeScript } from '../harness.mts';
+import { evaluated, expectThrown, observeScript } from '../harness.mts';
 
 /**
  * Round 5, Q7: a method clause that reads its class's parameters is decided
@@ -21,4 +21,9 @@ test('a method clause over the class\'s parameters is decided from the receiver'
   refused('class W<N: uint32> { m() where N > 2 { return 1; } } new W.<1>().m();');
   expect(evaluated(`${V}String(new V.<4>().lane.<1>());`)).toBe('1');
   expect(evaluated('class W<N: uint32> { m() where N > 2 { return 1; } } String(new W.<3>().m());')).toBe('1');
+});
+
+test('a method\'s contract message names the method', () => {
+  expectThrown('class C { m(i: uint32) where i > 10 { return i; } } let v: any = 5; new C().m(v);', 'the contract of "m"');
+  expectThrown('const o = { f(i: uint32) where i > 10 { return i; } }; let v: any = 5; o.f(v);', 'the contract of "f"');
 });

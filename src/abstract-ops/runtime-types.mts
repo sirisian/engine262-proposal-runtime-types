@@ -5808,8 +5808,13 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
       // them.
       const name = (fn as { properties?: Map<unknown, { Value?: Value }> }).properties === undefined
         ? 'the builder' : 'the builder';
+      // A method has no BindingIdentifier; its own `name` property is the
+      // name it was defined with, so the message names `m` rather than
+      // "the builder" (round 5, Q7).
+      const ownName = (fn as { properties?: Map<unknown, { Value?: Value }> }).properties?.get(Value('name'))?.Value;
       const declared = (fn as { ECMAScriptCode?: { parent?: { BindingIdentifier?: { name?: string } } } })
-        .ECMAScriptCode?.parent?.BindingIdentifier?.name;
+        .ECMAScriptCode?.parent?.BindingIdentifier?.name
+        ?? (ownName instanceof JSStringValue && ownName.stringValue() !== '' ? ownName.stringValue() : undefined);
       const shown = args.length === 0 ? '()' : `(${args.map((a) => safeDisplay(a)).join(', ')})`;
       return Throw.TypeError(
         'the contract of $1 is not satisfied by $2: $3',
