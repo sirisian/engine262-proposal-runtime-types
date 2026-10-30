@@ -72,6 +72,7 @@ import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
+import { NondeterministicMember } from './evaluable-fragment.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
@@ -3546,6 +3547,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return found;
   };
 
+  /** A read of the clock or the random source in a predicate, or undefined. */
+  const whereClauseNondeterministicRead = (predicate: ParseNode): string | undefined => {
+    let found: string | undefined;
+    const visit = (value: unknown): void => {
+      if (found !== undefined || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      found = NondeterministicMember(node as never);
+      if (found !== undefined) return;
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
   /** Whether a predicate reads `return`, the result a contract constrains. */
   const whereClauseNamesReturn = (predicate: ParseNode): boolean => {
     let found = false;
@@ -3623,6 +3640,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (bound) bindings.set(tp.BindingIdentifier.name, bound);
     });
     return bindings.size === list.length ? { declaration: decl, parameters: list, bindings } : null;
+  };
+
+  /**
+   * An enum's Type Object called with no argument: the call converts one value
+   * to an enumerator, and with none it failed at run time as "undefined is not
+   * assignable to int.<32>" (round 4, diagnostic identity).
+   */
+  const checkEnumConversionCall = (call: ParseNode.CallExpression): void => {
+    const callee = call.CallExpression;
+    if (callee.type !== 'IdentifierReference' || call.Arguments.length !== 0 || assignedNames.has(callee.name)) return;
+    const declaration = enumNodes.get(callee.name);
+    if (!declaration || declaration.type !== 'EnumDeclaration' || ResolveBindingDeclaration(callee, callee.name)?.node !== declaration) return;
+    reportType('rt-call-argument', call, '$1 converts one value to an enumerator of $1 and is called with none', Value(callee.name));
   };
 
   /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
@@ -13260,6 +13290,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const binding = ResolveBindingDeclaration(reference, reference.name);
           return binding?.kind === 'parameter' && binding.node === n;
         }))) continue;
+        // A `where` clause is decided once, at its declaration or application,
+        // so a read of the clock or the random source has no value to decide
+        // it by (round 5, Gap 6). Kept to `where` clauses: an enumerator
+        // initializer reaching `Math.random` through a binding is the run
+        // time's refusal (enum-initializer-fragment.test.mts).
+        const nondeterministic = whereClauseNondeterministicRead(predicate);
+        if (nondeterministic !== undefined) {
+          reportType('rt-compile-time-evaluability', clause, 'a where clause must be compile-time evaluable: $1', Value(nondeterministic));
+          continue;
+        }
         const violation = TypeExpressionEvaluabilityViolation(predicate, Value.undefined, () => false, moduleCheckInputs.get(root)?.sourceModule);
         if (violation !== undefined) reportType('rt-compile-time-evaluability', clause,
           'a specialization predicate must be compile-time evaluable: $1', Value(violation));
@@ -35494,7 +35534,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               || NarrowFrom(wanted as TypeRecord, undefinedType) !== wanted) {
               return;
             }
-            const completion = CreateTypeDiagnostic('rt-required-member', n, diagnosticPhase, '$1 is required by $2 and is not supplied', Value(pr.Name || `parameter ${i + 1}`), Value(displayType(wanted as TypeRecord))) as ThrowCompletion;
+            // #sec-type-diagnostic-identity: a parameter the call leaves without an
+            // argument is a call-argument failure, not a missing member of a value.
+            const completion = CreateTypeDiagnostic('rt-call-argument', n, diagnosticPhase, 'the call supplies no argument for $1, a required parameter of type $2', Value(pr.Name || `parameter ${i + 1}`), Value(displayType(wanted as TypeRecord))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           });
         }
@@ -38203,7 +38245,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? shape.Properties.find((property) => property.key === wellKnownSymbols.dispose)?.type : null;
               return !disposer || (!notCallable(disposer) && !protocolCallFails(disposer, () => false, [], type));
             })) {
-              const completion = CreateTypeDiagnostic('rt-disposal-contract', root, diagnosticPhase, 'a using resource of type $1 has a disposal contract that cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-disposal-contract', root, diagnosticPhase, (declared.Kind === 'primitive' || declared.Kind === 'literal'
+                ? 'a using resource of type $1 is a primitive, which has no Symbol.dispose method'
+                : 'a using resource of type $1 has a disposal contract that cannot be called without arguments'), Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             walk(binding);
@@ -39836,6 +39880,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         recordRuntimeSubjectWhereCheck(n as ParseNode.CallExpression);
         recordDefaultedWhereCheck(n as ParseNode.CallExpression);
         recordClassParameterWhereCheck(n as ParseNode.CallExpression);
+        checkEnumConversionCall(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);

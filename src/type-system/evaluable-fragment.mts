@@ -66,7 +66,7 @@ const NONDETERMINISTIC_MEMBERS: ReadonlyMap<string, readonly string[]> = new Map
 ]);
 
 /** `Math.random`, `Date.now` and the like: a member read whose value is not a function of the program. */
-function nondeterministicMember(node: { type?: string, MemberExpression?: { type?: string, name?: string }, IdentifierName?: { name?: string } }): string | undefined {
+export function NondeterministicMember(node: { type?: string, MemberExpression?: { type?: string, name?: string }, IdentifierName?: { name?: string } }): string | undefined {
   if (node.type !== 'MemberExpression' || node.MemberExpression?.type !== 'IdentifierReference' || !node.IdentifierName?.name) return undefined;
   const members = NONDETERMINISTIC_MEMBERS.get(node.MemberExpression.name ?? '');
   return members?.includes(node.IdentifierName.name) ? `a read of ${node.MemberExpression.name}.${node.IdentifierName.name}, which is not a function of the program` : undefined;
@@ -122,14 +122,7 @@ export function FirstNonEvaluableForm(node: ParseNode | undefined | null): strin
         return byName;
       }
     }
-    // #sec-compile-time-evaluability: the fragment is deterministic, so a read
-    // of the clock or the random source is out, whatever the binding kind of
-    // the global that reaches it. `where Math.random() > 0.5` passed the screen
-    // (round 5, Gap 6) and was refused only when evaluated.
-    const member = nondeterministicMember(record);
-    if (member !== undefined) {
-      return member;
-    }
+
     for (const [key, child] of Object.entries(record)) {
       if (key === 'parent' || key === 'location') {
         continue;

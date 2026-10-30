@@ -789,7 +789,8 @@ export abstract class TypeParser extends ExpressionParser {
     // with `N` required - the parameter after a pack is what stops the run.
     const previous = TypeParameterList[TypeParameterList.length - 1];
     if (previous && !previous.IsVariadic && !param.IsVariadic && previous.TypeParameterDefault && !param.TypeParameterDefault) {
-      return this.unexpected();
+      // Named, rather than a bare "Unexpected token" at the closing bracket.
+      this.addEarlyError(() => Throw.SyntaxError('a type parameter without a default cannot follow one with a default'), param);
     }
     // The same clause's second rule: two adjacent variadic parameters where
     // the first has no constraint have no boundary between them - the first
