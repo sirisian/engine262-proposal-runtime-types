@@ -23,6 +23,11 @@ test('a method clause over the class\'s parameters is decided from the receiver'
   expect(evaluated('class W<N: uint32> { m() where N > 2 { return 1; } } String(new W.<3>().m());')).toBe('1');
 });
 
+test('a static method under a class application is decided from the written arguments', () => {
+  refused('class V<N: uint32> { static m<I: uint32>() where I < N { return I; } } V.<4>.m.<5>();');
+  expect(evaluated('class V<N: uint32> { static m<I: uint32>() where I < N { return I; } } String(V.<4>.m.<1>());')).toBe('1');
+});
+
 test('a method\'s contract message names the method', () => {
   expectThrown('class C { m(i: uint32) where i > 10 { return i; } } let v: any = 5; new C().m(v);', 'the contract of "m"');
   expectThrown('const o = { f(i: uint32) where i > 10 { return i; } }; let v: any = 5; o.f(v);', 'the contract of "f"');

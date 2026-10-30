@@ -3586,6 +3586,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The receiver's class parameters bound from its Static Type's arguments, when every one is known (round 5, Q7). */
   const receiverClassBindings = (receiverNode: ParseNode): { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: Map<string, TypeRecord> } | null => {
+    // A static method under a class application, `V.<4>.m.<5>()`: the receiver
+    // is the applied class itself, whose written type arguments bind the
+    // class's parameters (round 5, Q7).
+    const applied = unparenthesized(receiverNode);
+    if (applied.type === 'TypeArgumentsExpression') {
+      const base = unparenthesized((applied as ParseNode.TypeArgumentsExpression).Expression as ParseNode);
+      const decl = base.type === 'IdentifierReference' && !assignedNames.has(base.name)
+        && ResolveBindingDeclaration(base, base.name)?.kind === 'class' ? classNodes.get(base.name) : undefined;
+      const list = (decl as { TypeParameters?: { TypeParameterList: readonly ParseNode.TypeParameter[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
+      if (decl && list?.length) {
+        const bindings = new Map<string, TypeRecord>();
+        bindExplicitTypeArguments(typeParameterRecordsOf(list), (applied as ParseNode.TypeArgumentsExpression).TypeArguments.TypeArgumentList,
+          bindings, { complete: true, application: applied as ParseNode.TypeArgumentsExpression });
+        if (bindings.size === list.length && [...bindings.values()].every((bound) => !mentionsTypeParameter(bound))) {
+          return { declaration: decl, parameters: list, bindings };
+        }
+      }
+      return null;
+    }
     const t = staticType(receiverNode);
     if (t?.Kind !== 'nominal') return null;
     const decl = (t as { Declaration?: ParseNode }).Declaration;
@@ -23875,8 +23894,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const generator = member.type === 'GeneratorMethod' || member.type === 'AsyncGeneratorMethod';
           const asyncGenerator = member.type === 'AsyncGeneratorMethod';
           let Return = member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null;
+          // A `where` clause is a contract the method declares (#sec-generic-where),
+          // so it anchors the literal's participation as a declared parameter or
+          // return type does; an unannotated method carrying one left a
+          // script-level `const` bound to the literal with no Static Type at all
+          // (round 5, Q6).
           let anchored = parameterTypes.some(declaredAnchor) || declaredAnchor(Return)
-            || declaredAnchor(expected?.Return ?? null) || declaredAnchor(expected?.ThisType ?? null);
+            || declaredAnchor(expected?.Return ?? null) || declaredAnchor(expected?.ThisType ?? null)
+            || ((member as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0;
           if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
           const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null, Narrows?: SignatureRecord['Narrows'] } = {
             Parameters, Return, ...methodPredicate(member.TypeAnnotation, Parameters, Return),

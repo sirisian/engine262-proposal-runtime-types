@@ -55,7 +55,7 @@ test('a method specialization predicate is judged as a function one is (round 5,
   expect(evaluated('class V<N: uint32> { lane<I: uint32>(): uint32 where I < N { return (1 := uint32); } } String(new V.<4>().lane.<1>());')).toBe('1');
   // Decided before the body since round 5, Q7, from the receiver's class arguments.
   expect(observeScript('class V<N: uint32> { lane<I: uint32>(): uint32 where I < N { return (1 := uint32); } } new V.<4>().lane.<5>();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-where-unsatisfied' } });
-  expect(observeScript('const o = { f<N: uint32>() where N > 0 { return N; } }; o.f.<0>();')).toMatchObject({ errorClass: 'TypeError' });
+  expect(observeScript('const o = { f<N: uint32>() where N > 0 { return N; } }; o.f.<0>();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-where-unsatisfied' } });
 });
 
 test('a result contract is decided at a return whose operand is a literal (round 5, Gap 8)', () => {
