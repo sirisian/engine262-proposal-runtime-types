@@ -1981,7 +1981,18 @@ function isEnumeratorInitializer(fn: object): boolean {
   while (p && p.type === 'ParenthesizedExpression') {
     p = p.parent as typeof p;
   }
-  return p?.type === 'EnumMember';
+  if (p?.type !== 'EnumMember') return false;
+  // Only the sequential form produces the members' values: #sec-enums gives
+  // "an enumerator initialized with a function of two parameters ... the
+  // result of calling that function", and the run time calls exactly the
+  // functions of two parameters. Any other function literal is the
+  // enumerator's value itself, in a function-typed position, and takes that
+  // position's signature like any contextually typed literal: treated as a
+  // producer, `enum C: (float32) => float32 { Zero = x => 0 }` published the
+  // literal 0 as its return and the evaluated enumerator refused itself.
+  const formals = (fn as { ArrowParameters?: readonly unknown[] | null, FormalParameters?: readonly unknown[] | null }).ArrowParameters
+    ?? (fn as { FormalParameters?: readonly unknown[] | null }).FormalParameters;
+  return (formals?.length ?? 0) === 2;
 }
 
 function isNumericValueTypeName(name: string | undefined): boolean {
