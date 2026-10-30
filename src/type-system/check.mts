@@ -3547,6 +3547,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return found;
   };
 
+  /** Whether a predicate assigns or updates anything: such a clause is not a pure test, and is not walked as one. */
+  const whereClauseAssigns = (predicate: ParseNode): boolean => {
+    let found = false;
+    const visit = (value: unknown): void => {
+      if (found || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') { found = true; return; }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
   /** Whether a predicate reads `this`, the value a record refinement tests. */
   const whereClauseNamesThis = (predicate: ParseNode): boolean => {
     let found = false;
@@ -14485,6 +14500,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               arg = R(r.Value);
             }
             args.push(arg);
+          }
+          // Round 5 follow-up, Q11: a class's own clauses are judged at an
+          // application in a type position (`let v: V.<1>`) as at one in an
+          // expression.
+          if (classDeclaration && ((classDeclaration as { ClassTail?: { WhereClauses?: readonly unknown[] | null } }).ClassTail?.WhereClauses?.length ?? 0) > 0) {
+            const classParameters = (classDeclaration as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
+            const classBindings = new Map<string, TypeRecord>();
+            classParameters.forEach((parameter, index) => {
+              const written = orderedArgList[index];
+              const resolved = written && (parameter.Arity ?? 0) === 0 ? resolveType(written) : null;
+              if (resolved && !mentionsTypeParameter(resolved)) classBindings.set(parameter.BindingIdentifier.name, resolved);
+            });
+            if (classParameters.length > 0 && classBindings.size === classParameters.length) {
+              recordWhereCheck(node, classDeclaration as unknown as GenericWhereCheck['declaration'], classBindings);
+            }
           }
           // #sec-parameterized-types: a primitive whose one type argument is an
           // object type is a metadata parameterization, `float32.<{ m: 1 }>`.
@@ -27706,18 +27736,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const rel = t as ParseNode.RelationalExpression;
     if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
     const mirrored: Record<string, string> = { '<': '>', '>': '<', '<=': '>=', '>=': '<=' };
+    // A value type parameter (`N` of `<N: uint32>`) is a place too, typed by
+    // its constraint: the clauses a class and its methods state over it are
+    // narrowed in sequence like any other (round 5 follow-up, Q11, the merge).
+    const valueParameterConstraint = (node: ParseNode): TypeRecord | null => {
+      if (node.type !== 'IdentifierReference') return null;
+      const binding = ResolveBindingDeclaration(node, (node as ParseNode.IdentifierReference).name);
+      if (binding?.kind !== 'type-parameter') return null;
+      const list = (binding.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+      const parameter = list.find((candidate) => candidate.BindingIdentifier.name === (node as ParseNode.IdentifierReference).name);
+      const constraint = parameter && (parameter as { IsValueParameter?: boolean }).IsValueParameter
+        ? (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint : null;
+      return constraint ? resolveType(constraint as ParseNode.Type) : null;
+    };
+    const placeOf = (node: ParseNode): string | null => narrowableName(node)
+      ?? (valueParameterConstraint(node) ? (node as ParseNode.IdentifierReference).name : null);
     let subject = unparenthesized(rel.RelationalExpression as ParseNode);
     let constant = unparenthesized(rel.ShiftExpression as ParseNode);
     let op = rel.operator as string;
-    if (narrowableName(subject) === null && narrowableName(constant) !== null) {
+    if (placeOf(subject) === null && placeOf(constant) !== null) {
       [subject, constant] = [constant, subject];
       op = mirrored[op]!;
     }
-    const place = narrowableName(subject);
+    const place = placeOf(subject);
     if (place === null || changesPlace(t, place)) return null;
     const bound = foldConstant(constant);
     if (bound === null) return null;
-    const type = operationalType(lookup(place) ?? staticType(subject)) as TypeRecord | null;
+    const type = operationalType(lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
     if (!type || !isIntegerValueType(type)) return null;
     const prim = type as unknown as { Name?: string, Arguments?: readonly (TypeRecord | number)[] };
     const bits = prim.Arguments?.[0];
@@ -34150,6 +34195,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const owner = (Array.isArray(body) ? body[0] : body)?.parent as ParseNode | undefined;
         const clauses = owner && owner.type === 'FunctionDeclaration'
           ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
+        // Round 5 follow-up, Q11, the merge: a method's clauses hold under its
+        // class's, so they are walked after the class's; a method clause no
+        // value the class admits can satisfy can never succeed, and one every
+        // such value satisfies can never fail.
+        if (owner && owner.type === 'MethodDefinition') {
+          let classNode: ParseNode | undefined = owner.parent as ParseNode | undefined;
+          while (classNode && classNode.type !== 'ClassDeclaration' && classNode.type !== 'ClassExpression') classNode = classNode.parent as ParseNode | undefined;
+          const classClauses = (classNode as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } } | undefined)?.ClassTail?.WhereClauses ?? [];
+          const methodClauses = (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+          if (classClauses.length > 0 && methodClauses.length > 0) {
+            const beforeMerge = captureFlow();
+            try {
+              for (const clause of [...classClauses, ...methodClauses]) {
+                const predicate = clause.RefinementPredicate;
+                if (predicate.type === 'ConditionalRefinement' || whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+                const outcome = walkTest(predicate as ParseNode);
+                if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
+              }
+            } finally {
+              restoreFlow(beforeMerge);
+            }
+          }
+        }
         const formalNames = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
         // Each clause is walked under the clauses before it (round 5, Q5): a
         // conjunction of clauses no value satisfies is a test that can never
@@ -34158,8 +34226,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         try {
           for (const clause of clauses ?? []) {
             const predicate = clause.RefinementPredicate;
+            // A clause over a value type parameter is walked too (round 5
+            // follow-up, Q11): `where N > 5 where N < 5` is the same
+            // contradiction over a parameter the application binds.
+            const valueTypeParameters = new Set(((owner as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | undefined)?.TypeParameters?.TypeParameterList ?? [])
+              .filter((parameter) => (parameter as { IsValueParameter?: boolean }).IsValueParameter).map((parameter) => parameter.BindingIdentifier.name));
             if (predicate.type !== 'ConditionalRefinement' && !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate)
-                && LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))) {
+                && (LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))
+                  || (!whereClauseAssigns(predicate) && LexicalFreeReferences(predicate).some((reference) => valueTypeParameters.has(reference.name))))) {
               const outcome = walkTest(predicate as ParseNode);
               if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
             }

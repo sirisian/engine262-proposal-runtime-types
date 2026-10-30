@@ -32,3 +32,21 @@ test('a method is called under the class clause and its own', () => {
   expect(evaluated(`${V}String(new V.<4>().m.<3>());`)).toBe('3');
   unsatisfied(`${V}new V.<4>().m.<5>();`);
 });
+
+test('an application in a type position is judged too', () => {
+  unsatisfied('class V<N: uint32> where N > 2 { } let v: V.<1>;');
+  unsatisfied('class V<N: uint32> where N > 2 { } function f(v: V.<1>) { return v; }');
+  expect(evaluated("class V<N: uint32> where N > 2 { } let v: V.<3> = new V.<3>(); 'ok';")).toBe('ok');
+});
+
+test('a method clause is judged under the class clause at its declaration (the merge)', () => {
+  const impossible = (source: string): void => {
+    expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-impossible-test' } });
+  };
+  impossible('class V<N: uint32> where N > 2 { m() where N < 2 { return 1; } }');
+  impossible('class V<N: uint32> where N > 2 { m() where N > 1 { return 1; } }');
+  expect(evaluated('class V<N: uint32> where N > 2 { m() where N > 5 { return 1; } } String(new V.<6>().m());')).toBe('1');
+  // The same narrowing judges a generic function's clauses over its value parameters.
+  impossible('function g<N: uint32>() where N > 5 where N < 5 { return N; }');
+  expect(evaluated('function g<N: uint32>() where N > 5 where N < 9 { return N; } String(g.<6>());')).toBe('6');
+});
