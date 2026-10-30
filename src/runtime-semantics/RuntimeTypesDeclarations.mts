@@ -53,7 +53,7 @@ import { BindTypeParameterTyped, toNumericArgument,
   SubstituteTypeArguments, GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
-import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { InferGenericBindings, TypeParameterValue, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -2943,6 +2943,34 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration,
   return yield* InCapturedTypeContext(captured, function* apply(): ValueEvaluator {
     const frame = new Map<string, TypeRecord>();
     const bound = Q(yield* BindTypeArgumentRecordsInto(params, args, names, frame, declaration.BindingIdentifier?.name ?? 'a class'));
+    // A class's own `where` clauses hold of every specialization (round 5
+    // follow-up, Q11): evaluated with each parameter bound to its argument,
+    // as a function specialization's are.
+    const clauses = (declaration.ClassTail as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+    if (clauses?.length) {
+      const context = surroundingAgent.runningExecutionContext;
+      const outer = context.LexicalEnvironment;
+      const scope = new DeclarativeEnvironmentRecord(outer);
+      for (const parameter of params) {
+        const name = parameter.BindingIdentifier.name;
+        const binding = frame.get(name);
+        if (!binding) continue;
+        const value = Q(yield* TypeParameterValue(binding));
+        X(scope.CreateImmutableBinding(Value(name), Value.true));
+        X(scope.InitializeBinding(Value(name), value));
+      }
+      context.LexicalEnvironment = scope;
+      try {
+        for (const clause of clauses) {
+          const verdict = Q(yield* GetValue(Q(yield* Evaluate(clause.RefinementPredicate as never))));
+          if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+            return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+          }
+        }
+      } finally {
+        context.LexicalEnvironment = outer;
+      }
+    }
     return yield* SpecializeFromFrame(declaration, frame, bound, bound.map(specializationKeyOf).join(','), family);
   });
 }

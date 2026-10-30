@@ -2284,6 +2284,7 @@ export namespace ParseNode {
 
     // proposal-runtime-types ImplementsClause : `implements` ImplementsList
     readonly ImplementsClause?: readonly TypeReference[] | null;
+    readonly WhereClauses?: readonly WhereClause[] | null;
     readonly ClassHeritage: ClassHeritage | null;
     readonly ClassBody: ClassBody | null;
   }

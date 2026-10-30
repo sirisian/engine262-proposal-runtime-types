@@ -2529,6 +2529,11 @@ export abstract class ExpressionParser extends FunctionParser {
     } else {
       node.ImplementsClause = null;
     }
+    // A class's own `where` clauses (round 5 follow-up, Q11): specialization
+    // predicates over its type parameters, after the heritage and before the
+    // body, judged at every application of the class.
+    (node as { WhereClauses?: ParseNode.WhereClause[] | null }).WhereClauses = surroundingAgent.feature('runtime-types') && this.test('where')
+      ? this.parseWhereClauses() : null;
 
     this.expect(Token.LBRACE);
     if (this.eat(Token.RBRACE)) {

@@ -116,9 +116,10 @@ test('the where positions previously claimed as covered', () => {
   // An ABSTRACT method carries a clause: a bodiless declaration still states what it requires
   // (#sec-generic-where).
   expect(ok('abstract class V<N: uint32> { lane<I: uint32>(): uint32 where I < N; }')).toBe(true);
-  // A class-level `where` is still refused - nothing writes one, and the
-  // dependent-record form is left to its extension.
-  expectThrown('class C<N: uint32> where N > 0 { }');
+  // A class-level `where` is a specialization predicate over the class's
+  // parameters, judged at every application of the class (round 5 follow-up,
+  // Q11, the author's decision of October 30; it was refused before).
+  expect(ok('class C<N: uint32> where N > 0 { }')).toBe(true);
   // A TYPE ALIAS clause parses.
   expect(evaluated('type P<N: uint32> = uint32 where N > 0; let x: P.<3> = (1 := uint32); String(x);')).toBe('1');
   // FIXED. This was recorded as a MEASUREMENT while the alias position parsed its clause and

@@ -3839,7 +3839,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
     outer?: { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: ReadonlyMap<string, TypeRecord> } | null): void => {
-    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
+      ?? (declaration as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses;
     if (!clauses?.length) return;
     // #sec-generic-where: "Omitting an argument list where defaults supply all
     // arguments creates the same checking obligation as an explicit empty
@@ -20757,6 +20758,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A mutable or replaceable constructor's source declaration alone
             // does not establish the value receiving these arguments.
             if (established) recordTypeArgumentApplication(specialization, parameters, bindings, pending);
+            // A class's own clauses are judged at each application of the
+            // class, as an alias's are (round 5 follow-up, Q11).
+            if (established && parameters.every((parameter) => bindings.has(parameter.Name))
+                && ((declaration as { ClassTail?: { WhereClauses?: readonly unknown[] | null } }).ClassTail?.WhereClauses?.length ?? 0) > 0) {
+              recordWhereCheck(specialization, declaration as unknown as GenericWhereCheck['declaration'], bindings);
+            }
             if (established && parameters.every((parameter) => bindings.has(parameter.Name))) {
               // Selected arguments keep free binder identities below member
               // results too; a context attached only to the instance is lost
