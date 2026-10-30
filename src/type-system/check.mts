@@ -38515,23 +38515,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // and admitted where it is open. The walk's narrowing is dropped.
         if (isPlainAlias && resolved && !mentionsTypeParameter(placeholder)) {
           const base = resolved.Kind === 'parameterized' ? ((resolved as { Base?: TypeRecord }).Base ?? resolved) : resolved;
-          for (const clause of ((n as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [])) {
-            const predicate = clause.RefinementPredicate;
-            // A `match` in a refinement has an implicit `default: false`
-            // (#sec-discriminated-where-chains: a value no clause matches is
-            // refused at the boundary), so the exhaustiveness judgment of an
-            // ordinary `match` does not apply to it; such a predicate is not
-            // walked here.
-            if (predicate.type === 'ConditionalRefinement' || !whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate)
-                || whereClauseContainsMatch(predicate)) continue;
-            const before = captureFlow();
-            thisTypeFrames.push(base);
-            try {
-              walkTest(predicate as ParseNode);
-            } finally {
-              thisTypeFrames.pop();
-              restoreFlow(before);
+          // Each clause is walked under the clauses before it (round 5, Q5).
+          const beforeClauses = captureFlow();
+          thisTypeFrames.push(base);
+          try {
+            for (const clause of ((n as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [])) {
+              const predicate = clause.RefinementPredicate;
+              // A `match` in a refinement has an implicit `default: false`
+              // (#sec-discriminated-where-chains: a value no clause matches is
+              // refused at the boundary), so the exhaustiveness judgment of an
+              // ordinary `match` does not apply to it; such a predicate is not
+              // walked here.
+              if (predicate.type === 'ConditionalRefinement' || !whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate)
+                  || whereClauseContainsMatch(predicate)) continue;
+              const outcome = walkTest(predicate as ParseNode);
+              if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
             }
+          } finally {
+            thisTypeFrames.pop();
+            restoreFlow(beforeClauses);
           }
         }
         if (resolved) {

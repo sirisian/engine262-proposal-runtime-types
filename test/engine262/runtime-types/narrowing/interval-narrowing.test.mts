@@ -29,6 +29,13 @@ test('contradictory where clauses are refused at the declaration', () => {
   expect(evaluated('function f(i: uint8) where i > 5 where i < 10 { return i; } String(f(7));')).toBe('7');
 });
 
+test('contradictory refinement clauses on a type alias are refused at the declaration', () => {
+  impossible('type T = { a: uint8 } where this.a > 5 where this.a < 5;');
+  impossible('type T = { a: uint8 } where this.a > 5 && this.a < 5;');
+  impossible('type S = uint8 where this > 5 where this < 5;');
+  expect(evaluated('type T = { a: uint8 } where this.a > 5 where this.a < 10; let t: T = { a: 7 }; String(t.a);')).toBe('7');
+});
+
 test('a satisfiable interval, an assignment, a loop, and a number are left alone', () => {
   expect(evaluated('function k(i: uint8) { if (i > 5 && i < 10) { return 1; } return 0; } String(k(7));')).toBe('1');
   expect(evaluated('function k(i: uint8, j: uint8) { if (i > 5) { i = j; if (i < 5) { return 1; } } return 0; } String(k(9, 1));')).toBe('1');
