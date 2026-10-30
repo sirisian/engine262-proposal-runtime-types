@@ -3767,6 +3767,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(start);
   };
 
+  /**
+   * Whether every `where` clause of an override (or implementation) is implied
+   * by the clauses of the member it overrides (round 5 follow-up, Q10): a
+   * caller holding the base relies on the base's contract, so an override may
+   * repeat or weaken it but not strengthen it, as Eiffel lets a redefinition
+   * only weaken a precondition. An override with no clause is implied; one
+   * whose base has none states a new precondition and is not. A clause is
+   * implied when its text matches a base clause, or when it is one ordered
+   * comparison of a parameter against a constant whose region contains the
+   * interval the base's comparisons of the same parameter (by position) allow;
+   * anything else is refused, conservatively.
+   */
+  const clausesImplied = (base: ParseNode, override: ParseNode): boolean => {
+    const own = (override as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    if (own.length === 0) return true;
+    const inherited = (base as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    if (inherited.length === 0) return false;
+    const text = (clause: ParseNode.WhereClause): string => ((clause.RefinementPredicate as { sourceText?: string }).sourceText ?? '').replace(/\s+/g, '');
+    const parameterNames = (declaration: ParseNode): string[] => [
+      ...((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [])
+        .map((parameter) => parameter.BindingIdentifier.name),
+    ];
+    const ownNames = parameterNames(override);
+    const baseNames = parameterNames(base);
+    const comparison = (clause: ParseNode.WhereClause, names: readonly string[]): { index: number, op: string, bound: bigint } | null => {
+      let t = clause.RefinementPredicate as ParseNode;
+      while (t.type === 'ParenthesizedExpression') t = (t as { Expression: ParseNode }).Expression;
+      if (t.type !== 'RelationalExpression') return null;
+      const rel = t as unknown as { operator: string, RelationalExpression: ParseNode, ShiftExpression: ParseNode };
+      if (!['<', '<=', '>', '>='].includes(rel.operator)) return null;
+      const subject = rel.RelationalExpression;
+      if (subject.type !== 'IdentifierReference') return null;
+      const index = names.indexOf((subject as ParseNode.IdentifierReference).name);
+      const bound = foldConstant(rel.ShiftExpression);
+      return index >= 0 && bound !== null ? { index, op: rel.operator, bound } : null;
+    };
+    const region = (c: { op: string, bound: bigint }): [bigint | null, bigint | null] => (
+      c.op === '<' ? [null, c.bound - 1n] : c.op === '<=' ? [null, c.bound] : c.op === '>' ? [c.bound + 1n, null] : [c.bound, null]);
+    return own.every((clause) => {
+      if (inherited.some((candidate) => text(candidate) === text(clause))) return true;
+      const mine = comparison(clause, ownNames);
+      if (!mine) return false;
+      let lo: bigint | null = null;
+      let hi: bigint | null = null;
+      for (const candidate of inherited) {
+        const theirs = comparison(candidate, baseNames);
+        if (!theirs || theirs.index !== mine.index) continue;
+        const [l, h] = region(theirs);
+        if (l !== null && (lo === null || l > lo)) lo = l;
+        if (h !== null && (hi === null || h < hi)) hi = h;
+      }
+      if (lo === null && hi === null) return false;
+      const [ml, mh] = region(mine);
+      return (ml === null || (lo !== null && lo >= ml)) && (mh === null || (hi !== null && hi <= mh));
+    });
+  };
+
   /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
   const recordClassParameterWhereCheck = (call: ParseNode.CallExpression): void => {
     const callee = call.CallExpression;
@@ -11227,6 +11284,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const inherited = overrideStructure.Properties.find((p) => p.key === own.key);
         if (!inherited || own.type?.Kind !== 'function' || inherited.type?.Kind !== 'function') {
           continue;
+        }
+        {
+          const ownSignature = (own.type as { Signatures: readonly SignatureRecord[] }).Signatures[0];
+          const baseSignature = (inherited.type as { Signatures: readonly SignatureRecord[] }).Signatures[0];
+          const ownDeclaration = ownSignature ? signatureDeclarations.get(ownSignature) : undefined;
+          const baseDeclaration = baseSignature ? signatureDeclarations.get(baseSignature) : undefined;
+          if (ownDeclaration && baseDeclaration && ownDeclaration !== baseDeclaration && !clausesImplied(baseDeclaration, ownDeclaration)) {
+            reportType('rt-inherited-contract', n, '$1 states a where clause the member it overrides does not imply; an override may only repeat or weaken the inherited contract', Value(String(own.key)));
+          }
         }
         for (const sig of (own.type as { Signatures: readonly SignatureRecord[] }).Signatures) {
           for (const base of (inherited.type as { Signatures: readonly SignatureRecord[] }).Signatures) {
@@ -20814,7 +20880,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // (round 5, Gap 10); the clause environment at pre-evaluation binds
           // the declaration's own parameters, and a class's are closed over by
           // the application's bindings where they are known.
+          // An abstract signature's clause is what a caller holding the base
+          // relies on (round 5 follow-up, Q10): `v.lane.<9>()` through `v: V`
+          // is decided against it, though the implementation may state none.
           const whereDeclaration = declaration?.type === 'FunctionDeclaration' || declaration?.type === 'MethodDefinition'
+            || declaration?.type === 'AbstractMethodDefinition'
             || declaration?.type === 'AsyncMethod' || declaration?.type === 'GeneratorMethod' || declaration?.type === 'AsyncGeneratorMethod';
           if (base.Signatures.length === 1 && whereDeclaration
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
@@ -41214,7 +41284,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const type = element.type === 'FieldDefinition'
                 ? element.TypeAnnotation ? resolveType(element.TypeAnnotation.Type) : null
                 : declaredMethodType(element as never, element);
-              addMemberContract(members, { key, kind, static: !!(element as { static?: boolean }).static,
+              addMemberContract(members, { key, kind, static: !!(element as { static?: boolean }).static, Declaration: element as ParseNode,
                 abstract: element.type === 'AbstractMethodDefinition',
                 readonly: element.type === 'FieldDefinition' && element.readonly,
                 type: type && !mentionsTypeParameter(type) ? type : null });
@@ -41226,6 +41296,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const masked = inheritedFieldViolation(chain, instanceType);
         if (masked !== null) reportType('rt-inherited-contract', (node as ParseNode), 'field $1 does not preserve its inherited member contract', typeof masked === 'string' ? Value(masked) : masked);
+        // Round 5 follow-up, Q10: a member implementing an abstract one may
+        // only repeat or weaken the abstract member's `where` clauses, which
+        // are what a caller holding the abstract class relies on.
+        for (const member of chain[0] ?? []) {
+          if (member.kind === 'field' || !member.Declaration) continue;
+          const obligation = chain.slice(1).flat().find((prior) => prior.abstract && prior.key === member.key && prior.static === member.static && prior.kind === member.kind);
+          if (obligation?.Declaration && !clausesImplied(obligation.Declaration, member.Declaration)) {
+            reportType('rt-inherited-contract', (node as ParseNode), '$1 states a where clause the member it overrides does not imply; an override may only repeat or weaken the inherited contract', Value(String(member.key)));
+          }
+        }
         const violation = abstractMemberViolation(chain, n.ClassModifiers?.includes('abstract') ?? false);
         if (violation) reportType('rt-inherited-contract', (node as ParseNode), violation.kind === 'signature'
           ? '$1 implements an inherited $2 with a signature the declaration does not accept'
