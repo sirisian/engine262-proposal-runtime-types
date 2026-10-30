@@ -856,21 +856,7 @@ export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRe
       }
       return false;
     });
-    if (!binding) {
-      // The active frames first: an inference in progress binds the
-      // parameters it is inferring to open placeholders there, and the
-      // declaration environment retains the unapplied `any` of the
-      // declaration-time check, which used to answer first and made
-      // `[N].<uint8>` evaluate its extent as the `any` Type Object (round 5,
-      // Q8: "[Function] is not a type" on every `g(t)`).
-      for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
-        const bound = typeParameterFrames[i].get(name);
-        if (bound !== undefined) {
-          return bound;
-        }
-      }
-      return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
-    }
+    if (!binding) return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
     if (binding.kind !== 'type-parameter') return null;
   }
   for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {

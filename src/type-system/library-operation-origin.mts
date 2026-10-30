@@ -22,6 +22,8 @@ const groups = {
   '%Array.prototype%': ['join', 'toString'],
   '%Map.prototype%': ['size'],
   '%Set.prototype%': ['size'],
+  // JSON.parse converts its text with ToString (round 5 follow-up, Q15).
+  '%JSON%': ['parse'],
 };
 const originals = new WeakMap<Realm, Map<string, Descriptor>>();
 

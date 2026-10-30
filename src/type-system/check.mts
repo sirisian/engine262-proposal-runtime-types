@@ -3515,6 +3515,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const binding = ResolveBindingDeclaration(reference, reference.name);
       if (binding) continue;
       if (globalObject.properties.has(Value(reference.name))) continue;
+      // A global the program creates as it runs (`globalThis.x = …`) is a
+      // name a clause may read; the run time judges it there
+      // (imported-alias-dependencies: 'unbound-global-predicate').
+      if (assignedGlobalProperties.has(reference.name) || assignedNames.has(reference.name)) continue;
       if (surroundingAgent.currentRealmRecord.GlobalEnv.DeclarativeRecord.bindings.has(Value(reference.name))) continue;
       if (reference.name === 'return' || reference.name === 'this') continue;
       // A name in a type position (`this is { p: string }`) is a type, not a
@@ -3727,6 +3731,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return intrinsicSourceIsStable(root, realm, within, declaration) ? found : undefined;
   };
 
+  /**
+   * A name in a type position that reaches, by a proved origin (no declaration
+   * of the name, no assignment to it, no direct eval, and the realm's global
+   * holding the intrinsic by identity), a built-in namespace object that is not
+   * a type: rt-type-required before the body, rather than a closed annotation
+   * failing to evaluate at pre-evaluation (round 5 follow-up, Q14).
+   */
+  const NON_TYPE_INTRINSICS: readonly (readonly [string, string])[] = [
+    ['Math', '%Math%'], ['JSON', '%JSON%'], ['Reflect', '%Reflect%'], ['Atomics', '%Atomics%'], ['Intl', '%Intl%'],
+  ];
+  const screenNonTypeGlobals = (start: ParseNode): void => {
+    const realm = surroundingAgent.currentRealmRecord;
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'TypeReference') {
+        const t = node as unknown as { TypeName?: { IdentifierReference?: ParseNode.IdentifierReference | null, MemberNames?: readonly unknown[] | null }, TypeArguments?: unknown };
+        const reference = t.TypeName?.IdentifierReference;
+        const entry = reference && !t.TypeName?.MemberNames?.length && !t.TypeArguments
+          ? NON_TYPE_INTRINSICS.find(([name]) => name === reference.name) : undefined;
+        if (entry && reference && !hasDirectEval && !ResolveBindingDeclaration(reference, reference.name)
+            && !assignedNames.has(reference.name) && !assignedGlobalProperties.has(reference.name)
+            && !aliasNodes.has(reference.name) && !classNodes.has(reference.name) && !interfaceNodes.has(reference.name) && !enumNodes.has(reference.name)) {
+          const held = realm.GlobalObject.properties.get(Value(reference.name) as never)?.Value;
+          if (held !== undefined && held === (realm.Intrinsics as unknown as Record<string, unknown>)[entry[1]]) {
+            reportType('rt-type-required', node, '$1 is not a type; it names the built-in $1 object', Value(reference.name));
+          }
+        }
+      }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(start);
+  };
+
   /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
   const recordClassParameterWhereCheck = (call: ParseNode.CallExpression): void => {
     const callee = call.CallExpression;
@@ -3880,8 +3920,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (type?.Kind === 'literal') return type;
     if (argument.type === 'IdentifierReference') {
       const origin = ResolveBindingDeclaration(argument, argument.name);
-      const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer) : null;
-      if (initializer && !assignedNames.has(argument.name)) return decidedArgumentValue(initializer, formal);
+      // A `let` the program never assigns holds its initializer as a `const`
+      // does (round 5 follow-up, Q18); `assignedNames` covers every assignment
+      // and update to the name anywhere in the program, nested functions too.
+      const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer)
+        : origin?.kind === 'let' ? (origin.node as { Initializer?: ParseNode | null }).Initializer ?? null : null;
+      // A binding declared `any` is the program asking for the run-time check.
+      const declaredAs = (origin?.node as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined)?.TypeAnnotation;
+      const dynamic = declaredAs ? resolveType(declaredAs.Type)?.Kind === 'any' : false;
+      if (initializer && !dynamic && !assignedNames.has(argument.name)) return decidedArgumentValue(initializer, formal);
     }
     const folded = foldConstant(argument);
     if (folded === null) return null;
@@ -15933,6 +15980,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (base.name === 'Promise' && method === 'reject') {
       return (args) => (args.length === 1 ? libraryTypeRecord('Promise', [anyTypeRecord, args[0]!]) ?? null : null);
+    }
+    // The applied form of the combinator typed below for inferred calls:
+    // `allSettled` never rejects, and each element is a settled record
+    // (`PromiseSettledResult`, standardlibrary.md), so `Promise.allSettled.<T>`
+    // is a promise of an array of them (round 5 follow-up, Q16).
+    if (base.name === 'Promise' && method === 'allSettled') {
+      return (args) => (args.length === 1 ? libraryTypeRecord('Promise', [
+        arrayOfElement(iterationInterfaceRecord('PromiseSettledResult', [args[0]!, anyTypeRecord]) as TypeRecord) as TypeRecord,
+        makePrimitive('undefined'),
+      ]) ?? null : null);
     }
     if (base.name === 'Array' && (method === 'of' || method === 'from')) {
       return (args) => (args.length === 1 ? ({ Kind: 'array', Element: args[0]!, Extent: 'dynamic' } as Known) : null);
@@ -41724,6 +41781,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // it must not replace the producer's descriptions with that consumer's.
     if (owner === root) sourceTypeArgumentApplicationChecks.set(application, { owner: root, checks: [...checks] });
   }
+  screenNonTypeGlobals(root as ParseNode);
   genericWhereChecks.set(root, [...whereChecks.values()].flat()
     .filter((check) => [...check.bindings.values()].every((bound) => !mentionsTypeParameter(bound))));
 

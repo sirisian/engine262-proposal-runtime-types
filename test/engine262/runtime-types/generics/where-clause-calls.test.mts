@@ -73,3 +73,13 @@ test('a satisfied or undecidable argument keeps the runtime contract', () => {
   expect(observeScript('function f(i: uint32) where i > 10 { return i; } let v: any = 5; f(v);')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
   expect(evaluated('function h(i: uint32): uint32 where return > i { return i + 1; } String(h(5));')).toBe('6');
 });
+
+test('a let the program never assigns decides the clause as a const does (round 5 follow-up, Q18)', () => {
+  refused('function f(i: uint32) where i > 10 { return i; } let m: uint32 = 5; f(m);');
+  refused('function f(i: uint32) where i > 10 { return i; } let m = 5; f(m);');
+  // Any assignment or update to the name, nested functions included, keeps the contract.
+  expect(observeScript('function f(i: uint32) where i > 10 { return i; } let m: uint32 = 50; m = 5; f(m);')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+  expect(observeScript('function f(i: uint32) where i > 10 { return i; } let m: uint32 = 5; m++; f(m);')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+  expect(evaluated('function f(i: uint32) where i > 10 { return i; } let m: uint32 = 5; function g() { m = 50; } g(); String(f(m));')).toBe('50');
+  expect(evaluated('function f(i: uint32) where i > 10 { return i; } let m: uint32 = 50; String(f(m));')).toBe('50');
+});

@@ -168,6 +168,24 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
       selected.add(node);
       continue;
     }
+    // JSON.parse converts its text with ToString before parsing, in the plain
+    // and the explicitly applied form alike (round 5 follow-up, Q15).
+    if (node.type === 'CallExpression' && topLevel(node)) {
+      const applied = (node.CallExpression.type === 'TypeArgumentsExpression'
+        ? (node.CallExpression as { Expression: ParseNode }).Expression : node.CallExpression) as ParseNode;
+      const json = applied.type === 'MemberExpression' ? applied as unknown as { MemberExpression: ParseNode, IdentifierName?: { name?: string } | null } : null;
+      const jsonReceiver = json ? unwrap(json.MemberExpression) : null;
+      if (jsonReceiver?.type === 'IdentifierReference' && jsonReceiver.name === 'JSON' && json?.IdentifierName?.name === 'parse'
+          && global('JSON') && node.Arguments.length >= 1 && (scalar(node.Arguments[0]) || annotated(node.Arguments[0]))
+          && OriginalLibraryFunction(realm, '%JSON%', 'parse')) {
+        results.set(node, { kind: 'stringConversion', operand: node.Arguments[0] });
+        // The callee is part of the selected operation, as a member callee is
+        // for every other operation here; the stability screen otherwise reads
+        // `JSON.parse` as an unproved property read and drops every proof.
+        selected.add(node); selected.add(applied); selected.add(node.CallExpression);
+        continue;
+      }
+    }
     if (node.type !== 'CallExpression' || !topLevel(node) || node.CallExpression.type !== 'MemberExpression') continue;
     const member = node.CallExpression;
     const name = member.IdentifierName?.name ?? (member.Expression?.type === 'StringLiteral' ? member.Expression.value : null);
