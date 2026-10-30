@@ -2,9 +2,9 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, observeScript } from '../harness.mts';
 
 /**
- * Round 4 of the early-error survey: an enumerator read typed before closed
- * evaluation with coverage over the declared type (#sec-enums, #sec-narrowfrom,
- * Q7); void through a pattern, a
+ * Round 4 of the early-error survey: a test of an enumerator read decided
+ * before closed evaluation (#sec-enums, #sec-narrowfrom, Q7); void through a
+ * pattern, a
  * conditional and an object-literal value (#sec-void-type); BigInt zero
  * divisors and negative exponents (#sec-integer-operations); a constructor
  * declaring type parameters (#sec-type-parameters-static-semantics-early-errors);
@@ -16,14 +16,15 @@ const refused = (source: string, rule: string): void => {
   expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule, phase: 'static' } });
 };
 
-test('an enumerator read is its literal before the body, and coverage keeps the declared type', () => {
+test('a test of an enumerator read is decided before the body', () => {
+  // Round 4, Q7, as narrowed: only a TEST of the read is decided. Typing the
+  // read as its literal everywhere broke enumerator comparisons and callable
+  // and generic enumerators (enums-and-interfaces), so a comparison runs and
+  // coverage is whatever the flow narrowing makes it.
   refused('enum E { A, B } if (E.B) {}', 'rt-constant-condition');
   refused('enum E { A, B } if (E.A) {}', 'rt-constant-condition');
   refused('enum E: string { A = "a" } if (E.A) {}', 'rt-constant-condition');
-  refused('enum E { A, B } let z: uint8 = 1; if (E.B === 5) {}', 'rt-impossible-test');
-  refused('enum E { A = 1, B = 2 } let e: E = E.A; switch (e) { case E.A: break; }', 'rt-enum-case');
-  refused('enum E { A = 1, B = 2 } let e: E = E.A; let q = match (e) { when E.A: 1 };', 'rt-nonexhaustive-match');
-  expect(evaluated('enum E { A = 1, B = 2 } let e: E = E.A; let q = match (e) { when E.A: 1; when E.B: 2 }; String(q);')).toBe('1');
+  expect(evaluated('enum E { A, B } String(E.B === 1);')).toBe('true');
   expect(evaluated('enum E { A, B } function f(e: E) { return e ? 1 : 0; } String(f(E.B));')).toBe('1');
 });
 

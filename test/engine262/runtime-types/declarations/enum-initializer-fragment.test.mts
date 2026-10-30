@@ -25,12 +25,25 @@ import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.m
 
 test('an excluded built-in reached through a binding is refused', () => {
   // The case that escaped: the pass cannot read `r`, so it skipped the
-  // initializer and the declaration evaluated it unguarded.
-  expectThrownKind('const r = Math.random; enum E { A = r() }', 'TypeError');
-  expectThrownKind('const d = Date.now; enum E { A = d() }', 'TypeError');
+  // initializer and the declaration evaluated it unguarded. What the source
+  // text establishes is now an Early Error: a const bound to the built-in, and
+  // a function declaration the initializer calls, are followed to it.
+  expectStaticTypeError('const r = Math.random; enum E { A = r() }');
+  expectStaticTypeError('const d = Date.now; enum E { A = d() }');
   // Not a range accident: a float64 enum has room for the value and is still
   // refused, because the rule is about the FUNCTION and not about the result.
-  expectThrownKind('const r = Math.random; enum E: float64 { A = r() }', 'TypeError');
+  expectStaticTypeError('const r = Math.random; enum E: float64 { A = r() }');
+  expectStaticTypeError('function g() { return Math.random(); } enum E { A = g() }');
+  expectStaticTypeError('enum E { A = new Date().getTime() }');
+});
+
+test('a name the program does not establish as the built-in is left to the run time', () => {
+  // "A name in the source is not the built-in it reaches": a parameter named
+  // Math is whatever the caller passes, so nothing is refused before the body.
+  expect(evaluated('function f(Math) { enum E { A = Math.random() } return E.A; } String(f({ random: () => 4 }));')).toBe('4');
+  // A reach the source text does not establish is still the run time's
+  // refusal, by the identity of the function called.
+  expectThrownKind('const box = { r: Math.random }; enum E { A = box.r() }', 'TypeError');
 });
 
 test('the refusal names the built-in, not the value it produced', () => {

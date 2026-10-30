@@ -73,6 +73,7 @@ import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
 import { NondeterministicMember } from './evaluable-fragment.mts';
+import { ExcludedGlobalReach } from './fragment-library.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
@@ -3653,6 +3654,66 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const declaration = enumNodes.get(callee.name);
     if (!declaration || declaration.type !== 'EnumDeclaration' || ResolveBindingDeclaration(callee, callee.name)?.node !== declaration) return;
     reportType('rt-call-argument', call, '$1 converts one value to an enumerator of $1 and is called with none', Value(callee.name));
+  };
+
+  /**
+   * The excluded built-in an enumerator initializer reaches through a proved
+   * origin, or undefined. A global counts only where the program neither
+   * shadows nor replaces it, and the effect screen proves nothing before the
+   * declaration can replace the intrinsic; `const` bindings and called function
+   * declarations are followed once each. "A name in the source is not the
+   * built-in it reaches" (fragment-library.mts), so the answer is by the
+   * identity the realm holds, and what cannot be proved is left to the run time.
+   */
+  const excludedBuiltinReach = (start: ParseNode, declaration: ParseNode): string | undefined => {
+    const realm = surroundingAgent.currentRealmRecord;
+    const regions: ParseNode[] = [start];
+    const followed = new Set<ParseNode>();
+    const unchangedGlobal = (reference: ParseNode.IdentifierReference): boolean => !hasDirectEval
+      && !ResolveBindingDeclaration(reference, reference.name) && !assignedNames.has(reference.name)
+      && !assignedGlobalProperties.has(reference.name);
+    let found: string | undefined;
+    const visit = (value: unknown): void => {
+      if (found !== undefined || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'MemberExpression') {
+        const m = node as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+        if (m.MemberExpression?.type === 'IdentifierReference' && m.IdentifierName?.name
+            && unchangedGlobal(m.MemberExpression as ParseNode.IdentifierReference)) {
+          found = ExcludedGlobalReach(realm, (m.MemberExpression as ParseNode.IdentifierReference).name, m.IdentifierName.name);
+          if (found !== undefined) return;
+        }
+      }
+      if (node.type === 'IdentifierReference') {
+        const reference = node as ParseNode.IdentifierReference;
+        if (unchangedGlobal(reference)) {
+          found = ExcludedGlobalReach(realm, reference.name);
+          if (found !== undefined) return;
+        } else if (!assignedNames.has(reference.name)) {
+          const binding = ResolveBindingDeclaration(reference, reference.name);
+          const target = binding?.kind === 'const' ? binding.initializer ?? null
+            : binding?.kind === 'function' ? (binding.node as { FunctionBody?: ParseNode | null }).FunctionBody ?? null : null;
+          if (target && !followed.has(target)) {
+            followed.add(target);
+            regions.push(target);
+            visit(target);
+            if (found !== undefined) return;
+          }
+        }
+      }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(start);
+    if (found === undefined) return undefined;
+    // Nothing that runs before the declaration may replace the intrinsic the
+    // reach depends on; the regions judged here are the reach itself.
+    const within = (node: ParseNode): boolean => {
+      for (let at: ParseNode | undefined = node; at; at = at.parent as ParseNode | undefined) if (regions.includes(at)) return true;
+      return false;
+    };
+    return intrinsicSourceIsStable(root, realm, within, declaration) ? found : undefined;
   };
 
   /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
@@ -11933,15 +11994,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const enumRecordOf = (type: Known, seen = new Set<TypeRecord>()): Known => {
     if (!type || seen.has(type)) return null;
     seen.add(type);
-    // Round 4, Q7, direction B: a subject narrowed to an enumerator literal is
-    // still a subject of the enum's type for coverage, as in Rust, where a
-    // variant in hand does not shrink the type a `match` must cover; the
-    // enumerators a `match` covers are the ones the declaration lists.
-    if (type.Kind === 'literal') return enumRecordOf((type as { Base?: TypeRecord }).Base ?? null, seen);
-    if (type.Kind === 'union') {
-      const records = type.Members.map((member) => enumRecordOf(member, seen));
-      return records.length > 0 && records.every((r) => r && r === records[0]) ? records[0] : null;
-    }
     if (type.Kind === 'nominal') {
       if ((type.Declaration as { type?: string } | undefined)?.type === 'EnumDeclaration') return type;
       return enumRecordOf(type.Structure ?? null, seen);
@@ -21543,28 +21595,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const evaluated = declaration ? evaluatedEnums.get(declaration) : undefined;
             const value = evaluated?.members.get(m.IdentifierName.name);
             if (value !== undefined) return { Kind: 'literal', Value: value, Base: evaluated!.record };
-            // Before closed evaluation, the declaration decides what it can
-            // (round 4, Q7, direction B): `enumTypeOf` computes each
-            // enumerator's value from a literal initializer or the sequence,
-            // so a read of a declared enumerator is its literal-of-E here too,
-            // for truthiness, `===` and assignability; coverage judgments read
-            // the subject's declared enum type (see `coverageEnumRecord`). An
-            // initializer that reads its own enum is inside the computation
-            // and gets no type, which keeps the computation finite.
-            if (declaration && !evaluated && !shadowedByProgram(base.name) && !enumReadsInProgress.has(declaration)
-                && ResolveBindingDeclaration(base, base.name)?.node === declaration) {
-              enumReadsInProgress.add(declaration);
-              try {
-                const record = enumTypeOf(base.name, declaration);
-                const names = (declaration as ParseNode.EnumDeclaration).EnumMemberList.map((member) => member.IdentifierName.name);
-                const index = names.indexOf(m.IdentifierName.name);
-                const members = (record as { EnumMembers?: readonly unknown[] } | null)?.EnumMembers;
-                const literal = index >= 0 ? members?.[index] : undefined;
-                if (record && literal !== undefined && literal !== null) return { Kind: 'literal', Value: literal, Base: record } as unknown as TypeRecord;
-              } finally {
-                enumReadsInProgress.delete(declaration);
-              }
-            }
           }
           if (base.type === 'IdentifierReference') {
             const baseName = (base as unknown as { name?: string }).name;
@@ -25329,8 +25359,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const answers = partition?.answers;
     return answers?.length && answers.every((answer) => answer !== undefined && answer === answers[0]) ? answers[0] : undefined;
   };
+  /**
+   * The literal-of-E a read of a declared enumerator holds before closed
+   * evaluation, for the truthiness judgment alone (round 4, Q7). Giving the
+   * read that type everywhere made `Color.Red === 0` a test that can never fail
+   * and broke callable and generic enumerators (enums-and-interfaces), so the
+   * read keeps no Static Type and only a test of it is decided.
+   */
+  const enumeratorLiteralOf = (node: ParseNode): TypeRecord | null => {
+    if (node.type !== 'MemberExpression') return null;
+    const m = node as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+    const base = m.MemberExpression;
+    const key = m.IdentifierName?.name;
+    if (base?.type !== 'IdentifierReference' || !key || assignedNames.has((base as ParseNode.IdentifierReference).name)) return null;
+    const name = (base as ParseNode.IdentifierReference).name;
+    const declaration = enumNodes.get(name);
+    if (!declaration || declaration.type !== 'EnumDeclaration' || evaluatedEnums.get(declaration) || shadowedByProgram(name)
+        || enumReadsInProgress.has(declaration) || ResolveBindingDeclaration(base, name)?.node !== declaration) return null;
+    enumReadsInProgress.add(declaration);
+    try {
+      const record = enumTypeOf(name, declaration);
+      const index = (declaration as ParseNode.EnumDeclaration).EnumMemberList.findIndex((member) => member.IdentifierName.name === key);
+      const literal = index >= 0 ? (record as { EnumMembers?: readonly unknown[] } | null)?.EnumMembers?.[index] : undefined;
+      return record && literal !== undefined && literal !== null ? { Kind: 'literal', Value: literal, Base: record } as unknown as TypeRecord : null;
+    } finally {
+      enumReadsInProgress.delete(declaration);
+    }
+  };
+
   const judgeTruthiness = (test: ParseNode): void => {
     const core = stripTest(test);
+    {
+      const enumLiteral = staticType(core) ? null : enumeratorLiteralOf(core);
+      const settled = enumLiteral ? settledTruthiness(enumLiteral) : undefined;
+      if (enumLiteral && settled !== undefined) {
+        reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value(displayType(enumLiteral)), Value(settled ? 'truthy' : 'falsy'));
+        return;
+      }
+    }
     if (core.type === 'BooleanLiteral') return;
     if (core.type === 'NumericLiteral' && [0, 1].includes(Number((core as unknown as { value: unknown }).value))) return;
     // #sec-narrowfrom: a test is judged by its value's Static Type whatever its
@@ -28561,12 +28627,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       const armTypes: Known[] = [];
       walk(me.Expression as ParseNode);
-      // Round 4, Q7, direction B: a subject narrowed to one enumerator literal
-      // is matched as a subject of the enum's declared type, so every arm is
-      // needed and every arm is reachable, as in Rust, where a variant in
-      // hand does not shrink the type a `match` must cover.
-      const narrowedSubject = staticType(me.Expression as ParseNode);
-      const subjectType = narrowedSubject?.Kind === 'literal' && enumRecordOf(narrowedSubject) ? enumRecordOf(narrowedSubject) : narrowedSubject;
+      const subjectType = staticType(me.Expression as ParseNode);
       let remaining = subjectType;
       let matchEntry = captureIndependentFlow();
       const subjectName = narrowableName(me.Expression);
@@ -38716,6 +38777,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const outside = evaluabilityViolation(member.Initializer, new Set(names));
           if (outside !== undefined) {
             reportType('rt-enum-initializer', (node as ParseNode), 'an enumerator initializer must be compile-time evaluable, and $1 is not', Value(outside));
+          } else {
+            // #sec-enums: an initializer that reaches a built-in outside the
+            // fragment where the source text establishes it, directly, through a
+            // const bound to such a reference, or through a function declaration
+            // it calls, is refused before the body; any other reach is the
+            // TypeError the fragment's evaluation raises.
+            const reached = excludedBuiltinReach(member.Initializer as ParseNode, node as ParseNode);
+            if (reached !== undefined) {
+              reportType('rt-enum-initializer', member.Initializer as ParseNode, 'an enumerator initializer must be compile-time evaluable, and it reaches $1, which is outside the compile-time-evaluable fragment', Value(reached));
+            }
           }
         });
         const underlying = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : builtinTypeRecord('int32');
@@ -38958,12 +39029,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // its value was excluded before the `switch`.
               const subjectName = narrowableName(expression);
               const labelType = label && subjectName !== null ? singleValueOperandType(label, discriminantType) : null;
-              // Round 4, Q7, direction B: a `switch` over an enum subject reads
-              // the declared enum type, so an enumerator label is never judged
-              // against the subject's current value; every arm is needed and
-              // every arm is reachable.
-              const enumSubject = !!enumRecordOf(discriminantType);
-              if (!enumSubject && labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType), (node as ParseNode));
+              if (labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType), (node as ParseNode));
               // #sec-narrowing-flow: a label repeating an earlier effect-free label
               // of this `switch` tests what that one already failed.
               const labelCanon = label && labelType?.Kind !== 'literal' ? testCanon(label, true) : null;
@@ -39022,11 +39088,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         const namedDiscriminant = singleValueOperandType(expression);
-        // Round 4, Q7, direction B: a discriminant narrowed to one enumerator
-        // literal is switched over as a subject of the enum's declared type,
-        // so every enumerator label is reachable and every arm is needed.
-        const narrowedDiscriminant = booleanType(namedDiscriminant) ? namedDiscriminant : staticType(expression);
-        const subject = narrowedDiscriminant?.Kind === 'literal' && enumRecordOf(narrowedDiscriminant) ? enumRecordOf(narrowedDiscriminant) : narrowedDiscriminant;
+        const subject = booleanType(namedDiscriminant) ? namedDiscriminant : staticType(expression);
         if (subject && subject.Kind !== 'any' && !mentionsTypeParameter(subject)) {
           for (const label of caseLabels) {
             if (!label) continue;

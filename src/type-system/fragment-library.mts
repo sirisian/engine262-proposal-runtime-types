@@ -115,6 +115,26 @@ function excludedSetFor(realm: Realm): WeakSet<ObjectValue> {
  * fragment check running twice, once with a frame open and once without. A rule
  * keyed on that frame would have missed the site that runs without one.
  */
+/**
+ * The excluded built-in a global name, or a named member of it, holds in
+ * _realm_ now, as the display the diagnostic names (`Math.random`, `Date`), or
+ * undefined. The answer is by identity against the excluded intrinsics, as
+ * IsExcludedFromFragment's is, so a replaced global or member answers for what
+ * it now holds rather than for its name; the caller supplies the proof that the
+ * program does not replace it before the reach is evaluated.
+ */
+export function ExcludedGlobalReach(realm: Realm, name: string, member?: string): string | undefined {
+  const global = realm.GlobalObject.properties.get(Value(name) as PropertyKeyValue)?.Value;
+  if (!(global instanceof ObjectValue)) {
+    return undefined;
+  }
+  const target = member === undefined ? global : global.properties.get(Value(member) as PropertyKeyValue)?.Value;
+  if (!(target instanceof ObjectValue) || !excludedSetFor(realm).has(target)) {
+    return undefined;
+  }
+  return member === undefined ? name : `${name}.${member}`;
+}
+
 const fragmentDepths = new WeakMap<object, number>();
 
 export function BeginFragmentEvaluation(): void {
