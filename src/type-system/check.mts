@@ -17729,6 +17729,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node && expressionViewTypes.has(node)
         && !(contextual && isTemplateArgumentType(expressionViewTypes.get(node)!))) return expressionViewTypes.get(node)!;
+    // Round 5 follow-up, Q17: a literal where a refined primitive type is
+    // expected is a value of that type when it fits the refined type's base,
+    // as a fresh object literal is of a refined record; the refinement itself
+    // is decided for the literal by the check `recordRefinementCheck` records
+    // (sec-where-clauses: a value of the refined type is a base value
+    // satisfying the predicate). Without this the literal was refused as
+    // unassignable before the predicate could be asked, satisfying or not.
+    if (node && contextual?.Kind === 'nominal') {
+      const refined = contextual as unknown as { Declaration?: ParseNode, Structure?: TypeRecord };
+      const structure = refined.Structure;
+      if (refined.Declaration?.type === 'TypeAliasDeclaration'
+          && ((refined.Declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0
+          && structure && (structure.Kind === 'primitive' || structure.Kind === 'literal' || structure.Kind === 'union')) {
+        let core: ParseNode = node;
+        while (core.type === 'ParenthesizedExpression') core = (core as { Expression: ParseNode }).Expression;
+        const literalNode = ['StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'BigIntLiteral', 'NoSubstitutionTemplate'].includes(core.type)
+          || (core.type === 'UnaryExpression' && (core as { operator?: string }).operator === '-'
+            && ['NumericLiteral', 'BigIntLiteral'].includes(((core as { UnaryExpression?: ParseNode }).UnaryExpression)?.type ?? ''));
+        const constReference = core.type === 'IdentifierReference' && !assignedNames.has((core as ParseNode.IdentifierReference).name)
+          && ResolveBindingDeclaration(core, (core as ParseNode.IdentifierReference).name)?.kind === 'const';
+        if (literalNode || constReference) {
+          const own = staticType(core);
+          // Only where the literal is already a value of the base: a number
+          // literal under a refined `uint8` would need the conversion the run
+          // time does not perform into a refined value type (even `(5 := P)`
+          // fails there today), so that case stays refused here.
+          if (own?.Kind === 'literal' && IsAssignable(own, structure)) return contextual;
+        }
+      }
+    }
     if (node?.type === 'MatchExpression') return checkMatchExpression(node, contextual);
     if (node?.type === 'CommaOperator') return commaResultType(node, (part) => staticTypeIn(part, contextual));
     // A COMPLEX CONTEXT REACHES THROUGH `+` AND `-` TO ITS OPERANDS, because

@@ -45,3 +45,24 @@ test('a literal source satisfying the refinement, and a source the checker canno
   expect(evaluated('const limit: uint8 = 0; type Q = { a: uint8 } where this.a > limit; let q: Q = { a: 1 }; String(q.a);')).toBe('1');
   expect(observeScript('type Pos = { a: uint8 } where this.a > 0; let v: any = { a: 0 }; let p: Pos = v;')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
 });
+
+test('a literal into a refined primitive type is judged by the refinement (round 5 follow-up, Q17)', () => {
+  // A literal already of the base is a value of the refined type when it
+  // satisfies the predicate, and refused naming the clause when it does not.
+  expect(evaluated("type S = string where this.length > 2; let s: S = 'abc'; s;")).toBe('abc');
+  refused("type S = string where this.length > 2; let s: S = 'a';");
+  expect(evaluated('type N = number where this > 2; let n: N = 5; String(n);')).toBe('5');
+  refused('type N = number where this > 2; let n: N = 1;');
+  expect(evaluated('type B = boolean where this === true; let b: B = true; String(b);')).toBe('true');
+  refused('type B = boolean where this === true; let b: B = false;');
+  // A const bound to a literal, and a call argument, the same.
+  expect(evaluated("type S = string where this.length > 2; const c = 'abc'; let s: S = c; s;")).toBe('abc');
+  refused("type S = string where this.length > 2; const c = 'a'; let s: S = c;");
+  refused("type S = string where this.length > 2; function g(s: S) { return s; } g('a');");
+  // A literal of another base, a non-literal source, and a number under a
+  // refined value type (which would need a conversion the run time does not
+  // perform into a refined value type) stay refused as before.
+  expect(observeScript("type S = string where this.length > 2; let s: S = 5;")).toMatchObject({ bodyEntered: false, diagnostic: { rule: 'rt-assignability', phase: 'static' } });
+  expect(observeScript("type S = string where this.length > 2; let x: string = 'abc'; let s: S = x;")).toMatchObject({ bodyEntered: false, diagnostic: { phase: 'static' } });
+  expect(observeScript('type P = uint8 where this > 2; let p: P = 5;')).toMatchObject({ bodyEntered: false, diagnostic: { phase: 'static' } });
+});
