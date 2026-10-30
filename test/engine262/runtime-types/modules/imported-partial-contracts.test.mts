@@ -35,7 +35,7 @@ test("a failed publisher preserves a different module's completed contribution",
   const [extension, bad, retained, good] = await observeModuleSequence(sources, ['extension', 'bad', 'retained', 'good']);
   expect(extension).toMatchObject({ status: 'fulfilled', bodyEntries: ['base', 'extension'] });
   expect(bad).toMatchObject({ status: 'rejected', bodyEntries: [], diagnostic: { code: 'RT_ASSIGNABILITY', phase: 'static' } });
-  expect(retained).toMatchObject({ status: 'rejected', bodyEntries: [], diagnostic: { code: 'RT_ASSIGNABILITY', phase: 'static' } });
+  expect(retained).toMatchObject({ status: 'rejected', bodyEntries: [], diagnostic: { code: 'RT_IMPLEMENTS_CONTRACT', phase: 'static' } });
   expect(retained.diagnostic?.arguments.join(' ')).toContain('extra');
   expect(good).toMatchObject({ status: 'fulfilled', bodyEntries: ['good'] });
   expect(good.diagnostic).toBeUndefined();

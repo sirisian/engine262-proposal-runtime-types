@@ -11,7 +11,7 @@
         "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
+          "code": "RT_IMPLEMENTS_CONTRACT",
           "phase": "static"
         }
       }
@@ -26,7 +26,7 @@
         "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
+          "code": "RT_IMPLEMENTS_CONTRACT",
           "phase": "static"
         }
       }
@@ -41,7 +41,7 @@
         "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
+          "code": "RT_IMPLEMENTS_CONTRACT",
           "phase": "static"
         }
       }
@@ -56,7 +56,7 @@
         "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
+          "code": "RT_IMPLEMENTS_CONTRACT",
           "phase": "static"
         }
       }
@@ -71,7 +71,7 @@
         "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
+          "code": "RT_IMPLEMENTS_CONTRACT",
           "phase": "static"
         }
       }

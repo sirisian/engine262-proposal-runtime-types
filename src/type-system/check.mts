@@ -6426,7 +6426,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
-  const report = (source: TypeRecord, target: TypeRecord, at: ParseNode = root) => {
+  const report = (source: TypeRecord, target: TypeRecord, at: ParseNode = root, rule: 'rt-assignability' | 'rt-implements-contract' = 'rt-assignability') => {
     // #sec-published-return-types, the diagnostic: where a published UNION is
     // refused, name the member that does not fit and the return it came from.
     if (provenanceNote && originNotes && source.Kind === 'union') {
@@ -6447,7 +6447,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } else if (provenanceNote) {
       completion = CreateTypeDiagnostic('rt-return-contract', at, diagnosticPhase, '$1 is not assignable to $2, and it is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
     } else {
-      completion = CreateTypeDiagnostic('rt-assignability', at, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
+      completion = (rule === 'rt-implements-contract'
+        ? CreateTypeDiagnostic('rt-implements-contract', at, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target)))
+        : CreateTypeDiagnostic('rt-assignability', at, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target)))) as ThrowCompletion;
     }
     errors.push(completion.Value as ObjectValue);
   };
@@ -10968,7 +10970,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               : undefined);
           if (!own) {
             if (!p.optional && !pendingApplication) {
-              const completion = CreateTypeDiagnostic('rt-assignability', n, diagnosticPhase, '$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
+              // #sec-type-diagnostic-identity (round 5 follow-up, Q12): every member the implements target lists and the class fails is the implements contract's failure, in the wording it had.
+              const completion = CreateTypeDiagnostic('rt-implements-contract', n, diagnosticPhase, '$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             continue;
@@ -10976,7 +10979,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // #sec-interfaces-semantics: a property promises its availability and
           // write capability as well as its readable value type.
           if (own.type && p.type && !DeclaredMemberImplements(own, p)) {
-            report(own.type, p.type);
+            report(own.type, p.type, root, 'rt-implements-contract');
           }
         }
         // Index signatures govern own enumerable instance storage, including
@@ -11166,6 +11169,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // wrongly refused; README settles that one value type never implicitly
         // becomes another, so a differing numeric IS a failed refinement and
         // the restriction was unnecessary.
+        // #sec-type-diagnostic-identity (round 5 follow-up, Q12): a getter where the
+        // inherited member is a method changes the member's kind, the inherited
+        // member contract's failure, as a field in that place already is.
+        if (own?.type && inherited?.type && inherited.type.Kind === 'function' && own.type.Kind !== 'function') {
+          reportType('rt-inherited-contract', n, 'getter $1 replaces an inherited method, and does not preserve its inherited member contract', Value(String(key)));
+          continue;
+        }
         if (own?.type && inherited?.type && !IsAssignable(own.type, inherited.type)) {
           report(own.type, inherited.type);
         }
