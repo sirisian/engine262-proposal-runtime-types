@@ -1098,12 +1098,30 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   }
   // A completed result can close the captures of a containing operation.
   // Drain those dependencies before checking crossings, in the same budget.
+  // A recheck synthesizes the type nodes of a metadata application afresh, so
+  // an obligation keyed by its node came back as a new key each pass and the
+  // loop never settled (meta-declarations' construction programs ran until
+  // killed). Such a node is keyed by the source application it stands for.
+  const synthesizedKeys = new Map<string, object>();
+  const structuralText = (node: unknown): string => JSON.stringify(node, (field, value) => (
+    field === 'parent' || field === 'location' || field === 'strict' ? undefined : value));
+  const obligationKey = (o: { computedAt?: { site: object } | undefined, node: object }): object => {
+    if (o.computedAt?.site) return o.computedAt.site;
+    if ((o.node as { location?: unknown }).location) return o.node;
+    const text = structuralText(o.node);
+    let key = synthesizedKeys.get(text);
+    if (!key) {
+      key = {};
+      synthesizedKeys.set(text, key);
+    }
+    return key;
+  };
   const completed = new Set<object>();
   for (;;) {
     if (IsBudgetExhausted()) return undefined;
     const before = completed.size;
     for (const obligation of obligations) {
-      const key = obligation.computedAt?.site ?? obligation.node;
+      const key = obligationKey(obligation);
       if (completed.has(key)) continue;
       const context = surroundingAgent.runningExecutionContext;
       const outer = context.LexicalEnvironment;
@@ -1216,9 +1234,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       const errors = RecheckAfterTypeEvaluation(root);
       if (errors.length > 0) return Throw(errors[0]!);
     }
-    const pending = DeferredTypeChecksOf(root).filter((o) => !completed.has(o.computedAt?.site ?? o.node));
-    const attempted = new Set(obligations.map((o) => o.computedAt?.site ?? o.node));
-    if (pending.length === 0 || (completed.size === before && pending.every((o) => attempted.has(o.computedAt?.site ?? o.node)))) break;
+    const pending = DeferredTypeChecksOf(root).filter((o) => !completed.has(obligationKey(o)));
+    const attempted = new Set(obligations.map(obligationKey));
+    if (pending.length === 0 || (completed.size === before && pending.every((o) => attempted.has(obligationKey(o))))) break;
     obligations = pending;
   }
   let recordedAMeet = false;
