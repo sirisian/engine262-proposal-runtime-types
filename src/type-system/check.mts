@@ -90,6 +90,7 @@ import {
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
 import { OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
+import { NominalAssignmentEvidence } from './nominal-evidence.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
 import { type CapturedTypeContext, ProjectMetadataObjectFromType, ProjectMetadataValueFromType, MetaTypeNamedByArgument, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
@@ -7471,6 +7472,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (!IsAssignable(erasedSource, erasedTarget)) {
+      // sec-incomplete-nominal-ancestry: an unresolved heritage expression is
+      // not proof that the target class is absent from the actual ancestry.
+      // Defer this receiving judgment, including conversion selection, to the
+      // ordinary runtime boundary. Keep IsAssignable false: this is neither a
+      // subtype proof nor permission to elide admission or prototype obligations.
+      if (NominalAssignmentEvidence(source, target) === 'unknown') return;
       // sec-user-defined-conversions form 1: a constructor taking one parameter
       // of type S converts S to T. Reached only AFTER assignability fails, which
       // is both the clause's ordering and the ranking it needs - a value that
@@ -11012,6 +11019,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? [...baseStructure.Properties.filter((property) => !Properties.some((own) => own.key === property.key)), ...Properties]
         : Properties, IndexSignatures: [] },
       Base: base ?? undefined,
+      UnresolvedHeritage: heritage && !base && bareHeritage?.type !== 'NullLiteral' ? true : undefined,
     } as TypeRecord;
     inferClassMethods(acc, () => receiver);
     const operators = new Map<string, TypeRecord>();
@@ -11432,6 +11440,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // walk. Nominal, not structural: two unrelated empty classes stay
       // unrelated, which is the point of the classes being nominal at all.
       Base: base ?? undefined,
+      UnresolvedHeritage: heritage && !base && bareHeritage?.type !== 'NullLiteral' ? true : undefined,
       Implements: resolvedInterfaces,
       LookupOnlyMemberKeys: lookupOnlyKeys,
       InstanceFieldKeys: instanceFieldKeys,

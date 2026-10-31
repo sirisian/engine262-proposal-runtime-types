@@ -694,6 +694,10 @@ export type TypeRecord =
     // type whose declaration extends ... that type's declaration" is the
     // relation this field holds.
     readonly Base?: TypeRecord,
+    // Checker evidence only, not part of nominal identity or assignability.
+    // With this marker, a missing Base means an unresolved heritage
+    // expression rather than an established end to the ancestry chain.
+    readonly UnresolvedHeritage?: true,
     // Resolved interface identities and arguments; aliases do not create a
     // second nominal declaration. Own field keys distinguish storage from the
     // prototype when checking index signatures and effective member lookup.
