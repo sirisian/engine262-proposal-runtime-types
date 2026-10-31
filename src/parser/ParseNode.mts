@@ -3361,6 +3361,7 @@ export namespace ParseNode {
     readonly TypeParameters: TypeParameters | null;
     readonly FunctionTypeParameterList: readonly FunctionTypeParameter[];
     readonly TypeAnnotation: TypeAnnotation | null;
+    readonly WhereClauses?: readonly WhereClause[] | null;
   }
 
   // FunctionType : FunctionTypeParameters `=>` Type

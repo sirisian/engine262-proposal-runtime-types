@@ -3839,6 +3839,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
+  /** The method signature an interface declares for a member, found in its source (round 5 follow-up, Q10). */
+  const interfaceMethodSignature = (declaration: ParseNode, key: string): ParseNode | undefined => {
+    let found: ParseNode | undefined;
+    const visit = (value: unknown): void => {
+      if (found !== undefined || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(visit); return; }
+      const node = value as ParseNode & { MethodSignature?: ParseNode | null, PropertyName?: { sourceText?: string } | null };
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'TypeMember' && node.MethodSignature && node.PropertyName?.sourceText?.trim() === key) {
+        found = node.MethodSignature;
+        return;
+      }
+      for (const [field, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(field)) visit(child);
+    };
+    visit(declaration);
+    return found;
+  };
+
   /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
   const recordClassParameterWhereCheck = (call: ParseNode.CallExpression): void => {
     const callee = call.CallExpression;
@@ -11051,6 +11069,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // #sec-interfaces-semantics: a property promises its availability and
           // write capability as well as its readable value type.
+          // Round 5 follow-up, Q10: an implementation may only repeat or weaken
+          // the clauses its interface's signature states.
+          if (own.type?.Kind === 'function' && p.type?.Kind === 'function') {
+            const ownDeclaration = signatureDeclarations.get((own.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object);
+            const signatureDeclaration = signatureDeclarations.get((p.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object)
+              ?? interfaceMethodSignature(ifaceDecl as ParseNode, String(p.key));
+            if (ownDeclaration && signatureDeclaration && !clausesImplied(signatureDeclaration, ownDeclaration)) {
+              reportType('rt-implements-contract', n, '$1 states a where clause the signature it implements does not imply; an implementation may only repeat or weaken the contract', Value(String(p.key)));
+            }
+          }
           if (own.type && p.type && !DeclaredMemberImplements(own, p)) {
             report(own.type, p.type, root, 'rt-implements-contract');
           }
@@ -20921,7 +20949,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // relies on (round 5 follow-up, Q10): `v.lane.<9>()` through `v: V`
           // is decided against it, though the implementation may state none.
           const whereDeclaration = declaration?.type === 'FunctionDeclaration' || declaration?.type === 'MethodDefinition'
-            || declaration?.type === 'AbstractMethodDefinition'
+            || declaration?.type === 'AbstractMethodDefinition' || declaration?.type === 'MethodSignature'
             || declaration?.type === 'AsyncMethod' || declaration?.type === 'GeneratorMethod' || declaration?.type === 'AsyncGeneratorMethod';
           if (base.Signatures.length === 1 && whereDeclaration
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {

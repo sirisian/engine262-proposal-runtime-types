@@ -3653,6 +3653,12 @@ export abstract class ExpressionParser extends FunctionParser {
     this.expect('abstract');
     node.static = false;
     node.ClassElementName = this.parseClassElementName();
+    // Round 5 follow-up, Q10: an abstract method written with the keyword
+    // declares type parameters and `where` clauses as the bodiless form does,
+    // so its contract can be stated either way.
+    if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
+      (node as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters = this.parseTypeParameters(false, 'method');
+    }
     this.scope.with({
       lexical: true, variable: true, superProperty: true, newTarget: true, await: false, yield: false,
     }, () => {
@@ -3661,6 +3667,9 @@ export abstract class ExpressionParser extends FunctionParser {
       this.scope.arrowInfoStack.pop();
     });
     node.TypeAnnotation = surroundingAgent.feature('runtime-types') && this.test(Token.COLON) ? this.parseTypeAnnotation(true) : null;
+    if (surroundingAgent.feature('runtime-types') && this.test('where')) {
+      (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
+    }
     this.semicolon();
     return this.finishNode(node, 'AbstractMethodDefinition');
   }

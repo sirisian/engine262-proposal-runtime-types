@@ -1309,6 +1309,13 @@ export abstract class TypeParser extends ExpressionParser {
         return list;
       })();
     node.TypeAnnotation = this.test(Token.COLON) ? this.parseTypeAnnotation() : null;
+    // Round 5 follow-up, Q10: a method signature in an interface or an object
+    // type states its contract in `where` clauses, as a method does; a caller
+    // through the signature is held to them, and an implementation may only
+    // repeat or weaken them.
+    if (this.test('where')) {
+      (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
+    }
     return this.finishNode(node, 'MethodSignature');
   }
 
