@@ -46,7 +46,7 @@ import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import { InjectedClassOf, instantiatePartialClassSelf, mentionsTypeParameter, substituteFreeTypeParameters, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
-import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
+import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias, recordGenericAliasDeclaration } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
@@ -71,7 +71,7 @@ import {
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
-import { DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
+import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { ClassDefinitionEvaluation, PartialClassMergeEvaluation, OwnClassMemberContractsOf } from './ClassDefinitionEvaluation.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
@@ -826,7 +826,13 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // has none.
     RecordDeclaredMemberOrigins(value as object, node);
   }
-  if (rebind) {
+  // An alias binding is immutable to the program (Q20), but the engine's own
+  // rebuild of an already evaluated declaration still replaces its value.
+  const holder = env instanceof GlobalEnvironmentRecord ? env.DeclarativeRecord : env;
+  const ownBinding = holder instanceof DeclarativeEnvironmentRecord ? holder.bindings.get(name) : undefined;
+  if (rebind && ownBinding && ownBinding.mutable === false && ownBinding.initialized) {
+    ownBinding.value = value;
+  } else if (rebind) {
     // The binding exists and is initialized; give it the rebuilt Type Object.
     // Tolerant of an environment that refuses, because a rebind is an
     // improvement on the first answer rather than a correctness requirement:
@@ -843,6 +849,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   if ((node.type === 'InterfaceDeclaration' || node.type === 'TypeAliasDeclaration' && !node.TypeParameters)
     && isTypeObject(value)) {
     recordResolvedAlias(env, name, node, value.TypeRecord, aliasContext ?? value.TypeRecord);
+  }
+  // A generic alias is published for a later script's checker too (Q20, A+).
+  if (node.type === 'TypeAliasDeclaration' && node.TypeParameters && isTypeObject(value)) {
+    recordGenericAliasDeclaration(env, name, node);
   }
   // proposal-runtime-types decorators.md: `@f enum Count { @f Zero, ... }`.
   // decorators.md "Order" puts members before their container, so the

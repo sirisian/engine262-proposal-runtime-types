@@ -540,7 +540,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -586,7 +586,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -632,7 +632,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -678,7 +678,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -724,7 +724,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -770,7 +770,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -816,7 +816,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -862,7 +862,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -908,7 +908,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }
@@ -954,7 +954,7 @@
             "errorClass": "StaticTypeError",
             "diagnostic": {
               "code": "RT_ASSIGNABILITY",
-              "phase": "pre-evaluation"
+              "phase": "static"
             }
           }
         }

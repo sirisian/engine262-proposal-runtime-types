@@ -52,7 +52,7 @@ import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
-import { resolvedAlias, resolvedAliasContext, resolvedNamespaceBinding } from './resolving-aliases.mts';
+import { resolvedAlias, resolvedAliasContext, resolvedAliasDeclaration, resolvedNamespaceBinding } from './resolving-aliases.mts';
 import { LexicalTypeParameterArgument } from './runtime.mts';
 import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
 import { InstantiateCheckedBindings } from './checked-bindings.mts';
@@ -14285,7 +14285,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (argument) return argument;
         }
         const selected = namespaceAlias ?? declarationAt(node.TypeName.IdentifierReference, intrinsicName,
-          classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName));
+          classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName))
+          // A generic alias an earlier script published is applied here as one
+          // declared in this script would be (Q20, A+); a plain one is already
+          // read from its publication by lookupAlias.
+          ?? (node.TypeArguments && !lexicalBinding && !parameterInScope && node.TypeName.MemberNames.length === 0
+            ? resolvedAliasDeclaration(checkingEnvironment, intrinsicName) as ParseNode.TypeAliasDeclaration | undefined : undefined);
         const aliasDeclaration = selected?.type === 'TypeAliasDeclaration' ? selected : undefined;
         // An immutable class-expression binding denotes the expression's
         // declaration in type position, just as its established `new` origin

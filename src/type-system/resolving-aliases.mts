@@ -94,6 +94,22 @@ export function resolvedAliasContext(environment: EnvironmentRecord | null | und
   return published?.declaration.type === 'TypeAliasDeclaration' ? published.context : undefined;
 }
 
+/** The type alias declaration an earlier script published under this name, so
+ * that a generic application of it in a later script is judged as one in the
+ * same script is (round 5 follow-up, Q20, A+). */
+export function resolvedAliasDeclaration(environment: EnvironmentRecord | null | undefined, name: string): ParseNode | undefined {
+  const binding = resolvedBinding(environment, name);
+  return binding ? genericAliasByBinding.get(binding) : undefined;
+}
+
+/** A generic alias is published apart from the plain ones: no reader of a
+ * resolved record sees it, only the checker's application of the declaration. */
+const genericAliasByBinding = new WeakMap<object, ParseNode>();
+export function recordGenericAliasDeclaration(environment: EnvironmentRecord, name: JSStringValue, declaration: ParseNode): void {
+  const binding = RefBindingHolder(environment, name)?.bindings.get(name);
+  if (binding?.initialized && !binding.indirect && !binding.refLocation) genericAliasByBinding.set(binding, declaration);
+}
+
 /** An initialized immutable slot can establish an outer namespace for direct
  * eval without invoking a binding/property read or accepting a lookalike. */
 export function resolvedNamespaceBinding(environment: EnvironmentRecord | null | undefined, name: string): AbstractModuleRecord | undefined {
