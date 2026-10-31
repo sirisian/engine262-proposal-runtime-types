@@ -17964,7 +17964,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // literal under a refined `uint8` would need the conversion the run
           // time does not perform into a refined value type (even `(5 := P)`
           // fails there today), so that case stays refused here.
-          if (own?.Kind === 'literal' && IsAssignable(own, structure)) return contextual;
+          if (own?.Kind === 'literal' && (IsAssignable(own, structure) || literalFitsNumericType(own, structure))) return contextual;
         }
       }
     }

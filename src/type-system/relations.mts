@@ -2322,6 +2322,18 @@ export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
   if (s.Kind === 'any' || t.Kind === 'any') {
     return true;
   }
+  // A refined primitive type is a subtype of its base (sec-where-clauses: a
+  // value of the refined type is a base value satisfying the predicate), as an
+  // object refinement already is (round 5 follow-up, Q17).
+  if (s.Kind === 'nominal' && s !== t) {
+    const refined = s as unknown as { Declaration?: { type?: string, WhereClauses?: readonly unknown[] | null }, Structure?: TypeRecord };
+    if (refined.Declaration?.type === 'TypeAliasDeclaration' && (refined.Declaration.WhereClauses?.length ?? 0) > 0
+        && refined.Structure?.Kind === 'primitive'
+        && !(t.Kind === 'nominal' && (t as unknown as { Declaration?: unknown }).Declaration === refined.Declaration)
+        && IsAssignable(refined.Structure, t)) {
+      return true;
+    }
+  }
   // The two BOUND types are tops over a predicate rather than over a structure,
   // so they are answered here rather than by the subtype walk. `value` admits
   // every value type (#sec-value-types), which is what excludes a `dynamic`

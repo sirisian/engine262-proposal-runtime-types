@@ -2350,6 +2350,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObserv
   return result;
 }
 
+const refinedConversionsInProgress = new Set<TypeRecord>();
 function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation,
   choices?: ConstructionSelections, objectMemberConversion?: ElementConversion, observations?: StructuralValueObservations): ValueEvaluator {
   const convertChecked = (value: Value, target: TypeRecord, observed?: SequenceObservation): ValueEvaluator =>
@@ -2359,6 +2360,25 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   const requireMember = objectMemberConversion
     ?? ((value: Value, target: TypeRecord): ValueEvaluator => RequireType(value, target, undefined, choices, observations));
   value = Q(yield* MaterializeGenericCallable(value, t));
+  // A refined primitive type (an alias with `where` clauses over a primitive)
+  // is entered by converting to the primitive and then checking the refinement
+  // (round 5 follow-up, Q17): `(5 := P)` for `type P = uint8 where this > 2`
+  // used to fail, because the number was checked against P unconverted.
+  if (t.Kind === 'nominal') {
+    const refined = t as unknown as { Declaration?: { type?: string, WhereClauses?: readonly unknown[] | null }, Structure?: TypeRecord };
+    if (refined.Declaration?.type === 'TypeAliasDeclaration' && (refined.Declaration.WhereClauses?.length ?? 0) > 0
+        && refined.Structure?.Kind === 'primitive' && !(value instanceof ObjectValue) && !refinedConversionsInProgress.has(t)) {
+      // The membership check below converts through this function again; the
+      // second time it takes the ordinary path.
+      refinedConversionsInProgress.add(t);
+      try {
+        const converted = Q(yield* convertChecked(value, refined.Structure));
+        return Q(yield* RequireType(converted, t, undefined, choices, observations));
+      } finally {
+        refinedConversionsInProgress.delete(t);
+      }
+    }
+  }
   // Nominal conversion selection follows membership and considers the
   // target's constructor before the source and inbound declarations. Other
   // target families retain their existing conversion path.

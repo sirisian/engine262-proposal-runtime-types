@@ -59,10 +59,15 @@ test('a literal into a refined primitive type is judged by the refinement (round
   expect(evaluated("type S = string where this.length > 2; const c = 'abc'; let s: S = c; s;")).toBe('abc');
   refused("type S = string where this.length > 2; const c = 'a'; let s: S = c;");
   refused("type S = string where this.length > 2; function g(s: S) { return s; } g('a');");
-  // A literal of another base, a non-literal source, and a number under a
-  // refined value type (which would need a conversion the run time does not
-  // perform into a refined value type) stay refused as before.
+  // A literal of another base, and a non-literal source, stay refused as before.
   expect(observeScript("type S = string where this.length > 2; let s: S = 5;")).toMatchObject({ bodyEntered: false, diagnostic: { rule: 'rt-assignability', phase: 'static' } });
   expect(observeScript("type S = string where this.length > 2; let x: string = 'abc'; let s: S = x;")).toMatchObject({ bodyEntered: false, diagnostic: { phase: 'static' } });
-  expect(observeScript('type P = uint8 where this > 2; let p: P = 5;')).toMatchObject({ bodyEntered: false, diagnostic: { phase: 'static' } });
+  // A number literal under a refined value type is converted into the base and
+  // then checked, by a conversion, a declaration or an argument alike, and a
+  // value of the refined type is a value of its base.
+  expect(evaluated('type P = uint8 where this > 2; let p: P = 5; String(p);')).toBe('5');
+  expect(evaluated('type P = uint8 where this > 2; let p: P = (5 := P); String(p + 1);')).toBe('6');
+  expect(evaluated('type P = uint8 where this > 2; function g(p: P): uint8 { return p; } String(g(5));')).toBe('5');
+  refused('type P = uint8 where this > 2; let p: P = 1;');
+  expect(observeScript('type P = uint8 where this > 2; let x: any = 1; let p: P = (x := P);')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
 });
