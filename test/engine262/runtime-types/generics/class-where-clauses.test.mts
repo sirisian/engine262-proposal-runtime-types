@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { evaluated, observeScript } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
  * Round 5 follow-up, Q11: a class's own `where` clauses, after its heritage
@@ -49,4 +50,18 @@ test('a method clause is judged under the class clause at its declaration (the m
   // The same narrowing judges a generic function's clauses over its value parameters.
   impossible('function g<N: uint32>() where N > 5 where N < 5 { return N; }');
   expect(evaluated('function g<N: uint32>() where N > 5 where N < 9 { return N; } String(g.<6>());')).toBe('6');
+});
+
+test('an annotation the checker cannot judge is judged when it is evaluated (round 5 follow-up, Q22)', () => {
+  const sequence = (...sources: string[]) => {
+    setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+    const realm = new ManagedRealm();
+    return sources.map((source) => realm.evaluateScriptSkipDebugger(source) as { Type: string, Value: { stringValue?: () => string } });
+  };
+  const V = 'class V<N: uint32> where N > 2 { } ';
+  expect(sequence(V, "let v: V.<1>; 'ran';")[1]).toMatchObject({ Type: 'throw' });
+  expect(sequence(V, "let v: V.<3>; 'ran';")[1].Value.stringValue?.()).toBe('ran');
+  expect(sequence(`${V}eval('let v: V.<1>; "ran"');`)[0]).toMatchObject({ Type: 'throw' });
+  expect(sequence(`${V}String(new Function('let v: V.<1>; return "ran";')());`)[0]).toMatchObject({ Type: 'throw' });
+  expect(sequence('class W<N: uint32> { }', "let w: W.<1>; 'ran';")[1].Value.stringValue?.()).toBe('ran');
 });

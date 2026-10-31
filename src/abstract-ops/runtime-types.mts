@@ -33,7 +33,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
+import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
@@ -5218,7 +5218,12 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
 export function functionWhereClauses(fn: AnnotatedFunction): readonly ParseNode[] | null {
   const code = fn.ECMAScriptCode as { parent?: { WhereClauses?: readonly ParseNode[] | null } } | null | undefined;
   const list = code?.parent?.WhereClauses;
-  return list && list.length > 0 ? list : null;
+  if (list && list.length > 0) return list;
+  // A member that states no clause keeps the clauses of the member it
+  // overrides or implements (round 5 follow-up, Q21), so a call that reaches it
+  // through `any` is held to them as a typed call is.
+  const inherited = code?.parent ? (InheritedWhereDeclarationOf(code.parent) as { WhereClauses?: readonly ParseNode[] | null } | undefined)?.WhereClauses : undefined;
+  return inherited && inherited.length > 0 ? inherited : null;
 }
 
 /**

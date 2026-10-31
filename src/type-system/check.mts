@@ -1306,6 +1306,18 @@ export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'p
  * checker computes it over declarations, before any function object exists.
  */
 const publishedReturnTypes = new WeakMap<object, TypeRecord>();
+/**
+ * Round 5 follow-up, Q21: a method or implementation that states no `where`
+ * clause keeps the clauses of the member it overrides or implements, at run
+ * time as well as through a typed receiver. The checker records, for each such
+ * declaration, the declaration whose clauses it inherits; only where the
+ * parameters are named alike by position, since the clauses are evaluated in
+ * the implementation's own scope.
+ */
+const inheritedWhereDeclarations = new WeakMap<object, ParseNode>();
+export function InheritedWhereDeclarationOf(declaration: object): ParseNode | undefined {
+  return inheritedWhereDeclarations.get(declaration);
+}
 const publishedNarrowings = new WeakMap<object, Pick<SignatureRecord, 'Return' | 'Narrows'>>();
 // Signature-owned provenance crosses module checking sessions with the exported
 // contract. Structural equality with another signature supplies no evidence.
@@ -3794,6 +3806,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * interval the base's comparisons of the same parameter (by position) allow;
    * anything else is refused, conservatively.
    */
+  /** Record that an override stating no clause keeps its base's clauses (Q21). */
+  const inheritWhereClauses = (base: ParseNode, override: ParseNode): void => {
+    const own = (override as { WhereClauses?: readonly unknown[] | null }).WhereClauses ?? [];
+    const inherited = (base as { WhereClauses?: readonly unknown[] | null }).WhereClauses ?? [];
+    if (own.length > 0 || inherited.length === 0) return;
+    const names = (declaration: ParseNode): string => {
+      const typeParameters = ((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [])
+        .map((parameter) => parameter.BindingIdentifier.name);
+      const formals = (declaration as { UniqueFormalParameters?: unknown, FormalParameters?: unknown, FunctionTypeParameterList?: readonly unknown[] });
+      const list = (formals.UniqueFormalParameters ?? formals.FormalParameters ?? formals.FunctionTypeParameterList ?? []) as readonly unknown[];
+      const formalNames = (Array.isArray(list) ? list : []).map((formal) => {
+        const f = formal as { BindingIdentifier?: { name?: string }, SingleNameBinding?: { BindingIdentifier?: { name?: string } } };
+        return f.BindingIdentifier?.name ?? f.SingleNameBinding?.BindingIdentifier?.name ?? '?';
+      });
+      return `${typeParameters.join(',')}|${formalNames.join(',')}`;
+    };
+    if (names(base) === names(override)) inheritedWhereDeclarations.set(override, base);
+  };
   const clausesImplied = (base: ParseNode, override: ParseNode): boolean => {
     const own = (override as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
     if (own.length === 0) return true;
@@ -3872,8 +3902,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
     outer?: { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: ReadonlyMap<string, TypeRecord> } | null): void => {
-    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
-      ?? (declaration as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses;
+    const ownClauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+    const clauses = (ownClauses && ownClauses.length > 0 ? ownClauses : undefined)
+      ?? (declaration as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses
+      ?? (inheritedWhereDeclarations.get(declaration as object) as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses
+      ?? ownClauses;
     if (!clauses?.length) return;
     // #sec-generic-where: "Omitting an argument list where defaults supply all
     // arguments creates the same checking obligation as an explicit empty
@@ -11075,6 +11108,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const ownDeclaration = signatureDeclarations.get((own.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object);
             const signatureDeclaration = signatureDeclarations.get((p.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object)
               ?? interfaceMethodSignature(ifaceDecl as ParseNode, String(p.key));
+            if (ownDeclaration && signatureDeclaration) inheritWhereClauses(signatureDeclaration, ownDeclaration);
             if (ownDeclaration && signatureDeclaration && !clausesImplied(signatureDeclaration, ownDeclaration)) {
               reportType('rt-implements-contract', n, '$1 states a where clause the signature it implements does not imply; an implementation may only repeat or weaken the contract', Value(String(p.key)));
             }
@@ -11334,6 +11368,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const baseSignature = (inherited.type as { Signatures: readonly SignatureRecord[] }).Signatures[0];
           const ownDeclaration = ownSignature ? signatureDeclarations.get(ownSignature) : undefined;
           const baseDeclaration = baseSignature ? signatureDeclarations.get(baseSignature) : undefined;
+          if (ownDeclaration && baseDeclaration && ownDeclaration !== baseDeclaration) inheritWhereClauses(baseDeclaration, ownDeclaration);
           if (ownDeclaration && baseDeclaration && ownDeclaration !== baseDeclaration && !clausesImplied(baseDeclaration, ownDeclaration)) {
             reportType('rt-inherited-contract', n, '$1 states a where clause the member it overrides does not imply; an override may only repeat or weaken the inherited contract', Value(String(own.key)));
           }
@@ -20945,7 +20980,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           while (genericOwner && !(genericOwner as { TypeParameters?: unknown }).TypeParameters) genericOwner = genericOwner.parent;
           const declaration = signatureDeclarations.get(signature) ?? genericOwner;
           if (declaration) checkSpecializedDeclaration(declaration, bindings);
-          const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] } | undefined)?.WhereClauses;
+          // A member stating no clause keeps the one it overrides (Q21).
+          const ownClauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] } | undefined)?.WhereClauses;
+          const clauses = ownClauses?.length ? ownClauses
+            : (declaration ? (inheritedWhereDeclarations.get(declaration as object) as { WhereClauses?: readonly ParseNode.WhereClause[] } | undefined)?.WhereClauses : undefined) ?? ownClauses;
           // A method's specialization predicate is judged as a function's is
           // (round 5, Gap 10); the clause environment at pre-evaluation binds
           // the declaration's own parameters, and a class's are closed over by
@@ -41430,6 +41468,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const member of chain[0] ?? []) {
           if (member.kind === 'field' || !member.Declaration) continue;
           const obligation = chain.slice(1).flat().find((prior) => prior.abstract && prior.key === member.key && prior.static === member.static && prior.kind === member.kind);
+          if (obligation?.Declaration) inheritWhereClauses(obligation.Declaration, member.Declaration);
           if (obligation?.Declaration && !clausesImplied(obligation.Declaration, member.Declaration)) {
             reportType('rt-inherited-contract', (node as ParseNode), '$1 states a where clause the member it overrides does not imply; an override may only repeat or weaken the inherited contract', Value(String(member.key)));
           }

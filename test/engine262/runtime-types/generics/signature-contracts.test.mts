@@ -60,3 +60,19 @@ test('an implementation of an interface signature may only repeat or weaken its 
   expect(evaluated('interface I { m<N: uint32>(): uint32 where N > 5 } class C implements I { m<N: uint32>(): uint32 where N > 0 { return N; } } String(new C().m.<6>());')).toBe('6');
   expect(evaluated("type T = { where: string; m(): uint32 }; 'ok';")).toBe('ok');
 });
+
+test('a member stating no clause keeps the inherited one at run time (round 5 follow-up, Q21)', () => {
+  const runtimeRefusal = (source: string): void => {
+    expect(observeScript(source)).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+  };
+  runtimeRefusal(`${V}class W extends V { lane<I: uint32>(): uint32 { return (1 := uint32); } } const v: any = new W(); String(v.lane.<9>());`);
+  runtimeRefusal('interface I { m<N: uint32>(): uint32 where N > 0 } class C implements I { m<N: uint32>(): uint32 { return N; } } const i: any = new C(); String(i.m.<0>());');
+  runtimeRefusal('class A { m<N: uint32>(): uint32 where N > 0 { return N; } } class B extends A { m<N: uint32>(): uint32 { return N; } } const b: any = new B(); String(b.m.<0>());');
+  runtimeRefusal('class A { m(i: uint32): uint32 where i > 0 { return i; } } class B extends A { m(i: uint32): uint32 { return i; } } const b: any = new B(); String(b.m(0));');
+  expect(evaluated(`${V}class W extends V { lane<I: uint32>(): uint32 { return (1 := uint32); } } const v: any = new W(); String(v.lane.<2>());`)).toBe('1');
+  // A weaker clause of its own is the implementation's contract; renamed
+  // parameters keep no inherited clause, since it could not be evaluated in
+  // the implementation's scope.
+  expect(evaluated(`${V}class W extends V { lane<I: uint32>(): uint32 where I < 8 { return (1 := uint32); } } const v: any = new W(); String(v.lane.<6>());`)).toBe('1');
+  expect(evaluated(`${V}class W extends V { lane<J: uint32>(): uint32 { return (1 := uint32); } } const v: any = new W(); String(v.lane.<9>());`)).toBe('1');
+});

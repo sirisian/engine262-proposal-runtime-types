@@ -6692,6 +6692,35 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
                 frameC.set(paramC.BindingIdentifier.name, recordC);
               }
             }
+            // A class's own `where` clauses hold of every application, an
+            // annotation's included (round 5 follow-up, Q22): a type position
+            // in a later script, eval or Function code is judged here, as an
+            // expression application is when the class is specialized.
+            const classDeclaration = baseRecord.Declaration as unknown as { type?: string, ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } };
+            const classClauses = (classDeclaration?.type === 'ClassDeclaration' || classDeclaration?.type === 'ClassExpression')
+              ? classDeclaration.ClassTail?.WhereClauses : undefined;
+            if (classClauses?.length && frameC.size === declParamsC.length) {
+              const context = surroundingAgent.runningExecutionContext;
+              const savedEnvironment = context.LexicalEnvironment;
+              const scope = new DeclarativeEnvironmentRecord(ClassTypeEnvironmentOf(value) ?? savedEnvironment);
+              for (const [parameterName, bound] of frameC) {
+                const parameterValue = Q(yield* TypeParameterValue(bound));
+                X(scope.CreateImmutableBinding(Value(parameterName), Value.true));
+                X(scope.InitializeBinding(Value(parameterName), parameterValue));
+              }
+              context.LexicalEnvironment = scope;
+              try {
+                for (const clause of classClauses) {
+                  const reference = Q(yield* Evaluate(clause.RefinementPredicate as never));
+                  const verdict = Q(yield* GetValue(reference as never));
+                  if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+                    return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+                  }
+                }
+              } finally {
+                context.LexicalEnvironment = savedEnvironment;
+              }
+            }
           }
         }
         // proposal-runtime-types #sec-iteration-types: an iteration interface is
