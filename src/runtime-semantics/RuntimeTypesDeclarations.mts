@@ -250,8 +250,16 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         aliasContext = { Kind: 'nominal', Declaration: node, Arguments: [], Structure: record };
         value = GetTypeObject(aliasContext);
       } else {
-        aliasContext = record;
         value = GetTypeObject(record);
+        // The context keeps the declaration's own binders where an equal
+        // interned type shares its Type Object. Where interning REDUCED the
+        // record instead - a meta `meet` folding an intersection of
+        // parameterizations into one - the reduced record is the type, and
+        // the context must be it too: with the unreduced intersection as the
+        // context, `const c: C = 7` was refused against the intersection
+        // (meet-literal, meet-scope).
+        const interned = (value as unknown as { TypeRecord: TypeRecord }).TypeRecord;
+        aliasContext = SameType(interned, record) ? record : interned;
       }
     }
   } else if (node.type === 'EnumDeclaration') {
