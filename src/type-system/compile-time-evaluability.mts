@@ -70,7 +70,18 @@ const isNode = (value: unknown): value is AnyNode => !!value && typeof value ===
 const isFunctionLike = (node: AnyNode): boolean => PARAMETER_KEYS.some((key) => key in node);
 
 /** The names a binding target binds, without entering initializers or nested functions. */
-function boundNamesOf(target: unknown, into: string[] = []): string[] {
+const boundNamesMemo = new WeakMap<object, readonly string[]>();
+function boundNamesOf(target: unknown, into?: string[]): string[] {
+  if (into === undefined && target && typeof target === 'object') {
+    const known = boundNamesMemo.get(target);
+    if (known) return known as string[];
+    const computed = boundNamesOfUncached(target, []);
+    boundNamesMemo.set(target, computed);
+    return computed;
+  }
+  return boundNamesOfUncached(target, into ?? []);
+}
+function boundNamesOfUncached(target: unknown, into: string[] = []): string[] {
   if (Array.isArray(target)) {
     target.forEach((t) => boundNamesOf(t, into));
     return into;
@@ -97,7 +108,24 @@ function unwrapExport(item: AnyNode): AnyNode {
 }
 
 /** A declaration of _name_ among the items of one statement list. */
+// Round 5 follow-up, Q19: the source tree does not change while it is checked,
+// so a statement list's answer for a name, and a resolution's static walk, are
+// computed once. Profiling a long program put binding resolution at about half
+// the checking time, the same lists scanned again for every reference.
+const declarationInListMemo = new WeakMap<readonly unknown[], Map<string, BindingDeclaration | undefined>>();
 function declarationInList(items: readonly unknown[], name: string): BindingDeclaration | undefined {
+  let byName = declarationInListMemo.get(items);
+  if (!byName) {
+    byName = new Map();
+    declarationInListMemo.set(items, byName);
+  } else if (byName.has(name)) {
+    return byName.get(name);
+  }
+  const found = declarationInListUncached(items, name);
+  byName.set(name, found);
+  return found;
+}
+function declarationInListUncached(items: readonly unknown[], name: string): BindingDeclaration | undefined {
   for (const raw of items) {
     if (!isNode(raw)) continue;
     const item = unwrapExport(raw);
@@ -193,8 +221,37 @@ function hoistedVarIn(root: unknown, name: string): AnyNode | undefined {
  * A caller can supply effective adopted binders at their lexical owner;
  * nearer written declarations retain precedence over that supplied scope.
  */
+const resolutionMemo = new WeakMap<object, Map<string, { consulted: readonly ParseNode[], result: BindingDeclaration | undefined }>>();
 export function ResolveBindingDeclaration(reference: ParseNode, name: string,
   additionalTypeParameter?: (scope: ParseNode, name: string) => boolean): BindingDeclaration | undefined {
+  let byName = resolutionMemo.get(reference);
+  let entry = byName?.get(name);
+  if (!entry) {
+    const consulted: ParseNode[] = [];
+    const result = resolveBindingDeclarationWalk(reference, name, (scope) => {
+      consulted.push(scope);
+      return false;
+    });
+    entry = { consulted, result };
+    if (!byName) {
+      byName = new Map();
+      resolutionMemo.set(reference, byName);
+    }
+    byName.set(name, entry);
+  }
+  // The walk consults the callback at exactly these ancestors, in this order,
+  // and only the callback can differ between calls (an adopted contextual
+  // parameter): the first ancestor it claims the name at is the answer, as the
+  // walk itself would have found.
+  if (additionalTypeParameter) {
+    for (const scope of entry.consulted) {
+      if (additionalTypeParameter(scope, name)) return { kind: 'type-parameter', node: scope };
+    }
+  }
+  return entry.result;
+}
+function resolveBindingDeclarationWalk(reference: ParseNode, name: string,
+  additionalTypeParameter: (scope: ParseNode, name: string) => boolean): BindingDeclaration | undefined {
   let child: ParseNode = reference;
   for (let at = (reference as { parent?: ParseNode }).parent as AnyNode | undefined; at; child = at, at = at.parent as AnyNode | undefined) {
     for (const key of Object.keys(at)) {
@@ -210,7 +267,7 @@ export function ResolveBindingDeclaration(reference: ParseNode, name: string,
     // parameters; a same-spelled outer type cannot replace a capture reference.
     const typeParameters = [...(typeList?.TypeParameterList ?? []), ...(typeList?.Captures ?? [])];
     if (typeParameters.some((tp) => (tp.BindingIdentifier as { name?: string } | undefined)?.name === name)
-        || additionalTypeParameter?.(at, name)) {
+        || additionalTypeParameter(at as ParseNode, name)) {
       return { kind: 'type-parameter', node: at };
     }
     if (isFunctionLike(at)) {

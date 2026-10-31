@@ -27758,6 +27758,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * clauses that contradict are refused as tests that can never succeed, and a
    * comparison the interval already settles as one that can never fail.
    */
+  /** Above zero while `where` clauses are walked in sequence, the one place interval facts apply. */
+  let whereClauseWalkDepth = 0;
+  const walkWhereClause = (predicate: ParseNode) => {
+    whereClauseWalkDepth += 1;
+    try {
+      return walkTest(predicate);
+    } finally {
+      whereClauseWalkDepth -= 1;
+    }
+  };
   const orderedComparison = (test: ParseNode): { place: string, op: string, bound: bigint, min: bigint, max: bigint } | null => {
     const t = unparenthesized(test);
     if (t.type !== 'RelationalExpression') return null;
@@ -27824,7 +27834,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const walkTestOutcomes = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     const live = flowLive;
     const canon = live && visit ? testCanon(test) : null;
-    const ordered = live && visit ? orderedComparison(test) : null;
+    // Interval facts judge `where` clauses in sequence (round 5, Q5) and only
+    // that: an ordinary branch over a broad domain is not narrowed by order,
+    // as value-origins' 'ordered-members: broad-domain' requires of
+    // `if (x < 100) { if (x >= 100) {} }` over a uint8.
+    const ordered = live && visit && whereClauseWalkDepth > 0 ? orderedComparison(test) : null;
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
     if (repeated === undefined && deciding && ordered) {
       const [lo, hi, narrowed] = currentInterval(ordered);
@@ -34238,7 +34252,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               for (const clause of [...classClauses, ...methodClauses]) {
                 const predicate = clause.RefinementPredicate;
                 if (predicate.type === 'ConditionalRefinement' || whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
-                const outcome = walkTest(predicate as ParseNode);
+                const outcome = walkWhereClause(predicate as ParseNode);
                 if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
               }
             } finally {
@@ -34262,7 +34276,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (predicate.type !== 'ConditionalRefinement' && !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate)
                 && (LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))
                   || (!whereClauseAssigns(predicate) && LexicalFreeReferences(predicate).some((reference) => valueTypeParameters.has(reference.name))))) {
-              const outcome = walkTest(predicate as ParseNode);
+              const outcome = walkWhereClause(predicate as ParseNode);
               if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
             }
           }
@@ -38920,7 +38934,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // walked here.
               if (predicate.type === 'ConditionalRefinement' || !whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate)
                   || whereClauseContainsMatch(predicate)) continue;
-              const outcome = walkTest(predicate as ParseNode);
+              const outcome = walkWhereClause(predicate as ParseNode);
               if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
             }
           } finally {

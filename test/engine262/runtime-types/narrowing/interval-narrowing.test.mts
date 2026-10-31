@@ -14,13 +14,19 @@ const impossible = (source: string): void => {
   expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-impossible-test', phase: 'static' } });
 };
 
-test('an ordered comparison the interval excludes is refused', () => {
-  impossible('function k(i: uint8) { if (i > 5 && i < 5) { return 1; } return 0; }');
-  impossible('function k(i: uint8) { if (i > 5) { if (i < 5) { return 1; } } return 0; }');
-  impossible('function k(i: uint8) { if (i > 5 && i < 3) { return 1; } return 0; }');
-  impossible('function k(i: uint8) { if (i > 5) { if (i > 3) { return 1; } } return 0; }');
-  impossible('function k(i: uint8) { if (i > 5) { return 0; } else { if (i > 7) { return 1; } } return 2; }');
-  impossible('function k(i: int8) { if (i < -5 && i > -3) { return 1; } return 0; }');
+test('an ordinary branch over a broad domain is not narrowed by order', () => {
+  // Interval facts judge where clauses in sequence and nothing else: the
+  // author's narrowing/value-origins 'ordered-members: broad-domain' requires
+  // `if (x < 100) { if (x >= 100) {} }` over a uint8 to be accepted, and
+  // ordered narrowing of ordinary branches stays with literal unions.
+  for (const source of [
+    'function k(i: uint8) { if (i > 5 && i < 5) { return 1; } return 0; }',
+    'function k(i: uint8) { if (i > 5) { if (i < 5) { return 1; } } return 0; }',
+    'function k(i: uint8) { if (i > 5) { if (i > 3) { return 1; } } return 0; }',
+    'function k(i: int8) { if (i < -5 && i > -3) { return 1; } return 0; }',
+  ]) {
+    expect(evaluated(`${source} 'ok';`)).toBe('ok');
+  }
 });
 
 test('contradictory where clauses are refused at the declaration', () => {
