@@ -7,6 +7,7 @@ import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mt
 import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
 import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions, PartialBindings } from '../type-system/partial-types.mts';
 import { InstantiateCheckedBindings } from '../type-system/checked-bindings.mts';
+import { RecordClassDenotation } from '../type-system/class-denotation.mts';
 import { keyAdmittedBy } from '../type-system/literal-fit.mts';
 import { operatorTableKey } from '../type-system/overloads.mts';
 import { FixedTypeSubtrees } from '../type-system/component-patterns.mts';
@@ -2118,6 +2119,32 @@ function registerLexicalClassFamily(declaration: ParseNode, environment: Environ
   declarations.set(declaration, constructor);
 }
 
+/** The outer binding is available only after class evaluation and initialization
+ * succeed. Inner self context remains separately available during formation.
+ */
+export function RetainClassDeclarationBinding(environment: EnvironmentRecord, name: JSStringValue,
+  declaration: ParseNode.ClassDeclaration, constructor: Value): void {
+  const binding = RefBindingHolder(environment, name)?.bindings.get(name);
+  const type = LookupClassType(constructor);
+  if (!binding?.initialized || !isTypeObject(type) || type.TypeRecord.Kind !== 'nominal'
+    || type.TypeRecord.Declaration !== declaration) return;
+  registerLexicalClassFamily(declaration, environment, constructor);
+  RecordClassDenotation(environment, name, declaration, constructor, type.TypeRecord);
+}
+
+/** A failed outer initialization cannot complete a previously prepared forward
+ * reference. Inner context stays separate; another activation is untouched.
+ */
+export function DiscardFailedClassDeclaration(environment: EnvironmentRecord, declaration: ParseNode.ClassDeclaration,
+  name = declaration.BindingIdentifier?.name): void {
+  if (!name) return;
+  const binding = RefBindingHolder(environment, Value(name))?.bindings.get(Value(name));
+  if (!binding || binding.initialized) return;
+  const identity = ClassDeclarationIdentity(environment, name);
+  if (identity) classFamilyConstructors.delete(identity);
+  lexicalClassFamilies.get(environment)?.delete(declaration);
+}
+
 /** Publish only a successfully initialized immutable class-expression binding.
  * This is its own creation dependency, not a type chosen from a tested instance.
  */
@@ -2251,15 +2278,11 @@ export function RegisterClassTypeEnvironment(ctor: Value, environment: Environme
   classFamilyIdentities.set(ctor, identity);
   if (!family) classFamilyConstructors.set(identity, ctor);
   // A declaration template is instantiated per lexical activation. Keep this
-  // association even if its mutable source binding is subsequently assigned.
-  // Specializations must not replace the family's entry. An expression owns
-  // its fresh inner class scope; its outer const binding is published only
-  // after successful initialization by RetainClassExpressionBinding.
+  // inner association during formation. Specializations must not replace the
+  // family's entry. Outer declaration/expression bindings publish only after
+  // successful initialization through their respective retention operations.
   if (!family && declaration) {
     registerLexicalClassFamily(declaration, environment, ctor);
-    if (declaration.type === 'ClassDeclaration' && environment.OuterEnv) {
-      registerLexicalClassFamily(declaration, environment.OuterEnv, ctor);
-    }
   }
   const inner = name && DeclarativeBindingIdentity(environment, Value(name));
   if (inner) classBindingIdentities.set(inner, identity);

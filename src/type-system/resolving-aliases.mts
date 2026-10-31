@@ -1,5 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, RefBindingHolder, type EnvironmentRecord } from '../execution-context/Environment.mts';
+import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, RefBindingHolder, ResolveInitializedBinding as resolvedBinding, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import type { AbstractModuleRecord } from '../modules.mts';
 import { Value, JSStringValue } from '../value.mts';
 import { isModuleNamespaceObject } from '../abstract-ops/module-namespace-exotic-objects.mts';
@@ -131,35 +131,6 @@ function resolvedPublication(environment: EnvironmentRecord | null | undefined, 
   const binding = resolvedBinding(environment, name);
   const published = binding && resolvedByBinding.get(binding);
   return published && (!declaration || published.declaration === declaration) ? published : undefined;
-}
-
-function resolvedBinding(environment: EnvironmentRecord | null | undefined, name: string):
-  ReturnType<DeclarativeEnvironmentRecord['bindings']['get']> {
-  let at = environment;
-  let key = Value(name);
-  let imported = false;
-  const seen = new Set<object>();
-  while (at) {
-    if (!(at instanceof DeclarativeEnvironmentRecord) && !(at instanceof GlobalEnvironmentRecord)) return undefined;
-    const binding = RefBindingHolder(at, key)?.bindings.get(key);
-    if (binding) {
-      if (!binding.initialized || binding.refLocation || seen.has(binding)) return undefined;
-      seen.add(binding);
-      if (binding.indirect) {
-        const [module, target] = (binding as unknown as { target: [AbstractModuleRecord, JSStringValue] }).target;
-        at = module.Environment;
-        key = target;
-        imported = true;
-        continue;
-      }
-      return binding;
-    }
-    // An import target is a direct binding in its Module Environment, not a
-    // fresh lexical search through the target module's outer environments.
-    if (imported) return undefined;
-    at = at.OuterEnv;
-  }
-  return undefined;
 }
 
 /** Find an already published dependency by source identity, including renamed

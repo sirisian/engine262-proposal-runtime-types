@@ -101,6 +101,9 @@ interface DeclarativeEnvironmentBinding {
   readonly strict?: boolean;
   readonly deletable?: boolean;
   value?: Value | undefined;
+  // A source class's type denotation remains reachable after its value slot
+  // changes. This is an internal binding root, not a user-visible property.
+  declaredClass?: Value;
 
   // proposal-runtime-types (references extension): a ref binding is an alias to a
   // storage location. When present, a read of the binding dereferences to the
@@ -221,6 +224,37 @@ export function RefBindingHolder(base: EnvironmentRecord, N: JSStringValue): Dec
   return undefined;
 }
 
+/** Read publication metadata by the nearest initialized declarative binding.
+ * Follow imports to their producer; ordinary, pending and reference bindings
+ * block fallback. This invokes no environment methods or user code.
+ */
+export function ResolveInitializedBinding(environment: EnvironmentRecord | null | undefined, name: string):
+  DeclarativeEnvironmentBinding | undefined {
+  let at = environment;
+  let key = Value(name);
+  let imported = false;
+  const seen = new globalThis.Set<object>();
+  while (at) {
+    if (!(at instanceof DeclarativeEnvironmentRecord) && !(at instanceof GlobalEnvironmentRecord)) return undefined;
+    const binding = RefBindingHolder(at, key)?.bindings.get(key);
+    if (binding) {
+      if (!binding.initialized || binding.refLocation || seen.has(binding)) return undefined;
+      seen.add(binding);
+      if (binding.indirect) {
+        const [module, target] = (binding as ModuleEnvironmentBinding).target;
+        at = module.Environment;
+        key = target;
+        imported = true;
+        continue;
+      }
+      return binding;
+    }
+    if (imported) return undefined;
+    at = at.OuterEnv;
+  }
+  return undefined;
+}
+
 // Opaque tokens identify bindings without retaining their environments or values.
 // Error objects acquire no observable properties or additional GC roots.
 const bindingIdentities = new WeakMap<DeclarativeEnvironmentBinding, object>();
@@ -291,6 +325,7 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
       value: undefined,
       mark(m: GCMarker) {
         m(this.value);
+        m(this.declaredClass);
       },
     });
     //  4. Return NormalCompletion(empty).
@@ -314,6 +349,7 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
       value: undefined,
       mark(m) {
         m(this.value);
+        m(this.declaredClass);
       },
     });
     // 4. Return NormalCompletion(empty).

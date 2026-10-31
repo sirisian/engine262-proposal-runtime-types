@@ -36,10 +36,8 @@ test('a getter and a setter replace their own half of the pair', () => {
 });
 
 test('a class is replaced, and the BINDING is what takes it', () => {
-  // A class declaration's binding is already initialized by the time its
-  // decorators run, so the replacement is written back through it - assigning a
-  // local would replace nothing, because every later reference resolves the
-  // name again.
+  // The outer binding initializes with the completed replacement after the
+  // decorators succeed; later ordinary reads must see that replacement.
   expect(evaluated('function rep(c) { return class { tag() { return "replaced"; } }; } '
     + '@rep class A { tag() { return "original"; } } (new A()).tag();')).toBe('replaced');
   expect(evaluated('function nop(c) {} @nop class A { tag() { return "original"; } } (new A()).tag();')).toBe('original');

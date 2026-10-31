@@ -52,12 +52,7 @@ test('an undecorated exported function is unaffected', () => runModule(
   'export function g() { return 1; }' + NL + 'if (g() !== 1) { throw new Error("wrong"); }')
   .then((r) => expect(r).toBe('ok')));
 
-// A decorated exported CLASS throws here, and did so before this change too -
-// verified by reverting it and running this file, where both this and the
-// function case failed. So the class branch has its own defect, untouched by
-// routing the function one, and this records it rather than asserting a green
-// that was never there.
-test('a decorated exported class throws, which is a separate pre-existing defect', () => runModule(
+test('a decorated exported class uses the runtime-types decorator path', () => runModule(
   MARK + '@mark' + NL + 'export class C {}' + NL
   + 'if (seen !== "@") { throw new Error("decorator did not run: " + seen); }')
-  .then((r) => expect(r).toBe('threw')));
+  .then((r) => expect(r).toBe('ok')));

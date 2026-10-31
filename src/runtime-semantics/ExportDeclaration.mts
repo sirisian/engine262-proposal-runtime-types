@@ -10,8 +10,9 @@ import {
   BindingClassDeclarationEvaluation,
   DecoratorListEvaluation,
 } from './all.mts';
-import { surroundingAgent } from '#self';
 import { Evaluate_FunctionDeclaration } from './FunctionDeclaration.mts';
+import { Evaluate_ClassDeclaration } from './ClassDeclaration.mts';
+import { surroundingAgent } from '#self';
 import {
   Assert, GetValue, type ECMAScriptFunctionObject, type FunctionDeclaration,
 } from '#self';
@@ -63,6 +64,9 @@ export function* Evaluate_ExportDeclaration(ExportDeclaration: ParseNode.ExportD
         return yield* Evaluate_FunctionDeclaration(Declaration, Decorators);
       }
       Assert(Declaration.type === 'ClassDeclaration' && !Declaration.Decorators);
+      if (surroundingAgent.feature('runtime-types')) {
+        return yield* Evaluate_ClassDeclaration(Declaration, Decorators);
+      }
       const decorators = Q(yield* DecoratorListEvaluation(Decorators));
       Q(yield* BindingClassDeclarationEvaluation(Declaration, decorators));
       return undefined;
@@ -79,6 +83,9 @@ export function* Evaluate_ExportDeclaration(ExportDeclaration: ParseNode.ExportD
     return yield* Evaluate(HoistableDeclaration);
   }
   if (ClassDeclaration) {
+    if (surroundingAgent.feature('runtime-types')) {
+      return yield* Evaluate_ClassDeclaration(ClassDeclaration, Decorators ?? ClassDeclaration.Decorators, true);
+    }
     const decorators = Decorators ? Q(yield* DecoratorListEvaluation(Decorators)) : [];
     const value = Q(yield* BindingClassDeclarationEvaluation(ClassDeclaration, decorators)) as ECMAScriptFunctionObject;
     // 2. Let className be the sole element of BoundNames of ClassDeclaration.

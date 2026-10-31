@@ -83,6 +83,7 @@ import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot, resolvedAliasContext, resolvedNamespaceAliasContext } from './resolving-aliases.mts';
+import { PublishedClassDenotation, NamespaceClassDenotation } from './class-denotation.mts';
 import { TypeResultContextOf } from './type-result-context.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
@@ -5937,6 +5938,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
   }
   switch (node.type) {
     case 'TypeReference': {
+      let qualifiedClass: ReturnType<typeof NamespaceClassDenotation>;
       // proposal-runtime-types #sec-higher-kinded-parameters: "Within the
       // declaration that introduces it, a higher-kinded parameter may appear
       // only applied. It is not a type." An unapplied reference to one is
@@ -6014,7 +6016,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
             return Throw.TypeError('$1 is not a type', Value(`${baseName}.${part.name}`));
           }
           const namespace = base;
-          base = Q(yield* Get(namespace, Value(part.name)));
+          qualifiedClass = NamespaceClassDenotation(namespace, part.name);
+          base = qualifiedClass?.constructor ?? Q(yield* Get(namespace, Value(part.name)));
           aliasContext = resolvedNamespaceAliasContext(namespace, part.name);
         }
         // proposal-runtime-types (temporal.md): the accessed value may itself be a
@@ -6031,7 +6034,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
         // member, carrying no slot, took the literal path and behaved. The
         // member denotes the ENUMERATOR, so only a real Type Object may take
         // this branch.
-        if (base instanceof ObjectValue && isTypeObject(base)) {
+        if (!qualifiedClass && base instanceof ObjectValue && isTypeObject(base)) {
           const record = aliasContext ?? base.TypeRecord;
           if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration'
             && record.Declaration.TypeParameters) {
@@ -6046,18 +6049,26 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
           }
           return record;
         }
-        if (base instanceof ObjectValue) {
+        if (!qualifiedClass && base instanceof ObjectValue) {
           const classType = LookupClassType(base);
           if (classType && isTypeObject(classType)) {
             return classType.TypeRecord;
           }
         }
         // The accessed value becomes a literal type of its own base type.
-        return { Kind: 'literal', Value: base, Base: RuntimeTypeOf(base) };
+        if (!qualifiedClass) return { Kind: 'literal', Value: base, Base: RuntimeTypeOf(base) };
+        // A source class export uses the same argument/default/specialization
+        // path as an unqualified declaration, retaining its producer family.
       }
       const name = node.TypeName.IdentifierReference.name;
+      const lexicalClassBinding = qualifiedClass ? undefined : ResolveBindingDeclaration(node, name);
+      const publishedClass = qualifiedClass ?? PublishedClassDenotation(surroundingAgent.runningExecutionContext.LexicalEnvironment, name);
+      // Syntax may describe a nearer binding whose body has not run yet.
+      // Never use an outer publication to bypass that ordinary shadow.
+      const classDenotation = !lexicalClassBinding || lexicalClassBinding.kind === 'import'
+        || lexicalClassBinding.node === publishedClass?.declaration ? publishedClass : undefined;
       {
-        const bound = lookupTypeParameter(name, node);
+        const bound = qualifiedClass ? null : lookupTypeParameter(name, node);
         if (bound) {
           // The DEFERRED reading.
           //
@@ -6106,7 +6117,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       // later path retains declaration/TDZ handling for unavailable bindings.
       if (node.TypeArguments) {
         const reference = EnsureCompletion(yield* ResolveTypeName(Value(name)));
-        const value = reference.Type === 'normal' ? EnsureCompletion(yield* GetValue(reference.Value)) : reference;
+        const value = reference.Type === 'normal'
+          ? classDenotation ? EnsureCompletion(classDenotation.constructor) : EnsureCompletion(yield* GetValue(reference.Value)) : reference;
         if (value.Type === 'normal' && isTypeObject(value.Value)) {
           const record = value.Value.TypeRecord;
           if (record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration'
@@ -6163,7 +6175,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
             }
             return Throw.TypeError('$1', Value(`the computed argument of ${name} is neither a type nor a metadata object`));
           }
-          const applicationDeclaration = declarationNamed(node, name) as { TypeParameters?: ParseNode.TypeParameters | null } | null;
+          const applicationDeclaration = (classDenotation?.declaration ?? declarationNamed(node, name)) as { TypeParameters?: ParseNode.TypeParameters | null } | null;
           const parameters = applicationDeclaration?.TypeParameters?.TypeParameterList ?? [];
           const argName = (argNode as { ArgumentName?: string }).ArgumentName;
           const p = argName === undefined ? parameters[argRecords.length] : parameters.find((q) => q.BindingIdentifier.name === argName);
@@ -6402,7 +6414,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       // refused rather than silently positional - the same rule a misspelling
       // gets. A user declaration's name falls through untouched; the
       // declaration-backed sites below order it against the real parameters.
-      const sourceDeclaration = declarationNamed(node, name);
+      const sourceDeclaration = classDenotation?.declaration ?? declarationNamed(node, name);
       const sourceClass = sourceDeclaration?.type === 'ClassDeclaration' || sourceDeclaration?.type === 'ClassExpression';
       if (!sourceClass && intrinsicAvailable && argNames2.some((n) => n !== undefined)) {
         const earlyLibNames = libraryTypeParameterNames(name);
@@ -6472,8 +6484,10 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       // after assignment changes the ordinary value binding. Aliases and
       // unevaluated declarations retain the existing resolution/TDZ path.
       const familyDeclaration = ResolveBindingDeclaration(node, name)?.node;
-      const family = familyDeclaration?.type === 'ClassDeclaration' && familyDeclaration === sourceDeclaration
+      const lexicalFamily = familyDeclaration?.type === 'ClassDeclaration' && familyDeclaration === sourceDeclaration
         ? LexicalClassFamily(sourceDeclaration, surroundingAgent.runningExecutionContext.LexicalEnvironment) : undefined;
+      const family = classDenotation?.constructor ?? (lexicalFamily && ref.Base instanceof EnvironmentRecord
+        && ClassDeclarationIdentity(ref.Base, name) === ClassFamilyIdentityOf(lexicalFamily) ? lexicalFamily : undefined);
       // Registration precedes field-type evaluation. Until the family has a
       // published class type, self-references still use the forward/TDZ path.
       const familyType = family && LookupClassType(family);

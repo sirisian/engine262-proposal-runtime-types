@@ -2,7 +2,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { IsPartialDeclaration } from '../type-system/partial-types.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { StringValue } from '../static-semantics/all.mts';
-import { Q, NormalCompletion } from '../completion.mts';
+import { Q, NormalCompletion, EnsureCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -11,7 +11,7 @@ import { RecordTypeOrigin, OriginOfNode } from '../type-system/provenance.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
 import { RegisterStampedClass } from '../type-system/intern.mts';
-import { RegisterPartialClass, ResolveImplementedInterfaces, RuntimeClassBaseOf } from './RuntimeTypesDeclarations.mts';
+import { RegisterPartialClass, ResolveImplementedInterfaces, RuntimeClassBaseOf, RetainClassDeclarationBinding, DiscardFailedClassDeclaration } from './RuntimeTypesDeclarations.mts';
 import {
   InitializeBoundName, ClassDefinitionEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
   ApplyDecorators, ClassDecoratorContext,
@@ -24,7 +24,14 @@ import {
 //   ClassDeclaration :
 //     `class` BindingIdentifier ClassTail
 //     `class` ClassTail
-export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.ClassDeclaration, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator {
+export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.ClassDeclaration, decorators: readonly DecoratorDefinitionRecord[], initialize = true): ValueEvaluator {
+  const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  const result = EnsureCompletion(yield* BindingClassDeclarationEvaluationImpl(ClassDeclaration, decorators, initialize));
+  if (result.Type === 'throw' && surroundingAgent.feature('runtime-types')) DiscardFailedClassDeclaration(environment, ClassDeclaration);
+  return result;
+}
+
+function* BindingClassDeclarationEvaluationImpl(ClassDeclaration: ParseNode.ClassDeclaration, decorators: readonly DecoratorDefinitionRecord[], initialize: boolean): ValueEvaluator {
   const { BindingIdentifier, ClassTail } = ClassDeclaration;
   const sourceText = ClassDeclaration.sourceText;
   // proposal-runtime-types (README "Class Extension"): a `partial class` re-opens
@@ -150,14 +157,28 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
   // 4. Let env be the running execution context's LexicalEnvironment.
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // 5. Perform ? InitializeBoundName(className, value, env).
-  Q(yield* InitializeBoundName(className, value, env));
+  if (initialize) {
+    Q(yield* InitializeBoundName(className, value, env));
+    if (surroundingAgent.feature('runtime-types')) RetainClassDeclarationBinding(env, className, ClassDeclaration, value);
+  }
   // 6. Return value.
   return value;
 }
 
 /** https://tc39.es/ecma262/#sec-class-definitions-runtime-semantics-evaluation */
 //   ClassDeclaration : `class` BindingIdentifier ClassTAil
-export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDeclaration): PlainEvaluator {
+export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDeclaration,
+  runtimeDecorators = ClassDeclaration.Decorators, defaultExport = false): PlainEvaluator {
+  const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  const result = EnsureCompletion(yield* EvaluateClassDeclarationImpl(ClassDeclaration, runtimeDecorators, defaultExport));
+  if (result.Type === 'throw' && surroundingAgent.feature('runtime-types')) {
+    DiscardFailedClassDeclaration(environment, ClassDeclaration, ClassDeclaration.BindingIdentifier?.name ?? (defaultExport ? '*default*' : undefined));
+  }
+  return result;
+}
+
+function* EvaluateClassDeclarationImpl(ClassDeclaration: ParseNode.ClassDeclaration,
+  runtimeDecorators: typeof ClassDeclaration.Decorators, defaultExport: boolean): PlainEvaluator {
   // #sec-specialization-lists: a CASE is inert at its own position. It binds no name,
   // runs no constructor and no static initialization; its body is evaluated
   // only when an application of the family selects it (SpecializeFromFrame).
@@ -167,10 +188,8 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
       return undefined;
     }
   }
-  // proposal-runtime-types: under this proposal the reserved layout controls
-  // are read from the syntax and never evaluated, and no other decorator is
-  // implemented yet. Under the TC39 feature - which is mutually exclusive with
-  // this one - the list evaluates as that proposal specifies.
+  // Runtime-types decorators apply to the completed class below. The separate
+  // TC39 decorators feature evaluates its list before class formation.
   let decorators: DecoratorDefinitionRecord[] = [];
   if (surroundingAgent.feature('runtime-types')) {
     // decorators.md "Order": "Members apply before their container, in document
@@ -179,13 +198,12 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
     // decorators did." So the class's own decorators run after the class is
     // built, not before - which is why this sits below the evaluation rather
     // than above it, where the refusal it replaces sat.
-    Q(yield* BindingClassDeclarationEvaluation(ClassDeclaration, decorators));
+    const ctor = Q(yield* BindingClassDeclarationEvaluation(ClassDeclaration, decorators, false));
     const name = ClassDeclaration.BindingIdentifier
       ? Value((ClassDeclaration.BindingIdentifier as { name: string }).name)
-      : Value.undefined;
-    let ctor: Value = Value.undefined;
+      : defaultExport ? Value('default') : Value.undefined;
     let binding;
-    if (ClassDeclaration.BindingIdentifier) {
+    if (ClassDeclaration.BindingIdentifier && IsPartialDeclaration(ClassDeclaration)) {
       // STRICT, which every class body is: #sec-strict-mode-code makes all
       // class code strict, and a module's is strict besides. `ResolveBinding`
       // defaults its third argument to *false*, and a module Environment
@@ -194,17 +212,20 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
       // raising any guest error, for a program as small as `class C {}` alone
       // in a module.
       binding = Q(yield* ResolveBinding(name as never, undefined, true));
-      ctor = Q(yield* GetValue(binding));
     }
     // decorators.md: a class decorator's return "replaces the class itself".
-    // BindingClassDeclarationEvaluation has already initialized the binding, so
-    // the replacement is WRITTEN BACK through it - assigning the local read
-    // above would replace nothing, since every later reference resolves the
-    // name again. An anonymous class expression has no binding to write to and
-    // so cannot be replaced this way; pinned rather than guessed at.
-    const replacement = Q(yield* ApplyDecorators(ClassDeclaration.Decorators, Q(yield* ClassDecoratorContext(name, ctor)), true));
+    // The outer binding initializes only after decorators succeed. Its value
+    // can be a replacement subclass; its type still names the declared class.
+    // A partial declaration reopens an existing binding instead.
+    const replacement = Q(yield* ApplyDecorators(runtimeDecorators, Q(yield* ClassDecoratorContext(name, ctor)), true));
     if (replacement !== undefined && binding !== undefined) {
       Q(yield* PutValue(binding, replacement));
+    }
+    if ((ClassDeclaration.BindingIdentifier || defaultExport) && !IsPartialDeclaration(ClassDeclaration)) {
+      const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+      const bindingName = ClassDeclaration.BindingIdentifier ? name : Value('*default*');
+      Q(yield* InitializeBoundName(bindingName as never, replacement ?? ctor, environment));
+      RetainClassDeclarationBinding(environment, bindingName as never, ClassDeclaration, ctor);
     }
     return NormalCompletion(undefined);
   } else if (ClassDeclaration.Decorators) {

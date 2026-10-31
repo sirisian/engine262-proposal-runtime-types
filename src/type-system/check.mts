@@ -53,6 +53,7 @@ import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type 
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias, resolvedAliasContext, resolvedAliasDeclaration, resolvedNamespaceBinding } from './resolving-aliases.mts';
+import { PublishedClassDenotation } from './class-denotation.mts';
 import { LexicalTypeParameterArgument } from './runtime.mts';
 import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
 import { InstantiateCheckedBindings } from './checked-bindings.mts';
@@ -9327,6 +9328,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return resolution && resolution !== 'ambiguous' ? resolution : undefined;
   };
   /** A qualified annotation names the export's declaration, not an equal Type Object. */
+  const namespaceClassDenotation = (name: ParseNode.TypeName): ReturnType<typeof PublishedClassDenotation> => {
+    if (!name.MemberNames.length) return undefined;
+    let namespace = importedNamespace(name.IdentifierReference);
+    for (const [index, part] of name.MemberNames.entries()) {
+      if (!namespace) return undefined;
+      const resolution = namespace.ResolveExport(Value(part.name));
+      if (!resolution || resolution === 'ambiguous') return undefined;
+      if (index + 1 < name.MemberNames.length) {
+        namespace = resolution.BindingName === 'namespace' || resolution.BindingName === 'deferred-namespace'
+          ? resolution.Module : undefined;
+        continue;
+      }
+      return resolution.BindingName instanceof JSStringValue
+        ? PublishedClassDenotation(resolution.Module.Environment, resolution.BindingName.stringValue()) : undefined;
+    }
+    return undefined;
+  };
   const namespaceTypeAlias = (name: ParseNode.TypeName): ParseNode.TypeAliasDeclaration | undefined => {
     if (!name.MemberNames.length) return undefined;
     let namespace = importedNamespace(name.IdentifierReference);
@@ -14322,13 +14340,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, intrinsicName);
         const parameterInScope = typeParameterInScope(intrinsicName)
           && (!lexicalBinding || lexicalBinding.kind === 'type-parameter');
+        let source: ParseNode = node;
+        while (source.parent) source = source.parent;
+        const publishedClass = namespaceClassDenotation(node.TypeName)
+          ?? (source === root && !parameterInScope && node.TypeName.MemberNames.length === 0
+            && (!lexicalBinding || lexicalBinding.kind === 'import')
+            ? PublishedClassDenotation(checkingEnvironment, intrinsicName) : undefined);
         if (!lexicalBinding && !parameterInScope && !node.TypeArguments && node.TypeName.MemberNames.length === 0) {
           let source: ParseNode = node;
           while (source.parent) source = source.parent;
           const argument = source === root ? LexicalTypeParameterArgument(checkingEnvironment, intrinsicName) : undefined;
           if (argument) return argument;
         }
-        const selected = namespaceAlias ?? declarationAt(node.TypeName.IdentifierReference, intrinsicName,
+        const selected = publishedClass?.declaration ?? namespaceAlias ?? declarationAt(node.TypeName.IdentifierReference, intrinsicName,
           classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName))
           // A generic alias an earlier script published is applied here as one
           // declared in this script would be (Q20, A+); a plain one is already
@@ -14345,7 +14369,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : expressionOrigin && !expressionOrigin.arguments ? expressionOrigin.declaration : undefined;
         const interfaceDeclaration = selected?.type === 'InterfaceDeclaration' ? selected : undefined;
         const enumDeclaration = selected?.type === 'EnumDeclaration' ? selected : undefined;
-        const selectedClass = (): Known => classDeclaration ? instanceTypeOf(classDeclaration) : null;
+        const selectedClass = (): Known => classDeclaration
+          ? publishedClass?.declaration === classDeclaration ? publishedClass.record : instanceTypeOf(classDeclaration) : null;
         const selectedInterface = (): Known => interfaceDeclaration
           ? interfaceTypeOfNode(interfaceDeclaration, interfaceDeclarations.get(intrinsicName)) : null;
         const selectedAlias = (): Known => aliasDeclaration ? lookupAlias(intrinsicName, aliasDeclaration)
