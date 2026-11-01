@@ -8,9 +8,9 @@ import { GlobalEffectValues } from './global-effect-values.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'global-bound' | 'Object' | 'Reflect'
-  | 'set' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign';
+  | 'String' | 'Symbol' | 'set' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
 const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'global-bound', 'Object', 'Reflect',
-  'set', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign'];
+  'String', 'Symbol', 'set', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
 type Binding = { node: ParseNode, name: string };
 type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean };
 const ignored = new Set(['parent', 'location', 'sourceText', 'strict']);
@@ -71,26 +71,8 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   const input = (target: unknown, value: unknown): void => {
     const at = unwrap(target), source = unwrap(value);
     if (!at || !source) return;
-    if (at.type === 'SingleNameBinding' || at.type === 'BindingElement') {
-      input(at.BindingIdentifier ?? at.BindingPattern, source);
-      input(at.BindingIdentifier ?? at.BindingPattern, at.Initializer);
-      return;
-    }
-    if (at.type === 'ObjectBindingPattern') {
-      for (const property of at.BindingPropertyList) {
-        const name = property.type === 'SingleNameBinding' ? property.BindingIdentifier : property.PropertyName;
-        const projection = { type: 'MemberExpression', MemberExpression: source,
-          IdentifierName: name.type === 'IdentifierName' || name.type === 'BindingIdentifier' ? name : undefined,
-          Expression: name.type === 'PropertyName' ? name.ComputedPropertyName : name,
-          parent: at.parent, location: at.location } as unknown as Node;
-        input(property.type === 'SingleNameBinding' ? property : property.BindingElement, projection);
-      }
-      return;
-    }
-    if (at.type === 'ArrayBindingPattern' && source.type === 'ArrayLiteral' && !source.ElementList.some((part) => part.type === 'SpreadElement')) {
-      at.BindingElementList.forEach((part, index) => input(part, source.ElementList[index]));
-      return;
-    }
+    // Patterns are modeled by the value-flow pass at their actual enclosing
+    // operation site; synthetic textual projections misorder default reads.
     if (!['BindingIdentifier', 'IdentifierReference'].includes(at.type)) return;
     const binding = bindingAt(at, at.name as string);
     inputs.set(binding, [...inputs.get(binding) ?? [], source]);
@@ -129,7 +111,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   };
   const nativeOrigins = (value: Value | undefined): Origin[] => {
     if (value === realm.GlobalObject) return ['global'];
-    for (const candidate of ['eval', 'Function', 'Object', 'Reflect'] as const) {
+    for (const candidate of ['eval', 'Function', 'Object', 'Reflect', 'String', 'Symbol'] as const) {
       if (value !== undefined && value === realm.Intrinsics[`%${candidate}%`]) return [candidate];
     }
     return [];
@@ -211,7 +193,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       const declaration = ResolveBindingDeclaration(node, node.name);
       return !declaration || declaration.kind === 'import' ? externalValue(node.name) : undefined;
     },
-    globalBinding: (node) => globalName(node, true), nativeOrigins, unknown: allOrigins, optional: (node) => optionalView(node as Node),
+    globalBinding: (node) => globalName(node, true), nativeOrigins, globalData: (key) => intrinsicData(realm.GlobalObject, Value(key)), unknown: allOrigins, optional: (node) => optionalView(node as Node),
   });
   const origins = (value: unknown): Set<string> => values.origins(isNode(value) ? value : undefined);
   const record = (node: Node, key?: string, lexical = false): void => {
@@ -278,14 +260,12 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       continue;
     }
     if (kinds.has('global-bound')) record(node);
-    if (!(packed ? values.element(packed, 0) : origins(args[0])).has('global')) {
-      if (!kinds.size) {
-        const exposed = new Set((packed ? [...values.contained(packed)] : args.flatMap((arg) => [...values.contained(arg)])));
-        if (exposed.has('global')) record(node);
-        if (['eval', 'Function', 'dynamic-function'].some((kind) => exposed.has(kind))) record(node, undefined, true);
-      }
-      continue;
+    if (!kinds.size) {
+      const exposed = new Set((packed ? [...values.contained(packed)] : args.flatMap((arg) => [...values.contained(arg)])));
+      if (exposed.has('global')) record(node);
+      if (['eval', 'Function', 'dynamic-function', 'opaque-callable', 'opaque-value'].some((kind) => exposed.has(kind))) record(node, undefined, true);
     }
+    if (!(packed ? values.element(packed, 0) : origins(args[0])).has('global')) continue;
     if (['set', 'defineProperty', 'deleteProperty'].some((kind) => kinds.has(kind as Origin))) {
       record(node, stringKey(args[1]));
     } else if (kinds.has('assign') || kinds.has('defineProperties')) {
@@ -297,6 +277,10 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       record(node);
     }
   }
+  // Opaque lookup and prior-source invocation may run code with ambient
+  // global access. Record the original operation site, not a speculative
+  // getter execution or a source-wide spelling match.
+  for (const site of values.opaqueEffects()) record(site as Node, undefined, true);
   const deferred = (node: ParseNode): boolean => {
     for (let at = node.parent; at; at = at.parent) {
       if (functionKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
@@ -304,9 +288,16 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     return false;
   };
+  const inPattern = (read: ParseNode, operation: ParseNode): boolean => {
+    const pattern = operation.type === 'LexicalBinding' || operation.type === 'VariableDeclaration' ? operation.BindingPattern
+      : operation.type === 'AssignmentExpression' ? operation.LeftHandSideExpression : undefined;
+    if (!pattern) return false;
+    for (let at: ParseNode | undefined = read; at && at !== operation; at = at.parent) if (at === pattern) return true;
+    return false;
+  };
   const affected = (node: ParseNode.IdentifierReference): boolean => values.exhausted() && globalName(node, false) || effects.some((effect) =>
     globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && (deferred(node) || deferred(effect.node)
-      || !effect.node.location || !node.location || effect.node.location.endIndex <= node.location.startIndex));
+      || inPattern(node, effect.node) || !effect.node.location || !node.location || effect.node.location.endIndex <= node.location.startIndex));
   const affects = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
     const node = unwrap(expression);
     if (!node) return false;
