@@ -3,7 +3,7 @@ import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
 
 type Node = ParseNode & Record<string, unknown>;
-type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, stringLength?: number };
+type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
 type Aggregate = { kind: 'aggregate', hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
@@ -21,6 +21,7 @@ const newFlow = (): Flow => ({ values: new Set(), users: new Set() });
  */
 export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   arrayIterationIsStable: (site: ParseNode) => boolean,
+  keyIsPrimitive: (node: ParseNode) => boolean,
   provenDelegations: ReadonlySet<ParseNode.YieldExpression>,
   binding: (node: ParseNode, name: string) => object,
   inputs: ReadonlyMap<object, readonly ParseNode[]>,
@@ -62,6 +63,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     for (const value of from.values) queue.push([value, user]);
   };
   const edges = new Map<Flow, Set<Flow>>();
+  const inputs = new Map<Flow, Set<Flow>>();
   const edge = (from: Flow, to: Flow): void => {
     let targets = edges.get(from);
     if (!targets) {
@@ -70,6 +72,12 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     if (targets.has(to)) return;
     targets.add(to);
+    let sources = inputs.get(to);
+    if (!sources) {
+      sources = new Set();
+      inputs.set(to, sources);
+    }
+    sources.add(from);
     watch(from, (value) => add(to, value));
   };
   const settle = (): void => {
@@ -130,7 +138,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     return found;
   };
   const deferred = (node: ParseNode): boolean => {
-    for (let at = node.parent; at; at = at.parent) {
+    let child = node;
+    for (let at = node.parent; at; child = at, at = at.parent) {
+      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition') && at.ClassElementName === child) continue;
       if (parameterKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
         || /^(For|While|DoWhile)/.test(at.type)) return true;
     }
@@ -221,6 +231,31 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     opaqueEffects.add(site);
   };
   const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean }[] = [];
+  const pendingKeys: { source: Flow, site: ParseNode }[] = [];
+  const propertyKey = (source: Flow, site: ParseNode): void => {
+    pendingKeys.push({ source, site });
+  };
+  // Empty carrier slots are bottom, but an expression with no primitive
+  // evidence is unknown. Require every contributing expression to be primitive.
+  const primitiveKeyState = (source: Flow, seen = new Set<Flow>()): 'bottom' | 'primitive' | 'unknown' => {
+    if (source.values.size || seen.has(source) || seen.size >= 256 || exhausted) return 'unknown';
+    if (--remaining < 0) {
+      exhausted = true;
+      return 'unknown';
+    }
+    seen.add(source);
+    let proven = source.primitiveLiteral || source.knownPrimitive || source.expression && options.keyIsPrimitive(source.expression);
+    for (const input of inputs.get(source) ?? []) {
+      const state = primitiveKeyState(input, seen);
+      if (state === 'unknown') {
+        seen.delete(source);
+        return state;
+      }
+      proven ||= state === 'primitive';
+    }
+    seen.delete(source);
+    return proven ? 'primitive' : source.expression ? 'unknown' : 'bottom';
+  };
   const iterate = (source: Flow, site: ParseNode, index?: number): Flow => {
     const result = newFlow();
     pendingOperations.push({ source, result, site });
@@ -476,6 +511,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     if (site && typeof value === 'string') {
       const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
       const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
+      if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty'].includes(value)) propertyKey(argument(1), site);
       if (value === 'set') {
         const receiver = newFlow();
         edge(argument(0), receiver);
@@ -527,6 +563,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     if (previous) return previous;
     const result = newFlow();
     expressions.set(node, result);
+    result.expression = node;
     if (['NullLiteral', 'BooleanLiteral', 'NumericLiteral', 'StringLiteral'].includes(node.type)) result.primitiveLiteral = true;
     if (node.type === 'StringLiteral') result.stringLength = node.value.length;
     if (exhausted) return result;
@@ -541,8 +578,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (options.globalBinding(node)) edge(slot(globalObject, node.name), result);
       nativeValue(options.external(node), result);
     } else if (['ParenthesizedExpression', 'TypeArgumentsExpression'].includes(node.type)) edge(expression(node.Expression), result);
-    else if (node.type === 'OptionalExpression') edge(expression(options.optional(node)), result);
-    else if (node.type === 'CommaOperator') edge(expression(node.ExpressionList.at(-1)), result);
+    else if (node.type === 'OptionalExpression') {
+      if (node.MemberExpression.type !== 'NullLiteral') edge(expression(options.optional(node)), result);
+    } else if (node.type === 'CommaOperator') edge(expression(node.ExpressionList.at(-1)), result);
     else if (node.type === 'ConditionalExpression') {
       edge(expression(node.AssignmentExpression_a), result); edge(expression(node.AssignmentExpression_b), result);
     } else if (node.type === 'AssignmentExpression' && node.AssignmentOperator === '=') {
@@ -573,7 +611,12 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       // does not establish that arbitrary generator execution is effect-free.
       if (options.provenDelegations.has(node)) add(result, 'opaque-value');
       else edge(iterate(expression(node.AssignmentExpression), node), result);
+    } else if (node.type === 'RelationalExpression' && node.operator === 'in' && !node.PrivateIdentifier) {
+      propertyKey(expression(node.RelationalExpression), node);
+    } else if (node.type === 'PropertyName') {
+      propertyKey(expression(node.ComputedPropertyName), node);
     } else if (node.type === 'MemberExpression') {
+      if (node.Expression) propertyKey(expression(node.Expression), node);
       const parent = node.parent;
       const writeOnly = isAssignmentTarget(node)
         || parent?.type === 'UnaryExpression' && parent.operator === 'delete';
@@ -648,6 +691,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (!request.source.values.size && !(request.copy && (request.source.primitiveLiteral || request.source.knownPrimitive))) opaque(request.result, request.site);
     }
     settle();
+  }
+  for (const request of pendingKeys) {
+    if (primitiveKeyState(request.source) !== 'primitive') opaqueEffects.add(request.site);
   }
   const summarize = (from: Flow, deep: boolean): Set<string> => {
     const result = new Set<string>();

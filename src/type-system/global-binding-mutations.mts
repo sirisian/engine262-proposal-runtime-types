@@ -217,8 +217,67 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   const statements = root.type === 'Script' ? root.ScriptBody?.StatementList ?? []
     : root.type === 'Module' ? root.ModuleBody?.ModuleItemList ?? [] : [];
   const provenDelegations = ProvenResumedDelegations(root, statements, realm);
+  const primitiveKeyProofs = new Map<ParseNode, boolean>();
+  const intrinsicPrimitiveCall = (node: ParseNode): boolean => {
+    if (node.type !== 'CallExpression') return false;
+    const callee = unwrap(node.CallExpression);
+    return callee?.type === 'IdentifierReference' && ['String', 'Symbol'].includes(callee.name)
+      && !ResolveBindingDeclaration(callee, callee.name) && !inputs.get(bindingAt(callee, callee.name))?.length
+      && externalValue(callee.name) === realm.Intrinsics[callee.name === 'String' ? '%String%' : '%Symbol%']
+      && node.Arguments.every((argument) => ['NullLiteral', 'BooleanLiteral', 'NumericLiteral', 'StringLiteral'].includes(argument.type));
+  };
+  const localSymbolDeclaration = (value: unknown): ParseNode | undefined => {
+    let node = unwrap(value);
+    if (node?.type === 'CommaOperator') node = unwrap(node.ExpressionList.at(-1));
+    if (node?.type !== 'IdentifierReference') return undefined;
+    const declaration = ResolveBindingDeclaration(node, node.name);
+    const initializer = declaration?.kind === 'const' ? unwrap(declaration.initializer) : undefined;
+    return declaration?.kind === 'const' && !(declaration.node as Node).TypeAnnotation && !(declaration.node as Node).Ref && initializer?.type === 'CallExpression'
+      && unwrap(initializer.CallExpression)?.name === 'Symbol' && intrinsicPrimitiveCall(initializer) ? declaration.node : undefined;
+  };
+  const localSymbolDataAccess = (node: ParseNode): boolean => {
+    if (node.type !== 'MemberExpression' || !node.Expression) return false;
+    const base = unwrap(node.MemberExpression), key = localSymbolDeclaration(node.Expression);
+    if (base?.type !== 'IdentifierReference' || !key) return false;
+    const declaration = ResolveBindingDeclaration(base, base.name);
+    const object = declaration?.kind === 'const' ? unwrap(declaration.initializer) : undefined;
+    if (declaration?.kind !== 'const' || (declaration.node as Node).TypeAnnotation || (declaration.node as Node).Ref || object?.type !== 'ObjectLiteral') return false;
+    return object.PropertyDefinitionList.every((property) => property.type === 'PropertyDefinition' && property.PropertyName)
+      && object.PropertyDefinitionList.some((property) => property.type === 'PropertyDefinition'
+        && property.PropertyName?.type === 'PropertyName' && localSymbolDeclaration(property.PropertyName.ComputedPropertyName) === key);
+  };
+  const keyIsPrimitive = (value: ParseNode): boolean => {
+    const node = unwrap(value);
+    if (!node || node.type !== 'CallExpression' && node.type !== 'MemberExpression') return false;
+    const cached = primitiveKeyProofs.get(node);
+    if (cached !== undefined) return cached;
+    const callee = unwrap(node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression);
+    if (callee?.type !== 'IdentifierReference' || !['String', 'Symbol'].includes(callee.name)
+      || ResolveBindingDeclaration(callee, callee.name) || inputs.get(bindingAt(callee, callee.name))?.length
+      || externalValue(callee.name) !== realm.Intrinsics[callee.name === 'String' ? '%String%' : '%Symbol%']) return false;
+    if (node.type === 'CallExpression') {
+      if (!node.Arguments.every((argument) => ['NullLiteral', 'BooleanLiteral', 'NumericLiteral', 'StringLiteral'].includes(argument.type))) return false;
+    } else {
+      const key = keyOf(node);
+      const data = key === undefined ? undefined : intrinsicData(externalValue(callee.name)!, Value(key));
+      if (!data || data instanceof ObjectValue) return false;
+    }
+    // Ancestors enclose the selected operation; their own operation follows
+    // its capture. Other children still participate in the effect screen.
+    const enclosing = new Set<ParseNode>();
+    for (let at: ParseNode | undefined = node; at; at = at.parent) enclosing.add(at);
+    // The source screen may admit local data accesses under the same intrinsic
+    // hypothesis. Only immutable Symbol keys naming an own literal data entry
+    // qualify; deletion, reflection, escape calls and other effects still fail
+    // the screen. This preserves local Symbol evidence without trusting an
+    // arbitrary computed read or the spelling of a replaced intrinsic.
+    const stable = intrinsicSourceIsStable(root, realm, (at) => enclosing.has(at) || intrinsicPrimitiveCall(at)
+      || at.type === 'PropertyName' && !!localSymbolDeclaration(at.ComputedPropertyName) || localSymbolDataAccess(at), node, undefined, callee.name);
+    primitiveKeyProofs.set(node, stable);
+    return stable;
+  };
   const values = GlobalEffectValues(nodes, {
-    binding: bindingAt, inputs, arrayIterationIsStable, provenDelegations, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
+    binding: bindingAt, inputs, arrayIterationIsStable, provenDelegations, keyIsPrimitive, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
     external: (node) => {
       const declaration = ResolveBindingDeclaration(node, node.name);
       return !declaration || declaration.kind === 'import' ? externalValue(node.name) : undefined;
@@ -312,7 +371,9 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   // getter execution or a source-wide spelling match.
   for (const site of values.opaqueEffects()) record(site as Node, undefined, true);
   const deferred = (node: ParseNode): boolean => {
-    for (let at = node.parent; at; at = at.parent) {
+    let child = node;
+    for (let at = node.parent; at; child = at, at = at.parent) {
+      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition') && at.ClassElementName === child) continue;
       if (functionKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
         || ['ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement', 'WhileStatement', 'DoWhileStatement'].includes(at.type)) return true;
     }
@@ -330,15 +391,18 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     return false;
   };
   const precedes = (effect: ParseNode, read: ParseNode): boolean => {
-    // Pattern syntax precedes its RHS in text, but all pattern operations run
-    // after that initializer. Rest copies follow the preceding defaults.
+    // Pattern operations and a simple store's final key conversion follow its
+    // RHS. Evaluating the reference's base/key, and reading a compound target,
+    // precede the RHS. Rest copies follow the preceding defaults.
     for (let at: ParseNode | undefined = effect; at; at = at.parent) {
       if ((at.type === 'LexicalBinding' || at.type === 'VariableDeclaration') && at.BindingPattern && contains(at.BindingPattern, effect)) {
         if (at.Initializer && contains(at.Initializer, read)) return false;
         break;
       }
       if (at.type === 'AssignmentExpression' && contains(at.LeftHandSideExpression, effect)) {
-        if (contains(at.AssignmentExpression, read)) return false;
+        const target = unwrap(at.LeftHandSideExpression);
+        if ((target?.type === 'ArrayLiteral' || target?.type === 'ObjectLiteral'
+          || at.AssignmentOperator === '=' && target === effect) && contains(at.AssignmentExpression, read)) return false;
         break;
       }
     }

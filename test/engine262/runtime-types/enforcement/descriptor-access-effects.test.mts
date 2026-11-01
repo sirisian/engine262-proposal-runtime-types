@@ -145,8 +145,8 @@ test('descriptor field lookup includes a newly installed inherited getter', () =
     .toMatchObject({ completion: 'normal', bodyEntered: true, value: '1' });
 });
 
-test.each(['"??"', 'text'])('string source %s still writes UTF-16 index properties', (source) => {
-  expect(observe('const text="??";const box={1:0};const setter=v=>{globalThis.f=()=>1;};',
+test.each(['"\\u{1F600}"', 'text'])('string source %s still writes UTF-16 index properties', (source) => {
+  expect(observe('const text="\\u{1F600}";const box={1:0};const setter=v=>{globalThis.f=()=>1;};',
     `function f():string{return "old";}Object.defineProperty(box,"1",{set:setter});Object.assign(box,${source});const n:number=f();String(n);`))
     .toMatchObject({ completion: 'normal', bodyEntered: true, value: '1' });
 });
