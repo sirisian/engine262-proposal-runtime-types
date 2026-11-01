@@ -6,7 +6,7 @@ import { intrinsicData } from './intrinsic-origin.mts';
 type Node = ParseNode & Record<string, unknown>;
 type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
-type Aggregate = { kind: 'aggregate', hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
+type Aggregate = { kind: 'aggregate', deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
 type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], packed?: Flow, receiver: Flow, properties: Aggregate };
@@ -95,7 +95,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     queue.length = 0;
   };
-  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), mutations: new Set(), array, slotUsers: new Set() });
+  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', deletions: [], deletionUsers: new Set(), hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), mutations: new Set(), array, slotUsers: new Set() });
   const propertiesOf = (value: Candidate): Aggregate | undefined => typeof value === 'string' ? undefined
     : value.kind === 'aggregate' ? value : value.properties;
   const functionProperties = (node?: ParseNode): Aggregate => {
@@ -205,14 +205,38 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       const adapter = key !== undefined && ['call', 'apply', 'bind'].includes(key);
       const descriptor = key === undefined ? undefined : object.native?.properties.get(Value(key));
       accessHooks(object, key, receiver, site, (_key, result) => edge(result, to));
-      if (adapter && !descriptor) {
-        if (object.prototypeFlow) load(object.prototypeFlow, key, to, site, receiver);
+      let followedPrototype = false;
+      const exposePrototype = (deletion: boolean): void => {
+        if (followedPrototype) return;
         const prototype = object.native && 'Prototype' in object.native ? object.native.Prototype : object.prototype;
+        followedPrototype = !!object.prototypeFlow || prototype instanceof ObjectValue || prototype === Value.null || deletion;
+        if (object.prototypeFlow) load(object.prototypeFlow, key, to, site, receiver);
         if (prototype instanceof ObjectValue && prototype !== object.native) {
           const parent = newFlow(); nativeValue(prototype, parent);
           load(parent, key, to, site, receiver);
+        } else if (deletion && prototype !== Value.null && !object.prototypeFlow) {
+          // Source aggregates without an established prototype cannot certify
+          // that removal reveals no inherited getter or callable.
+          add(to, 'opaque-value');
+          if (site) opaqueEffects.add(site);
         }
-      }
+      };
+      if (adapter && !descriptor) exposePrototype(false);
+      const removed = (): void => {
+        if (followedPrototype || descriptor?.Configurable === Value.false) return;
+        for (const change of object.deletions) {
+          if (exhausted || --remaining < 0) {
+            exhausted = true;
+            return;
+          }
+          if (matchingKey(key, change.key) && (!site || mayPrecede(change.site, site))) {
+            exposePrototype(true);
+            return;
+          }
+        }
+      };
+      object.deletionUsers.add(removed);
+      removed();
       if (object.native && (key === undefined || descriptor?.Value === undefined && (!adapter || descriptor))) {
         if (site) opaqueEffects.add(site);
         add(to, 'opaque-value');
@@ -237,6 +261,18 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       edge(from, slot(object, key));
       accessHooks(object, key, receiver, site, undefined, from);
       if (site && object.native && (key === undefined || object.native.properties.get(Value(key))?.Value === undefined)) opaqueEffects.add(site);
+    }
+  });
+  const remove = (base: Flow, key: string | undefined, site: ParseNode): void => watch(base, (value) => {
+    if (value === 'global') globalWrites.push({ site, key });
+    else if (value === 'opaque-value') opaqueEffects.add(site);
+    else if (typeof value !== 'string') {
+      const object = propertiesOf(value)!;
+      if (object.native && object.native.Delete !== ObjectValue.prototype.Delete) opaqueEffects.add(site);
+      // Deletion changes later lookup; it does not invoke an own getter/setter
+      // and does not retract historical values from this may-flow graph.
+      object.deletions.push({ key, site });
+      for (const update of object.deletionUsers) update();
     }
   });
   const binding = (node: Node, name: string): Flow => {
@@ -614,11 +650,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         if (packed || args.length > 3) edge(argument(3), receiver);
         store(argument(0), key, argument(2), site, receiver);
       }
-      if (value === 'deleteProperty') watch(argument(0), (target) => {
-        if (target === 'global') globalWrites.push({ site, key });
-        if (target === 'opaque-value' || typeof target !== 'string' && target.kind === 'aggregate'
-          && target.native && target.native.Delete !== ObjectValue.prototype.Delete) opaqueEffects.add(site);
-      });
+      if (value === 'deleteProperty') remove(argument(0), key, site);
       if (value === 'defineProperty' || value === 'reflect-defineProperty') {
         defineDescriptor(argument(0), key, argument(2), site, argumentNodes?.[2]);
         if (value === 'defineProperty') edge(argument(0), result);
@@ -656,6 +688,16 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (!['ArrayLiteral', 'ObjectLiteral', 'PropertyDefinition', 'SpreadElement', 'AssignmentRestElement', 'ParenthesizedExpression'].includes(parent.type)) return false;
     }
     return false;
+  };
+  const deletionOperand = (node: ParseNode): ParseNode => {
+    while (node.type === 'ParenthesizedExpression') node = node.Expression;
+    return node.type === 'OptionalExpression' && node.MemberExpression.type !== 'NullLiteral' ? options.optional(node) : node;
+  };
+  const isDeleteTarget = (node: ParseNode): boolean => {
+    let at = node;
+    while (at.parent?.type === 'ParenthesizedExpression') at = at.parent;
+    const parent = at.parent;
+    return parent?.type === 'UnaryExpression' && parent.operator === 'delete' && deletionOperand(parent.UnaryExpression) === node;
   };
   const expression = (value: unknown): Flow => {
     if (!isNode(value)) return newFlow();
@@ -718,9 +760,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       propertyKey(expression(node.ComputedPropertyName), node);
     } else if (node.type === 'MemberExpression') {
       if (node.Expression) propertyKey(expression(node.Expression), node);
-      const parent = node.parent;
-      const writeOnly = isAssignmentTarget(node)
-        || parent?.type === 'UnaryExpression' && parent.operator === 'delete';
+      const writeOnly = isAssignmentTarget(node) || isDeleteTarget(node);
       if (!writeOnly) load(expression(node.MemberExpression), options.key(node), result, node);
       if (!writeOnly && ['call', 'apply', 'bind'].includes(options.key(node) ?? '')) pendingOperations.push({ source: result, result, site: node, copy: true });
     } else if (parameterKeys.some((key) => key in node)) {
@@ -734,6 +774,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           edge(callable(at as Node).receiver, result); break;
         }
       }
+    } else if (node.type === 'UnaryExpression' && node.operator === 'delete') {
+      const operand = deletionOperand(node.UnaryExpression);
+      if (operand.type === 'MemberExpression') remove(expression(operand.MemberExpression), options.key(operand), node);
     } else if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       let callee: ParseNode = node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression;
       while (callee.type === 'ParenthesizedExpression') callee = callee.Expression;
