@@ -10,9 +10,9 @@ import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'Object' | 'Reflect'
-  | 'String' | 'Symbol' | 'create' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
+  | 'String' | 'Symbol' | 'prototype-setter' | 'create' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
 const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'Object', 'Reflect',
-  'String', 'Symbol', 'create', 'setPrototypeOf', 'reflect-setPrototypeOf', 'function-call', 'function-apply', 'function-bind', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
+  'String', 'Symbol', 'prototype-setter', 'create', 'setPrototypeOf', 'reflect-setPrototypeOf', 'function-call', 'function-apply', 'function-bind', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
 type Binding = { node: ParseNode, name: string };
 type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean };
 const ignored = new Set(['parent', 'location', 'sourceText', 'strict']);
@@ -277,6 +277,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   };
   const values = GlobalEffectValues(nodes, {
     objectPrototype: realm.Intrinsics['%Object.prototype%'],
+    arrayPrototype: realm.Intrinsics['%Array.prototype%'],
     functionPrototype: (node) => realm.Intrinsics[node?.type.startsWith('AsyncGenerator') ? '%AsyncGeneratorFunction.prototype%'
       : node?.type.startsWith('Generator') ? '%GeneratorFunction.prototype%' : node?.type.startsWith('Async') ? '%AsyncFunction.prototype%' : '%Function.prototype%'],
     binding: bindingAt, inputs, arrayIterationIsStable, provenDelegations, keyIsPrimitive, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
@@ -336,12 +337,13 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     const kinds = origins(callee);
     if (['function-call', 'function-apply', 'function-bind'].some((kind) => kinds.has(kind))) continue;
     const args: readonly ParseNode[] = node.Arguments ?? [];
-    if (!kinds.size && callee?.type === 'MemberExpression' && values.contained(callee.MemberExpression).has('global')) record(node);
+    const summarizedBound = !kinds.size && values.boundInvocation(callee);
+    if (!kinds.size && !summarizedBound && callee?.type === 'MemberExpression' && values.contained(callee.MemberExpression).has('global')) record(node);
     if (kinds.has('eval') || kinds.has('dynamic-function')) {
       record(node, undefined, true);
       continue;
     }
-    if (!kinds.size) {
+    if (!kinds.size && !summarizedBound) {
       const exposed = new Set(args.flatMap((arg) => [...values.contained(arg)]));
       if (exposed.has('global')) record(node);
       if (['eval', 'Function', 'dynamic-function', 'opaque-callable', 'opaque-value'].some((kind) => exposed.has(kind))) record(node, undefined, true);

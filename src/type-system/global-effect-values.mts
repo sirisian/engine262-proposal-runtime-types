@@ -3,13 +3,15 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { JSStringValue, NumberValue, ObjectValue, Value } from '../value.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
 import { isIntrinsicPrototypeGetter } from './intrinsic-effect-origin.mts';
+import { OrdinaryDataReadSupported } from './runtime.mts';
+import { ScalarRestOwner } from './scalar-rests.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, primitiveKinds?: Set<'null' | 'undefined' | 'other'>, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
 type PropertyWrite = { key: string | undefined, source: Flow, site?: ParseNode };
 type PrototypeChange = { source: Flow, site: ParseNode };
-type Aggregate = { kind: 'aggregate', writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
+type Aggregate = { kind: 'aggregate', typedKeys: Set<string | undefined>, writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
 type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], packed?: Flow, receiver: Flow, properties: Aggregate };
@@ -26,6 +28,7 @@ const newFlow = (): Flow => ({ values: new Set(), users: new Set() });
 export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   functionPrototype: (node?: ParseNode) => ObjectValue,
   objectPrototype: ObjectValue,
+  arrayPrototype: ObjectValue,
   arrayIterationIsStable: (site: ParseNode) => boolean,
   keyIsPrimitive: (node: ParseNode) => boolean,
   provenDelegations: ReadonlySet<ParseNode.YieldExpression>,
@@ -41,6 +44,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   unknown: readonly string[],
   optional: (node: ParseNode) => ParseNode,
 }): {
+  boundInvocation: (node: ParseNode | undefined) => boolean,
   origins: (node: ParseNode | undefined) => Set<string>,
   contained: (node: ParseNode | undefined) => Set<string>,
   element: (node: ParseNode | undefined, index: number) => Set<string>,
@@ -99,7 +103,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     queue.length = 0;
   };
-  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', writes: [], writeUsers: new Set(), ordinaryPrototypeMutation: true, ownKeys: new Set(), prototypes: [], prototypeUsers: new Set(), deletions: [], deletionUsers: new Set(), hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), mutations: new Set(), array, slotUsers: new Set() });
+  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', typedKeys: new Set(), writes: [], writeUsers: new Set(), ordinaryPrototypeMutation: true, ownKeys: new Set(), prototypes: [], prototypeUsers: new Set(), deletions: [], deletionUsers: new Set(), hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), mutations: new Set(), array, slotUsers: new Set() });
   const propertiesOf = (value: Candidate): Aggregate | undefined => typeof value === 'string' ? undefined
     : value.kind === 'aggregate' ? value : value.properties;
   const functionProperties = (node?: ParseNode): Aggregate => {
@@ -150,7 +154,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (object.native) {
         const descriptor = object.native.properties.get(Value(key));
         if (descriptor?.Value !== undefined) nativeValue(intrinsicData(object.native, Value(key)), found);
-        else if (!['call', 'apply', 'bind'].includes(key) || descriptor) add(found, 'opaque-value');
+        else if (descriptor) add(found, 'opaque-value');
       }
     }
     for (const user of object.slotUsers) user(key, found);
@@ -242,7 +246,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           exhausted = true;
           return;
         }
-        if (observed.has(hook) || !matchingKey(key, hook.key) || !mayPrecede(hook.site, site)
+        if (observed.has(hook) || !matchingKey(key, hook.key) || !beforePrototypeUse(hook.site, site)
           || hook.key !== undefined && excluded?.has(hook.key)) continue;
         if (excluded && hook.enumerable === false && !object.enumerability.some((change) => change.value !== false
           && matchingKey(change.key, hook.key) && mayPrecede(hook.site, change.site) && mayPrecede(change.site, site))) continue;
@@ -255,13 +259,26 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     object.hookUsers.add(update);
     update();
   };
+  const globalPropertyAt = (key: string | undefined, to: Flow, site?: ParseNode): void => {
+    const seen = new Set<PropertyWrite>();
+    const update = (): void => {
+      for (const write of globalObject.writes) {
+        if (exhausted || --remaining < 0) {
+          exhausted = true; return;
+        }
+        if (seen.has(write) || !matchingKey(key, write.key) || write.site && !beforePrototypeUse(write.site, site)) continue;
+        seen.add(write); edge(write.source, to);
+      }
+    };
+    globalObject.writeUsers.add(update); update();
+  };
   const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode, receiver = base, path = new Set<Aggregate>()): void => watch(base, (value) => {
     if (typeof value === 'string') {
       if (value === 'opaque-value') {
         add(to, value);
         if (site) opaqueEffects.add(site);
       }
-      if (value === 'global') edge(key === undefined ? globalObject.all : slot(globalObject, key), to);
+      if (value === 'global') globalPropertyAt(key, to, site);
       if (value === 'global' && key === 'globalThis') add(to, 'global');
       else if (value === 'global' && key && ['String', 'Symbol', 'Object', 'Reflect'].includes(key)) {
         const data = options.globalData(key);
@@ -381,24 +398,116 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       } else edge(slot(object, key), to);
     }
   });
-  const store = (base: Flow, key: string | undefined, from: Flow, site?: ParseNode, receiver = base, writeSite = site): void => watch(base, (value) => {
-    if (value === 'global') {
-      edge(from, slot(globalObject, key));
-      if (site) globalWrites.push({ site, key });
-    } else if (value === 'opaque-value' && site) opaqueEffects.add(site);
-    else if (typeof value !== 'string') {
-      const object = propertiesOf(value)!;
-      if (site) prototypeEffects(base, site, key);
-      object.mutations.add(key);
-      if (object.native) {
-        object.writes.push({ key, source: from, site: writeSite });
-        for (const update of object.writeUsers) update();
-      }
-      edge(from, slot(object, key));
-      accessHooks(object, key, receiver, site, undefined, from);
-      if (site && object.native && (key === undefined || object.native.properties.get(Value(key))?.Value === undefined)) opaqueEffects.add(site);
+  const recordDataWrite = (object: Aggregate, key: string | undefined, from: Flow, site?: ParseNode): void => {
+    object.mutations.add(key);
+    if (object.native || object === globalObject) {
+      object.writes.push({ key, source: from, site });
+      for (const update of object.writeUsers) update();
     }
+    edge(from, slot(object, key));
+  };
+  const receiverAdmissionEffects = (receiver: Flow, key: string | undefined, site: ParseNode): void => watch(receiver, (value) => {
+    const object = propertiesOf(value);
+    if (!object) {
+      if (value === 'opaque-value') opaqueEffects.add(site);
+      return;
+    }
+    pendingTypedStores.push({ object, key, site });
+    if (!object.native) return;
+    // Base [[Set]] also implements proposal storage admission. Its ordinary
+    // method identity alone is not proof that this receiver runs no user code.
+    if (!OrdinaryDataReadSupported(object.native)) opaqueEffects.add(site);
+    const typed = object.native as ObjectValue & { TypedProperties?: ReadonlyMap<unknown, unknown>, TypedElement?: unknown, TypedTuple?: unknown };
+    if (key === undefined ? typed.TypedProperties?.size : typed.TypedProperties?.has(key)) opaqueEffects.add(site);
+    if ((key === undefined || /^(0|[1-9][0-9]*)$/.test(key))
+      && (typed.TypedElement !== undefined || typed.TypedTuple !== undefined || ScalarRestOwner(typed).ScalarRestGuards?.length)) opaqueEffects.add(site);
   });
+  const dataReceiverStore = (receiver: Flow, key: string | undefined, from: Flow, site: ParseNode): void => watch(receiver, (value) => {
+    if (value === 'global') {
+      globalWrites.push({ site, key }); recordDataWrite(globalObject, key, from, site); return;
+    }
+    const object = propertiesOf(value);
+    if (!object) {
+      if (value === 'opaque-value') opaqueEffects.add(site);
+      return;
+    }
+    if (object.native) {
+      if (object.native.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
+        || object.native.DefineOwnProperty !== ObjectValue.prototype.DefineOwnProperty) opaqueEffects.add(site);
+      const own = key === undefined ? undefined : object.native.properties.get(Value(key));
+      if (own && (own.Getter !== undefined || own.Setter !== undefined || own.Writable === Value.false)) return;
+    }
+    recordDataWrite(object, key, from, site);
+  });
+  // Ordinary [[Set]] chooses an own/inherited setter with the original
+  // receiver. A data write is defined on Receiver, not its lookup target.
+  const storeEffects = (base: Flow, key: string | undefined, from: Flow, receiver: Flow, site: ParseNode,
+    path = new Set<Aggregate>()): void => watch(base, (value) => {
+    const object = propertiesOf(value);
+    if (!object) {
+      if (value === 'opaque-value' || value === 'global' && path.size) opaqueEffects.add(site);
+      return;
+    }
+    if (path.has(object) || path.size >= 256) {
+      opaqueEffects.add(site); return;
+    }
+    const next = new Set(path); next.add(object);
+    if (object.native ? object.native.Set !== ObjectValue.prototype.Set
+      || object.native.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
+      || object.native.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf : !object.ordinaryPrototypeMutation) {
+      opaqueEffects.add(site); return;
+    }
+    receiverAdmissionEffects(receiver, key, site);
+    accessHooks(object, key, receiver, site, undefined, from);
+    if (object.native) {
+      const descriptor = key === undefined ? undefined : object.native.properties.get(Value(key));
+      const descriptors = key === undefined ? object.native.properties.values() : descriptor ? [descriptor] : [];
+      for (const found of descriptors) {
+        if (--remaining < 0) {
+          exhausted = true; return;
+        }
+        if (found.Value !== undefined) {
+          if (found.Writable !== Value.false) dataReceiverStore(receiver, key, from, site);
+        } else if (found.Setter !== Value.undefined && found.Setter !== undefined) {
+          const setter = newFlow(); nativeValue(found.Setter, setter);
+          invoke(setter, [from], receiver, newFlow(), undefined, site);
+        }
+      }
+    } else if (key === undefined || object.ownKeys.has(key)) {
+      // Source descriptor transitions still join candidates. This data route
+      // is a may-write, not proof that an accessor was bypassed or replaced.
+      dataReceiverStore(receiver, key, from, site);
+    }
+    const followSource = (source: Flow): void => {
+      storeEffects(source, key, from, receiver, site, next);
+      pendingStoreEnds.push({ source, receiver, key, from, site });
+    };
+    let followed = false;
+    const follow = (): void => {
+      if (followed || !canInherit(object, key, site)) return;
+      followed = true;
+      followSource(initialPrototype(object));
+    };
+    object.deletionUsers.add(follow); follow();
+    observePrototypes(object, site, (change) => {
+      // Relinking performed by this very setter cannot change the lookup
+      // that selected it. Repeated/deferred executions remain conservative.
+      if (change.site !== site || deferred(site)) followSource(change.source);
+    }, key, true);
+  });
+  const store = (base: Flow, key: string | undefined, from: Flow, site?: ParseNode, receiver = base, writeSite = site): void => {
+    if (site) storeEffects(base, key, from, receiver, site);
+    watch(base, (value) => {
+      if (value === 'global') {
+        recordDataWrite(globalObject, key, from, writeSite);
+        if (site) globalWrites.push({ site, key });
+      } else if (!site) {
+        // Descriptor definition bypasses setters, preserving its write position.
+        const object = propertiesOf(value);
+        if (object) recordDataWrite(object, key, from, writeSite);
+      }
+    });
+  };
   const remove = (base: Flow, key: string | undefined, site: ParseNode): void => watch(base, (value) => {
     if (value === 'global') globalWrites.push({ site, key });
     else if (value === 'opaque-value') opaqueEffects.add(site);
@@ -429,9 +538,30 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   };
   const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean, arguments?: boolean, creationTarget?: Flow }[] = [];
   const pendingPrototypeReads: { source: Flow, site: ParseNode }[] = [];
-  const pendingTypedDefinitions: { source: Flow, site: ParseNode }[] = [];
+  const pendingTypedDefinitions: { source: Flow, site: ParseNode, target: Flow, key?: string }[] = [];
+  const pendingTypedStores: { object: Aggregate, key?: string, site: ParseNode }[] = [];
   const pendingPrototypeSources: { source: Flow, destination: Flow, defaultPrototype?: ObjectValue }[] = [];
+  const pendingStoreEnds: { source: Flow, receiver: Flow, key?: string, from: Flow, site: ParseNode }[] = [];
+  const pendingLegacySetters: { target: Flow, source: Flow, site: ParseNode }[] = [];
   const pendingPrototypeTargets: { source: Flow, site: ParseNode }[] = [];
+  const changePrototype = (target: Flow, source: Flow, site: ParseNode): void => {
+    pendingPrototypeTargets.push({ source: target, site });
+    watch(target, (targetValue) => {
+      if (targetValue === 'global') {
+        globalWrites.push({ site }); return;
+      }
+      if (targetValue === 'opaque-value') {
+        opaqueEffects.add(site); return;
+      }
+      const object = propertiesOf(targetValue);
+      if (!object) return;
+      if (object.native ? object.native.SetPrototypeOf !== ObjectValue.prototype.SetPrototypeOf : !object.ordinaryPrototypeMutation) {
+        opaqueEffects.add(site); return;
+      }
+      object.prototypes.push({ source, site });
+      for (const update of object.prototypeUsers) update();
+    });
+  };
   const pendingKeys: { source: Flow, site: ParseNode }[] = [];
   const propertyKey = (source: Flow, site: ParseNode): void => {
     pendingKeys.push({ source, site });
@@ -514,7 +644,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     for (const [key, flow] of object.slots) visit(key, flow);
   };
   const copyRest = (source: Flow, site: ParseNode, excluded = new Set<string>()): Flow => {
-    const result = newFlow(), copy = aggregate(); add(result, copy);
+    const result = newFlow(), copy = aggregate(); copy.prototype = options.objectPrototype; add(result, copy);
     // String copying enumerates UTF-16 index properties even though their
     // primitive values carry no capabilities. Target setters still see writes.
     for (let index = 0; index < (source.stringLength ?? 0); index += 1) {
@@ -637,7 +767,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     pendingOperations.push({ source: descriptor, result: newFlow(), site, copy: true });
     // A present type may admit/convert/default a value using user code. Until
     // that operation has its own positive effect proof, preserve its effects.
-    pendingTypedDefinitions.push({ source: fields.get('type')!, site });
+    pendingTypedDefinitions.push({ source: fields.get('type')!, site, target, key });
     // Defining a property does not invoke its old setter.
     store(target, key, fields.get('value')!, undefined, target, site);
     let enumerable: boolean | undefined;
@@ -663,7 +793,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     });
   };
   const arrayRest = (source: Flow, site: ParseNode, start: number): Flow => {
-    const result = newFlow(), copy = aggregate(true); add(result, copy);
+    const result = newFlow(), copy = aggregate(true); copy.prototype = options.arrayPrototype; add(result, copy);
     // Iteration is an operation even when no remaining element is collected.
     const values = iterate(source, site);
     watch(source, (value) => {
@@ -683,7 +813,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const node = value;
     if (node.type === 'BindingIdentifier' || node.type === 'IdentifierReference') {
       edge(source, binding(node, node.name));
-      if (options.globalBinding(node as ParseNode.IdentifierReference)) edge(source, slot(globalObject, node.name));
+      if (options.globalBinding(node as ParseNode.IdentifierReference)) recordDataWrite(globalObject, node.name, source, site ?? node);
     } else if (node.type === 'MemberExpression') store(expression(node.MemberExpression), options.key(node), source, site);
     else if (node.type === 'ParenthesizedExpression') target(node.Expression, source, site);
     else if (node.type === 'SingleNameBinding' || node.type === 'BindingElement') {
@@ -855,32 +985,19 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           }
         }
       }
+      if (value === 'prototype-setter') {
+        pendingLegacySetters.push({ target: receiver, source: argument(0), site });
+        result.knownPrimitive = true; result.primitiveKinds = new Set(['undefined']);
+      }
       if (value === 'setPrototypeOf' || value === 'reflect-setPrototypeOf') {
-        const target = argument(0), source = argument(1);
-        pendingPrototypeTargets.push({ source: target, site });
-        watch(target, (targetValue) => {
-          if (targetValue === 'global') {
-            globalWrites.push({ site });
-            return;
-          }
-          if (targetValue === 'opaque-value') {
-            opaqueEffects.add(site);
-            return;
-          }
-          const object = propertiesOf(targetValue);
-          if (!object) return;
-          if (object.native ? object.native.SetPrototypeOf !== ObjectValue.prototype.SetPrototypeOf : !object.ordinaryPrototypeMutation) {
-            opaqueEffects.add(site); return;
-          }
-          object.prototypes.push({ source, site });
-          for (const update of object.prototypeUsers) update();
-        });
+        const target = argument(0);
+        changePrototype(target, argument(1), site);
         if (value === 'setPrototypeOf') edge(target, result);
         else result.knownPrimitive = true;
       }
       if (value === 'set') {
         const receiver = newFlow();
-        edge(argument(0), receiver);
+        if (packed || args.length <= 3) edge(argument(0), receiver);
         if (packed || args.length > 3) edge(argument(3), receiver);
         store(argument(0), key, argument(2), site, receiver);
       }
@@ -902,7 +1019,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     if (typeof value === 'string' || value.kind !== 'callable') return;
     value.parameters.forEach((parameter, index) => {
       if (parameter.type === 'BindingRestElement') {
-        const rest = aggregate(true), flow = newFlow(); add(flow, rest);
+        const rest = aggregate(true), flow = newFlow(); rest.prototype = options.arrayPrototype; add(flow, rest);
         if (packed) edge(project(packed, undefined, site), slot(rest, undefined));
         else args.slice(index).forEach((argument, offset) => edge(argument, slot(rest, String(offset))));
         target(parameter, flow, site);
@@ -964,7 +1081,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
 
     if (node.type === 'IdentifierReference') {
       edge(binding(node, node.name), result);
-      if (options.globalBinding(node)) edge(slot(globalObject, node.name), result);
+      if (options.globalBinding(node)) globalPropertyAt(node.name, result, node);
       nativeValue(options.external(node), result);
     } else if (['ParenthesizedExpression', 'TypeArgumentsExpression'].includes(node.type)) edge(expression(node.Expression), result);
     else if (node.type === 'OptionalExpression') {
@@ -981,7 +1098,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       target(node.LeftHandSideExpression, result, node);
     } else if ((node.type === 'ObjectLiteral' || node.type === 'ArrayLiteral') && !isAssignmentTarget(node)) {
       const object = aggregate(node.type === 'ArrayLiteral' && !node.ElementList.some((part) => part.type === 'Elision')); add(result, object);
-      if (node.type === 'ObjectLiteral') object.prototype = options.objectPrototype;
+      object.prototype = node.type === 'ObjectLiteral' ? options.objectPrototype : options.arrayPrototype;
       if (node.type === 'ArrayLiteral') {
         object.ownKeys.add('length');
         let fixedIndex = true;
@@ -1001,6 +1118,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         } else if (property.type === 'PropertyDefinition') {
           if (property.PropertyName) {
             const key = options.propertyKey(property.PropertyName);
+            if (property.TypeAnnotation) object.typedKeys.add(key);
             if (key === '__proto__' && ['IdentifierName', 'StringLiteral'].includes(property.PropertyName.type)) {
               setInitialPrototype(object, expression(property.AssignmentExpression), options.objectPrototype);
             } else {
@@ -1087,8 +1205,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
   }
   settle();
-  let index = 0, prototypeIndex = 0;
-  while (index < pendingOperations.length || prototypeIndex < pendingPrototypeSources.length) {
+  let index = 0, prototypeIndex = 0, legacyIndex = 0, storeIndex = 0;
+  while (index < pendingOperations.length || prototypeIndex < pendingPrototypeSources.length || legacyIndex < pendingLegacySetters.length || storeIndex < pendingStoreEnds.length) {
     const end = pendingOperations.length;
     for (; index < end; index += 1) {
       const request = pendingOperations[index];
@@ -1133,13 +1251,36 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       else if (request.defaultPrototype && (facts & (undefinedValue | otherPrimitive))) nativeValue(request.defaultPrototype, request.destination);
     }
     settle();
+    const legacyEnd = pendingLegacySetters.length;
+    for (; legacyIndex < legacyEnd; legacyIndex += 1) {
+      const request = pendingLegacySetters[legacyIndex];
+      const facts = prototypeValueFacts(request.source, false);
+      // Invalid non-null primitive prototypes are ignored before consulting
+      // the receiver's internal operation, including an exotic receiver.
+      if (!facts || facts === unknownValue || facts & (objectValue | nullValue)) changePrototype(request.target, request.source, request.site);
+    }
+    settle();
+    const storeEnd = pendingStoreEnds.length;
+    for (; storeIndex < storeEnd; storeIndex += 1) {
+      const request = pendingStoreEnds[storeIndex];
+      const facts = prototypeValueFacts(request.source, false);
+      if (!facts || facts === unknownValue) opaqueEffects.add(request.site);
+      if (!facts || facts === unknownValue || facts & nullValue) dataReceiverStore(request.receiver, request.key, request.from, request.site);
+    }
+    settle();
   }
   for (const request of pendingPrototypeReads) {
     const facts = prototypeValueFacts(request.source, false);
     if (!facts || facts === unknownValue) opaqueEffects.add(request.site);
   }
   for (const request of pendingTypedDefinitions) {
-    if (prototypeValueFacts(request.source, false) !== 0) opaqueEffects.add(request.site);
+    if (prototypeValueFacts(request.source, false) === 0) continue;
+    opaqueEffects.add(request.site);
+    for (const value of request.target.values) propertiesOf(value)?.typedKeys.add(request.key);
+  }
+  for (const request of pendingTypedStores) {
+    if (request.object.typedKeys.has(undefined) || request.key === undefined && request.object.typedKeys.size
+      || request.object.typedKeys.has(request.key)) opaqueEffects.add(request.site);
   }
   for (const request of pendingPrototypeTargets) {
     const facts = prototypeValueFacts(request.source, true);
@@ -1178,6 +1319,13 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     return exhausted ? new Set(options.unknown) : result;
   };
   return {
+    // This proves only that invocation flow already accounts for the bound
+    // target/arguments. It supplies no purity or receiving-result contract.
+    boundInvocation: (node) => {
+      const source = expression(node); settle();
+      return !!source.values.size && [...source.values].every((value) => typeof value !== 'string' && value.kind === 'bound')
+        && prototypeValueFacts(source, false) !== unknownValue;
+    },
     origins: (node) => {
       const from = expression(node); settle(); return summarize(from, false);
     },

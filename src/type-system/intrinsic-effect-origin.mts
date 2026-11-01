@@ -1,7 +1,7 @@
 import { ObjectValue, Value } from '../value.mts';
 
 export type IntrinsicEffectOrigin = 'set' | 'reflect-defineProperty' | 'deleteProperty' | 'defineProperty' | 'defineProperties' | 'assign'
-  | 'create' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind';
+  | 'prototype-setter' | 'create' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind';
 
 // Private identities recorded during bootstrap, before source code can replace
 // a namespace property. A captured original retains its summary across realms
@@ -28,4 +28,8 @@ export function registerIntrinsicPrototypeGetter(value: Value | undefined): void
 }
 export function isIntrinsicPrototypeGetter(value: Value | undefined): boolean {
   return value instanceof ObjectValue && prototypeGetters.has(value);
+}
+
+export function registerIntrinsicPrototypeSetter(value: Value | undefined): void {
+  if (value instanceof ObjectValue) origins.set(value, 'prototype-setter');
 }

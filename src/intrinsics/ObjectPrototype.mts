@@ -14,7 +14,7 @@ import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
-import { registerIntrinsicPrototypeGetter } from '../type-system/intrinsic-effect-origin.mts';
+import { registerIntrinsicPrototypeGetter, registerIntrinsicPrototypeSetter } from '../type-system/intrinsic-effect-origin.mts';
 import { assignProps } from './bootstrap.mts';
 import {
   DefinePropertyOrThrow,
@@ -330,6 +330,7 @@ export function bootstrapObjectPrototype(realmRec: Realm) {
   ]);
 
   registerIntrinsicPrototypeGetter(proto.properties.get(Value('__proto__'))?.Getter);
+  registerIntrinsicPrototypeSetter(proto.properties.get(Value('__proto__'))?.Setter);
 
   realmRec.Intrinsics['%Object.prototype.toString%'] = X(Get(proto, Value('toString'))) as BuiltinFunctionObject;
   realmRec.Intrinsics['%Object.prototype.valueOf%'] = X(Get(proto, Value('valueOf'))) as FunctionObject;
