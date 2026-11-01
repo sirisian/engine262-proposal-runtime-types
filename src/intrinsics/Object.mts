@@ -11,9 +11,10 @@ import {
   JSStringValue,
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
-import { AddEntriesFromIterable } from './Map.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { makePrimitive } from '../type-system/records.mts';
+import { registerIntrinsicEffectOrigins } from '../type-system/intrinsic-effect-origin.mts';
+import { AddEntriesFromIterable } from './Map.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
   surroundingAgent,
@@ -484,5 +485,6 @@ export function bootstrapObject(realmRec: Realm) {
     ['values', Object_values, 1],
   ]);
 
+  registerIntrinsicEffectOrigins(objectConstructor, { assign: 'assign', defineProperties: 'defineProperties', defineProperty: 'defineProperty' });
   realmRec.Intrinsics['%Object%'] = objectConstructor;
 }

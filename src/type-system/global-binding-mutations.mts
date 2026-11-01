@@ -4,6 +4,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import { ObjectValue, Value, wellKnownSymbols } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
+import { intrinsicEffectOrigin } from './intrinsic-effect-origin.mts';
 import { GlobalEffectValues } from './global-effect-values.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
@@ -112,6 +113,8 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   };
   const nativeOrigins = (value: Value | undefined): Origin[] => {
     if (value === realm.GlobalObject) return ['global'];
+    const effect = intrinsicEffectOrigin(value);
+    if (effect) return [effect];
     for (const candidate of ['eval', 'Function', 'Object', 'Reflect', 'String', 'Symbol'] as const) {
       if (value !== undefined && value === realm.Intrinsics[`%${candidate}%`]) return [candidate];
     }
@@ -155,9 +158,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     if (node.type === 'MemberExpression') {
       const base = from(node.MemberExpression), key = keyOf(node);
       if (base.has('global') && key === 'globalThis') return new Set(['global']);
-      if (base.has('global') && key && ['eval', 'Function', 'Object', 'Reflect'].includes(key)) return new Set([key as Origin]);
-      if (key && (base.has('Reflect') && ['set', 'defineProperty', 'deleteProperty'].includes(key)
-        || base.has('Object') && ['defineProperty', 'defineProperties', 'assign'].includes(key))) return new Set([base.has('Reflect') && key === 'defineProperty' ? 'reflect-defineProperty' : key as Origin]);
+      if (base.has('global') && key && ['eval', 'Function'].includes(key)) return new Set([key as Origin]);
       return new Set();
     }
     if (node.type === 'CallExpression' || node.type === 'NewExpression') {

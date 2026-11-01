@@ -98,7 +98,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const kinds = options.nativeOrigins(value);
     if (kinds.length) {
       kinds.forEach((kind) => add(to, kind));
-      if (!kinds.some((kind) => kind === 'String' || kind === 'Symbol')) return;
+      if (!kinds.some((kind) => ['String', 'Symbol', 'Object', 'Reflect'].includes(kind))) return;
     }
     if (!(value instanceof ObjectValue)) {
       to.knownPrimitive = true;
@@ -180,16 +180,14 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       }
       if (value === 'global') edge(key === undefined ? globalObject.all : slot(globalObject, key), to);
       if (value === 'global' && key === 'globalThis') add(to, 'global');
-      else if (value === 'global' && key && ['String', 'Symbol'].includes(key)) {
+      else if (value === 'global' && key && ['String', 'Symbol', 'Object', 'Reflect'].includes(key)) {
         const data = options.globalData(key);
         if (data) nativeValue(data, to);
         else {
           add(to, 'opaque-value');
           if (site) opaqueEffects.add(site);
         }
-      } else if (value === 'global' && key && ['eval', 'Function', 'Object', 'Reflect'].includes(key)) add(to, key);
-      else if (key && (value === 'Reflect' && ['set', 'defineProperty', 'deleteProperty'].includes(key)
-        || value === 'Object' && ['defineProperty', 'defineProperties', 'assign'].includes(key))) add(to, value === 'Reflect' && key === 'defineProperty' ? 'reflect-defineProperty' : key);
+      } else if (value === 'global' && key && ['eval', 'Function'].includes(key)) add(to, key);
     } else if (value.kind === 'aggregate') {
       accessHooks(value, key, base, site, (_key, result) => edge(result, to));
       if (value.native && (key === undefined || value.native.properties.get(Value(key))?.Value === undefined)) {
@@ -518,6 +516,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         if (packed || args.length > 3) edge(argument(3), receiver);
         store(argument(0), key, argument(2), site, receiver);
       }
+      if (value === 'deleteProperty') watch(argument(0), (target) => {
+        if (target === 'opaque-value' || typeof target !== 'string' && target.kind === 'aggregate'
+          && target.native && target.native.Delete !== ObjectValue.prototype.Delete) opaqueEffects.add(site);
+      });
       if (value === 'defineProperty' || value === 'reflect-defineProperty') {
         defineDescriptor(argument(0), key, argument(2), site, argumentNodes?.[2]);
         if (value === 'defineProperty') edge(argument(0), result);

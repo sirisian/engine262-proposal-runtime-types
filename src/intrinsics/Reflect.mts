@@ -1,4 +1,5 @@
 import { MetadataEntries } from '../type-system/metadata-keys.mts';
+import { registerIntrinsicEffectOrigins } from '../type-system/intrinsic-effect-origin.mts';
 import { SelectedDeclarationOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
@@ -1273,6 +1274,7 @@ export function bootstrapReflect(realmRec: Realm) {
     ] : []),
   ], realmRec.Intrinsics['%Object.prototype%'], 'Reflect');
 
+  registerIntrinsicEffectOrigins(reflect, { set: 'set', defineProperty: 'reflect-defineProperty', deleteProperty: 'deleteProperty' });
   realmRec.Intrinsics['%Reflect%'] = reflect;
 }
 
