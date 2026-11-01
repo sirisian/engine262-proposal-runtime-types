@@ -485,6 +485,6 @@ export function bootstrapObject(realmRec: Realm) {
     ['values', Object_values, 1],
   ]);
 
-  registerIntrinsicEffectOrigins(objectConstructor, { assign: 'assign', defineProperties: 'defineProperties', defineProperty: 'defineProperty' });
+  registerIntrinsicEffectOrigins(objectConstructor, { assign: 'assign', defineProperties: 'defineProperties', defineProperty: 'defineProperty', setPrototypeOf: 'setPrototypeOf' });
   realmRec.Intrinsics['%Object%'] = objectConstructor;
 }

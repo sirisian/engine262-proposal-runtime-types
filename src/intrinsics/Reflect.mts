@@ -1274,7 +1274,7 @@ export function bootstrapReflect(realmRec: Realm) {
     ] : []),
   ], realmRec.Intrinsics['%Object.prototype%'], 'Reflect');
 
-  registerIntrinsicEffectOrigins(reflect, { set: 'set', defineProperty: 'reflect-defineProperty', deleteProperty: 'deleteProperty' });
+  registerIntrinsicEffectOrigins(reflect, { set: 'set', defineProperty: 'reflect-defineProperty', deleteProperty: 'deleteProperty', setPrototypeOf: 'reflect-setPrototypeOf' });
   realmRec.Intrinsics['%Reflect%'] = reflect;
 }
 
