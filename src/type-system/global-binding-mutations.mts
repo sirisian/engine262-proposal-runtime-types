@@ -4,6 +4,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import { Value } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
+import { GlobalEffectValues } from './global-effect-values.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'global-bound' | 'Object' | 'Reflect'
@@ -27,6 +28,7 @@ const stringKey = (value: unknown, seen = new Set<ParseNode>()): string | undefi
   const node = unwrap(value);
   if (!node || seen.has(node) || seen.size >= 256) return undefined;
   if (node.type === 'StringLiteral') return node.value;
+  if (node.type === 'NumericLiteral') return String(node.value);
   seen.add(node);
   if (node.type === 'IdentifierReference') {
     const binding = ResolveBindingDeclaration(node, node.name);
@@ -37,6 +39,8 @@ const stringKey = (value: unknown, seen = new Set<ParseNode>()): string | undefi
   return undefined;
 };
 const keyOf = (node: Node): string | undefined => (node.IdentifierName as { name?: string } | undefined)?.name ?? stringKey(node.Expression);
+const propertyKey = (node: Node): string | undefined => node.type === 'IdentifierName' ? node.name : node.type === 'NumericLiteral' ? String(node.value)
+  : stringKey(node.type === 'PropertyName' ? node.ComputedPropertyName : node);
 
 /**
  * A footprint of writes through global-object and dynamic-source aliases.
@@ -118,10 +122,12 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   };
   for (const node of [...nodes]) if (node.type === 'OptionalExpression') optionalView(node);
 
-  const externalOrigins = (name: string): Origin[] => {
+  const externalValue = (name: string): Value | undefined => {
     const binding = ResolveInitializedBinding(environment, name);
-    const value = binding?.value ?? (environment === realm.GlobalEnv && !realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(name))
+    return binding?.value ?? (environment === realm.GlobalEnv && !realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(name))
       ? intrinsicData(realm.GlobalObject, Value(name)) : undefined);
+  };
+  const nativeOrigins = (value: Value | undefined): Origin[] => {
     if (value === realm.GlobalObject) return ['global'];
     for (const candidate of ['eval', 'Function', 'Object', 'Reflect'] as const) {
       if (value !== undefined && value === realm.Intrinsics[`%${candidate}%`]) return [candidate];
@@ -131,16 +137,16 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
 
   // Aliases are may-origins: a later rebinding cannot make a possibly global
   // write disappear. This finite source inventory is not a value interpreter.
-  const origins = (value: unknown, seen = new Set<Binding>(), budget = { remaining: 4096 }): Set<Origin> => {
+  const scalarOrigins = (value: unknown, seen = new Set<Binding>(), budget = { remaining: 4096 }): Set<Origin> => {
     const node = unwrap(value);
     if (!node) return new Set();
     if (--budget.remaining < 0 || seen.size >= 256) return new Set(allOrigins);
-    const from = (source: unknown, next = seen): Set<Origin> => origins(source, next, budget);
+    const from = (source: unknown, next = seen): Set<Origin> => scalarOrigins(source, next, budget);
     if (node.type === 'OptionalExpression') return from(optionalView(node));
     if (node.type === 'IdentifierReference') {
       const declaration = ResolveBindingDeclaration(node, node.name);
       const binding = bindingAt(node, node.name);
-      const external = !declaration || declaration.kind === 'import' ? externalOrigins(node.name) : [];
+      const external = !declaration || declaration.kind === 'import' ? nativeOrigins(externalValue(node.name)) : [];
       const seed: Origin[] = external.length ? external : declaration?.kind === 'import'
         ? [...allOrigins]
         : !declaration && !ResolveInitializedBinding(environment, node.name) ? node.name === 'globalThis' ? ['global']
@@ -184,6 +190,30 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     return new Set();
   };
+  const globalName = (node: ParseNode.IdentifierReference, objectOnly: boolean): boolean => {
+    const binding = ResolveBindingDeclaration(node, node.name);
+    if (!binding) {
+      const external = ResolveInitializedBinding(environment, node.name);
+      return !external || !objectOnly && external.mutable !== false
+        && external === realm.GlobalEnv.DeclarativeRecord.bindings.get(Value(node.name));
+    }
+    if (root.type !== 'Script' || !(objectOnly ? ['function', 'var'] : ['function', 'var', 'let']).includes(binding.kind)) return false;
+    for (let at = binding.node.parent; at && at !== root; at = at.parent) {
+      if (functionKeys.some((key) => key in at) || ['ClassDeclaration', 'ClassExpression', 'ClassStaticBlock'].includes(at.type)) return false;
+      if (binding.kind !== 'var' && (at.type === 'Block'
+        || ['ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(at.type))) return false;
+    }
+    return true;
+  };
+  const values = GlobalEffectValues(nodes, {
+    binding: bindingAt, inputs, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
+    external: (node) => {
+      const declaration = ResolveBindingDeclaration(node, node.name);
+      return !declaration || declaration.kind === 'import' ? externalValue(node.name) : undefined;
+    },
+    globalBinding: (node) => globalName(node, true), nativeOrigins, unknown: allOrigins, optional: (node) => optionalView(node as Node),
+  });
+  const origins = (value: unknown): Set<string> => values.origins(isNode(value) ? value : undefined);
   const record = (node: Node, key?: string, lexical = false): void => {
     effects.push({ node, names: key === undefined ? undefined : new Set([key]), lexical });
   };
@@ -234,20 +264,26 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     if (callee?.type === 'MemberExpression' && keyOf(callee) === 'bind') continue;
     let kinds = origins(callee);
     let args: readonly ParseNode[] = node.Arguments ?? [];
+    let packed: ParseNode | undefined;
     if (callee?.type === 'MemberExpression' && ['call', 'apply'].includes(keyOf(callee) ?? '')) {
       kinds = origins(callee.MemberExpression);
-      if (!kinds.size && origins(args[0]).has('global')) record(node);
+      if (!kinds.size && values.contained(args[0]).has('global')) record(node);
+      if (keyOf(callee) === 'apply') packed = args[1];
       args = keyOf(callee) === 'call' ? args.slice(1) : unwrap(args[1])?.type === 'ArrayLiteral'
         ? (unwrap(args[1]) as ParseNode.ArrayLiteral).ElementList : [];
     }
-    if (!kinds.size && callee?.type === 'MemberExpression' && origins(callee.MemberExpression).has('global')) record(node);
+    if (!kinds.size && callee?.type === 'MemberExpression' && values.contained(callee.MemberExpression).has('global')) record(node);
     if (kinds.has('eval') || kinds.has('dynamic-function')) {
       record(node, undefined, true);
       continue;
     }
     if (kinds.has('global-bound')) record(node);
-    if (!origins(args[0]).has('global')) {
-      if (!kinds.size && args.some((arg) => origins(arg).has('global'))) record(node);
+    if (!(packed ? values.element(packed, 0) : origins(args[0])).has('global')) {
+      if (!kinds.size) {
+        const exposed = new Set((packed ? [...values.contained(packed)] : args.flatMap((arg) => [...values.contained(arg)])));
+        if (exposed.has('global')) record(node);
+        if (['eval', 'Function', 'dynamic-function'].some((kind) => exposed.has(kind))) record(node, undefined, true);
+      }
       continue;
     }
     if (['set', 'defineProperty', 'deleteProperty'].some((kind) => kinds.has(kind as Origin))) {
@@ -268,22 +304,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     return false;
   };
-  const globalName = (node: ParseNode.IdentifierReference, objectOnly: boolean): boolean => {
-    const binding = ResolveBindingDeclaration(node, node.name);
-    if (!binding) {
-      const external = ResolveInitializedBinding(environment, node.name);
-      return !external || !objectOnly && external.mutable !== false
-        && external === realm.GlobalEnv.DeclarativeRecord.bindings.get(Value(node.name));
-    }
-    if (root.type !== 'Script' || !(objectOnly ? ['function', 'var'] : ['function', 'var', 'let']).includes(binding.kind)) return false;
-    for (let at = binding.node.parent; at && at !== root; at = at.parent) {
-      if (functionKeys.some((key) => key in at) || ['ClassDeclaration', 'ClassExpression', 'ClassStaticBlock'].includes(at.type)) return false;
-      if (binding.kind !== 'var' && (at.type === 'Block'
-        || ['ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(at.type))) return false;
-    }
-    return true;
-  };
-  const affected = (node: ParseNode.IdentifierReference): boolean => effects.some((effect) =>
+  const affected = (node: ParseNode.IdentifierReference): boolean => values.exhausted() && globalName(node, false) || effects.some((effect) =>
     globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && (deferred(node) || deferred(effect.node)
       || !effect.node.location || !node.location || effect.node.location.endIndex <= node.location.startIndex));
   const affects = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
