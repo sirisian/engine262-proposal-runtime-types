@@ -1,20 +1,20 @@
 import { expect, test } from 'vitest';
 import { observeModuleGraph } from '../module-observer.mts';
-import { Agent, ManagedRealm, ObjectValue, setSurroundingAgent } from '#self';
+import { Agent, EnsureCompletion, ManagedRealm, ObjectValue, setSurroundingAgent } from '#self';
 
 /** Observe only the consuming Script; do not prepend code or invoke a probe getter. */
 function observe(setup: string, source: string) {
   const agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);
   const realm = new ManagedRealm();
-  const initial = realm.evaluateScriptSkipDebugger(setup);
+  const initial = EnsureCompletion(realm.evaluateScriptSkipDebugger(setup));
   expect(initial.Type, (initial.Value as { HostDefinedMessageString?: string })?.HostDefinedMessageString).toBe('normal');
   let bodyEntered = false;
   agent.hostDefinedOptions.onNodeEvaluation = (node) => {
     if (node.type === 'ScriptBody') bodyEntered = true;
   };
   try {
-    const result = realm.evaluateScriptSkipDebugger(source);
+    const result = EnsureCompletion(realm.evaluateScriptSkipDebugger(source));
     const errorClass = result.Type === 'throw' && result.Value instanceof ObjectValue && 'Prototype' in result.Value
       ? (['StaticTypeError', 'TypeError', 'Error', 'ReferenceError'] as const).find((name) =>
         (result.Value as ObjectValue & { Prototype: unknown }).Prototype === realm.Intrinsics[`%${name}.prototype%`]) : undefined;

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { observeScript } from '../harness.mts';
 import { observeModuleGraph } from '../module-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { Agent, EnsureCompletion, ManagedRealm, setSurroundingAgent } from '#self';
 
 function observe(source: string) {
   const result = observeScript(source);
@@ -118,8 +118,8 @@ test('a loop read cannot assume that a write on the previous iteration has not h
 test('later source reads use the actual global replacement', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(realm.evaluateScriptSkipDebugger('function f():string{return "old";}').Type).toBe('normal');
-  const result = realm.evaluateScriptSkipDebugger('const world=globalThis;world.f=()=>1;const n:number=f();String(n);');
+  expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('function f():string{return "old";}')).Type).toBe('normal');
+  const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('const world=globalThis;world.f=()=>1;const n:number=f();String(n);'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue?(): string }).stringValue?.()).toBe('1');
 });
@@ -127,8 +127,8 @@ test('later source reads use the actual global replacement', () => {
 test.each(['const world=globalThis;', 'var world=globalThis;', 'let world={};'])('a live external global alias is recognized: %s', (declaration) => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(realm.evaluateScriptSkipDebugger(`function f():string{return "old";}${declaration}`).Type).toBe('normal');
-  const result = realm.evaluateScriptSkipDebugger(`${declaration.startsWith('let') ? 'world=globalThis;' : ''}world.f=()=>1;const n:number=f();String(n);`);
+  expect(EnsureCompletion(realm.evaluateScriptSkipDebugger(`function f():string{return "old";}${declaration}`)).Type).toBe('normal');
+  const result = EnsureCompletion(realm.evaluateScriptSkipDebugger(`${declaration.startsWith('let') ? 'world=globalThis;' : ''}world.f=()=>1;const n:number=f();String(n);`));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue?(): string }).stringValue?.()).toBe('1');
 });
@@ -141,8 +141,8 @@ test.each(['"f"', 'String("f")'])('global property writes do not replace a same-
 test('a prior source lexical binding is not its namesake global property', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(realm.evaluateScriptSkipDebugger('const f=():string=>"old";const world=globalThis;').Type).toBe('normal');
-  const result = realm.evaluateScriptSkipDebugger('world.f=()=>1;const n:number=f();');
+  expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('const f=():string=>"old";const world=globalThis;')).Type).toBe('normal');
+  const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('world.f=()=>1;const n:number=f();'));
   expect(result.Type).toBe('throw');
   expect((result.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain('StaticTypeError: "string" is not assignable to "number"');
 });

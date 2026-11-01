@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { observeScript } from '../harness.mts';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { Agent, EnsureCompletion, ManagedRealm, setSurroundingAgent } from '#self';
 
 function observe(source: string) {
   const result = observeScript(source);
@@ -112,8 +112,8 @@ test('getters run once during execution and are not invoked by alias analysis', 
 test('prior-source ordinary own data can carry a global alias', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(realm.evaluateScriptSkipDebugger('function f():string{return "old";}const box={world:globalThis};').Type).toBe('normal');
-  const result = realm.evaluateScriptSkipDebugger('box.world.f=()=>1;const n:number=f();String(n);');
+  expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('function f():string{return "old";}const box={world:globalThis};')).Type).toBe('normal');
+  const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('box.world.f=()=>1;const n:number=f();String(n);'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue?(): string }).stringValue?.()).toBe('1');
 });

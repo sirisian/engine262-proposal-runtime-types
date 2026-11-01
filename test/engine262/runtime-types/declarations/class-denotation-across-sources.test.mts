@@ -47,7 +47,7 @@ test.each([
   ['global property is a different binding', ['class V{}const Original=V;', 'globalThis.V=class {};', 'String(V===Original)+"/"+String(type V===Original);'], 'true/true'],
   ['reading a type does not replay static initialization', ['let count=0;class V{static{count++;}}const Original=V;', 'V=class {};', 'const t=type V;const u=type V;String(count)+"/"+String(t===u);'], '1/true'],
   ['generic type argument', ['class V{}const Original=V;function identity<T:type>(){return T;}', 'V=class {};', 'String(identity.<V>()===Original);'], 'true'],
-])('%s keeps the declaration denotation', (_name, sources, expected) => {
+])('%s keeps the declaration denotation', (_name, sources, expected?: string) => {
   const results = sequence(...sources as string[]);
   for (const result of results) expect(result).toMatchObject({ completion: 'normal', errorClass: undefined });
   expect(results.at(-1)?.value).toBe(expected ?? 'ok');

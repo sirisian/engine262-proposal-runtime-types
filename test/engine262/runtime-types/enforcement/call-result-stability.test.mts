@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { observeScript } from '../harness.mts';
 import { observeModuleGraph } from '../module-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { Agent, EnsureCompletion, ManagedRealm, setSurroundingAgent } from '#self';
 
 function observe(source: string) {
   const result = observeScript(source);
@@ -61,8 +61,8 @@ test('a known global property write withdraws the declaration result assumption'
 test('a later Script cannot exploit an earlier elided return', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  expect(realm.evaluateScriptSkipDebugger('function f():uint8{return 1;}function g():uint8{return f();}').Type).toBe('normal');
-  const changed = realm.evaluateScriptSkipDebugger('globalThis.f=()=>"bad";g();');
+  expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('function f():uint8{return 1;}function g():uint8{return f();}')).Type).toBe('normal');
+  const changed = EnsureCompletion(realm.evaluateScriptSkipDebugger('globalThis.f=()=>"bad";g();'));
   expect(changed.Type).toBe('throw');
   expect((changed.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain('uint.<8>');
 });
