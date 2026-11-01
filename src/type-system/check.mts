@@ -73,6 +73,7 @@ import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
+import { GlobalBindingMutations } from './global-binding-mutations.mts';
 import { NondeterministicMember } from './evaluable-fragment.mts';
 import { ExcludedGlobalReach } from './fragment-library.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
@@ -4142,6 +4143,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const assignedNames = new Set<string>();
   const lexicalMutations = LexicalMutationAnalysis(root);
   const lexicalUnassigned = lexicalMutations.unassigned;
+  const globalBindingMutations = GlobalBindingMutations(root,
+    checkingEnvironments.get(root) ?? surroundingAgent.currentRealmRecord.GlobalEnv, surroundingAgent.currentRealmRecord);
   const assignedGlobalProperties = new Set<string>();
   /**
    * Names some FUNCTION BODY assigns to, so a call might change them.
@@ -5481,6 +5484,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Even a const elsewhere can be hidden by dynamic name lookup or sloppy
     // eval declaration injection. Its storage immutability is not lookup proof.
     if (hasDirectEval) return false;
+    if (reference && globalBindingMutations.affects(reference)) return false;
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       if (frames[i].immutableNames.has(name)) {
         return true;
@@ -5492,10 +5496,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // This existing contribution screen preserves published declaration
     // contracts. Its spelling fallback is not implementation evidence and
     // must not authorize check elision; establishedCallable requires the
-    // positive lexical proof separately. Global property writes also withdraw
-    // an otherwise unproved declaration-result assumption.
+    // positive lexical proof separately. The global mutation footprint above
+    // withdraws affected declaration-result assumptions at their read positions.
     return (reference && lexicalUnassigned(reference, name))
-      ?? (!assignedNames.has(name) && !assignedGlobalProperties.has(name));
+      ?? !assignedNames.has(name);
   };
 
   const establishedCallable = (expression: ParseNode | undefined, seen = new Set<ParseNode>()): ParseNode | undefined => {
