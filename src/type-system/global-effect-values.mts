@@ -1,10 +1,11 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ObjectValue, Value } from '../value.mts';
+import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
 
 type Node = ParseNode & Record<string, unknown>;
-type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean };
-type Aggregate = { kind: 'aggregate', slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, array?: boolean,
+type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, stringLength?: number };
+type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
+type Aggregate = { kind: 'aggregate', hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
 type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], receiver: Flow };
@@ -82,7 +83,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     queue.length = 0;
   };
-  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', slots: new Map(), all: newFlow(), array, slotUsers: new Set() });
+  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), array, slotUsers: new Set() });
   const globalObject = aggregate();
   const nativeValue = (value: Value | undefined, to: Flow): void => {
     if (!value) return;
@@ -93,6 +94,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     if (!(value instanceof ObjectValue)) {
       to.knownPrimitive = true;
+      if (value instanceof JSStringValue) to.stringLength = value.stringValue().length;
       return;
     }
     if (value.Get !== ObjectValue.prototype.Get) {
@@ -127,6 +129,39 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     for (const user of object.slotUsers) user(key, found);
     return found;
   };
+  const deferred = (node: ParseNode): boolean => {
+    for (let at = node.parent; at; at = at.parent) {
+      if (parameterKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
+        || /^(For|While|DoWhile)/.test(at.type)) return true;
+    }
+    return false;
+  };
+  const mayPrecede = (before: ParseNode, after: ParseNode): boolean => before === after || deferred(before) || deferred(after)
+    || !before.location || !after.location || before.location.endIndex <= after.location.startIndex;
+  const matchingKey = (a: string | undefined, b: string | undefined): boolean => a === undefined || b === undefined || a === b;
+  const accessHooks = (object: Aggregate, key: string | undefined, receiver: Flow, site: ParseNode | undefined,
+    read?: (key: string | undefined, value: Flow) => void, written?: Flow, excluded?: ReadonlySet<string>): void => {
+    if (!site || exhausted) return;
+    const observed = new Set<Hook>();
+    const update = (): void => {
+      for (const hook of object.hooks) {
+        if (exhausted || --remaining < 0) {
+          exhausted = true;
+          return;
+        }
+        if (observed.has(hook) || !matchingKey(key, hook.key) || !mayPrecede(hook.site, site)
+          || hook.key !== undefined && excluded?.has(hook.key)) continue;
+        if (excluded && hook.enumerable === false && !object.enumerability.some((change) => change.value !== false
+          && matchingKey(change.key, hook.key) && mayPrecede(hook.site, change.site) && mayPrecede(change.site, site))) continue;
+        observed.add(hook);
+        const result = newFlow();
+        invoke(written ? hook.set : hook.get, written ? [written] : [], receiver, result, undefined, site);
+        read?.(hook.key, result);
+      }
+    };
+    object.hookUsers.add(update);
+    update();
+  };
   const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode): void => watch(base, (value) => {
     if (typeof value === 'string') {
       if (value === 'opaque-value') {
@@ -144,8 +179,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         }
       } else if (value === 'global' && key && ['eval', 'Function', 'Object', 'Reflect'].includes(key)) add(to, key);
       else if (key && (value === 'Reflect' && ['set', 'defineProperty', 'deleteProperty'].includes(key)
-        || value === 'Object' && ['defineProperty', 'defineProperties', 'assign'].includes(key))) add(to, key);
+        || value === 'Object' && ['defineProperty', 'defineProperties', 'assign'].includes(key))) add(to, value === 'Reflect' && key === 'defineProperty' ? 'reflect-defineProperty' : key);
     } else if (value.kind === 'aggregate') {
+      accessHooks(value, key, base, site, (_key, result) => edge(result, to));
       if (value.native && (key === undefined || value.native.properties.get(Value(key))?.Value === undefined)) {
         if (site) opaqueEffects.add(site);
         add(to, 'opaque-value');
@@ -159,9 +195,14 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       } else edge(slot(value, key), to);
     }
   });
-  const store = (base: Flow, key: string | undefined, from: Flow): void => watch(base, (value) => {
+  const store = (base: Flow, key: string | undefined, from: Flow, site?: ParseNode, receiver = base): void => watch(base, (value) => {
     if (value === 'global') edge(from, slot(globalObject, key));
-    else if (typeof value !== 'string' && value.kind === 'aggregate') edge(from, slot(value, key));
+    else if (value === 'opaque-value' && site) opaqueEffects.add(site);
+    else if (typeof value !== 'string' && value.kind === 'aggregate') {
+      edge(from, slot(value, key));
+      accessHooks(value, key, receiver, site, undefined, from);
+      if (site && value.native && (key === undefined || value.native.properties.get(Value(key))?.Value === undefined)) opaqueEffects.add(site);
+    }
   });
   const binding = (node: Node, name: string): Flow => {
     const owner = options.binding(node, name);
@@ -179,10 +220,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     add(result, 'opaque-value');
     opaqueEffects.add(site);
   };
-  const pendingIterations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean }[] = [];
+  const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean }[] = [];
   const iterate = (source: Flow, site: ParseNode, index?: number): Flow => {
     const result = newFlow();
-    pendingIterations.push({ source, result, site });
+    pendingOperations.push({ source, result, site });
     watch(source, (value) => {
       if (typeof value !== 'string' && value.kind === 'aggregate' && value.array && options.arrayIterationIsStable(site)) {
         edge(project(source, index === undefined ? undefined : String(index)), result);
@@ -196,11 +237,21 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   };
   const copyRest = (source: Flow, site: ParseNode, excluded = new Set<string>()): Flow => {
     const result = newFlow(), copy = aggregate(); add(result, copy);
-    pendingIterations.push({ source, result: slot(copy, undefined), site, copy: true });
+    // String copying enumerates UTF-16 index properties even though their
+    // primitive values carry no capabilities. Target setters still see writes.
+    for (let index = 0; index < (source.stringLength ?? 0); index += 1) {
+      if (--remaining < 0) {
+        exhausted = true;
+        break;
+      }
+      if (!excluded.has(String(index))) slot(copy, String(index)).knownPrimitive = true;
+    }
+    pendingOperations.push({ source, result: slot(copy, undefined), site, copy: true });
     watch(source, (value) => {
       if (typeof value === 'string' || value.kind !== 'aggregate') {
         opaque(slot(copy, undefined), site);
       } else if (value.native) {
+        accessHooks(value, undefined, source, site, (key, flow) => edge(flow, slot(copy, key)), undefined, excluded);
         if (value.native.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys
           || value.native.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty) {
           opaque(slot(copy, undefined), site);
@@ -217,11 +268,107 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         observeSlots(value, (key, flow) => {
           if (key === undefined || !excluded.has(key) && value.native!.properties.get(Value(key))?.Enumerable !== Value.false) edge(flow, slot(copy, key));
         });
-      } else observeSlots(value, (key, flow) => {
-        if (key === undefined || !excluded.has(key)) edge(flow, slot(copy, key));
+      } else {
+        accessHooks(value, undefined, source, site, (key, flow) => edge(flow, slot(copy, key)), undefined, excluded);
+        observeSlots(value, (key, flow) => {
+          if (key === undefined || !excluded.has(key)) edge(flow, slot(copy, key));
+        });
+      }
+    });
+    return result;
+  };
+  const copiedProperties = (source: Flow, site: ParseNode, visit: (key: string | undefined, value: Flow) => void): void => {
+    watch(copyRest(source, site), (object) => {
+      if (typeof object === 'string' || object.kind !== 'aggregate') return;
+      observeSlots(object, (key, flow) => {
+        if (key !== undefined) visit(key, flow);
+        else {
+          let observed = false;
+          watch(flow, () => {
+            if (!observed) {
+              observed = true;
+              visit(key, flow);
+            }
+          });
+        }
+      });
+    });
+  };
+  const descriptorField = (source: Flow, key: string, site: ParseNode): Flow => {
+    const result = newFlow();
+    watch(source, (value) => {
+      if (typeof value === 'string' || value.kind !== 'aggregate') {
+        opaque(result, site);
+        return;
+      }
+      accessHooks(value, key, source, site, (_key, flow) => edge(flow, result));
+      if (!value.native) {
+        edge(slot(value, key), result);
+        return;
+      }
+      let object: Value = value.native;
+      const seen = new Set<Value>();
+      while (object !== Value.null) {
+        if (!(object instanceof ObjectValue) || object.Get !== ObjectValue.prototype.Get
+          || object.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty || !('Prototype' in object) || seen.has(object)) {
+          opaque(result, site);
+          return;
+        }
+        seen.add(object);
+        if (object !== value.native) {
+          if (options.nativeOrigins(object).length) {
+            opaque(result, site);
+            return;
+          }
+          let prototype = native.get(object);
+          if (!prototype) {
+            prototype = { ...aggregate(), native: object };
+            native.set(object, prototype);
+          }
+          accessHooks(prototype, key, source, site, (_key, flow) => edge(flow, result));
+          observeSlots(prototype, (name, flow) => {
+            if (matchingKey(name, key)) edge(flow, result);
+          });
+        }
+        const descriptor = object.properties.get(Value(key));
+        if (descriptor) {
+          if (descriptor.Value === undefined) opaque(result, site);
+          else nativeValue(descriptor.Value, result);
+          break;
+        }
+        object = object.Prototype as Value;
+      }
+      // Preserve values installed through the current source, without turning
+      // a proven absent optional field into an ordinary unknown Get.
+      observeSlots(value, (name, flow) => {
+        if (matchingKey(name, key)) edge(flow, result);
       });
     });
     return result;
+  };
+  const defineDescriptor = (target: Flow, key: string | undefined, descriptor: Flow, site: ParseNode, syntax?: ParseNode): void => {
+    const fields = new Map(['enumerable', 'configurable', 'value', 'writable', 'get', 'set']
+      .map((name) => [name, descriptorField(descriptor, name, site)]));
+    pendingOperations.push({ source: descriptor, result: newFlow(), site, copy: true });
+    store(target, key, fields.get('value')!);
+    let enumerable: boolean | undefined;
+    let changesEnumerable = false;
+    if (syntax?.type === 'ObjectLiteral') for (const property of syntax.PropertyDefinitionList) {
+      if (property.type === 'PropertyDefinition' && property.PropertyName && options.propertyKey(property.PropertyName) === 'enumerable') {
+        changesEnumerable = true;
+        if (property.AssignmentExpression.type === 'BooleanLiteral') enumerable = property.AssignmentExpression.value;
+      }
+    }
+    watch(target, (value) => {
+      if (typeof value === 'string' || value.kind !== 'aggregate') {
+        if (value === 'opaque-value') opaqueEffects.add(site);
+        return;
+      }
+      if (value.native && value.native.DefineOwnProperty !== ObjectValue.prototype.DefineOwnProperty) opaqueEffects.add(site);
+      value.hooks.push({ key, get: fields.get('get')!, set: fields.get('set')!, site, enumerable });
+      if (changesEnumerable) value.enumerability.push({ key, site, value: enumerable });
+      for (const update of value.hookUsers) update();
+    });
   };
   const arrayRest = (source: Flow, site: ParseNode, start: number): Flow => {
     const result = newFlow(), copy = aggregate(true); add(result, copy);
@@ -236,7 +383,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       } else edge(values, slot(copy, undefined));
     });
     // Empty candidate sets are not proof that iteration cannot run user code.
-    pendingIterations.push({ source, result: slot(copy, undefined), site });
+    pendingOperations.push({ source, result: slot(copy, undefined), site });
     return result;
   };
   const target = (value: unknown, source: Flow, site?: ParseNode): void => {
@@ -245,7 +392,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     if (node.type === 'BindingIdentifier' || node.type === 'IdentifierReference') {
       edge(source, binding(node, node.name));
       if (options.globalBinding(node as ParseNode.IdentifierReference)) edge(source, slot(globalObject, node.name));
-    } else if (node.type === 'MemberExpression') store(expression(node.MemberExpression), options.key(node), source);
+    } else if (node.type === 'MemberExpression') store(expression(node.MemberExpression), options.key(node), source, site);
     else if (node.type === 'ParenthesizedExpression') target(node.Expression, source, site);
     else if (node.type === 'SingleNameBinding' || node.type === 'BindingElement') {
       target(node.BindingIdentifier ?? node.BindingPattern, source, site);
@@ -302,7 +449,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     functions.set(node, result);
     return result;
   };
-  const invoke = (callee: Flow, args: readonly Flow[], receiver: Flow, result: Flow, packed?: Flow, site?: ParseNode): void => watch(callee, (value) => {
+  const invoke = (callee: Flow, args: readonly Flow[], receiver: Flow, result: Flow, packed?: Flow, site?: ParseNode, argumentNodes?: readonly ParseNode[]): void => watch(callee, (value) => {
     if (value === 'Function') add(result, 'dynamic-function');
     // String/Symbol on a primitive literal cannot enter user coercion code. This is
     // a positive intrinsic summary, not trust in every native implementation.
@@ -326,6 +473,29 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       } else invoke(value.callee, [...value.arguments, ...args], value.receiver, result, undefined, site);
       return;
     }
+    if (site && typeof value === 'string') {
+      const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
+      const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
+      if (value === 'set') {
+        const receiver = newFlow();
+        edge(argument(0), receiver);
+        if (packed || args.length > 3) edge(argument(3), receiver);
+        store(argument(0), key, argument(2), site, receiver);
+      }
+      if (value === 'defineProperty' || value === 'reflect-defineProperty') {
+        defineDescriptor(argument(0), key, argument(2), site, argumentNodes?.[2]);
+        if (value === 'defineProperty') edge(argument(0), result);
+      }
+      if (value === 'assign') {
+        edge(argument(0), result);
+        const sources = packed ? [project(packed, undefined, site)] : args.slice(1);
+        for (const source of sources) copiedProperties(source, site, (name, flow) => store(argument(0), name, flow, site));
+      }
+      if (value === 'defineProperties') {
+        edge(argument(0), result);
+        copiedProperties(argument(1), site, (name, descriptor) => defineDescriptor(argument(0), name, descriptor, site));
+      }
+    }
     if (typeof value === 'string' || value.kind !== 'callable') return;
     value.parameters.forEach((parameter, index) => {
       if (parameter.type === 'BindingRestElement') {
@@ -344,7 +514,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   const isAssignmentTarget = (node: ParseNode): boolean => {
     for (let at = node; at.parent; at = at.parent) {
       const parent = at.parent;
-      if (parent.type === 'AssignmentExpression') return parent.LeftHandSideExpression === at;
+      if (parent.type === 'AssignmentExpression') return parent.AssignmentOperator === '=' && parent.LeftHandSideExpression === at;
       if (parent.type === 'ForOfStatement' || parent.type === 'ForAwaitStatement') return parent.LeftHandSideExpression === at;
       if (!['ArrayLiteral', 'ObjectLiteral', 'PropertyDefinition', 'SpreadElement', 'AssignmentRestElement', 'ParenthesizedExpression'].includes(parent.type)) return false;
     }
@@ -358,6 +528,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const result = newFlow();
     expressions.set(node, result);
     if (['NullLiteral', 'BooleanLiteral', 'NumericLiteral', 'StringLiteral'].includes(node.type)) result.primitiveLiteral = true;
+    if (node.type === 'StringLiteral') result.stringLength = node.value.length;
     if (exhausted) return result;
     if (++depth > 256) {
       exhausted = true;
@@ -402,8 +573,12 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       // does not establish that arbitrary generator execution is effect-free.
       if (options.provenDelegations.has(node)) add(result, 'opaque-value');
       else edge(iterate(expression(node.AssignmentExpression), node), result);
-    } else if (node.type === 'MemberExpression') load(expression(node.MemberExpression), options.key(node), result, node);
-    else if (parameterKeys.some((key) => key in node)) {
+    } else if (node.type === 'MemberExpression') {
+      const parent = node.parent;
+      const writeOnly = isAssignmentTarget(node)
+        || parent?.type === 'UnaryExpression' && parent.operator === 'delete';
+      if (!writeOnly) load(expression(node.MemberExpression), options.key(node), result, node);
+    } else if (parameterKeys.some((key) => key in node)) {
       const fn = callable(node); add(result, fn);
       if (isNode(node.BindingIdentifier)) edge(result, binding(node.BindingIdentifier, node.BindingIdentifier.name as string));
       const concise = node.ConciseBody as Node | undefined;
@@ -444,19 +619,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           edge(args[index], slot(argumentsObject, uncertain ? undefined : String(index)));
         });
       }
-      invoke(expression(callee), args, receiver, result, packed, node);
-      const argument = (index: number): Flow => packed ? project(packed, String(index), node) : args[index] ?? newFlow();
-      watch(expression(callee), (kind) => {
-        const key = !packed && node.Arguments?.[1] ? options.propertyKey(node.Arguments[1]) : undefined;
-        if (kind === 'set') store(argument(0), key, argument(2));
-        if (kind === 'defineProperty') store(argument(0), key, project(argument(2), 'value', node));
-        if (kind === 'assign') {
-          edge(argument(0), result);
-          const sources = packed ? [project(packed, undefined, node)] : args.slice(1);
-          for (const source of sources) store(argument(0), undefined, project(source, undefined, node));
-        }
-        if (kind === 'defineProperties') store(argument(0), undefined, project(project(argument(1), undefined, node), 'value', node));
-      });
+      invoke(expression(callee), args, receiver, result, packed, node, argumentNodes);
     }
     depth -= 1;
     return result;
@@ -464,6 +627,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   for (const value of nodes) {
     const node = value as Node;
     expression(node);
+    if (node.type === 'AssignmentExpression' && node.AssignmentOperator !== '=') target(node.LeftHandSideExpression, expression(node.AssignmentExpression), node);
+    if (node.type === 'UpdateExpression') target(node.LeftHandSideExpression ?? node.UnaryExpression, newFlow(), node);
     if (node.type === 'LexicalBinding' || node.type === 'VariableDeclaration') target(node.BindingIdentifier ?? node.BindingPattern, expression(node.Initializer), node);
     if (node.type === 'ForOfStatement' || node.type === 'ForAwaitStatement') {
       target(node.LeftHandSideExpression ?? node.ForBinding ?? node.ForDeclaration, iterate(expression(node.AssignmentExpression), node), node);
@@ -476,10 +641,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
   }
   settle();
-  for (let index = 0; index < pendingIterations.length;) {
-    const end = pendingIterations.length;
+  for (let index = 0; index < pendingOperations.length;) {
+    const end = pendingOperations.length;
     for (; index < end; index += 1) {
-      const request = pendingIterations[index];
+      const request = pendingOperations[index];
       if (!request.source.values.size && !(request.copy && (request.source.primitiveLiteral || request.source.knownPrimitive))) opaque(request.result, request.site);
     }
     settle();

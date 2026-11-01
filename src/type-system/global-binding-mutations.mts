@@ -9,9 +9,9 @@ import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'global-bound' | 'Object' | 'Reflect'
-  | 'String' | 'Symbol' | 'set' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
+  | 'String' | 'Symbol' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
 const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'global-bound', 'Object', 'Reflect',
-  'String', 'Symbol', 'set', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
+  'String', 'Symbol', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
 type Binding = { node: ParseNode, name: string };
 type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean };
 const ignored = new Set(['parent', 'location', 'sourceText', 'strict']);
@@ -157,7 +157,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       if (base.has('global') && key === 'globalThis') return new Set(['global']);
       if (base.has('global') && key && ['eval', 'Function', 'Object', 'Reflect'].includes(key)) return new Set([key as Origin]);
       if (key && (base.has('Reflect') && ['set', 'defineProperty', 'deleteProperty'].includes(key)
-        || base.has('Object') && ['defineProperty', 'defineProperties', 'assign'].includes(key))) return new Set([key as Origin]);
+        || base.has('Object') && ['defineProperty', 'defineProperties', 'assign'].includes(key))) return new Set([base.has('Reflect') && key === 'defineProperty' ? 'reflect-defineProperty' : key as Origin]);
       return new Set();
     }
     if (node.type === 'CallExpression' || node.type === 'NewExpression') {
@@ -296,7 +296,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       if (['eval', 'Function', 'dynamic-function', 'opaque-callable', 'opaque-value'].some((kind) => exposed.has(kind))) record(node, undefined, true);
     }
     if (!(packed ? values.element(packed, 0) : origins(args[0])).has('global')) continue;
-    if (['set', 'defineProperty', 'deleteProperty'].some((kind) => kinds.has(kind as Origin))) {
+    if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty'].some((kind) => kinds.has(kind as Origin))) {
       record(node, stringKey(args[1]));
     } else if (kinds.has('assign') || kinds.has('defineProperties')) {
       for (const source of kinds.has('assign') ? args.slice(1) : args.slice(1, 2)) {
