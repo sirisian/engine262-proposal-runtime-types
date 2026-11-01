@@ -1657,6 +1657,7 @@ export @callable() class Descriptor {
     m(this.Value);
     m(this.Getter);
     m(this.Setter);
+    if (this.Type instanceof ObjectValue) m(this.Type);
   }
 }
 

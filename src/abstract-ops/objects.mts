@@ -1,3 +1,4 @@
+import { GetTypeObject } from '../type-system/intern.mts';
 import type { StoreAdmission } from '../type-system/store-admission.mts';
 import { AdmitStoreValue, isArrayExoticObject } from '#self';
 import { HasInheritedStorageDependents, PlanInheritedDefinition, PlanInheritedDeletion, PlanInheritedPrototypeChange, CommitInheritedStorageChanges } from '#self';
@@ -138,6 +139,11 @@ export function OrdinaryGetOwnProperty(O: ObjectValue, P: PropertyKeyValue) {
   }
   D.Enumerable = x.Enumerable;
   D.Configurable = x.Configurable;
+  if (surroundingAgent.feature('runtime-types')) {
+    const declared = (O as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> })
+      .TypedProperties?.get(P instanceof JSStringValue ? P.stringValue() : P);
+    D.Type = declared instanceof ObjectValue ? declared : declared ? GetTypeObject(declared.TypeRecord) : x.Type;
+  }
 
   return TransferResultDependency(x, Descriptor(D));
 }

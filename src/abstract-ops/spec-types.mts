@@ -121,6 +121,9 @@ export function FromPropertyDescriptor(Desc: Descriptor | UndefinedValue) {
   if (Desc.Configurable !== undefined) {
     X(CreateDataProperty(obj, Value('configurable'), Desc.Configurable));
   }
+  if (surroundingAgent.feature('runtime-types') && Desc.Type !== undefined) {
+    X(CreateDataProperty(obj, Value('type'), Desc.Type as ObjectValue));
+  }
   // Assert: All of the above CreateDataProperty operations return true.
   return obj;
 }

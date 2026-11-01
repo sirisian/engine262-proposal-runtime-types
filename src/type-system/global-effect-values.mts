@@ -400,10 +400,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   });
   const recordDataWrite = (object: Aggregate, key: string | undefined, from: Flow, site?: ParseNode): void => {
     object.mutations.add(key);
-    if (object.native || object === globalObject) {
-      object.writes.push({ key, source: from, site });
-      for (const update of object.writeUsers) update();
-    }
+    object.writes.push({ key, source: from, site });
+    for (const update of object.writeUsers) update();
     edge(from, slot(object, key));
   };
   const receiverAdmissionEffects = (receiver: Flow, key: string | undefined, site: ParseNode): void => watch(receiver, (value) => {
@@ -537,6 +535,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     opaqueEffects.add(site);
   };
   const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean, arguments?: boolean, creationTarget?: Flow }[] = [];
+  const pendingDescriptorTypes: { object: Aggregate, key?: string, site: ParseNode, descriptor: Aggregate, initial: boolean }[] = [];
+  const pendingDescriptorReads: { source: Flow, result: Flow, site: ParseNode, objectCoercion: boolean, all: boolean, prototype: ObjectValue }[] = [];
   const pendingPrototypeReads: { source: Flow, site: ParseNode }[] = [];
   const pendingTypedDefinitions: { source: Flow, site: ParseNode, target: Flow, key?: string }[] = [];
   const pendingTypedStores: { object: Aggregate, key?: string, site: ParseNode }[] = [];
@@ -659,7 +659,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (typeof value === 'string' || value.kind !== 'aggregate') {
         opaque(slot(copy, undefined), site);
       } else if (value.native) {
-        accessHooks(value, undefined, source, site, (key, flow) => edge(flow, slot(copy, key)), undefined, excluded);
+        accessHooks(value, undefined, source, site, (key, flow) => recordDataWrite(copy, key, flow, site), undefined, excluded);
         if (value.native.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys
           || value.native.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty) {
           opaque(slot(copy, undefined), site);
@@ -671,15 +671,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           const key = typeof name === 'string' ? name : 'stringValue' in name ? name.stringValue() : undefined;
           if (key !== undefined && excluded.has(key) || descriptor.Enumerable !== Value.true) continue;
           if (descriptor.Value === undefined) opaque(slot(copy, key), site);
-          else nativeValue(descriptor.Value, slot(copy, key));
+          else {
+            const field = newFlow(); nativeValue(descriptor.Value, field); recordDataWrite(copy, key, field, site);
+          }
         }
         observeSlots(value, (key, flow) => {
-          if (key === undefined || !excluded.has(key) && value.native!.properties.get(Value(key))?.Enumerable !== Value.false) edge(flow, slot(copy, key));
+          if (key === undefined || !excluded.has(key) && value.native!.properties.get(Value(key))?.Enumerable !== Value.false) recordDataWrite(copy, key, flow, site);
         });
       } else {
-        accessHooks(value, undefined, source, site, (key, flow) => edge(flow, slot(copy, key)), undefined, excluded);
+        accessHooks(value, undefined, source, site, (key, flow) => recordDataWrite(copy, key, flow, site), undefined, excluded);
         observeSlots(value, (key, flow) => {
-          if (key === undefined || !excluded.has(key)) edge(flow, slot(copy, key));
+          if (key === undefined || !excluded.has(key)) recordDataWrite(copy, key, flow, site);
         });
       }
     });
@@ -761,6 +763,101 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     });
     return result;
   };
+  const descriptorObject = (prototype: ObjectValue, fields: ReadonlyMap<string, Flow>): Aggregate => {
+    const descriptor = aggregate(); descriptor.prototype = prototype;
+    for (const [key, source] of fields) {
+      descriptor.ownKeys.add(key);
+      recordDataWrite(descriptor, key, source);
+    }
+    return descriptor;
+  };
+  // Descriptor observation copies own descriptor fields; it does not Get the
+  // property, traverse its prototype, or invoke the described getter/setter.
+  const observeDescriptors = (source: Flow, key: string | undefined, result: Flow, site: ParseNode,
+    all: boolean, objectCoercion: boolean, prototype: ObjectValue): void => {
+    const table = all ? aggregate() : undefined;
+    if (table) {
+      table.prototype = prototype; add(result, table);
+    }
+    const primitive = (): Flow => {
+      const flow = newFlow(); flow.knownPrimitive = true; return flow;
+    };
+    const emit = (name: string | undefined, fields: ReadonlyMap<string, Flow>): Aggregate => {
+      const descriptor = descriptorObject(prototype, fields);
+      if (table) {
+        const flow = newFlow(); add(flow, descriptor); recordDataWrite(table, name, flow, site);
+      } else add(result, descriptor);
+      return descriptor;
+    };
+    pendingDescriptorReads.push({ source, result: table ? slot(table, undefined) : result, site, objectCoercion, all, prototype });
+    watch(source, (candidate) => {
+      const object = propertiesOf(candidate);
+      if (!object) {
+        if (candidate === 'opaque-value' || candidate === 'global') opaque(table ? slot(table, undefined) : result, site);
+        return;
+      }
+      if (object.native ? !OrdinaryDataReadSupported(object.native)
+        || all && object.native.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys : !object.ordinaryPrototypeMutation) {
+        opaque(table ? slot(table, undefined) : result, site); return;
+      }
+      const unknownFields = object.slots.get(undefined);
+      if (unknownFields) watch(unknownFields, (value) => {
+        if (value === 'opaque-value') opaque(table ? slot(table, undefined) : result, site);
+      });
+      const flags = (): Map<string, Flow> => new Map([['enumerable', primitive()], ['configurable', primitive()]]);
+      if (object.native) for (const [nameValue, descriptor] of object.native.properties) {
+        if (--remaining < 0) {
+          exhausted = true; return;
+        }
+        const name = typeof nameValue === 'string' ? nameValue : 'stringValue' in nameValue ? nameValue.stringValue() : undefined;
+        if (!all && !matchingKey(name, key)) continue;
+        const fields = new Map<string, Flow>();
+        for (const [field, value] of [['value', descriptor.Value], ['writable', descriptor.Writable], ['get', descriptor.Getter],
+          ['set', descriptor.Setter], ['enumerable', descriptor.Enumerable], ['configurable', descriptor.Configurable]] as const) {
+          if (value !== undefined) {
+            const flow = newFlow(); nativeValue(value, flow); fields.set(field, flow);
+          }
+        }
+        const declared = (object.native as ObjectValue & { TypedProperties?: ReadonlyMap<unknown, object> })
+          .TypedProperties?.get(typeof nameValue === 'string' ? nameValue : 'stringValue' in nameValue ? nameValue.stringValue() : nameValue) ?? descriptor.Type;
+        if (declared !== undefined) {
+          const flow = newFlow();
+          if (declared instanceof ObjectValue) nativeValue(declared, flow);
+          else add(flow, 'opaque-value');
+          fields.set('type', flow);
+        }
+        emit(name, fields);
+      }
+      const writes = new Set<PropertyWrite>(), hooks = new Set<Hook>();
+      const update = (): void => {
+        for (const write of object.writes) {
+          if (--remaining < 0) {
+            exhausted = true; return;
+          }
+          if (writes.has(write) || !all && !matchingKey(write.key, key) || write.site && !beforePrototypeUse(write.site, site)) continue;
+          writes.add(write);
+          const fields = flags();
+          fields.set('value', write.source); fields.set('writable', primitive());
+          const descriptor = emit(write.key, fields);
+          pendingDescriptorTypes.push({ object, key: write.key, site, descriptor, initial: object.typedKeys.has(write.key) || object.typedKeys.has(undefined) });
+        }
+        for (const hook of object.hooks) {
+          if (--remaining < 0) {
+            exhausted = true; return;
+          }
+          if (hooks.has(hook) || !all && !matchingKey(hook.key, key) || !beforePrototypeUse(hook.site, site)) continue;
+          hooks.add(hook);
+          const fields = flags(); fields.set('get', hook.get); fields.set('set', hook.set); emit(hook.key, fields);
+        }
+      };
+      object.writeUsers.add(update); object.hookUsers.add(update); update();
+      // Absence remains possible under historical descriptor/deletion joins.
+      // This is not a proof that an own property definitely exists.
+      if (!table) {
+        result.knownPrimitive = true; (result.primitiveKinds ??= new Set()).add('undefined');
+      }
+    });
+  };
   const defineDescriptor = (target: Flow, key: string | undefined, descriptor: Flow, site: ParseNode, syntax?: ParseNode): void => {
     const fields = new Map(['enumerable', 'configurable', 'value', 'writable', 'type', 'get', 'set']
       .map((name) => [name, descriptorField(descriptor, name, site)]));
@@ -799,10 +896,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     watch(source, (value) => {
       if (typeof value !== 'string' && value.kind === 'aggregate' && value.array && options.arrayIterationIsStable(site)) {
         observeSlots(value, (key, flow) => {
-          if (key === undefined) edge(flow, slot(copy, undefined));
-          else if (/^(0|[1-9][0-9]*)$/.test(key) && Number(key) >= start) edge(flow, slot(copy, String(Number(key) - start)));
+          if (key === undefined) recordDataWrite(copy, undefined, flow, site);
+          else if (/^(0|[1-9][0-9]*)$/.test(key) && Number(key) >= start) recordDataWrite(copy, String(Number(key) - start), flow, site);
         });
-      } else edge(values, slot(copy, undefined));
+      } else recordDataWrite(copy, undefined, values, site);
     });
     // Empty candidate sets are not proof that iteration cannot run user code.
     pendingOperations.push({ source, result: slot(copy, undefined), site });
@@ -964,7 +1061,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     if (site && typeof value === 'string') {
       const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
       const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
-      if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty'].includes(value)) propertyKey(argument(1), site);
+      if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty', 'getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor'].includes(value)) propertyKey(argument(1), site);
       if (value === 'create') {
         const object = aggregate(), created = newFlow(); add(created, object); add(result, object);
         setInitialPrototype(object, argument(0));
@@ -1016,12 +1113,27 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         copiedProperties(argument(1), site, (name, descriptor) => defineDescriptor(argument(0), name, descriptor, site));
       }
     }
+    if (typeof value !== 'string' && value.kind === 'aggregate' && value.native && site) {
+      const origin = options.nativeOrigins(value.native).find((kind) =>
+        ['getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor', 'getOwnPropertyDescriptors'].includes(kind));
+      if (origin) {
+        // FromPropertyDescriptor allocates in the actual built-in's realm,
+        // including a borrowed cross-realm original.
+        const prototype = (value.native as ObjectValue & { Realm?: { Intrinsics: Record<string, ObjectValue> } }).Realm?.Intrinsics['%Object.prototype%'];
+        if (!prototype) {
+          opaque(result, site); return;
+        }
+        const source = packed ? project(packed, '0', site) : args[0] ?? newFlow();
+        const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
+        observeDescriptors(source, key, result, site, origin === 'getOwnPropertyDescriptors', origin !== 'reflect-getOwnPropertyDescriptor', prototype);
+      }
+    }
     if (typeof value === 'string' || value.kind !== 'callable') return;
     value.parameters.forEach((parameter, index) => {
       if (parameter.type === 'BindingRestElement') {
         const rest = aggregate(true), flow = newFlow(); rest.prototype = options.arrayPrototype; add(flow, rest);
-        if (packed) edge(project(packed, undefined, site), slot(rest, undefined));
-        else args.slice(index).forEach((argument, offset) => edge(argument, slot(rest, String(offset))));
+        if (packed) recordDataWrite(rest, undefined, project(packed, undefined, site), site);
+        else args.slice(index).forEach((argument, offset) => recordDataWrite(rest, String(offset), argument, site));
         target(parameter, flow, site);
         return;
       }
@@ -1105,16 +1217,16 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         node.ElementList.forEach((part, index) => {
           if (part.type === 'SpreadElement') {
             fixedIndex = false;
-            edge(iterate(expression(part.AssignmentExpression), part), slot(object, undefined));
+            recordDataWrite(object, undefined, iterate(expression(part.AssignmentExpression), part), part);
           } else {
             if (fixedIndex && part.type !== 'Elision') object.ownKeys.add(String(index));
-            edge(expression(part), slot(object, fixedIndex ? String(index) : undefined));
+            recordDataWrite(object, fixedIndex ? String(index) : undefined, expression(part), part);
           }
         });
       } else for (const property of node.PropertyDefinitionList) {
         if (property.type === 'IdentifierReference') {
           object.ownKeys.add(property.name);
-          edge(expression(property), slot(object, property.name));
+          recordDataWrite(object, property.name, expression(property), property);
         } else if (property.type === 'PropertyDefinition') {
           if (property.PropertyName) {
             const key = options.propertyKey(property.PropertyName);
@@ -1123,13 +1235,13 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
               setInitialPrototype(object, expression(property.AssignmentExpression), options.objectPrototype);
             } else {
               if (key !== undefined) object.ownKeys.add(key);
-              edge(expression(property.AssignmentExpression), slot(object, key));
+              recordDataWrite(object, key, expression(property.AssignmentExpression), property);
             }
-          } else edge(project(expression(property.AssignmentExpression), undefined, property), slot(object, undefined));
+          } else recordDataWrite(object, undefined, project(expression(property.AssignmentExpression), undefined, property), property);
         } else if (property.type === 'MethodDefinition') {
           const key = options.propertyKey(property.ClassElementName);
           if (key !== undefined) object.ownKeys.add(key);
-          if (property.UniqueFormalParameters !== null) edge(expression(property), slot(object, key));
+          if (property.UniqueFormalParameters !== null) recordDataWrite(object, key, expression(property), property);
           else {
             const get = newFlow(), set = newFlow();
             edge(expression(property), property.PropertySetParameterList === null ? get : set);
@@ -1269,6 +1381,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     settle();
   }
+  for (const request of pendingDescriptorReads) {
+    const facts = prototypeValueFacts(request.source, false);
+    if (!facts || facts === unknownValue) opaque(request.result, request.site);
+    else if (request.objectCoercion && facts & (undefinedValue | nullValue | otherPrimitive)) {
+      request.result.knownPrimitive = true;
+      (request.result.primitiveKinds ??= new Set()).add('undefined');
+      // String wrappers may expose primitive-valued own data descriptors.
+      const field = newFlow(); field.knownPrimitive = true;
+      add(request.result, descriptorObject(request.prototype, new Map(['value', 'writable', 'enumerable', 'configurable'].map((key) => [key, field]))));
+    }
+  }
   for (const request of pendingPrototypeReads) {
     const facts = prototypeValueFacts(request.source, false);
     if (!facts || facts === unknownValue) opaqueEffects.add(request.site);
@@ -1278,6 +1401,21 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     opaqueEffects.add(request.site);
     for (const value of request.target.values) propertiesOf(value)?.typedKeys.add(request.key);
   }
+  for (const request of pendingDescriptorTypes) {
+    const typed = request.initial || pendingTypedDefinitions.some((definition) => {
+      if (--remaining < 0) {
+        exhausted = true; return true;
+      }
+      return matchingKey(request.key, definition.key) && beforePrototypeUse(definition.site, request.site)
+        && [...definition.target.values].some((value) => propertiesOf(value) === request.object)
+        && prototypeValueFacts(definition.source, false) !== 0;
+    });
+    if (typed) {
+      const field = newFlow(); add(field, 'opaque-value');
+      request.descriptor.ownKeys.add('type'); recordDataWrite(request.descriptor, 'type', field);
+    }
+  }
+  settle();
   for (const request of pendingTypedStores) {
     if (request.object.typedKeys.has(undefined) || request.key === undefined && request.object.typedKeys.size
       || request.object.typedKeys.has(request.key)) opaqueEffects.add(request.site);
