@@ -10,9 +10,9 @@ import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'Object' | 'Reflect'
-  | 'String' | 'Symbol' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
+  | 'String' | 'Symbol' | 'create' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
 const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'Object', 'Reflect',
-  'String', 'Symbol', 'setPrototypeOf', 'reflect-setPrototypeOf', 'function-call', 'function-apply', 'function-bind', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
+  'String', 'Symbol', 'create', 'setPrototypeOf', 'reflect-setPrototypeOf', 'function-call', 'function-apply', 'function-bind', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
 type Binding = { node: ParseNode, name: string };
 type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean };
 const ignored = new Set(['parent', 'location', 'sourceText', 'strict']);
@@ -32,6 +32,9 @@ const stringKey = (value: unknown, seen = new Set<ParseNode>()): string | undefi
   if (node.type === 'StringLiteral') return node.value;
   if (node.type === 'NumericLiteral') return String(node.value);
   seen.add(node);
+  // The suffix supplies the key; preceding comma operands still retain their
+  // separately collected effects and cannot retarget an already captured base.
+  if (node.type === 'CommaOperator') return stringKey(node.ExpressionList.at(-1), seen);
   if (node.type === 'IdentifierReference') {
     const binding = ResolveBindingDeclaration(node, node.name);
     if (binding?.kind === 'const' && binding.initializer && !(binding.node as Node).TypeAnnotation && !(binding.node as Node).Ref) {
@@ -273,6 +276,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     return stable;
   };
   const values = GlobalEffectValues(nodes, {
+    objectPrototype: realm.Intrinsics['%Object.prototype%'],
     functionPrototype: (node) => realm.Intrinsics[node?.type.startsWith('AsyncGenerator') ? '%AsyncGeneratorFunction.prototype%'
       : node?.type.startsWith('Generator') ? '%GeneratorFunction.prototype%' : node?.type.startsWith('Async') ? '%AsyncFunction.prototype%' : '%Function.prototype%'],
     binding: bindingAt, inputs, arrayIterationIsStable, provenDelegations, keyIsPrimitive, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
@@ -349,7 +353,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       for (const source of kinds.has('assign') ? args.slice(1) : args.slice(1, 2)) {
         effects.push({ node, names: objectKeys(source) });
       }
-    } else if (!kinds.has('Function')) {
+    } else if (!kinds.has('Function') && !kinds.has('create')) {
       // Giving an opaque operation the global object exposes every property.
       record(node);
     }

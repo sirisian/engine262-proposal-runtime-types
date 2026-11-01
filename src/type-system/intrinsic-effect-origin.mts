@@ -1,7 +1,7 @@
 import { ObjectValue, Value } from '../value.mts';
 
 export type IntrinsicEffectOrigin = 'set' | 'reflect-defineProperty' | 'deleteProperty' | 'defineProperty' | 'defineProperties' | 'assign'
-  | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind';
+  | 'create' | 'setPrototypeOf' | 'reflect-setPrototypeOf' | 'function-call' | 'function-apply' | 'function-bind';
 
 // Private identities recorded during bootstrap, before source code can replace
 // a namespace property. A captured original retains its summary across realms
@@ -17,4 +17,15 @@ export function registerIntrinsicEffectOrigins(namespace: ObjectValue, entries: 
 
 export function intrinsicEffectOrigin(value: Value | undefined): IntrinsicEffectOrigin | undefined {
   return value instanceof ObjectValue ? origins.get(value) : undefined;
+}
+
+// Accessor identity is separate from invocation summaries: calling this getter
+// with an exotic receiver can run a trap. Only a proven ordinary receiver lets
+// an inherited read use the no-user-code prototype lookup summary.
+const prototypeGetters = new WeakSet<ObjectValue>();
+export function registerIntrinsicPrototypeGetter(value: Value | undefined): void {
+  if (value instanceof ObjectValue) prototypeGetters.add(value);
+}
+export function isIntrinsicPrototypeGetter(value: Value | undefined): boolean {
+  return value instanceof ObjectValue && prototypeGetters.has(value);
 }
