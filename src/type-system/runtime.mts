@@ -78,7 +78,7 @@ import { GenericWhereVerified } from './generic-where.mts';
 import { CreateGenericAliasRecord, GenericAliasContextOf } from './generic-alias-context.mts';
 import { AliasFormationFor, BeginAliasFormation, EndAliasFormation, MatchingAliasExpansion, CompleteAliasFormation, type AliasExpansion } from './alias-formation.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
-import { PartialClassSelfOf, MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
+import { PartialClassSelfOf, MergePartialStructures, RuntimePartialContributions, IsPartialDeclaration } from './partial-types.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
@@ -857,7 +857,26 @@ export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRe
       }
       return false;
     });
-    if (!binding) return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
+    if (!binding) {
+      // A partial declaration with no parameter list of its own names its
+      // primary's parameters (`partial class C { static id(x: T): T }`): they
+      // are bound in the active frames by the specialization that reached it,
+      // not in its lexical environment. Only a reference inside such a partial
+      // reads the frames first; eval and Function code, separately parsed,
+      // keeps lexical resolution (runtime-generic-scope).
+      let inPartial = false;
+      for (let at = (reference as { parent?: ParseNode }).parent; at; at = (at as { parent?: ParseNode }).parent) {
+        const t = (at as { type?: string }).type;
+        if ((t === 'ClassDeclaration' || t === 'ClassExpression' || t === 'InterfaceDeclaration') && IsPartialDeclaration(at)) { inPartial = true; break; }
+      }
+      if (inPartial) {
+        for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
+          const bound = typeParameterFrames[i].get(name);
+          if (bound !== undefined) return bound;
+        }
+      }
+      return LexicalTypeParameterArgument(surroundingAgent.runningExecutionContext.LexicalEnvironment, name) ?? null;
+    }
     if (binding.kind !== 'type-parameter') return null;
   }
   for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {

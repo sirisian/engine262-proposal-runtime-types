@@ -4077,6 +4077,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const binding = ResolveBindingDeclaration(callee, callee.name);
     const declaration = binding?.kind === 'function' ? binding.node : undefined;
     if (!declaration || declaration.type !== 'FunctionDeclaration' || assignedNames.has(callee.name)) return;
+    // An overloaded name resolves to its first declaration, which need not be
+    // the overload the call selects: judging the arguments against that one's
+    // parameters refused `f('q')` against `f(x: P)` when `f(x: string)` was
+    // the overload chosen (functions/overload-resolution). The selected
+    // overload's own contract still runs at the call.
+    const siblings = (declaration.parent as { StatementList?: readonly ParseNode[], FunctionStatementList?: readonly ParseNode[], ScriptBody?: { StatementList?: readonly ParseNode[] }, ModuleBody?: { ModuleItemList?: readonly ParseNode[] } } | undefined);
+    const list = siblings?.StatementList ?? siblings?.FunctionStatementList ?? siblings?.ScriptBody?.StatementList ?? siblings?.ModuleBody?.ModuleItemList
+      ?? (Array.isArray(declaration.parent) ? declaration.parent as readonly ParseNode[] : undefined);
+    const overloads = (list ?? []).filter((item) => item.type === 'FunctionDeclaration'
+      && (item as ParseNode.FunctionDeclaration).BindingIdentifier?.name === callee.name).length;
+    if (overloads > 1) return;
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
     const formals = (declaration as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? [];
     if (!clauses?.length || (declaration as { TypeParameters?: unknown }).TypeParameters) {
