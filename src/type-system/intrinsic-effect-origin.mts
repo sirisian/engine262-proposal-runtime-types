@@ -1,6 +1,7 @@
 import { ObjectValue, Value } from '../value.mts';
 
-export type IntrinsicEffectOrigin = 'set' | 'reflect-defineProperty' | 'deleteProperty' | 'defineProperty' | 'defineProperties' | 'assign';
+export type IntrinsicEffectOrigin = 'set' | 'reflect-defineProperty' | 'deleteProperty' | 'defineProperty' | 'defineProperties' | 'assign'
+  | 'function-call' | 'function-apply' | 'function-bind';
 
 // Private identities recorded during bootstrap, before source code can replace
 // a namespace property. A captured original retains its summary across realms

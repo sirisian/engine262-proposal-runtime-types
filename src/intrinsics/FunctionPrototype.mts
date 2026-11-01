@@ -1,3 +1,4 @@
+import { registerIntrinsicEffectOrigins } from '../type-system/intrinsic-effect-origin.mts';
 import {
   HostHasSourceTextAvailable,
 } from '../host-defined/engine.mts';
@@ -14,8 +15,8 @@ import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
-import { assignProps } from './bootstrap.mts';
 import { FunctionProto_callThread } from '../runtime-semantics/CallThread.mts';
+import { assignProps } from './bootstrap.mts';
 import {
   Assert,
   Call,
@@ -233,4 +234,5 @@ export function bootstrapFunctionPrototype(realmRec: Realm) {
     ['toString', FunctionProto_toString, 0],
     [wellKnownSymbols.hasInstance, FunctionProto_hasInstance, 1, readonly],
   ]);
+  registerIntrinsicEffectOrigins(proto, { call: 'function-call', apply: 'function-apply', bind: 'function-bind' });
 }

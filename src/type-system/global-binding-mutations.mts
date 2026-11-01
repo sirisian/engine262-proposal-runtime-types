@@ -9,10 +9,10 @@ import { GlobalEffectValues } from './global-effect-values.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
 type Node = ParseNode & Record<string, unknown>;
-type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'global-bound' | 'Object' | 'Reflect'
-  | 'String' | 'Symbol' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
-const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'global-bound', 'Object', 'Reflect',
-  'String', 'Symbol', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
+type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'Object' | 'Reflect'
+  | 'String' | 'Symbol' | 'function-call' | 'function-apply' | 'function-bind' | 'set' | 'reflect-defineProperty' | 'defineProperty' | 'deleteProperty' | 'defineProperties' | 'assign' | 'opaque-value' | 'opaque-callable';
+const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'Object', 'Reflect',
+  'String', 'Symbol', 'function-call', 'function-apply', 'function-bind', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
 type Binding = { node: ParseNode, name: string };
 type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean };
 const ignored = new Set(['parent', 'location', 'sourceText', 'strict']);
@@ -163,12 +163,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       const callee = unwrap(node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression);
-      if (callee?.type === 'MemberExpression' && keyOf(callee) === 'bind') {
-        const kinds = from(callee.MemberExpression);
-        if (node.Arguments?.some((arg) => from(arg).has('global'))) kinds.add('global-bound');
-        return kinds;
-      }
-      const target = callee?.type === 'MemberExpression' && ['call', 'apply'].includes(keyOf(callee) ?? '') ? callee.MemberExpression : callee;
+      const target = callee;
       return from(target).has('Function')
         ? new Set(['dynamic-function']) : new Set();
     }
@@ -278,6 +273,8 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     return stable;
   };
   const values = GlobalEffectValues(nodes, {
+    functionPrototype: (node) => realm.Intrinsics[node?.type.startsWith('AsyncGenerator') ? '%AsyncGeneratorFunction.prototype%'
+      : node?.type.startsWith('Generator') ? '%GeneratorFunction.prototype%' : node?.type.startsWith('Async') ? '%AsyncFunction.prototype%' : '%Function.prototype%'],
     binding: bindingAt, inputs, arrayIterationIsStable, provenDelegations, keyIsPrimitive, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
     external: (node) => {
       const declaration = ResolveBindingDeclaration(node, node.name);
@@ -332,30 +329,20 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     if (['ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(node.type)) write(node.LeftHandSideExpression, node);
     if (node.type !== 'CallExpression' && node.type !== 'NewExpression') continue;
     const callee = unwrap(node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression);
-    // Binding arguments captures them; it does not invoke the target yet.
-    if (callee?.type === 'MemberExpression' && keyOf(callee) === 'bind') continue;
-    let kinds = origins(callee);
-    let args: readonly ParseNode[] = node.Arguments ?? [];
-    let packed: ParseNode | undefined;
-    if (callee?.type === 'MemberExpression' && ['call', 'apply'].includes(keyOf(callee) ?? '')) {
-      kinds = origins(callee.MemberExpression);
-      if (!kinds.size && values.contained(args[0]).has('global')) record(node);
-      if (keyOf(callee) === 'apply') packed = args[1];
-      args = keyOf(callee) === 'call' ? args.slice(1) : unwrap(args[1])?.type === 'ArrayLiteral'
-        ? (unwrap(args[1]) as ParseNode.ArrayLiteral).ElementList : [];
-    }
+    const kinds = origins(callee);
+    if (['function-call', 'function-apply', 'function-bind'].some((kind) => kinds.has(kind))) continue;
+    const args: readonly ParseNode[] = node.Arguments ?? [];
     if (!kinds.size && callee?.type === 'MemberExpression' && values.contained(callee.MemberExpression).has('global')) record(node);
     if (kinds.has('eval') || kinds.has('dynamic-function')) {
       record(node, undefined, true);
       continue;
     }
-    if (kinds.has('global-bound')) record(node);
     if (!kinds.size) {
-      const exposed = new Set((packed ? [...values.contained(packed)] : args.flatMap((arg) => [...values.contained(arg)])));
+      const exposed = new Set(args.flatMap((arg) => [...values.contained(arg)]));
       if (exposed.has('global')) record(node);
       if (['eval', 'Function', 'dynamic-function', 'opaque-callable', 'opaque-value'].some((kind) => exposed.has(kind))) record(node, undefined, true);
     }
-    if (!(packed ? values.element(packed, 0) : origins(args[0])).has('global')) continue;
+    if (!origins(args[0]).has('global')) continue;
     if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty'].some((kind) => kinds.has(kind as Origin))) {
       record(node, stringKey(args[1]));
     } else if (kinds.has('assign') || kinds.has('defineProperties')) {
@@ -371,6 +358,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   // global access. Record the original operation site, not a speculative
   // getter execution or a source-wide spelling match.
   for (const site of values.opaqueEffects()) record(site as Node, undefined, true);
+  for (const effect of values.globalWrites()) record(effect.site as Node, effect.key);
   const deferred = (node: ParseNode): boolean => {
     let child = node;
     for (let at = node.parent; at; child = at, at = at.parent) {

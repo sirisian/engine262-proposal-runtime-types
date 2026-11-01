@@ -1,14 +1,15 @@
+import { R } from '../abstract-ops/spec-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { JSStringValue, ObjectValue, Value } from '../value.mts';
+import { JSStringValue, NumberValue, ObjectValue, Value } from '../value.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
-type Aggregate = { kind: 'aggregate', hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, array?: boolean,
+type Aggregate = { kind: 'aggregate', hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
-type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow };
-type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], receiver: Flow };
+type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
+type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], packed?: Flow, receiver: Flow, properties: Aggregate };
 type Candidate = string | Aggregate | Callable | Bound;
 const isNode = (value: unknown): value is Node => !!value && typeof value === 'object' && typeof (value as Node).type === 'string';
 const parameterKeys = ['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'];
@@ -20,6 +21,7 @@ const newFlow = (): Flow => ({ values: new Set(), users: new Set() });
  * code and establish neither a public contract nor a stable implementation.
  */
 export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
+  functionPrototype: (node?: ParseNode) => ObjectValue,
   arrayIterationIsStable: (site: ParseNode) => boolean,
   keyIsPrimitive: (node: ParseNode) => boolean,
   provenDelegations: ReadonlySet<ParseNode.YieldExpression>,
@@ -40,12 +42,14 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   element: (node: ParseNode | undefined, index: number) => Set<string>,
   exhausted: () => boolean,
   opaqueEffects: () => ReadonlySet<ParseNode>,
+  globalWrites: () => readonly { site: ParseNode, key?: string }[],
 } {
   const expressions = new Map<ParseNode, Flow>();
   const bindings = new Map<object, Flow>();
   const functions = new Map<ParseNode, Callable>();
   const native = new Map<ObjectValue, Aggregate>();
   const opaqueEffects = new Set<ParseNode>();
+  const globalWrites: { site: ParseNode, key?: string }[] = [];
   const queue: [Candidate, (value: Candidate) => void][] = [];
   // Bound propagation work, not elapsed time. Exhaustion loses precision; it
   // must never become evidence that an effect cannot occur.
@@ -91,14 +95,22 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     queue.length = 0;
   };
-  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), array, slotUsers: new Set() });
+  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', hooks: [], hookUsers: new Set(), enumerability: [], slots: new Map(), all: newFlow(), mutations: new Set(), array, slotUsers: new Set() });
+  const propertiesOf = (value: Candidate): Aggregate | undefined => typeof value === 'string' ? undefined
+    : value.kind === 'aggregate' ? value : value.properties;
+  const functionProperties = (node?: ParseNode): Aggregate => {
+    const object = { ...aggregate(), prototype: options.functionPrototype(node) };
+    slot(object, 'length').knownPrimitive = true;
+    slot(object, 'name').knownPrimitive = true;
+    return object;
+  };
   const globalObject = aggregate();
   const nativeValue = (value: Value | undefined, to: Flow): void => {
     if (!value) return;
     const kinds = options.nativeOrigins(value);
     if (kinds.length) {
       kinds.forEach((kind) => add(to, kind));
-      if (!kinds.some((kind) => ['String', 'Symbol', 'Object', 'Reflect'].includes(kind))) return;
+      if (kinds.includes('global')) return;
     }
     if (!(value instanceof ObjectValue)) {
       to.knownPrimitive = true;
@@ -131,7 +143,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (object.native) {
         const descriptor = object.native.properties.get(Value(key));
         if (descriptor?.Value !== undefined) nativeValue(intrinsicData(object.native, Value(key)), found);
-        else add(found, 'opaque-value');
+        else if (!['call', 'apply', 'bind'].includes(key) || descriptor) add(found, 'opaque-value');
       }
     }
     for (const user of object.slotUsers) user(key, found);
@@ -172,7 +184,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     object.hookUsers.add(update);
     update();
   };
-  const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode): void => watch(base, (value) => {
+  const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode, receiver = base): void => watch(base, (value) => {
     if (typeof value === 'string') {
       if (value === 'opaque-value') {
         add(to, value);
@@ -188,28 +200,43 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           if (site) opaqueEffects.add(site);
         }
       } else if (value === 'global' && key && ['eval', 'Function'].includes(key)) add(to, key);
-    } else if (value.kind === 'aggregate') {
-      accessHooks(value, key, base, site, (_key, result) => edge(result, to));
-      if (value.native && (key === undefined || value.native.properties.get(Value(key))?.Value === undefined)) {
+    } else {
+      const object = propertiesOf(value)!;
+      const adapter = key !== undefined && ['call', 'apply', 'bind'].includes(key);
+      const descriptor = key === undefined ? undefined : object.native?.properties.get(Value(key));
+      accessHooks(object, key, receiver, site, (_key, result) => edge(result, to));
+      if (adapter && !descriptor) {
+        if (object.prototypeFlow) load(object.prototypeFlow, key, to, site, receiver);
+        const prototype = object.native && 'Prototype' in object.native ? object.native.Prototype : object.prototype;
+        if (prototype instanceof ObjectValue && prototype !== object.native) {
+          const parent = newFlow(); nativeValue(prototype, parent);
+          load(parent, key, to, site, receiver);
+        }
+      }
+      if (object.native && (key === undefined || descriptor?.Value === undefined && (!adapter || descriptor))) {
         if (site) opaqueEffects.add(site);
         add(to, 'opaque-value');
       }
       if (key === undefined) {
-        if (value.native) for (const name of value.native.properties.keys()) {
-          if (typeof name === 'string') slot(value, name);
-          else if ('stringValue' in name) slot(value, name.stringValue());
+        if (object.native) for (const name of object.native.properties.keys()) {
+          if (typeof name === 'string') slot(object, name);
+          else if ('stringValue' in name) slot(object, name.stringValue());
         }
-        edge(value.all, to);
-      } else edge(slot(value, key), to);
+        edge(object.all, to);
+      } else edge(slot(object, key), to);
     }
   });
   const store = (base: Flow, key: string | undefined, from: Flow, site?: ParseNode, receiver = base): void => watch(base, (value) => {
-    if (value === 'global') edge(from, slot(globalObject, key));
-    else if (value === 'opaque-value' && site) opaqueEffects.add(site);
-    else if (typeof value !== 'string' && value.kind === 'aggregate') {
-      edge(from, slot(value, key));
-      accessHooks(value, key, receiver, site, undefined, from);
-      if (site && value.native && (key === undefined || value.native.properties.get(Value(key))?.Value === undefined)) opaqueEffects.add(site);
+    if (value === 'global') {
+      edge(from, slot(globalObject, key));
+      if (site) globalWrites.push({ site, key });
+    } else if (value === 'opaque-value' && site) opaqueEffects.add(site);
+    else if (typeof value !== 'string') {
+      const object = propertiesOf(value)!;
+      object.mutations.add(key);
+      edge(from, slot(object, key));
+      accessHooks(object, key, receiver, site, undefined, from);
+      if (site && object.native && (key === undefined || object.native.properties.get(Value(key))?.Value === undefined)) opaqueEffects.add(site);
     }
   });
   const binding = (node: Node, name: string): Flow => {
@@ -228,7 +255,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     add(result, 'opaque-value');
     opaqueEffects.add(site);
   };
-  const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean }[] = [];
+  const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean, arguments?: boolean }[] = [];
   const pendingKeys: { source: Flow, site: ParseNode }[] = [];
   const propertyKey = (source: Flow, site: ParseNode): void => {
     pendingKeys.push({ source, site });
@@ -383,6 +410,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const fields = new Map(['enumerable', 'configurable', 'value', 'writable', 'get', 'set']
       .map((name) => [name, descriptorField(descriptor, name, site)]));
     pendingOperations.push({ source: descriptor, result: newFlow(), site, copy: true });
+    // Defining a property does not invoke its old setter.
     store(target, key, fields.get('value')!);
     let enumerable: boolean | undefined;
     let changesEnumerable = false;
@@ -393,14 +421,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       }
     }
     watch(target, (value) => {
-      if (typeof value === 'string' || value.kind !== 'aggregate') {
+      if (typeof value === 'string') {
+        if (value === 'global') globalWrites.push({ site, key });
         if (value === 'opaque-value') opaqueEffects.add(site);
         return;
       }
-      if (value.native && value.native.DefineOwnProperty !== ObjectValue.prototype.DefineOwnProperty) opaqueEffects.add(site);
-      value.hooks.push({ key, get: fields.get('get')!, set: fields.get('set')!, site, enumerable });
-      if (changesEnumerable) value.enumerability.push({ key, site, value: enumerable });
-      for (const update of value.hookUsers) update();
+      const object = propertiesOf(value)!;
+      object.mutations.add(key);
+      if (object.native && object.native.DefineOwnProperty !== ObjectValue.prototype.DefineOwnProperty) opaqueEffects.add(site);
+      object.hooks.push({ key, get: fields.get('get')!, set: fields.get('set')!, site, enumerable });
+      if (changesEnumerable) object.enumerability.push({ key, site, value: enumerable });
+      for (const update of object.hookUsers) update();
     });
   };
   const arrayRest = (source: Flow, site: ParseNode, start: number): Flow => {
@@ -478,11 +509,71 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const existing = functions.get(node);
     if (existing) return existing;
     const parameters = parameterKeys.flatMap((key) => Array.isArray(node[key]) ? node[key] as Node[] : isNode(node[key]) ? [node[key] as Node] : []);
-    const result = { kind: 'callable' as const, parameters, result: newFlow(), receiver: newFlow() };
+    const result = { kind: 'callable' as const, parameters, result: newFlow(), receiver: newFlow(), properties: functionProperties(node) };
     functions.set(node, result);
     return result;
   };
+  const copyArguments = (source: Flow, destination: Aggregate, start: number, offset: number, site?: ParseNode): void => {
+    watch(source, (entry) => {
+      const object = propertiesOf(entry);
+      if (!object) {
+        edge(project(source, undefined, site), slot(destination, undefined));
+        return;
+      }
+      if (object.native) {
+        const length = intrinsicData(object.native, Value('length'));
+        const count = length instanceof NumberValue ? R(length) : undefined;
+        if (count === undefined || !Number.isSafeInteger(count) || count < 0 || count > 256) {
+          edge(project(source, undefined, site), slot(destination, undefined));
+          return;
+        }
+        for (let index = start; index < count; index += 1) edge(project(source, String(index), site), slot(destination, String(index - start + offset)));
+      } else observeSlots(object, (key, input) => {
+        if (key === undefined) edge(input, slot(destination, undefined));
+        else if (/^(0|[1-9][0-9]*)$/.test(key) && Number(key) >= start) edge(input, slot(destination, String(Number(key) - start + offset)));
+      });
+    });
+  };
+  const argumentTail = (packed: Flow, site?: ParseNode): Flow => {
+    const tail = aggregate(true), flow = newFlow(); add(flow, tail);
+    copyArguments(packed, tail, 1, 0, site);
+    return flow;
+  };
   const invoke = (callee: Flow, args: readonly Flow[], receiver: Flow, result: Flow, packed?: Flow, site?: ParseNode, argumentNodes?: readonly ParseNode[]): void => watch(callee, (value) => {
+    if (value === 'eval' || value === 'dynamic-function') {
+      if (site) opaqueEffects.add(site);
+    }
+    if (value === 'function-call' || value === 'function-apply' || value === 'function-bind') {
+      const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
+      if (value === 'function-bind') {
+        project(receiver, 'length', site); project(receiver, 'name', site);
+        const properties = functionProperties();
+        properties.prototype = undefined;
+        properties.prototypeFlow = newFlow();
+        watch(receiver, (target) => {
+          const object = propertiesOf(target);
+          if (!object) {
+            if (target === 'opaque-value') add(properties.prototypeFlow!, target);
+          } else if (object.prototypeFlow) edge(object.prototypeFlow, properties.prototypeFlow!);
+          else nativeValue(object.native && 'Prototype' in object.native ? object.native.Prototype as Value : object.prototype, properties.prototypeFlow!);
+        });
+        add(result, { kind: 'bound', callee: receiver, arguments: packed ? [] : args.slice(1),
+          packed: packed ? argumentTail(packed, site) : undefined, receiver: argument(0), properties });
+      } else if (value === 'function-apply') {
+        const argumentsObject = packed || args.length > 1 ? argument(1) : undefined;
+        if (argumentsObject?.expression?.type === 'NullLiteral') invoke(receiver, [], argument(0), result, undefined, site);
+        else {
+          if (argumentsObject && site) {
+            project(argumentsObject, 'length', site);
+            pendingOperations.push({ source: argumentsObject, result: newFlow(), site, arguments: true });
+          }
+          invoke(receiver, [], argument(0), result, argumentsObject, site);
+        }
+      } else if (packed) {
+        invoke(receiver, [], argument(0), result, argumentTail(packed, site), site);
+      } else invoke(receiver, args.slice(1), argument(0), result, undefined, site, argumentNodes?.slice(1));
+      return;
+    }
     if (value === 'Function') add(result, 'dynamic-function');
     // String/Symbol on a primitive literal cannot enter user coercion code. This is
     // a positive intrinsic summary, not trust in every native implementation.
@@ -497,11 +588,18 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (site) opaqueEffects.add(site);
     }
     if (typeof value !== 'string' && value.kind === 'bound') {
-      if (packed) {
+      if (packed || value.packed) {
         const combined = aggregate(), flow = newFlow(); add(flow, combined);
         value.arguments.forEach((argument, index) => edge(argument, slot(combined, String(index))));
         // Unknown arity is a wildcard contribution, never an ignored suffix.
-        edge(project(packed, undefined, site), slot(combined, undefined));
+        if (value.packed) {
+          edge(project(value.packed, undefined, site), slot(combined, undefined));
+          args.forEach((argument) => edge(argument, slot(combined, undefined)));
+        }
+        if (packed) {
+          if (value.packed) edge(project(packed, undefined, site), slot(combined, undefined));
+          else copyArguments(packed, combined, 0, value.arguments.length, site);
+        }
         invoke(value.callee, [], value.receiver, result, flow, site);
       } else invoke(value.callee, [...value.arguments, ...args], value.receiver, result, undefined, site);
       return;
@@ -517,6 +615,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         store(argument(0), key, argument(2), site, receiver);
       }
       if (value === 'deleteProperty') watch(argument(0), (target) => {
+        if (target === 'global') globalWrites.push({ site, key });
         if (target === 'opaque-value' || typeof target !== 'string' && target.kind === 'aggregate'
           && target.native && target.native.Delete !== ObjectValue.prototype.Delete) opaqueEffects.add(site);
       });
@@ -623,6 +722,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       const writeOnly = isAssignmentTarget(node)
         || parent?.type === 'UnaryExpression' && parent.operator === 'delete';
       if (!writeOnly) load(expression(node.MemberExpression), options.key(node), result, node);
+      if (!writeOnly && ['call', 'apply', 'bind'].includes(options.key(node) ?? '')) pendingOperations.push({ source: result, result, site: node, copy: true });
     } else if (parameterKeys.some((key) => key in node)) {
       const fn = callable(node); add(result, fn);
       if (isNode(node.BindingIdentifier)) edge(result, binding(node.BindingIdentifier, node.BindingIdentifier.name as string));
@@ -637,25 +737,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     } else if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       let callee: ParseNode = node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression;
       while (callee.type === 'ParenthesizedExpression') callee = callee.Expression;
-      let argumentNodes: readonly ParseNode.ArgumentListElement[] = node.Arguments ?? [];
-      let args = argumentNodes.map(expression);
-      let receiver = callee.type === 'MemberExpression' ? expression(callee.MemberExpression) : newFlow();
+      const argumentNodes: readonly ParseNode.ArgumentListElement[] = node.Arguments ?? [];
+      const args = argumentNodes.map(expression);
+      const receiver = callee.type === 'MemberExpression' ? expression(callee.MemberExpression) : newFlow();
       let packed: Flow | undefined;
-      if (callee.type === 'MemberExpression' && options.key(callee) === 'bind') {
-        add(result, { kind: 'bound', callee: expression(callee.MemberExpression), arguments: args.slice(1), receiver: args[0] ?? newFlow() });
-        depth -= 1;
-        return result;
-      }
-      if (callee.type === 'MemberExpression' && ['call', 'apply'].includes(options.key(callee) ?? '')) {
-        receiver = args[0] ?? newFlow();
-        if (options.key(callee) === 'apply') {
-          packed = args[1];
-          if (packed) project(packed, 'length', node);
-        }
-        args = options.key(callee) === 'call' ? args.slice(1) : [];
-        argumentNodes = options.key(callee) === 'call' ? argumentNodes.slice(1) : [];
-        callee = callee.MemberExpression;
-      }
       if (!packed && argumentNodes.some((argument) => argument.type === 'AssignmentRestElement')) {
         const argumentsObject = aggregate(true); packed = newFlow(); add(packed, argumentsObject);
         let uncertain = false;
@@ -690,6 +775,29 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const end = pendingOperations.length;
     for (; index < end; index += 1) {
       const request = pendingOperations[index];
+      if (request.arguments) watch(request.source, (value) => {
+        const object = propertiesOf(value);
+        if (!object) {
+          opaqueEffects.add(request.site);
+          return;
+        }
+        if (object.native) {
+          const length = intrinsicData(object.native, Value('length'));
+          const count = length instanceof NumberValue ? R(length) : undefined;
+          if (count === undefined || !Number.isSafeInteger(count) || count < 0 || count > 256 || object.hooks.length
+            || object.mutations.has('length') || object.mutations.has(undefined)) {
+            opaqueEffects.add(request.site);
+          } else {
+            for (let index = 0; index < count; index += 1) project(request.source, String(index), request.site);
+          }
+        } else if (object.array) {
+          observeSlots(object, (key) => {
+            if (key !== undefined && /^(0|[1-9][0-9]*)$/.test(key)) project(request.source, key, request.site);
+          });
+          if (inputs.get(slot(object, undefined))?.size || object.hooks.length
+            || object.mutations.has('length') || object.mutations.has(undefined)) opaqueEffects.add(request.site);
+        } else opaqueEffects.add(request.site);
+      });
       if (!request.source.values.size && !(request.copy && (request.source.primitiveLiteral || request.source.knownPrimitive))) opaque(request.result, request.site);
     }
     settle();
@@ -719,6 +827,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         } else if (deep && value.kind === 'callable') visit(value.result);
         else if (deep && value.kind === 'bound') {
           visit(value.callee); visit(value.receiver); value.arguments.forEach(visit);
+          if (value.packed) visit(value.packed);
         }
       }
     };
@@ -737,5 +846,6 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     },
     exhausted: () => exhausted,
     opaqueEffects: () => opaqueEffects,
+    globalWrites: () => globalWrites,
   };
 }
