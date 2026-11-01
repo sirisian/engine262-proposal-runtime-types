@@ -1,0 +1,491 @@
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { ResolveBindingDeclaration, type BindingDeclaration } from './compile-time-evaluability.mts';
+
+type Node = ParseNode & Record<string, unknown>;
+interface Origin {
+  source: ParseNode;
+  arguments?: ParseNode.TypeArguments;
+}
+interface Binding {
+  declaration: BindingDeclaration;
+  name: string;
+  owner: ParseNode;
+  immutable: boolean;
+  global: boolean;
+}
+interface State {
+  values: Map<Binding, Origin>;
+  live: boolean;
+}
+const ignored = new Set(['parent', 'location', 'sourceText', 'strict', 'TypeAnnotation', 'TypeParameters',
+  'TypeArguments', 'ReturnType', 'ReturnTypeAnnotation', 'WhereClauses', 'ImplementsClause']);
+const parameterKeys = ['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'];
+const bodyKeys = ['FunctionBody', 'ConciseBody', 'AsyncConciseBody', 'GeneratorBody', 'AsyncBody', 'AsyncGeneratorBody'];
+const isNode = (value: unknown): value is Node => !!value && typeof value === 'object'
+  && typeof (value as { type?: unknown }).type === 'string';
+const callable = (node: Node): boolean => parameterKeys.some((key) => key in node);
+const unwrap = (value: unknown): Node | undefined => {
+  let node = isNode(value) ? value : undefined;
+  while (node?.type === 'ParenthesizedExpression') node = node.Expression as Node;
+  return node;
+};
+const children = (node: Node): Node[] => Object.entries(node).flatMap(([key, value]) =>
+  ignored.has(key) ? [] : (Array.isArray(value) ? value : [value]).filter(isNode));
+const same = (a: Origin | undefined, b: Origin | undefined): boolean => a?.source === b?.source && a?.arguments === b?.arguments;
+const copy = (state: State): State => ({ values: new Map(state.values), live: state.live });
+const join = (into: State, a: State, b: State): void => {
+  into.live = a.live || b.live;
+  into.values = !a.live ? new Map(b.values) : !b.live ? new Map(a.values)
+    : new Map([...a.values].filter(([key, value]) => same(value, b.values.get(key))));
+};
+
+/**
+  * Constructor VALUE evidence at evaluated expression positions. This does not
+    * form a type, execute source, or license check elision. In particular a later
+      * effect cannot rewrite a value already captured by a heritage or new operand.
+        * Unsupported effects withdraw evidence; declaration contracts remain separate.
+          */
+export function ClassValueOrigins(root: ParseNode): WeakMap<ParseNode, Origin | undefined> {
+  const observations = new WeakMap<ParseNode, Origin | undefined>();
+  const bindings = new Map<ParseNode, Map<string, Binding>>();
+  const written = new Set<Binding>();
+  const captured = new Set<Binding>();
+  const directEvals: Node[] = [];
+  const deferred: { node: Node, state: State }[] = [];
+  const ownerOf = (node: ParseNode): ParseNode => {
+    for (let at = node.parent; at; at = at.parent) {
+      if (callable(at as Node) || at.type === 'FieldDefinition' && !at.static) return at;
+    }
+    return root;
+  };
+  const globalBinding = (declaration: BindingDeclaration): boolean => {
+    if (root.type !== 'Script' || ownerOf(declaration.node) !== root) return false;
+    if (declaration.kind === 'var' || declaration.kind === 'function') return true;
+    if (declaration.node.type === 'ClassExpression') return false;
+    for (let at = declaration.node.parent; at && at !== root; at = at.parent) {
+      if (['Block', 'CaseBlock', 'Catch', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement', 'ClassStaticBlock'].includes(at.type)) return false;
+    }
+    return true;
+  };
+  const bindingAt = (node: ParseNode, name: string): Binding | undefined => {
+    const declaration = ResolveBindingDeclaration(node, name);
+    if (!declaration) return undefined;
+    let names = bindings.get(declaration.node);
+    if (!names) {
+      names = new Map(); bindings.set(declaration.node, names);
+    }
+    let binding = names.get(name);
+    if (!binding) {
+      const owner = ownerOf(declaration.node);
+      binding = { declaration, name, owner, immutable: declaration.kind === 'const',
+        global: globalBinding(declaration) };
+      names.set(name, binding);
+    }
+    return binding;
+  };
+  const targets = (value: unknown, visit: (node: Node, name: string) => void): void => {
+    if (Array.isArray(value)) {
+      value.forEach((child) => targets(child, visit)); return;
+    }
+    if (!isNode(value)) return;
+    if (value.type === 'IdentifierReference' || value.type === 'BindingIdentifier') {
+      visit(value, value.name as string); return;
+    }
+    const keys: Record<string, string[]> = {
+      ParenthesizedExpression: ['Expression'], AssignmentExpression: ['LeftHandSideExpression'],
+      ArrayLiteral: ['ElementList'], ObjectLiteral: ['PropertyDefinitionList'],
+      PropertyDefinition: ['AssignmentExpression'], CoverInitializedName: ['IdentifierReference'],
+      SpreadElement: ['AssignmentExpression'], AssignmentRestElement: ['AssignmentExpression'],
+      ObjectBindingPattern: ['BindingPropertyList', 'BindingRestProperty'], ArrayBindingPattern: ['BindingElementList', 'BindingRestElement'],
+      BindingProperty: ['BindingElement'], BindingElement: ['BindingIdentifier', 'BindingPattern'],
+      SingleNameBinding: ['BindingIdentifier'], BindingRestElement: ['BindingIdentifier', 'BindingPattern'],
+      BindingRestProperty: ['BindingIdentifier'],
+      ForBinding: ['BindingIdentifier', 'BindingPattern'], ForDeclaration: ['ForBinding'],
+    };
+    for (const key of keys[value.type] ?? []) targets(value[key], visit);
+  };
+  const directEval = (node: Node): boolean => {
+    const callee = unwrap(node.CallExpression);
+    return node.type === 'CallExpression' && callee?.type === 'IdentifierReference'
+      && callee.name === 'eval';
+  };
+  const collect = (node: Node): void => {
+    if (node.type === 'IdentifierReference' || node.type === 'BindingIdentifier') bindingAt(node, node.name as string);
+    const target = node.type === 'AssignmentExpression' ? node.LeftHandSideExpression
+      : node.type === 'UpdateExpression' ? node.LeftHandSideExpression ?? node.UnaryExpression
+        : ['ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(node.type) ? node.LeftHandSideExpression : undefined;
+    targets(target, (place, name) => {
+      const binding = bindingAt(place, name);
+      if (binding) {
+        written.add(binding);
+        if (ownerOf(place) !== binding.owner) captured.add(binding);
+        for (let at = place.parent; at && at !== binding.owner; at = at.parent) {
+          if ((at.type === 'ClassDeclaration' || at.type === 'ClassExpression') && at.TypeParameters?.TypeParameterList.length) captured.add(binding);
+        }
+      }
+    });
+    if (directEval(node)) directEvals.push(node);
+    // A reference or dynamically selected location can expose a local cell to
+    // code whose writes are not represented by an identifier assignment.
+    if (node.type === 'RefExpression' || node.type === 'RefRebindingStatement' || node.Ref) {
+      for (const child of children(node)) targets(child, (place, name) => {
+        const binding = bindingAt(place, name);
+        if (binding) {
+          written.add(binding); captured.add(binding);
+        }
+      });
+    }
+    children(node).forEach(collect);
+  };
+  collect(root as Node);
+  for (const names of bindings.values()) for (const binding of names.values()) {
+    for (const evalNode of directEvals) {
+      if (bindingAt(evalNode, binding.name) === binding) {
+        written.add(binding);
+        if (ownerOf(evalNode) !== binding.owner) captured.add(binding);
+      }
+    }
+  }
+  const observe = (node: Node, value: Origin | undefined): Origin | undefined => {
+    if (observations.has(node) && !same(observations.get(node), value)) observations.set(node, undefined);
+    else if (!observations.has(node)) observations.set(node, value);
+    return value;
+  };
+  const effect = (state: State, at: Node, dynamic = false, all = false): void => {
+    for (const binding of state.values.keys()) {
+      const shadowable = dynamic && !at.strict && binding.owner !== ownerOf(at);
+      if (shadowable || !binding.immutable && (all || dynamic || binding.global || captured.has(binding))) state.values.delete(binding);
+    }
+  };
+  const read = (node: Node, state: State): Origin | undefined => {
+    const name = node.name as string;
+    // A class body's self binding is immutable and separate from its outer
+    // declaration. Heritage runs before that inner binding is initialized.
+    for (let child: ParseNode = node, at = node.parent; at; child = at, at = at.parent) {
+      if ((at.type === 'ClassDeclaration' || at.type === 'ClassExpression') && at.BindingIdentifier?.name === name) {
+        if (child === at.ClassTail && at.ClassTail.ClassHeritage) {
+          let inHeritage = false;
+          for (let part: ParseNode | undefined = node; part && part !== at; part = part.parent) {
+            if (part === at.ClassTail.ClassHeritage) inHeritage = true;
+          }
+          if (inHeritage) return undefined;
+        }
+        const selected = bindingAt(node, name);
+        if (selected?.declaration.kind === 'class' && selected.declaration.node === at) return { source: at };
+      }
+    }
+    const binding = bindingAt(node, name);
+    if (binding?.declaration.kind === 'import') return { source: node };
+    return binding && state.values.get(binding);
+  };
+  const store = (target: unknown, value: Origin | undefined, state: State): void => {
+    targets(target, (node, name) => {
+      const binding = bindingAt(node, name);
+      if (!binding) return;
+      const declaration = binding.declaration.node as Node;
+      if (value && binding.declaration.kind !== 'parameter' && !declaration.TypeAnnotation && !declaration.Ref) state.values.set(binding, value);
+      else state.values.delete(binding);
+    });
+  };
+  const literalTruth = (value: unknown): boolean | undefined => {
+    const node = unwrap(value);
+    if (node?.type === 'BooleanLiteral') return node.value as boolean;
+    if (node?.type === 'NullLiteral') return false;
+    if (node?.type === 'StringLiteral') return !!node.value;
+    return undefined;
+  };
+  const queue = (node: Node, state: State): void => {
+    const entry = copy(state);
+    entry.live = true;
+    for (const binding of entry.values.keys()) {
+      if (!binding.immutable && (binding.global || written.has(binding))) entry.values.delete(binding);
+    }
+    deferred.push({ node, state: entry });
+  };
+  const keyEffects = (node: Node, state: State): void => {
+    const key = node.ClassElementName ?? node.PropertyName;
+    if (isNode(key) && key.type === 'PropertyName') {
+      visit(key.ComputedPropertyName, state);
+      if (!['StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral'].includes(unwrap(key.ComputedPropertyName)?.type ?? '')) effect(state, key);
+    }
+  };
+  const typeEffects = (value: unknown, state: State): void => {
+    if (Array.isArray(value)) {
+      value.forEach((child) => typeEffects(child, state)); return;
+    }
+    if (!isNode(value)) return;
+    if (value.type === 'TypeArguments' || value.type === 'TypeArgumentsExpression' || value.type === 'CallExpression') {
+      effect(state, value);
+      return;
+    }
+    // An application can initialize a specialization. Type formation is not
+    // an ordinary initializer, but its permitted effects still precede later
+    // ordinary value reads.
+    for (const [key, child] of Object.entries(value)) {
+      if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) typeEffects(child, state);
+    }
+  };
+  const widen = (value: unknown, state: State): void => {
+    if (Array.isArray(value)) {
+      value.forEach((child) => widen(child, state)); return;
+    }
+    if (!isNode(value)) return;
+    const node = value;
+    if (callable(node)) {
+      for (const key of ['ClassElementName', 'PropertyName', 'Decorators']) widen(node[key], state);
+      return;
+    }
+    if (node.type === 'FieldDefinition' && !node.static) {
+      widen(node.ClassElementName, state);
+      widen(node.Decorators, state);
+      return;
+    }
+    const target = node.type === 'AssignmentExpression' ? node.LeftHandSideExpression
+      : node.type === 'UpdateExpression' ? node.LeftHandSideExpression ?? node.UnaryExpression
+        : ['ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(node.type) ? node.LeftHandSideExpression ?? node.ForBinding
+          : node.type === 'VariableDeclaration' && node.Initializer ? node.BindingIdentifier : undefined;
+    store(target, undefined, state);
+    if (node.type === 'WithStatement' || node.type === 'RefExpression' || node.type === 'RefRebindingStatement') effect(state, node, true, true);
+    else if (['CallExpression', 'NewExpression', 'MemberExpression', 'AwaitExpression', 'YieldExpression', 'SpreadElement', 'Decorator',
+      'UnaryExpression', 'UpdateExpression', 'AdditiveExpression', 'MultiplicativeExpression', 'RelationalExpression',
+      'EqualityExpression', 'ShiftExpression', 'ExponentiationExpression', 'BitwiseANDExpression', 'BitwiseORExpression', 'BitwiseXORExpression',
+      'ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(node.type)) effect(state, node, directEval(node));
+    typeEffects(node.TypeAnnotation ?? node.TypeArguments, state);
+    children(node).forEach((child) => widen(child, state));
+  };
+  const visit = (value: unknown, state: State): Origin | undefined => {
+    if (Array.isArray(value)) {
+      let result: Origin | undefined;
+      for (const item of value) result = visit(item, state);
+      return result;
+    }
+    if (!isNode(value)) return undefined;
+    const node = value;
+    if (callable(node)) {
+      keyEffects(node, state);
+      if (node.Decorators) {
+        visit(node.Decorators, state); effect(state, node);
+      }
+      queue(node, state);
+      return undefined;
+    }
+    if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+      visit(node.ClassTail.ClassHeritage, state);
+      // Compute all names before static initialization. Neither method bodies
+      // nor instance initializers run while a class is being defined.
+      for (const member of node.ClassTail.ClassBody ?? []) keyEffects(member as Node, state);
+      for (const member of node.ClassTail.ClassBody ?? []) {
+        if (callable(member as Node) || member.type === 'FieldDefinition' && !member.static) queue(member as Node, state);
+        if (member.type === 'FieldDefinition' && member.static) visit(member.Initializer, state);
+        if (member.type === 'ClassStaticBlock') visit(member.ClassStaticBlockBody, state);
+        if ((member as Node).Decorators) {
+          visit((member as Node).Decorators, state); effect(state, member as Node);
+        }
+      }
+      if (node.Decorators) {
+        visit(node.Decorators, state); effect(state, node);
+      }
+      const origin = { source: node };
+      if (node.type === 'ClassDeclaration' && !node.ClassModifiers?.includes('partial')) store(node.BindingIdentifier, origin, state);
+      return observe(node, origin);
+    }
+    switch (node.type) {
+      case 'IdentifierReference': return observe(node, read(node, state));
+      case 'ParenthesizedExpression': return observe(node, visit(node.Expression, state));
+      case 'TypeArgumentsExpression': {
+        const base = visit(node.Expression, state);
+        effect(state, node);
+        return observe(node, base && { ...base, arguments: node.TypeArguments });
+      }
+      case 'CommaOperator': return observe(node, visit(node.ExpressionList, state));
+      case 'LexicalBinding': case 'VariableDeclaration': {
+        typeEffects(node.TypeAnnotation, state);
+        const initial = visit(node.Initializer, state);
+        if (node.BindingPattern) {
+          effect(state, node);
+          store(node.BindingPattern, undefined, state);
+        } else store(node.BindingIdentifier, initial, state);
+        return undefined;
+      }
+      case 'AssignmentExpression': {
+        const target = unwrap(node.LeftHandSideExpression);
+        if (target?.type !== 'IdentifierReference') visit(node.LeftHandSideExpression, state);
+        const initial = visit(node.AssignmentExpression, state);
+        if (target?.type !== 'IdentifierReference') effect(state, node);
+        store(target, node.AssignmentOperator === '=' && target?.type === 'IdentifierReference' ? initial : undefined, state);
+        return observe(node, node.AssignmentOperator === '=' ? initial : undefined);
+      }
+      case 'UpdateExpression':
+        visit(node.LeftHandSideExpression ?? node.UnaryExpression, state);
+        effect(state, node);
+        store(node.LeftHandSideExpression ?? node.UnaryExpression, undefined, state);
+        return undefined;
+      case 'UnaryExpression':
+        visit(node.UnaryExpression, state);
+        if (!['void', 'typeof'].includes(node.operator)) effect(state, node);
+        return undefined;
+      case 'AdditiveExpression': case 'MultiplicativeExpression': case 'ShiftExpression': case 'RelationalExpression':
+      case 'EqualityExpression': case 'ExponentiationExpression': case 'BitwiseANDExpression': case 'BitwiseORExpression': case 'BitwiseXORExpression': {
+        const operands: Record<string, string[]> = {
+          AdditiveExpression: ['AdditiveExpression', 'MultiplicativeExpression'], MultiplicativeExpression: ['MultiplicativeExpression', 'ExponentiationExpression'],
+          ShiftExpression: ['ShiftExpression', 'AdditiveExpression'], RelationalExpression: ['RelationalExpression', 'ShiftExpression'],
+          EqualityExpression: ['EqualityExpression', 'RelationalExpression'], ExponentiationExpression: ['UpdateExpression', 'ExponentiationExpression'],
+          BitwiseANDExpression: ['A', 'B'], BitwiseORExpression: ['A', 'B'], BitwiseXORExpression: ['A', 'B'],
+        };
+        for (const key of operands[node.type]) visit(node[key], state);
+        effect(state, node);
+        return undefined;
+      }
+      case 'CallExpression': case 'NewExpression': {
+        visit(node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression, state);
+        visit(node.PlacementArguments, state);
+        visit(node.Arguments, state);
+        effect(state, node, directEval(node));
+        return observe(node, undefined);
+      }
+      case 'MemberExpression':
+        visit(node.MemberExpression, state);
+        visit(node.Expression, state);
+        effect(state, node);
+        // Module namespace origin is separately proved by the linked checker.
+        return observe(node, { source: node });
+      case 'IfStatement': case 'ConditionalExpression': {
+        const condition = node.type === 'IfStatement' ? node.Expression : node.ShortCircuitExpression;
+        visit(condition, state);
+        const a = copy(state), b = copy(state);
+        const av = visit(node.type === 'IfStatement' ? node.Statement_a : node.AssignmentExpression_a, a);
+        const bv = visit(node.type === 'IfStatement' ? node.Statement_b : node.AssignmentExpression_b, b);
+        const selected = literalTruth(condition);
+        if (selected !== undefined) {
+          const chosen = selected ? a : b;
+          state.values = chosen.values; state.live = chosen.live;
+        } else join(state, a, b);
+        return observe(node, selected === true ? av : selected === false ? bv : same(av, bv) ? av : undefined);
+      }
+      case 'LogicalANDExpression': case 'LogicalORExpression': case 'CoalesceExpression': {
+        const left = node.type === 'LogicalANDExpression' ? node.LogicalANDExpression
+          : node.type === 'LogicalORExpression' ? node.LogicalORExpression : node.CoalesceExpressionHead;
+        const right = node.type === 'LogicalORExpression' ? node.LogicalANDExpression : node.BitwiseORExpression;
+        const av = visit(left, state), before = copy(state), after = copy(state);
+        const bv = visit(right, after), truth = literalTruth(left);
+        const knownConstructor = av?.source.type === 'ClassDeclaration' || av?.source.type === 'ClassExpression';
+        const takeRight = node.type === 'CoalesceExpression' ? unwrap(left)?.type === 'NullLiteral' ? true : knownConstructor ? false : undefined
+          : truth === undefined ? knownConstructor ? node.type === 'LogicalANDExpression' : undefined : node.type === 'LogicalANDExpression' ? truth : !truth;
+        if (takeRight === true) {
+          state.values = after.values; state.live = after.live;
+        } else if (takeRight === undefined) join(state, before, after);
+        return observe(node, takeRight === true ? bv : takeRight === false ? av : same(av, bv) ? av : undefined);
+      }
+      case 'ForStatement': case 'ForInStatement': case 'ForOfStatement': case 'ForAwaitStatement':
+      case 'WhileStatement': case 'DoWhileStatement': {
+        visit(node.LexicalDeclaration ?? node.VariableDeclarationList ?? node.Expression_a, state);
+        // Repeated evaluation can observe a previous iteration's writes. A
+        // single conservative entry state prevents textual order from proving
+        // a first-iteration fact for every iteration.
+        widen(node, state);
+        const entry = copy(state), body = copy(state);
+        store(node.LeftHandSideExpression, undefined, body);
+        visit(node.Expression ?? node.Expression_b, body);
+        visit(node.Statement, body);
+        visit(node.Expression_c, body);
+        body.live = true;
+        join(state, entry, body);
+        return undefined;
+      }
+      case 'TryStatement': {
+        const entry = copy(state), normal = copy(state);
+        visit(node.Block, normal);
+        widen(node.Block, entry);
+        const handlers = node.CatchClauses ?? (node.Catch ? [node.Catch] : []);
+        const failure = copy(entry);
+        failure.live = false;
+        for (const handler of handlers as Node[]) {
+          const handled = copy(entry);
+          visit(handler.Block, handled);
+          join(failure, copy(failure), handled);
+        }
+        join(state, normal, failure);
+        const wasLive = state.live;
+        state.live = true;
+        visit(node.Finally, state);
+        state.live &&= wasLive;
+        return undefined;
+      }
+      case 'ReturnStatement': case 'ThrowStatement':
+        visit(node.Expression, state);
+        state.live = false;
+        return undefined;
+      case 'BreakStatement': case 'ContinueStatement': state.live = false; return undefined;
+      case 'AwaitExpression': case 'YieldExpression':
+        children(node).forEach((child) => visit(child, state));
+        effect(state, node);
+        return undefined;
+      case 'WithStatement':
+        visit(node.Expression, state);
+        effect(state, node, true, true);
+        // Dynamic binding resolution cannot supply a lexical origin proof.
+        suppress(node.Statement);
+        return undefined;
+      case 'ObjectLiteral':
+        for (const property of node.PropertyDefinitionList ?? []) {
+          if (callable(property as Node)) {
+            visit(property, state); continue;
+          }
+          keyEffects(property as Node, state);
+          visit(property.type === 'IdentifierReference' ? property : (property as Node).AssignmentExpression ?? (property as Node).IdentifierReference, state);
+          if (property.type === 'PropertyDefinition' && !property.PropertyName) effect(state, property as Node);
+        }
+        return undefined;
+      case 'ArrayLiteral': visit(node.ElementList, state); return undefined;
+      case 'SpreadElement': visit(node.AssignmentExpression, state); effect(state, node); return undefined;
+      case 'TypeAliasDeclaration': case 'InterfaceDeclaration': case 'TypeAnnotation': case 'TypeOperatorExpression':
+        typeEffects(node, state);
+        return undefined;
+      case 'ExportDeclaration':
+        visit(node.VariableStatement ?? node.Declaration ?? node.HoistableDeclaration ?? node.ClassDeclaration ?? node.AssignmentExpression, state);
+        if (node.Decorators) {
+          visit(node.Decorators, state); effect(state, node);
+        }
+        return undefined;
+      default: {
+        if (node.type.endsWith('Literal') || ['BindingIdentifier', 'IdentifierName', 'EmptyStatement', 'ThisExpression', 'ImportDeclaration'].includes(node.type)) return undefined;
+        const transparent = ['Script', 'Module', 'ScriptBody', 'ModuleBody', 'Block', 'FunctionBody', 'AsyncBody',
+          'GeneratorBody', 'AsyncGeneratorBody', 'ClassStaticBlockBody', 'ExpressionStatement', 'LexicalDeclaration',
+          'VariableStatement', 'Finally', 'ExpressionBody', 'ConciseBody', 'AsyncConciseBody', 'NamedArgument',
+          'FormalParameter', 'SingleNameBinding', 'BindingElement', 'FormalParameters', 'UniqueFormalParameters'].includes(node.type);
+        if (!transparent) {
+          effect(state, node, true, true);
+          suppress(node);
+          return undefined;
+        }
+        children(node).forEach((child) => visit(child, state));
+        return undefined;
+      }
+    }
+  };
+  // Unsupported dynamic regions are unknown, including nested references that
+  // must not fall back to a whole-source syntactic class guess.
+  const suppress = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(suppress); return;
+    }
+    if (!isNode(value)) return;
+    if (value.type === 'IdentifierReference') observations.set(value, undefined);
+    children(value).forEach(suppress);
+  };
+  visit(root, { values: new Map(), live: true });
+  for (const { node, state } of deferred) {
+    if (node.type === 'FieldDefinition') visit(node.Initializer, state);
+    else {
+      // Parameter defaults precede the function body; a body var is not in
+      // their environment. Unknown parameter defaults may or may not run.
+      for (const key of parameterKeys) {
+        const before = copy(state), after = copy(state);
+        visit(node[key], after);
+        join(state, before, after);
+      }
+      for (const key of bodyKeys) visit(node[key], state);
+    }
+  }
+  return observations;
+}

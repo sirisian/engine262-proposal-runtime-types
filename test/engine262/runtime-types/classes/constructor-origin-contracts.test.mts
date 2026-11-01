@@ -59,8 +59,12 @@ test("heritage alias shadow good", () => {
   expect(ok("class B{x:uint8=0;}const Alias=B;function f(){const Alias=class{x:string=\"s\";};class C extends Alias{f(){this.x=\"s\";}}}")).toBe(true);
 });
 
-test("defers a mutable constructor alias", () => {
-  expect(ok("class B{x:uint8=0;}let Alias=B;class C extends Alias{f(){this.x=\"s\";}}")).toBe(true);
+test("retains a mutable constructor alias at an unaffected heritage read", () => {
+  expectStaticTypeError("class B{x:uint8=0;}let Alias=B;class C extends Alias{f(){this.x=\"s\";}}");
+});
+
+test("defers a mutable constructor alias after an affecting call", () => {
+  expect(ok("class B{x:uint8=0;}let Alias=B;function forget(){}forget();class C extends Alias{f(){this.x=\"s\";}}")).toBe(true);
 });
 
 test("defers an unknown mixin result", () => {

@@ -77,6 +77,7 @@ import { NondeterministicMember } from './evaluable-fragment.mts';
 import { ExcludedGlobalReach } from './fragment-library.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
+import { ClassValueOrigins } from './class-value-origins.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType,
 } from './iteration-types.mts';
@@ -9241,6 +9242,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
   }).ClassTail?.ClassBody ?? [];
   type ClassOrigin = ImportedConstructorOrigin;
+  const classValueOrigins = ClassValueOrigins(root);
   const constructorSelections = new WeakMap<ParseNode, ConstructorSelection>();
   // Contribution queries can reach a const before its ordinary source walk.
   // Re-enter that declaration's prepared scope, never the querying function's.
@@ -9289,7 +9291,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * callable only with a `void` or `undefined` return replaces nothing, so a
    * class carrying only such decorators is still exactly itself.
    */
-  const decoratorsReplaceNothing = (cls: ParseNode.ClassDeclaration | ParseNode.ClassExpression): boolean => (cls.Decorators ?? []).every((decorator) => {
+  const classDecorators = (cls: ParseNode.ClassDeclaration | ParseNode.ClassExpression) => cls.Decorators
+    ?? (cls.parent?.type === 'ExportDeclaration' ? cls.parent.Decorators : undefined);
+  const decoratorsReplaceNothing = (cls: ParseNode.ClassDeclaration | ParseNode.ClassExpression): boolean => (classDecorators(cls) ?? []).every((decorator) => {
     const expression = decorator.MemberExpression ?? decorator.ParenthesizedExpression ?? decorator.CallExpression;
     const type = expression ? callableForm(staticType(expression as ParseNode)) : null;
     return type?.Kind === 'function' && type.Signatures.length > 0 && type.Signatures.every((signature) => {
@@ -9393,8 +9397,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (seen.has(node) || seen.size >= 256) return undefined;
     seen.add(node);
     if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') {
-      if (!node.Decorators?.length || decoratorsReplaceNothing(node)) return { declaration: node };
+      if (!classDecorators(node)?.length || decoratorsReplaceNothing(node)) return { declaration: node };
       return bounded ? { declaration: node, bounded: true } : undefined;
+    }
+    if (classValueOrigins.has(node)) {
+      if (node.type === 'IdentifierReference' && ResolveBindingDeclaration(node, node.name)?.kind === 'type-parameter') return undefined;
+      const captured = classValueOrigins.get(node);
+      if (!captured) return undefined;
+      if (captured.source !== node) {
+        const origin = stableClassOrigin(captured.source, seen, bounded);
+        return origin && (captured.arguments ? { ...origin, arguments: captured.arguments, selection: undefined } : origin);
+      }
     }
     if (node.type === 'TypeArgumentsExpression') {
       const origin = stableClassOrigin(node.Expression, seen, bounded);

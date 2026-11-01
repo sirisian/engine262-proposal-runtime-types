@@ -591,21 +591,23 @@
       }
     },
     {
-      "name": "mutable consumer alias retains dynamic checking",
+      "name": "mutable consumer alias retains its source-position origin",
       "modules": {
         "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
         "main": "import {Has,E} from \"dep\";let Alias=E;class D extends Alias{get():string{return \"ok\";}}"
       },
       "expected": {
-        "status": "fulfilled",
+        "status": "rejected",
         "loaded": [
           "main",
           "dep"
         ],
-        "bodyEntries": [
-          "dep",
-          "main"
-        ]
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INHERITED_CONTRACT",
+          "phase": "static"
+        }
       }
     },
     {
