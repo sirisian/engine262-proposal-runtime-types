@@ -290,6 +290,15 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
     // or arbitrary result values. Preserve the target's shape and require the
     // enclosing nominal's exact argument comparison after completing leaves.
     if (argument) {
+      if (copy.Kind === 'parameter' && evidence?.Kind === 'parameter'
+        && copy.Name === evidence.Name && copy.CapturedDeclaration === evidence.CapturedDeclaration) {
+        if (copy.Constraint) copy.Constraint = complete(copy.Constraint, evidence.Constraint, signature, true);
+        return copy;
+      }
+      if (copy.Kind === 'family-pattern' && evidence?.Kind === 'family-pattern') {
+        copy.Template = complete(copy.Template, evidence.Template, signature, true);
+        return copy;
+      }
       if (copy.Kind === 'nominal' && evidence?.Kind === 'nominal'
         && copy.Declaration === evidence.Declaration && copy.LibraryName === evidence.LibraryName
         && copy.DeclarationIdentity === evidence.DeclarationIdentity) {
@@ -345,6 +354,8 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
             || !!(to as SignatureRecord & { Untyped?: boolean }).Untyped !== !!(from as SignatureRecord & { Untyped?: boolean }).Untyped
             || parameters.some((parameter, i) => parameter.Declaration !== supplied[i].Declaration)) continue;
           const candidate: SignatureRecord = { ...to,
+            ...(to.TypeParameters ? { TypeParameters: to.TypeParameters.map((parameter, i) => ({ ...parameter,
+              Constraint: parameter.Constraint && complete(parameter.Constraint, supplied[i]?.Constraint, true, true) })) } : {}),
             Parameters: to.Parameters.map((parameter, i) => ({ ...parameter,
               Type: complete(parameter.Type, from.Parameters[i]?.Type, true, true) })),
             // A signature result is a type description, including protocol

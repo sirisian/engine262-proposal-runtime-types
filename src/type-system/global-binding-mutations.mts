@@ -14,7 +14,7 @@ type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'Object' | '
 const allOrigins: readonly Origin[] = ['global', 'eval', 'Function', 'dynamic-function', 'Object', 'Reflect',
   'String', 'Symbol', 'getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor', 'getOwnPropertyDescriptors', 'prototype-setter', 'create', 'setPrototypeOf', 'reflect-setPrototypeOf', 'function-call', 'function-apply', 'function-bind', 'set', 'reflect-defineProperty', 'defineProperty', 'deleteProperty', 'defineProperties', 'assign', 'opaque-value', 'opaque-callable'];
 type Binding = { node: ParseNode, name: string };
-type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean };
+type Effect = { node: ParseNode, names?: ReadonlySet<string>, lexical?: boolean, deferredOnly?: boolean, source?: ParseNode };
 const ignored = new Set(['parent', 'location', 'sourceText', 'strict']);
 const functionKeys = ['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'];
 const isNode = (value: unknown): value is Node => !!value && typeof value === 'object'
@@ -275,7 +275,32 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     primitiveKeyProofs.set(node, stable);
     return stable;
   };
-  const values = GlobalEffectValues(nodes, {
+  const intrinsicTypeNames = new Map<ParseNode.Type, string>();
+  const unavailableIntrinsicTypes = new Set<ParseNode.Type>();
+  const intrinsicAdmission = (type: ParseNode.Type): string | undefined => {
+    if (unavailableIntrinsicTypes.has(type)) return undefined;
+    if (type.type === 'PredefinedType') return type.keyword;
+    if (type.type === 'LiteralType') return type.kind === 'imaginary' ? undefined : type.kind;
+    if (type.type !== 'TypeReference' || type.TypeArguments) return undefined;
+    const name = type.TypeName;
+    if (name.MemberNames.length || ResolveBindingDeclaration(name.IdentifierReference, name.IdentifierReference.name)) return undefined;
+    const spelling = name.IdentifierReference.name;
+    if (spelling === 'undefined' && externalValue(spelling) === Value.undefined) return spelling;
+    if (!/^(?:any|void|string|boolean|number|bigint|uint(?:8|16|32|64)?|int(?:8|16|32|64)?|float(?:16|32|64))$/.test(spelling)
+        || environment !== realm.GlobalEnv || realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(spelling))) return undefined;
+    // These spellings fall back to intrinsic types only when no value binding
+    // exists. Prove absence from raw ordinary descriptors; never run a getter.
+    const seen = new Set<ObjectValue>();
+    for (let at: Value = realm.GlobalObject; at !== Value.null;) {
+      if (!(at instanceof ObjectValue) || seen.has(at) || seen.size >= 256
+          || at.Get !== ObjectValue.prototype.Get || !('Prototype' in at) || at.properties.has(Value(spelling))) return undefined;
+      seen.add(at); at = at.Prototype as Value;
+    }
+    if (inputs.get(bindingAt(name.IdentifierReference, spelling))?.length) return undefined;
+    intrinsicTypeNames.set(type, spelling);
+    return spelling;
+  };
+  const collectValues = () => GlobalEffectValues(nodes, {
     objectPrototype: realm.Intrinsics['%Object.prototype%'],
     arrayPrototype: realm.Intrinsics['%Array.prototype%'],
     functionPrototype: (node) => realm.Intrinsics[node?.type.startsWith('AsyncGenerator') ? '%AsyncGeneratorFunction.prototype%'
@@ -285,11 +310,92 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       const declaration = ResolveBindingDeclaration(node, node.name);
       return !declaration || declaration.kind === 'import' ? externalValue(node.name) : undefined;
     },
-    globalBinding: (node) => globalName(node, true), nativeOrigins, globalData: (key) => intrinsicData(realm.GlobalObject, Value(key)), unknown: allOrigins, optional: (node) => optionalView(node as Node),
+    globalBinding: (node) => globalName(node, true),
+    intrinsicAdmission,
+    primitiveConversion: (node) => unwrap(node.Expression)?.type === 'NumericLiteral'
+      && /^(?:number|bigint|uint|int|float)/.test(intrinsicAdmission(node.Type) ?? ''),
+    admissionType: (node) => {
+      if (node.type !== 'BindingIdentifier' && node.type !== 'IdentifierReference') return undefined;
+      if (node.type === 'BindingIdentifier') return (node.parent as { TypeAnnotation?: ParseNode.TypeAnnotation } | undefined)?.TypeAnnotation?.Type;
+      const declaration = ResolveBindingDeclaration(node, node.name);
+      if (declaration?.kind === 'parameter') {
+        const pending = functionKeys.flatMap((key) => {
+          const part = (declaration.node as Node)[key];
+          return (Array.isArray(part) ? part : [part]).filter(isNode);
+        });
+        while (pending.length) {
+          const part = pending.pop()!;
+          if (part.type === 'BindingIdentifier' && part.name === node.name) {
+            for (let at = part.parent; at && at !== declaration.node; at = at.parent) {
+              const annotation = (at as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type;
+              if (annotation) return annotation;
+            }
+            return undefined;
+          }
+          for (const [key, value] of Object.entries(part)) if (!ignored.has(key) && key !== 'Initializer' && key !== 'TypeAnnotation') {
+            pending.push(...(Array.isArray(value) ? value : [value]).filter(isNode));
+          }
+        }
+        return undefined;
+      }
+      return (declaration?.node as { TypeAnnotation?: ParseNode.TypeAnnotation } | undefined)?.TypeAnnotation?.Type;
+    },
+    opaqueGlobalRead: (node) => node.parent?.type !== 'TypeName' && !ResolveBindingDeclaration(node, node.name) && globalName(node, true) && externalValue(node.name) === undefined,
+    opaqueGlobalStore: (key) => {
+      const seen = new Set<ObjectValue>();
+      for (let at: Value = realm.GlobalObject; at !== Value.null;) {
+        if (!(at instanceof ObjectValue) || seen.has(at) || seen.size >= 256
+          || at.Set !== ObjectValue.prototype.Set || at.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
+          || at.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf || !('Prototype' in at)) return true;
+        seen.add(at);
+        const typed = (realm.GlobalObject as ObjectValue & { TypedProperties?: ReadonlyMap<string, unknown> }).TypedProperties;
+        if (key === undefined ? typed?.size : typed?.has(key)) return true;
+        const descriptor = key === undefined ? undefined : at.properties.get(Value(key));
+        const descriptors = key === undefined ? at.properties.values() : descriptor ? [descriptor] : [];
+        for (const entry of descriptors) {
+          if (entry.Setter !== undefined && entry.Setter !== Value.undefined
+            && intrinsicEffectOrigin(entry.Setter) !== 'prototype-setter') return true;
+        }
+        if (descriptor) return false;
+        at = at.Prototype as Value;
+      }
+      return false;
+    },
+    nativeOrigins, globalData: (key) => intrinsicData(realm.GlobalObject, Value(key)), unknown: allOrigins, optional: (node) => optionalView(node as Node),
   });
+  let values = collectValues();
+  // Builtin type spellings are value bindings too. A property/reflection alias
+  // can replace one without a direct assignment to its identifier. Remove
+  // unsupported intrinsic hypotheses and rebuild their dependent may-flows.
+  // Hypotheses only disappear; cap rebuilding and conservatively stand every
+  // remaining hypothesis down if the small fixed-point budget is exhausted.
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    for (const [type, name] of intrinsicTypeNames) {
+      if (unavailableIntrinsicTypes.has(type)) continue;
+      let laterActivation = false;
+      for (let at = type.parent; at; at = at.parent) if (functionKeys.some((key) => key in at)
+        || at.type === 'FieldDefinition' && !at.static || /^(For|While|DoWhile)/.test(at.type)) laterActivation = true;
+      const affected = values.globalWrites().some((write) => {
+        if (write.key !== undefined && write.key !== name) return false;
+        if (laterActivation) return true;
+        return (values.executionSites(write.site) ?? [write.site]).some((site) => !site.location || !type.location
+          || site.location.endIndex <= type.location.startIndex);
+      });
+      if (affected) {
+        unavailableIntrinsicTypes.add(type); changed = true;
+      }
+    }
+    if (!changed) break;
+    if (pass === 3) for (const type of intrinsicTypeNames.keys()) unavailableIntrinsicTypes.add(type);
+    values = collectValues();
+  }
   const origins = (value: unknown): Set<string> => values.origins(isNode(value) ? value : undefined);
-  const record = (node: Node, key?: string, lexical = false): void => {
-    effects.push({ node, names: key === undefined ? undefined : new Set([key]), lexical });
+  const record = (node: Node, key?: string | ReadonlySet<string>, lexical = false): void => {
+    const names = typeof key === 'string' ? new Set([key]) : key;
+    const executions = values.executionSites(node);
+    effects.push({ node, names, lexical, deferredOnly: executions !== undefined });
+    for (const execution of executions ?? []) effects.push({ node: execution as Node, names, lexical, source: node });
   };
   const write = (value: unknown, at: Node): void => {
     const node = unwrap(value);
@@ -353,7 +459,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       record(node, stringKey(args[1]));
     } else if (kinds.has('assign') || kinds.has('defineProperties')) {
       for (const source of kinds.has('assign') ? args.slice(1) : args.slice(1, 2)) {
-        effects.push({ node, names: objectKeys(source) });
+        record(node, objectKeys(source));
       }
     } else if (!kinds.has('Function') && !kinds.has('create')) {
       // Giving an opaque operation the global object exposes every property.
@@ -368,7 +474,8 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   const deferred = (node: ParseNode): boolean => {
     let child = node;
     for (let at = node.parent; at; child = at, at = at.parent) {
-      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition') && at.ClassElementName === child) continue;
+      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition')
+        && (at.ClassElementName === child || at.Decorators?.some((decorator) => decorator === child))) continue;
       if (functionKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
         || ['ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement', 'WhileStatement', 'DoWhileStatement'].includes(at.type)) return true;
     }
@@ -406,9 +513,53 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     return inPattern(read, effect) || !effect.location || !read.location || effect.location.endIndex <= read.location.startIndex;
   };
-  const affected = (node: ParseNode.IdentifierReference): boolean => values.exhausted() && globalName(node, false) || effects.some((effect) =>
-    globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && (deferred(node) || deferred(effect.node)
-      || precedes(effect.node, node)));
+  const provenDelegationCallees = new Set<ParseNode.IdentifierReference>([...provenDelegations].flatMap((yielded) => {
+    const call = unwrap(yielded.AssignmentExpression);
+    const callee = call?.type === 'CallExpression' ? unwrap(call.CallExpression) : undefined;
+    return callee?.type === 'IdentifierReference' ? [callee] : [];
+  }));
+  // This independent protocol proof already establishes the local callee at
+  // the first resumption. A later opaque resume cannot erase that boundary.
+  const activationOwner = (node: ParseNode): ParseNode | undefined => {
+    let child = node;
+    for (let at = node.parent; at; child = at, at = at.parent) {
+      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition')
+        && (at.ClassElementName === child || at.Decorators?.some((decorator) => decorator === child))) continue;
+      if (functionKeys.some((key) => key in at)) return at;
+    }
+    return undefined;
+  };
+  const beforeInActivation = (effect: ParseNode, read: ParseNode, owner: ParseNode): boolean => {
+    // An effect after a capture can precede its next loop iteration, but an
+    // ordinary later operation cannot erase that capture in this activation.
+    for (let at = read.parent; at && at !== owner; at = at.parent) {
+      if (/^(For|While|DoWhile)/.test(at.type) && contains(at, effect)) return true;
+    }
+    return precedes(effect, read);
+  };
+  const effectMayPrecede = (effect: Effect, read: ParseNode): boolean => {
+    const owner = activationOwner(read);
+    if (!owner) return !effect.deferredOnly && (deferred(read) || deferred(effect.node) || precedes(effect.node, read));
+    if (effect.deferredOnly) {
+      const sites = values.executionSites(effect.node, owner);
+      return sites === undefined || sites.some((site) => beforeInActivation(site, read, owner));
+    }
+    const reads = values.executionSites(read);
+    // An uncalled body's declaration still sees effects that actually execute
+    // in the surrounding source before a possible later activation.
+    if (!reads?.length) return true;
+    return reads.some((site) => {
+      // The original body effect above supplies ordering within this same
+      // invocation. Its projected call boundary must not precede itself.
+      // Opaque invocation work (for example apply's argument access) and
+      // evaluation of the callee and arguments precede entry to the body.
+      if (effect.node === site) return !effect.source || values.activationMayRepeat(read);
+      if (contains(site, effect.node)) return true;
+      return deferred(site) || deferred(effect.node) || precedes(effect.node, site);
+    });
+  };
+  const affected = (node: ParseNode.IdentifierReference): boolean => !provenDelegationCallees.has(node) && (values.exhausted() && globalName(node, false) || effects.some((effect) =>
+    globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && effectMayPrecede(effect, node)));
   const affects = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
     const node = unwrap(expression);
     if (!node) return false;

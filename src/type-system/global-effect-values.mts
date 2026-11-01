@@ -1,4 +1,5 @@
 import { R } from '../abstract-ops/spec-types.mts';
+import { HasOwnClassOperator, HasOwnClassConversion } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { JSStringValue, NumberValue, ObjectValue, Value } from '../value.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
@@ -7,13 +8,13 @@ import { OrdinaryDataReadSupported } from './runtime.mts';
 import { ScalarRestOwner } from './scalar-rests.mts';
 
 type Node = ParseNode & Record<string, unknown>;
-type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, primitiveKinds?: Set<'null' | 'undefined' | 'other'>, stringLength?: number, expression?: ParseNode };
+type Flow = { absent?: boolean, primitiveContract?: string, values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, primitiveKinds?: Set<'null' | 'undefined' | 'other'>, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
 type PropertyWrite = { key: string | undefined, source: Flow, site?: ParseNode };
 type PrototypeChange = { source: Flow, site: ParseNode };
-type Aggregate = { kind: 'aggregate', typedKeys: Set<string | undefined>, writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
+type Aggregate = { kind: 'aggregate', sourceClass?: ParseNode.ClassDeclaration | ParseNode.ClassExpression, typedKeys: Set<string | undefined>, writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
-type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
+type Callable = { kind: 'callable', sites: Set<ParseNode>, parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], packed?: Flow, receiver: Flow, properties: Aggregate };
 type Candidate = string | Aggregate | Callable | Bound;
 const isNode = (value: unknown): value is Node => !!value && typeof value === 'object' && typeof (value as Node).type === 'string';
@@ -39,6 +40,11 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   propertyKey: (node: ParseNode) => string | undefined,
   external: (node: ParseNode.IdentifierReference) => Value | undefined,
   globalBinding: (node: ParseNode.IdentifierReference) => boolean,
+  intrinsicAdmission: (type: ParseNode.Type) => string | undefined,
+  admissionType: (node: ParseNode) => ParseNode.Type | undefined,
+  primitiveConversion: (node: ParseNode.TypedConversionExpression) => boolean,
+  opaqueGlobalRead: (node: ParseNode.IdentifierReference) => boolean,
+  opaqueGlobalStore: (key: string | undefined) => boolean,
   nativeOrigins: (value: Value) => readonly string[],
   globalData: (key: string) => Value | undefined,
   unknown: readonly string[],
@@ -50,6 +56,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   element: (node: ParseNode | undefined, index: number) => Set<string>,
   exhausted: () => boolean,
   opaqueEffects: () => ReadonlySet<ParseNode>,
+  executionSites: (site: ParseNode, within?: ParseNode) => readonly ParseNode[] | undefined,
+  activationMayRepeat: (site: ParseNode) => boolean,
   globalWrites: () => readonly { site: ParseNode, key?: string }[],
 } {
   const expressions = new Map<ParseNode, Flow>();
@@ -163,7 +171,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   const deferred = (node: ParseNode): boolean => {
     let child = node;
     for (let at = node.parent; at; child = at, at = at.parent) {
-      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition') && at.ClassElementName === child) continue;
+      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition')
+        && (at.ClassElementName === child || at.Decorators?.some((decorator) => decorator === child))) continue;
       if (parameterKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
         || /^(For|While|DoWhile)/.test(at.type)) return true;
     }
@@ -252,7 +261,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           && matchingKey(change.key, hook.key) && mayPrecede(hook.site, change.site) && mayPrecede(change.site, site))) continue;
         observed.add(hook);
         const result = newFlow();
-        invoke(written ? hook.set : hook.get, written ? [written] : [], receiver, result, undefined, site);
+        invoke(written ? hook.set : hook.get, written ? [written] : [], receiver, result, undefined, site, undefined, true);
         read?.(hook.key, result);
       }
     };
@@ -272,132 +281,140 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     };
     globalObject.writeUsers.add(update); update();
   };
-  const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode, receiver = base, path = new Set<Aggregate>()): void => watch(base, (value) => {
-    if (typeof value === 'string') {
-      if (value === 'opaque-value') {
-        add(to, value);
-        if (site) opaqueEffects.add(site);
-      }
-      if (value === 'global') globalPropertyAt(key, to, site);
-      if (value === 'global' && key === 'globalThis') add(to, 'global');
-      else if (value === 'global' && key && ['String', 'Symbol', 'Object', 'Reflect'].includes(key)) {
-        const data = options.globalData(key);
-        if (data) nativeValue(data, to);
-        else {
+  const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode, receiver = base, path = new Set<Aggregate>()): void => {
+    if (site) pendingLoads.push({ source: base, result: to, key, site });
+    watch(base, (value) => {
+      if (typeof value === 'string') {
+        if (value === 'opaque-value') {
+          add(to, value);
+          if (site) opaqueEffects.add(site);
+        }
+        if (value === 'global') globalPropertyAt(key, to, site);
+        if (value === 'global' && key === 'globalThis') add(to, 'global');
+        else if (value === 'global' && key && ['String', 'Symbol', 'Object', 'Reflect'].includes(key)) {
+          const data = options.globalData(key);
+          if (data) nativeValue(data, to);
+          else {
+            add(to, 'opaque-value');
+            if (site) opaqueEffects.add(site);
+          }
+        } else if (value === 'global' && key && ['eval', 'Function'].includes(key)) add(to, key);
+      } else {
+        const object = propertiesOf(value)!;
+        if (object.sourceClass && key !== 'prototype') {
+          if (site) opaque(to, site);
+          else add(to, 'opaque-value');
+          return;
+        }
+        if (path.has(object) || path.size >= 256) {
+          add(to, 'opaque-value');
+          if (site) opaqueEffects.add(site);
+          return;
+        }
+        const next = new Set(path); next.add(object);
+        const adapter = key !== undefined && ['call', 'apply', 'bind'].includes(key);
+        const descriptor = key === undefined ? undefined : object.native?.properties.get(Value(key));
+        const inheritedOrdinary = path.size > 0 && object.native?.Get === ObjectValue.prototype.Get
+          && object.native.GetOwnProperty === ObjectValue.prototype.GetOwnProperty
+          && object.native.GetPrototypeOf === ObjectValue.prototype.GetPrototypeOf && 'Prototype' in object.native;
+        accessHooks(object, key, receiver, site, (_key, result) => edge(result, to));
+        let followedPrototype = false;
+        const exposePrototype = (deletion: boolean): void => {
+          if (followedPrototype) return;
+          const prototype = object.native && 'Prototype' in object.native ? object.native.Prototype : object.prototype;
+          followedPrototype = !!object.prototypeFlow || prototype instanceof ObjectValue || prototype === Value.null || deletion;
+          if (object.prototypeFlow) load(object.prototypeFlow, key, to, site, receiver, next);
+          if (prototype instanceof ObjectValue && prototype !== object.native) {
+            const parent = newFlow(); nativeValue(prototype, parent);
+            load(parent, key, to, site, receiver, next);
+          } else if (deletion && prototype !== Value.null && !object.prototypeFlow) {
+            // Source aggregates without an established prototype cannot certify
+            // that removal reveals no inherited getter or callable.
+            add(to, 'opaque-value');
+            if (site) opaqueEffects.add(site);
+          }
+        };
+        if ((!object.native || inheritedOrdinary) && canInherit(object, key, site)
+          || adapter && !descriptor && !object.ownKeys.has(key!)) exposePrototype(false);
+        observePrototypes(object, site, (change) => {
+          load(change.source, key, to, site, receiver, next);
+          if (!object.native && !object.prototype && !object.prototypeFlow) {
+            add(to, 'opaque-value');
+            if (site) opaqueEffects.add(site);
+          }
+        }, key, true);
+        if (path.size && !object.native && !object.prototype && !object.prototypeFlow && canInherit(object, key, site)) {
           add(to, 'opaque-value');
           if (site) opaqueEffects.add(site);
         }
-      } else if (value === 'global' && key && ['eval', 'Function'].includes(key)) add(to, key);
-    } else {
-      const object = propertiesOf(value)!;
-      if (path.has(object) || path.size >= 256) {
-        add(to, 'opaque-value');
-        if (site) opaqueEffects.add(site);
-        return;
-      }
-      const next = new Set(path); next.add(object);
-      const adapter = key !== undefined && ['call', 'apply', 'bind'].includes(key);
-      const descriptor = key === undefined ? undefined : object.native?.properties.get(Value(key));
-      const inheritedOrdinary = path.size > 0 && object.native?.Get === ObjectValue.prototype.Get
-        && object.native.GetOwnProperty === ObjectValue.prototype.GetOwnProperty
-        && object.native.GetPrototypeOf === ObjectValue.prototype.GetPrototypeOf && 'Prototype' in object.native;
-      accessHooks(object, key, receiver, site, (_key, result) => edge(result, to));
-      let followedPrototype = false;
-      const exposePrototype = (deletion: boolean): void => {
-        if (followedPrototype) return;
-        const prototype = object.native && 'Prototype' in object.native ? object.native.Prototype : object.prototype;
-        followedPrototype = !!object.prototypeFlow || prototype instanceof ObjectValue || prototype === Value.null || deletion;
-        if (object.prototypeFlow) load(object.prototypeFlow, key, to, site, receiver, next);
-        if (prototype instanceof ObjectValue && prototype !== object.native) {
-          const parent = newFlow(); nativeValue(prototype, parent);
-          load(parent, key, to, site, receiver, next);
-        } else if (deletion && prototype !== Value.null && !object.prototypeFlow) {
-          // Source aggregates without an established prototype cannot certify
-          // that removal reveals no inherited getter or callable.
-          add(to, 'opaque-value');
-          if (site) opaqueEffects.add(site);
-        }
-      };
-      if ((!object.native || inheritedOrdinary) && canInherit(object, key, site)
-        || adapter && !descriptor && !object.ownKeys.has(key!)) exposePrototype(false);
-      observePrototypes(object, site, (change) => {
-        load(change.source, key, to, site, receiver, next);
-        if (!object.native && !object.prototype && !object.prototypeFlow) {
-          add(to, 'opaque-value');
-          if (site) opaqueEffects.add(site);
-        }
-      }, key, true);
-      if (path.size && !object.native && !object.prototype && !object.prototypeFlow && canInherit(object, key, site)) {
-        add(to, 'opaque-value');
-        if (site) opaqueEffects.add(site);
-      }
-      const removed = (): void => {
-        if (followedPrototype || descriptor?.Configurable === Value.false) return;
-        for (const change of object.deletions) {
-          if (exhausted || --remaining < 0) {
-            exhausted = true;
-            return;
-          }
-          if (matchingKey(key, change.key) && beforePrototypeUse(change.site, site)) {
-            exposePrototype(true);
-            return;
-          }
-        }
-      };
-      object.deletionUsers.add(removed);
-      removed();
-      if (inheritedOrdinary && site) {
-        // Ordinary inherited data lookup and proven absence run no user code.
-        // Accessors need their own identity/receiver proof, even for an unknown
-        // primitive key. Never probe a getter to discover that proof.
-        const descriptors = key === undefined ? object.native!.properties.values() : descriptor ? [descriptor] : [];
-        for (const found of descriptors) {
-          if (--remaining < 0) {
-            exhausted = true; break;
-          }
-          if (found.Value !== undefined || found.Getter === Value.undefined) continue;
-          if (!isIntrinsicPrototypeGetter(found.Getter)) {
-            opaqueEffects.add(site); continue;
-          }
-          pendingPrototypeReads.push({ source: receiver, site });
-          watch(receiver, (candidate) => {
-            const base = propertiesOf(candidate);
-            if (!base || (base.native ? base.native.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf : !base.ordinaryPrototypeMutation)) {
-              opaque(to, site); return;
-            }
-            edge(prototypeAt(base, site), to);
-          });
-        }
-      }
-      if (object.native && !inheritedOrdinary && (key === undefined || descriptor?.Value === undefined && (!adapter || descriptor))) {
-        if (site) opaqueEffects.add(site);
-        add(to, 'opaque-value');
-      }
-      if (key === undefined) {
-        if (object.native) for (const name of object.native.properties.keys()) {
-          if (typeof name === 'string') slot(object, name);
-          else if ('stringValue' in name) slot(object, name.stringValue());
-        }
-        edge(object.all, to);
-      } else if (site && descriptor?.Value && object.native && options.nativeOrigins(descriptor.Value).length) {
-        // Later ordinary stores must not retarget a captured intrinsic property.
-        // Keep the initial value and only writes that may precede this lookup.
-        nativeValue(intrinsicData(object.native, Value(key)), to);
-        const seen = new Set<PropertyWrite>();
-        const update = (): void => {
-          for (const write of object.writes) {
+        const removed = (): void => {
+          if (followedPrototype || descriptor?.Configurable === Value.false) return;
+          for (const change of object.deletions) {
             if (exhausted || --remaining < 0) {
               exhausted = true;
               return;
             }
-            if (seen.has(write) || !matchingKey(key, write.key) || write.site && !beforePrototypeUse(write.site, site)) continue;
-            seen.add(write); edge(write.source, to);
+            if (matchingKey(key, change.key) && beforePrototypeUse(change.site, site)) {
+              exposePrototype(true);
+              return;
+            }
           }
         };
-        object.writeUsers.add(update); update();
-      } else edge(slot(object, key), to);
-    }
-  });
+        object.deletionUsers.add(removed);
+        removed();
+        if (inheritedOrdinary && site) {
+          // Ordinary inherited data lookup and proven absence run no user code.
+          // Accessors need their own identity/receiver proof, even for an unknown
+          // primitive key. Never probe a getter to discover that proof.
+          const descriptors = key === undefined ? object.native!.properties.values() : descriptor ? [descriptor] : [];
+          for (const found of descriptors) {
+            if (--remaining < 0) {
+              exhausted = true; break;
+            }
+            if (found.Value !== undefined || found.Getter === Value.undefined) continue;
+            if (!isIntrinsicPrototypeGetter(found.Getter)) {
+              opaqueEffects.add(site); continue;
+            }
+            pendingPrototypeReads.push({ source: receiver, site });
+            watch(receiver, (candidate) => {
+              const base = propertiesOf(candidate);
+              if (!base || (base.native ? base.native.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf : !base.ordinaryPrototypeMutation)) {
+                opaque(to, site); return;
+              }
+              edge(prototypeAt(base, site), to);
+            });
+          }
+        }
+        if (object.native && !inheritedOrdinary && (key === undefined || descriptor?.Value === undefined && (!adapter || descriptor))) {
+          if (site) opaqueEffects.add(site);
+          add(to, 'opaque-value');
+        }
+        if (key === undefined) {
+          if (object.native) for (const name of object.native.properties.keys()) {
+            if (typeof name === 'string') slot(object, name);
+            else if ('stringValue' in name) slot(object, name.stringValue());
+          }
+          edge(object.all, to);
+        } else if (site && descriptor?.Value && object.native && options.nativeOrigins(descriptor.Value).length) {
+          // Later ordinary stores must not retarget a captured intrinsic property.
+          // Keep the initial value and only writes that may precede this lookup.
+          nativeValue(intrinsicData(object.native, Value(key)), to);
+          const seen = new Set<PropertyWrite>();
+          const update = (): void => {
+            for (const write of object.writes) {
+              if (exhausted || --remaining < 0) {
+                exhausted = true;
+                return;
+              }
+              if (seen.has(write) || !matchingKey(key, write.key) || write.site && !beforePrototypeUse(write.site, site)) continue;
+              seen.add(write); edge(write.source, to);
+            }
+          };
+          object.writeUsers.add(update); update();
+        } else edge(slot(object, key), to);
+      }
+    });
+  };
   const recordDataWrite = (object: Aggregate, key: string | undefined, from: Flow, site?: ParseNode): void => {
     object.mutations.add(key);
     object.writes.push({ key, source: from, site });
@@ -494,11 +511,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }, key, true);
   });
   const store = (base: Flow, key: string | undefined, from: Flow, site?: ParseNode, receiver = base, writeSite = site): void => {
-    if (site) storeEffects(base, key, from, receiver, site);
+    if (site) {
+      storeEffects(base, key, from, receiver, site);
+      pendingReceivers.push({ source: base, site, store: true });
+    }
     watch(base, (value) => {
       if (value === 'global') {
         recordDataWrite(globalObject, key, from, writeSite);
-        if (site) globalWrites.push({ site, key });
+        if (site) {
+          globalWrites.push({ site, key });
+          if (options.opaqueGlobalStore(key)) opaqueEffects.add(site);
+        }
       } else if (!site) {
         // Descriptor definition bypasses setters, preserving its write position.
         const object = propertiesOf(value);
@@ -506,18 +529,21 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       }
     });
   };
-  const remove = (base: Flow, key: string | undefined, site: ParseNode): void => watch(base, (value) => {
-    if (value === 'global') globalWrites.push({ site, key });
-    else if (value === 'opaque-value') opaqueEffects.add(site);
-    else if (typeof value !== 'string') {
-      const object = propertiesOf(value)!;
-      if (object.native && object.native.Delete !== ObjectValue.prototype.Delete) opaqueEffects.add(site);
-      // Deletion changes later lookup; it does not invoke an own getter/setter
-      // and does not retract historical values from this may-flow graph.
-      object.deletions.push({ key, site });
-      for (const update of object.deletionUsers) update();
-    }
-  });
+  const remove = (base: Flow, key: string | undefined, site: ParseNode): void => {
+    pendingReceivers.push({ source: base, site, store: false });
+    watch(base, (value) => {
+      if (value === 'global') globalWrites.push({ site, key });
+      else if (value === 'opaque-value') opaqueEffects.add(site);
+      else if (typeof value !== 'string') {
+        const object = propertiesOf(value)!;
+        if (object.native && object.native.Delete !== ObjectValue.prototype.Delete) opaqueEffects.add(site);
+        // Deletion changes later lookup; it does not invoke an own getter/setter
+        // and does not retract historical values from this may-flow graph.
+        object.deletions.push({ key, site });
+        for (const update of object.deletionUsers) update();
+      }
+    });
+  };
   const binding = (node: Node, name: string): Flow => {
     const owner = options.binding(node, name);
     let found = bindings.get(owner);
@@ -534,6 +560,11 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     add(result, 'opaque-value');
     opaqueEffects.add(site);
   };
+  const pendingInvocations: { source: Flow, result: Flow, site: ParseNode, absent: boolean }[] = [];
+  const pendingReceivers: { source: Flow, site: ParseNode, store: boolean }[] = [];
+  const pendingLoads: { source: Flow, result: Flow, key?: string, site: ParseNode }[] = [];
+  const pendingOperators: { sources: Flow[], result: Flow, site: ParseNode }[] = [];
+  const pendingCoercions: { source: Flow, site: ParseNode }[] = [];
   const pendingOperations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean, arguments?: boolean, creationTarget?: Flow }[] = [];
   const pendingDescriptorTypes: { object: Aggregate, key?: string, site: ParseNode, descriptor: Aggregate, initial: boolean }[] = [];
   const pendingDescriptorReads: { source: Flow, result: Flow, site: ParseNode, objectCoercion: boolean, all: boolean, prototype: ObjectValue }[] = [];
@@ -591,7 +622,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   // only to distinguish null prototypes from ignored literal prototype values;
   // these facts do not establish a callable contract or execute a conversion.
   const unknownValue = 16, objectValue = 1, nullValue = 2, undefinedValue = 4, otherPrimitive = 8;
-  const prototypeValueFacts = (source: Flow, ordinaryTarget: boolean, seen = new Set<Flow>()): number => {
+  const prototypeValueFacts = (source: Flow, ordinaryTarget: boolean, seen = new Set<Flow>(), globalTarget = false): number => {
     if (seen.has(source) || seen.size >= 256 || exhausted) return unknownValue;
     if (--remaining < 0) {
       exhausted = true;
@@ -603,7 +634,11 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       else facts |= otherPrimitive;
     }
     for (const value of source.values) {
-      if (value === 'opaque-value' || value === 'global') return unknownValue;
+      if (value === 'opaque-value' || value === 'global' && !globalTarget) return unknownValue;
+      if (value === 'global') {
+        facts |= objectValue;
+        continue;
+      }
       const object = propertiesOf(value);
       if (!object) continue;
       if (ordinaryTarget && (object.native ? object.native.SetPrototypeOf !== ObjectValue.prototype.SetPrototypeOf : !object.ordinaryPrototypeMutation)) return unknownValue;
@@ -611,7 +646,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     seen.add(source);
     for (const input of inputs.get(source) ?? []) {
-      const inputFacts = prototypeValueFacts(input, ordinaryTarget, seen);
+      const inputFacts = prototypeValueFacts(input, ordinaryTarget, seen, globalTarget);
       if (inputFacts === unknownValue) {
         seen.delete(source);
         return unknownValue;
@@ -905,11 +940,137 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     pendingOperations.push({ source, result: slot(copy, undefined), site });
     return result;
   };
+  const literalAdmission = (source: Flow, seen = new Set<Flow>()): boolean => {
+    if (--remaining < 0) {
+      exhausted = true; return false;
+    }
+    if (seen.has(source) || seen.size >= 256 || source.values.size) return false;
+    if (source.absent || source.primitiveContract) return true;
+    const node = source.expression;
+    // A bare intrinsic primitive can fit, convert numerically, or fail. None
+    // of those outcomes invokes a source-class conversion or a meta hook.
+    if (node?.type === 'NumericLiteral') return !node.Imaginary;
+    if (node?.type === 'TypedConversionExpression' && options.primitiveConversion(node)) return true;
+    if (node && ['StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(node.type)) return true;
+    if (source.primitiveKinds?.size === 1 && source.primitiveKinds.has('undefined')) return true;
+    const sources = inputs.get(source);
+    if (!sources?.size) return false;
+    seen.add(source);
+    const result = [...sources].every((input) => literalAdmission(input, seen));
+    seen.delete(source);
+    return result;
+  };
+  const simpleSignature = (type: ParseNode.FunctionType): boolean => !type.TypeParameters
+    && !!options.intrinsicAdmission(type.ReturnType) && type.FunctionTypeParameterList.every((parameter) => {
+      const type = parameter.Type ?? parameter.TypeAnnotation?.Type;
+      return !parameter.Initializer && !!type && !!options.intrinsicAdmission(type);
+    });
+  const literalAggregateAdmission = (source: Flow, type: ParseNode.Type): boolean => {
+    const node = source.expression;
+    if (type.type === 'FunctionType' && simpleSignature(type) && node
+      && ['FunctionExpression', 'ArrowFunction', 'AsyncFunctionExpression', 'AsyncArrowFunction', 'GeneratorExpression', 'AsyncGeneratorExpression'].includes(node.type)) return true;
+    if (type.type !== 'ArrayType' || type.ArrayExtent || node?.type !== 'ArrayLiteral') return false;
+    const elements = type.TypeArguments?.TypeArgumentList;
+    if (!elements || elements.length !== 1 || !options.intrinsicAdmission(elements[0])) return false;
+    // A fresh dense literal of primitive constants has no element getter or
+    // conversion callback. It can still acquire typed backing after admission.
+    return node.ElementList.every((element) => ['StringLiteral', 'BooleanLiteral', 'NumericLiteral', 'NullLiteral'].includes(element.type)
+      && literalAdmission(expression(element)));
+  };
+  const primitiveDomain = (source: Flow, seen = new Set<Flow>()): string | undefined => {
+    if (--remaining < 0) {
+      exhausted = true; return undefined;
+    }
+    if (seen.has(source) || seen.size >= 256 || source.values.size) return undefined;
+    if (source.primitiveContract) return source.primitiveContract;
+    const node = source.expression;
+    if (node?.type === 'NumericLiteral') return node.Imaginary ? undefined : typeof node.value === 'bigint' ? 'bigint' : '#literal';
+    if (node?.type === 'StringLiteral') return 'string';
+    if (node?.type === 'BooleanLiteral') return 'boolean';
+    if (node?.type === 'NullLiteral') return 'null';
+    if (node?.type === 'TypedConversionExpression' && options.primitiveConversion(node)) return options.intrinsicAdmission(node.Type);
+    const sources = inputs.get(source);
+    if (!sources?.size) return undefined;
+    seen.add(source);
+    const domains = [...sources].map((input) => primitiveDomain(input, seen));
+    seen.delete(source);
+    return domains.every((domain) => domain === domains[0]) ? domains[0] : undefined;
+  };
+  const transparentPrototypeOperation = (source: Flow, site: ParseNode, conversion = false, seen = new Set<Aggregate>()): boolean => {
+    const facts = prototypeValueFacts(source, false);
+    if (!facts || facts === unknownValue || seen.size >= 256) return false;
+    for (const value of source.values) {
+      // Callability is irrelevant to this raw prototype-registration query.
+      // Complete-input facts above still require its accompanying object.
+      if (value === 'opaque-callable') continue;
+      const object = propertiesOf(value);
+      if (!object || seen.has(object) || object.sourceClass
+        || object.native && (conversion ? HasOwnClassConversion(object.native) : HasOwnClassOperator(object.native, 'unary !'))) return false;
+      const next = new Set(seen); next.add(object);
+      if (!transparentPrototypeOperation(initialPrototype(object), site, conversion, next)) return false;
+      for (const change of object.prototypes) if (beforePrototypeUse(change.site, site)
+        && !transparentPrototypeOperation(change.source, site, conversion, next)) return false;
+    }
+    return true;
+  };
+  const settleOperators = (): void => {
+    for (const request of pendingOperators) {
+      if (request.site.type === 'UnaryExpression' && request.site.operator === '!'
+        && request.sources.every((source) => transparentPrototypeOperation(source, request.site))) {
+        request.result.knownPrimitive = true; request.result.primitiveContract = 'boolean';
+        continue;
+      }
+      const domains = request.sources.map((source) => primitiveDomain(source));
+      const receiver = domains.find((domain) => domain !== '#literal') ?? 'number';
+      // A primitive proof excludes coercion hooks, not a declared operator on a
+      // different operand domain. Only its own intrinsic pair is transparent.
+      if (!domains.length || domains.some((domain) => domain !== receiver
+      && !(domain === '#literal' && /^(?:number|uint|int|float)/.test(receiver)))) {
+        opaque(request.result, request.site);
+        continue;
+      }
+      const node = request.site as Node;
+      const operator = node.operator ?? node.MultiplicativeOperator ?? node.AssignmentOperator;
+      const comparison = node.type === 'EqualityExpression' || node.type === 'RelationalExpression' || operator === '!';
+      request.result.knownPrimitive = true;
+      request.result.primitiveContract = comparison ? 'boolean'
+        : receiver === 'string' && (operator === '+' || operator === '+=') ? 'string'
+          : /^(?:number|bigint|uint|int|float)/.test(receiver) ? receiver : 'number';
+    }
+  };
+  const pendingAdmissions: { source: Flow, result: Flow, target?: string, type: ParseNode.Type, site: ParseNode }[] = [];
+  const admit = (source: Flow, type: ParseNode.Type | undefined, site: ParseNode): Flow => {
+    if (!type) return source;
+    const target = options.intrinsicAdmission(type);
+    if (target === 'any' || target === 'void') return source;
+    // Admission can convert a value and install storage obligations. A simple
+    // primitive target constrains the result, independently of input effects.
+    const result = newFlow();
+    if (target) {
+      result.knownPrimitive = true; result.primitiveContract = target;
+    } else {
+      edge(source, result);
+      if (type.type !== 'FunctionType' || !literalAggregateAdmission(source, type)) add(result, 'opaque-value');
+    }
+    pendingAdmissions.push({ source, result, target, type, site });
+    return result;
+  };
   const target = (value: unknown, source: Flow, site?: ParseNode): void => {
     if (!isNode(value)) return;
     const node = value;
+    const annotation = (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type ?? options.admissionType(node);
+    // A pattern default is evaluated before that element's admission. Keep
+    // its boundary on the element, rather than at the enclosing pattern start.
+    const admissionSite = site && ['LexicalBinding', 'VariableDeclaration'].includes(site.type)
+      ? node.type === 'BindingIdentifier' ? node.parent ?? node : node : site ?? node;
+    source = admit(source, annotation, admissionSite);
     if (node.type === 'BindingIdentifier' || node.type === 'IdentifierReference') {
-      edge(source, binding(node, node.name));
+      const destination = binding(node, node.name);
+      const kind = annotation && options.intrinsicAdmission(annotation);
+      if (kind && kind !== 'any' && kind !== 'void') {
+        destination.knownPrimitive = true; destination.primitiveContract = kind;
+      }
+      edge(source, destination);
       if (options.globalBinding(node as ParseNode.IdentifierReference)) recordDataWrite(globalObject, node.name, source, site ?? node);
     } else if (node.type === 'MemberExpression') store(expression(node.MemberExpression), options.key(node), source, site);
     else if (node.type === 'ParenthesizedExpression') target(node.Expression, source, site);
@@ -964,8 +1125,16 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const existing = functions.get(node);
     if (existing) return existing;
     const parameters = parameterKeys.flatMap((key) => Array.isArray(node[key]) ? node[key] as Node[] : isNode(node[key]) ? [node[key] as Node] : []);
-    const result = { kind: 'callable' as const, parameters, result: newFlow(), receiver: newFlow(), properties: functionProperties(node) };
+    const result = { kind: 'callable' as const, sites: new Set<ParseNode>(), parameters, result: newFlow(), receiver: newFlow(), properties: functionProperties(node) };
     functions.set(node, result);
+    for (const parameter of parameters) {
+      const annotation = (parameter as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type;
+      const kind = annotation && options.intrinsicAdmission(annotation);
+      if (kind && kind !== 'any' && kind !== 'void' && isNode(parameter.BindingIdentifier)) {
+        const flow = binding(parameter.BindingIdentifier, parameter.BindingIdentifier.name as string);
+        flow.knownPrimitive = true; flow.primitiveContract = kind;
+      }
+    }
     return result;
   };
   const copyArguments = (source: Flow, destination: Aggregate, start: number, offset: number, site?: ParseNode): void => {
@@ -994,155 +1163,171 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     copyArguments(packed, tail, 1, 0, site);
     return flow;
   };
-  const invoke = (callee: Flow, args: readonly Flow[], receiver: Flow, result: Flow, packed?: Flow, site?: ParseNode, argumentNodes?: readonly ParseNode[]): void => watch(callee, (value) => {
-    if (value === 'eval' || value === 'dynamic-function') {
-      if (site) opaqueEffects.add(site);
+  const invoke = (callee: Flow, args: readonly Flow[], receiver: Flow, result: Flow, packed?: Flow, site?: ParseNode, argumentNodes?: readonly ParseNode[], absent = false): void => {
+    if (site) {
+      pendingInvocations.push({ source: callee, result, site, absent });
+      // Named/packed invocation requires the actual signature's argument
+      // assignment. Until that relation is represented here, keep its effect
+      // boundary even when the positional may-flow supplies some candidates.
+      if (argumentNodes?.some((argument) => argument.type === 'NamedArgument')) opaqueEffects.add(site);
     }
-    if (value === 'function-call' || value === 'function-apply' || value === 'function-bind') {
-      const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
-      if (value === 'function-bind') {
-        project(receiver, 'length', site); project(receiver, 'name', site);
-        const properties = functionProperties();
-        properties.prototype = undefined;
-        properties.prototypeFlow = newFlow();
-        watch(receiver, (target) => {
-          const object = propertiesOf(target);
-          if (!object) {
-            if (target === 'opaque-value') add(properties.prototypeFlow!, target);
-          } else edge(prototypeAt(object, site), properties.prototypeFlow!);
-        });
-        add(result, { kind: 'bound', callee: receiver, arguments: packed ? [] : args.slice(1),
-          packed: packed ? argumentTail(packed, site) : undefined, receiver: argument(0), properties });
-      } else if (value === 'function-apply') {
-        const argumentsObject = packed || args.length > 1 ? argument(1) : undefined;
-        if (argumentsObject?.expression?.type === 'NullLiteral') invoke(receiver, [], argument(0), result, undefined, site);
-        else {
-          if (argumentsObject && site) {
-            project(argumentsObject, 'length', site);
-            pendingOperations.push({ source: argumentsObject, result: newFlow(), site, arguments: true });
+    watch(callee, (value) => {
+      if (value === 'eval' || value === 'dynamic-function') {
+        if (site) opaqueEffects.add(site);
+      }
+      if (value === 'function-call' || value === 'function-apply' || value === 'function-bind') {
+        const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
+        if (value === 'function-bind') {
+          project(receiver, 'length', site); project(receiver, 'name', site);
+          const properties = functionProperties();
+          properties.prototype = undefined;
+          properties.prototypeFlow = newFlow();
+          watch(receiver, (target) => {
+            const object = propertiesOf(target);
+            if (!object) {
+              if (target === 'opaque-value') add(properties.prototypeFlow!, target);
+            } else edge(prototypeAt(object, site), properties.prototypeFlow!);
+          });
+          add(result, { kind: 'bound', callee: receiver, arguments: packed ? [] : args.slice(1),
+            packed: packed ? argumentTail(packed, site) : undefined, receiver: argument(0), properties });
+        } else if (value === 'function-apply') {
+          const argumentsObject = packed || args.length > 1 ? argument(1) : undefined;
+          if (argumentsObject?.expression?.type === 'NullLiteral') invoke(receiver, [], argument(0), result, undefined, site);
+          else {
+            if (argumentsObject && site) {
+              project(argumentsObject, 'length', site);
+              pendingOperations.push({ source: argumentsObject, result: newFlow(), site, arguments: true });
+            }
+            invoke(receiver, [], argument(0), result, argumentsObject, site);
           }
-          invoke(receiver, [], argument(0), result, argumentsObject, site);
-        }
-      } else if (packed) {
-        invoke(receiver, [], argument(0), result, argumentTail(packed, site), site);
-      } else invoke(receiver, args.slice(1), argument(0), result, undefined, site, argumentNodes?.slice(1));
-      return;
-    }
-    if (value === 'Function') add(result, 'dynamic-function');
-    // String/Symbol on a primitive literal cannot enter user coercion code. This is
-    // a positive intrinsic summary, not trust in every native implementation.
-    // Bound/call arguments keep their original flows; apply remains opaque.
-    if ((value === 'String' || value === 'Symbol') && (site?.type !== 'CallExpression' || packed || args.length && !args[0].primitiveLiteral)) {
-      // Successful calls return primitives even when coercion has effects.
-      if (site?.type === 'NewExpression' && value === 'String') add(result, 'opaque-value');
-      if (site) opaqueEffects.add(site);
-    }
-    if (value === 'opaque-callable' || value === 'opaque-value') {
-      add(result, 'opaque-value');
-      if (site) opaqueEffects.add(site);
-    }
-    if (typeof value !== 'string' && value.kind === 'bound') {
-      if (packed || value.packed) {
-        const combined = aggregate(), flow = newFlow(); add(flow, combined);
-        value.arguments.forEach((argument, index) => edge(argument, slot(combined, String(index))));
-        // Unknown arity is a wildcard contribution, never an ignored suffix.
-        if (value.packed) {
-          edge(project(value.packed, undefined, site), slot(combined, undefined));
-          args.forEach((argument) => edge(argument, slot(combined, undefined)));
-        }
-        if (packed) {
-          if (value.packed) edge(project(packed, undefined, site), slot(combined, undefined));
-          else copyArguments(packed, combined, 0, value.arguments.length, site);
-        }
-        invoke(value.callee, [], value.receiver, result, flow, site);
-      } else invoke(value.callee, [...value.arguments, ...args], value.receiver, result, undefined, site);
-      return;
-    }
-    if (site && typeof value === 'string') {
-      const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
-      const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
-      if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty', 'getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor'].includes(value)) propertyKey(argument(1), site);
-      if (value === 'create') {
-        const object = aggregate(), created = newFlow(); add(created, object); add(result, object);
-        setInitialPrototype(object, argument(0));
-        const omitted = packed?.expression?.type === 'ArrayLiteral' && packed.expression.ElementList.length <= 1
-          && packed.expression.ElementList.every((part) => part.type !== 'SpreadElement');
-        if (!omitted && (packed || args.length > 1)) pendingOperations.push({ source: argument(1), result: newFlow(), site, creationTarget: created });
-        const syntax = !packed ? argumentNodes?.[1] : undefined;
-        // This fresh table cannot escape before the call. No getter/decorator
-        // may delete a later descriptor entry while its own keys are consumed.
-        if (syntax?.type === 'ObjectLiteral' && !syntax.Decorators?.length && syntax.PropertyDefinitionList.every((property) =>
-          property.type === 'IdentifierReference' || property.type === 'PropertyDefinition' && property.PropertyName)) {
-          for (const property of syntax.PropertyDefinitionList) {
-            if (property.type === 'IdentifierReference') object.ownKeys.add(property.name);
-            else if (property.type === 'PropertyDefinition' && property.PropertyName) {
-              const name = options.propertyKey(property.PropertyName);
-              if (name !== undefined && !(name === '__proto__' && ['IdentifierName', 'StringLiteral'].includes(property.PropertyName.type))) object.ownKeys.add(name);
+        } else if (packed) {
+          invoke(receiver, [], argument(0), result, argumentTail(packed, site), site);
+        } else invoke(receiver, args.slice(1), argument(0), result, undefined, site, argumentNodes?.slice(1));
+        return;
+      }
+      if (value === 'Function') add(result, 'dynamic-function');
+      if (value === 'String' || value === 'Symbol') result.knownPrimitive = site?.type !== 'NewExpression';
+      // String/Symbol on a primitive literal cannot enter user coercion code. This is
+      // a positive intrinsic summary, not trust in every native implementation.
+      // Bound/call arguments keep their original flows; apply remains opaque.
+      if ((value === 'String' || value === 'Symbol') && (site?.type !== 'CallExpression' || packed || args.length && !args[0].primitiveLiteral)) {
+        // Successful calls return primitives even when coercion has effects.
+        if (site?.type === 'NewExpression' && value === 'String') add(result, 'opaque-value');
+        if (site) opaqueEffects.add(site);
+      }
+      if (value === 'opaque-callable' || value === 'opaque-value') {
+        add(result, 'opaque-value');
+        if (site) opaqueEffects.add(site);
+      }
+      if (typeof value !== 'string' && value.kind === 'bound') {
+        if (packed || value.packed) {
+          const combined = aggregate(), flow = newFlow(); add(flow, combined);
+          value.arguments.forEach((argument, index) => edge(argument, slot(combined, String(index))));
+          // Unknown arity is a wildcard contribution, never an ignored suffix.
+          if (value.packed) {
+            edge(project(value.packed, undefined, site), slot(combined, undefined));
+            args.forEach((argument) => edge(argument, slot(combined, undefined)));
+          }
+          if (packed) {
+            if (value.packed) edge(project(packed, undefined, site), slot(combined, undefined));
+            else copyArguments(packed, combined, 0, value.arguments.length, site);
+          }
+          invoke(value.callee, [], value.receiver, result, flow, site);
+        } else invoke(value.callee, [...value.arguments, ...args], value.receiver, result, undefined, site);
+        return;
+      }
+      if (site && typeof value === 'string') {
+        const argument = (index: number): Flow => packed ? project(packed, String(index), site) : args[index] ?? newFlow();
+        const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
+        if (['set', 'defineProperty', 'reflect-defineProperty', 'deleteProperty', 'getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor'].includes(value)) propertyKey(argument(1), site);
+        if (value === 'create') {
+          const object = aggregate(), created = newFlow(); add(created, object); add(result, object);
+          setInitialPrototype(object, argument(0));
+          const omitted = packed?.expression?.type === 'ArrayLiteral' && packed.expression.ElementList.length <= 1
+            && packed.expression.ElementList.every((part) => part.type !== 'SpreadElement');
+          if (!omitted && (packed || args.length > 1)) pendingOperations.push({ source: argument(1), result: newFlow(), site, creationTarget: created });
+          const syntax = !packed ? argumentNodes?.[1] : undefined;
+          // This fresh table cannot escape before the call. No getter/decorator
+          // may delete a later descriptor entry while its own keys are consumed.
+          if (syntax?.type === 'ObjectLiteral' && !syntax.Decorators?.length && syntax.PropertyDefinitionList.every((property) =>
+            property.type === 'IdentifierReference' || property.type === 'PropertyDefinition' && property.PropertyName)) {
+            for (const property of syntax.PropertyDefinitionList) {
+              if (property.type === 'IdentifierReference') object.ownKeys.add(property.name);
+              else if (property.type === 'PropertyDefinition' && property.PropertyName) {
+                const name = options.propertyKey(property.PropertyName);
+                if (name !== undefined && !(name === '__proto__' && ['IdentifierName', 'StringLiteral'].includes(property.PropertyName.type))) object.ownKeys.add(name);
+              }
             }
           }
         }
-      }
-      if (value === 'prototype-setter') {
-        pendingLegacySetters.push({ target: receiver, source: argument(0), site });
-        result.knownPrimitive = true; result.primitiveKinds = new Set(['undefined']);
-      }
-      if (value === 'setPrototypeOf' || value === 'reflect-setPrototypeOf') {
-        const target = argument(0);
-        changePrototype(target, argument(1), site);
-        if (value === 'setPrototypeOf') edge(target, result);
-        else result.knownPrimitive = true;
-      }
-      if (value === 'set') {
-        const receiver = newFlow();
-        if (packed || args.length <= 3) edge(argument(0), receiver);
-        if (packed || args.length > 3) edge(argument(3), receiver);
-        store(argument(0), key, argument(2), site, receiver);
-      }
-      if (value === 'deleteProperty') remove(argument(0), key, site);
-      if (value === 'defineProperty' || value === 'reflect-defineProperty') {
-        defineDescriptor(argument(0), key, argument(2), site, argumentNodes?.[2]);
-        if (value === 'defineProperty') edge(argument(0), result);
-      }
-      if (value === 'assign') {
-        edge(argument(0), result);
-        const sources = packed ? [project(packed, undefined, site)] : args.slice(1);
-        for (const source of sources) copiedProperties(source, site, (name, flow) => store(argument(0), name, flow, site));
-      }
-      if (value === 'defineProperties') {
-        edge(argument(0), result);
-        copiedProperties(argument(1), site, (name, descriptor) => defineDescriptor(argument(0), name, descriptor, site));
-      }
-    }
-    if (typeof value !== 'string' && value.kind === 'aggregate' && value.native && site) {
-      const origin = options.nativeOrigins(value.native).find((kind) =>
-        ['getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor', 'getOwnPropertyDescriptors'].includes(kind));
-      if (origin) {
-        // FromPropertyDescriptor allocates in the actual built-in's realm,
-        // including a borrowed cross-realm original.
-        const prototype = (value.native as ObjectValue & { Realm?: { Intrinsics: Record<string, ObjectValue> } }).Realm?.Intrinsics['%Object.prototype%'];
-        if (!prototype) {
-          opaque(result, site); return;
+        if (value === 'prototype-setter') {
+          pendingLegacySetters.push({ target: receiver, source: argument(0), site });
+          result.knownPrimitive = true; result.primitiveKinds = new Set(['undefined']);
         }
-        const source = packed ? project(packed, '0', site) : args[0] ?? newFlow();
-        const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
-        observeDescriptors(source, key, result, site, origin === 'getOwnPropertyDescriptors', origin !== 'reflect-getOwnPropertyDescriptor', prototype);
+        if (value === 'setPrototypeOf' || value === 'reflect-setPrototypeOf') {
+          const target = argument(0);
+          changePrototype(target, argument(1), site);
+          if (value === 'setPrototypeOf') edge(target, result);
+          else result.knownPrimitive = true;
+        }
+        if (value === 'set') {
+          const receiver = newFlow();
+          if (packed || args.length <= 3) edge(argument(0), receiver);
+          if (packed || args.length > 3) edge(argument(3), receiver);
+          store(argument(0), key, argument(2), site, receiver);
+        }
+        if (value === 'deleteProperty') remove(argument(0), key, site);
+        if (value === 'defineProperty' || value === 'reflect-defineProperty') {
+          defineDescriptor(argument(0), key, argument(2), site, argumentNodes?.[2]);
+          if (value === 'defineProperty') edge(argument(0), result);
+        }
+        if (value === 'assign') {
+          edge(argument(0), result);
+          const sources = packed ? [project(packed, undefined, site)] : args.slice(1);
+          for (const source of sources) copiedProperties(source, site, (name, flow) => store(argument(0), name, flow, site));
+        }
+        if (value === 'defineProperties') {
+          edge(argument(0), result);
+          copiedProperties(argument(1), site, (name, descriptor) => defineDescriptor(argument(0), name, descriptor, site));
+        }
       }
-    }
-    if (typeof value === 'string' || value.kind !== 'callable') return;
-    value.parameters.forEach((parameter, index) => {
-      if (parameter.type === 'BindingRestElement') {
-        const rest = aggregate(true), flow = newFlow(); rest.prototype = options.arrayPrototype; add(flow, rest);
-        if (packed) recordDataWrite(rest, undefined, project(packed, undefined, site), site);
-        else args.slice(index).forEach((argument, offset) => recordDataWrite(rest, String(offset), argument, site));
-        target(parameter, flow, site);
-        return;
+      if (typeof value !== 'string' && value.kind === 'aggregate' && value.native && site) {
+        const origin = options.nativeOrigins(value.native).find((kind) =>
+          ['getOwnPropertyDescriptor', 'reflect-getOwnPropertyDescriptor', 'getOwnPropertyDescriptors'].includes(kind));
+        if (origin) {
+          // FromPropertyDescriptor allocates in the actual built-in's realm,
+          // including a borrowed cross-realm original.
+          const prototype = (value.native as ObjectValue & { Realm?: { Intrinsics: Record<string, ObjectValue> } }).Realm?.Intrinsics['%Object.prototype%'];
+          if (!prototype) {
+            opaque(result, site); return;
+          }
+          const source = packed ? project(packed, '0', site) : args[0] ?? newFlow();
+          const key = !packed && argumentNodes?.[1] ? options.propertyKey(argumentNodes[1]) : undefined;
+          observeDescriptors(source, key, result, site, origin === 'getOwnPropertyDescriptors', origin !== 'reflect-getOwnPropertyDescriptor', prototype);
+        }
       }
-      const argument = packed ? project(packed, String(index), site) : args[index];
-      if (argument) target(parameter, argument, site);
+      if (typeof value !== 'string' && value.kind === 'aggregate' && value.sourceClass && site) {
+        const cls = value.sourceClass;
+        if (cls.ClassTail.ClassHeritage || cls.ClassTail.ClassBody?.length || cls.Decorators?.length) opaque(result, site);
+        else add(result, 'opaque-value');
+      }
+      if (typeof value === 'string' || value.kind !== 'callable') return;
+      if (site) value.sites.add(site);
+      value.parameters.forEach((parameter, index) => {
+        if (parameter.type === 'BindingRestElement') {
+          const rest = aggregate(true), flow = newFlow(); rest.prototype = options.arrayPrototype; add(flow, rest);
+          if (packed) recordDataWrite(rest, undefined, project(packed, undefined, site), site);
+          else args.slice(index).forEach((argument, offset) => recordDataWrite(rest, String(offset), argument, site));
+          target(parameter, flow, site);
+          return;
+        }
+        const argument = packed ? project(packed, String(index), site) : args[index];
+        if (argument) target(parameter, argument, site);
+      });
+      edge(receiver, value.receiver);
+      edge(value.result, result);
     });
-    edge(receiver, value.receiver);
-    edge(value.result, result);
-  });
+  };
   const isAssignmentTarget = (node: ParseNode): boolean => {
     for (let at = node; at.parent; at = at.parent) {
       const parent = at.parent;
@@ -1163,7 +1348,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     return parent?.type === 'UnaryExpression' && parent.operator === 'delete' && deletionOperand(parent.UnaryExpression) === node;
   };
   const expression = (value: unknown): Flow => {
-    if (!isNode(value)) return newFlow();
+    if (!isNode(value)) return { ...newFlow(), absent: true };
     const node = value;
     const previous = expressions.get(node);
     if (previous) return previous;
@@ -1172,6 +1357,11 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     result.expression = node;
     if (['NullLiteral', 'BooleanLiteral', 'NumericLiteral', 'StringLiteral'].includes(node.type)) result.primitiveLiteral = true;
     if (node.type === 'StringLiteral') result.stringLength = node.value.length;
+    if (node.type === 'UnaryExpression' && (node.operator === 'typeof' || node.operator === 'void')
+      || node.type === 'EqualityExpression' && (node.operator === '===' || node.operator === '!==')) {
+      result.knownPrimitive = true;
+      result.primitiveContract = node.type === 'EqualityExpression' ? 'boolean' : node.operator === 'typeof' ? 'string' : 'undefined';
+    }
     if (exhausted) return result;
     if (++depth > 256) {
       exhausted = true;
@@ -1180,21 +1370,48 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     for (const kind of options.scalar(node)) add(result, kind);
     if (node.type === 'NewExpression') prototypeEffects(expression(node.MemberExpression), node);
-    if (node.type === 'ClassTail' && node.ClassHeritage) prototypeEffects(expression(node.ClassHeritage), node);
+    if (node.type === 'ClassTail' && node.ClassHeritage) load(expression(node.ClassHeritage), 'prototype', newFlow(), node);
     if (node.type === 'ForInStatement') prototypeEffects(expression(node.Expression), node);
-    if (node.type === 'AwaitExpression') prototypeEffects(expression(node.UnaryExpression), node);
-    if (node.type === 'TemplateLiteral' && node.parent?.type !== 'CallExpression' && node.parent?.type !== 'MemberExpression') {
-      node.ExpressionList.forEach((part) => prototypeEffects(expression(part), node));
+    if (node.type === 'AwaitExpression' || node.type === 'YieldExpression' && !options.provenDelegations.has(node) || node.type === 'SuperCall'
+      || node.type === 'Decorator' || node.type === 'ForInStatement' || node.type === 'TypedConversionExpression' && !options.primitiveConversion(node)
+      || node.type === 'SuperProperty' || node.type === 'TargetTypedNew' || node.type === 'ImportCall'
+      || node.type === 'WithStatement' || node.type === 'IsExpression' || node.type === 'MatchExpression'
+      || node.type === 'RefRebindingStatement') {
+      // These operations can enter code beyond the visible value-flow graph
+      // (assimilation, suspension, superclass/decorator calls, enumeration or
+      // conversion/refinement). No absent may-flow candidate is a purity proof.
+      opaqueEffects.add(node);
     }
-    if (node.type === 'ExponentiationExpression' || node.type === 'UpdateExpression'
-      || typeof node.operator === 'string' && !['delete', 'typeof', 'void', '!', '===', '!==', '&&', '||', '??'].includes(node.operator)) {
-      for (const [key, part] of Object.entries(node)) if (key !== 'parent' && isNode(part)) prototypeEffects(expression(part), node);
+    if (node.type === 'TemplateLiteral' && node.parent?.type !== 'TaggedTemplateExpression') {
+      node.ExpressionList.forEach((part) => pendingCoercions.push({ source: expression(part), site: node }));
+    }
+    if (['ExponentiationExpression', 'MultiplicativeExpression', 'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression', 'UpdateExpression'].includes(node.type)
+      || typeof node.operator === 'string' && !['delete', 'typeof', 'void', '===', '!==', '&&', '||', '??'].includes(node.operator)) {
+      const operands: Flow[] = [];
+      for (const [key, part] of Object.entries(node)) if (key !== 'parent' && isNode(part)) {
+        operands.push(expression(part));
+        if (node.type !== 'UnaryExpression' || node.operator !== '!') {
+          prototypeEffects(expression(part), node);
+          pendingCoercions.push({ source: expression(part), site: node });
+        }
+      }
+      pendingOperators.push({ sources: operands, result, site: node });
+    }
+
+    if (node.type === 'AssignmentExpression' && !['=', '&&=', '||=', '??='].includes(node.AssignmentOperator)) {
+      pendingCoercions.push({ source: expression(node.LeftHandSideExpression), site: node },
+        { source: expression(node.AssignmentExpression), site: node });
+      pendingOperators.push({ sources: [expression(node.LeftHandSideExpression), expression(node.AssignmentExpression)], result, site: node });
+    }
+    if (node.type === 'LexicalDeclaration' && node.LetOrConst === 'using') {
+      opaqueEffects.add(node); opaqueEffects.add(node.parent ?? node);
     }
 
     if (node.type === 'IdentifierReference') {
       edge(binding(node, node.name), result);
       if (options.globalBinding(node)) globalPropertyAt(node.name, result, node);
       nativeValue(options.external(node), result);
+      if (options.opaqueGlobalRead(node)) opaque(result, node);
     } else if (['ParenthesizedExpression', 'TypeArgumentsExpression'].includes(node.type)) edge(expression(node.Expression), result);
     else if (node.type === 'OptionalExpression') {
       if (node.MemberExpression.type !== 'NullLiteral') edge(expression(options.optional(node)), result);
@@ -1235,9 +1452,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
               setInitialPrototype(object, expression(property.AssignmentExpression), options.objectPrototype);
             } else {
               if (key !== undefined) object.ownKeys.add(key);
-              recordDataWrite(object, key, expression(property.AssignmentExpression), property);
+              recordDataWrite(object, key, admit(expression(property.AssignmentExpression), property.TypeAnnotation?.Type, property), property);
             }
-          } else recordDataWrite(object, undefined, project(expression(property.AssignmentExpression), undefined, property), property);
+          } else copiedProperties(expression(property.AssignmentExpression), property,
+            (key, flow) => recordDataWrite(object, key, flow, property));
         } else if (property.type === 'MethodDefinition') {
           const key = options.propertyKey(property.ClassElementName);
           if (key !== undefined) object.ownKeys.add(key);
@@ -1266,11 +1484,18 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       const writeOnly = isAssignmentTarget(node) || isDeleteTarget(node);
       if (!writeOnly) load(expression(node.MemberExpression), options.key(node), result, node);
       if (!writeOnly && ['call', 'apply', 'bind'].includes(options.key(node) ?? '')) pendingOperations.push({ source: result, result, site: node, copy: true });
+    } else if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+      const object = functionProperties();
+      object.sourceClass = node; object.ordinaryPrototypeMutation = false;
+      object.ownKeys.add('prototype'); add(slot(object, 'prototype'), 'opaque-value');
+      add(result, object);
+      if (node.Decorators?.length) add(result, 'opaque-value');
+      if (node.BindingIdentifier) edge(result, binding(node.BindingIdentifier as Node, node.BindingIdentifier.name));
     } else if (parameterKeys.some((key) => key in node)) {
       const fn = callable(node); add(result, fn);
       if (isNode(node.BindingIdentifier)) edge(result, binding(node.BindingIdentifier, node.BindingIdentifier.name as string));
       const concise = node.ConciseBody as Node | undefined;
-      if (concise?.type === 'ConciseBody') edge(expression(concise.ExpressionBody.AssignmentExpression), fn.result);
+      if (concise?.type === 'ConciseBody') edge(admit(expression(concise.ExpressionBody.AssignmentExpression), (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type, concise), fn.result);
     } else if (node.type === 'ThisExpression') {
       for (let at = node.parent; at; at = at.parent) {
         if (parameterKeys.some((key) => key in at) && !['ArrowFunction', 'AsyncArrowFunction'].includes(at.type)) {
@@ -1280,6 +1505,11 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     } else if (node.type === 'UnaryExpression' && node.operator === 'delete') {
       const operand = deletionOperand(node.UnaryExpression);
       if (operand.type === 'MemberExpression') remove(expression(operand.MemberExpression), options.key(operand), node);
+    } else if (node.type === 'TaggedTemplateExpression') {
+      const callee = node.MemberExpression;
+      const receiver = callee.type === 'MemberExpression' ? expression(callee.MemberExpression) : newFlow();
+      const template = newFlow(); add(template, aggregate(true));
+      invoke(expression(callee), [template, ...node.TemplateLiteral.ExpressionList.map(expression)], receiver, result, undefined, node);
     } else if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       let callee: ParseNode = node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression;
       while (callee.type === 'ParenthesizedExpression') callee = callee.Expression;
@@ -1311,14 +1541,15 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     if (node.type === 'ReturnStatement') for (let at = node.parent; at; at = at.parent) {
       if (parameterKeys.some((key) => key in at)) {
-        edge(expression(node.Expression), callable(at as Node).result);
+        edge(admit(expression(node.Expression), (at as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type, node), callable(at as Node).result);
         break;
       }
     }
   }
   settle();
-  let index = 0, prototypeIndex = 0, legacyIndex = 0, storeIndex = 0;
-  while (index < pendingOperations.length || prototypeIndex < pendingPrototypeSources.length || legacyIndex < pendingLegacySetters.length || storeIndex < pendingStoreEnds.length) {
+  let index = 0, prototypeIndex = 0, legacyIndex = 0, storeIndex = 0, invocationIndex = 0, loadIndex = 0, admissionIndex = 0;
+  while (index < pendingOperations.length || prototypeIndex < pendingPrototypeSources.length || legacyIndex < pendingLegacySetters.length || storeIndex < pendingStoreEnds.length
+    || invocationIndex < pendingInvocations.length || loadIndex < pendingLoads.length || admissionIndex < pendingAdmissions.length) {
     const end = pendingOperations.length;
     for (; index < end; index += 1) {
       const request = pendingOperations[index];
@@ -1351,7 +1582,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
             || object.mutations.has('length') || object.mutations.has(undefined)) opaqueEffects.add(request.site);
         } else opaqueEffects.add(request.site);
       });
-      if (!request.source.values.size && !(request.copy && (request.source.primitiveLiteral || request.source.knownPrimitive))) opaque(request.result, request.site);
+      const facts = prototypeValueFacts(request.source, false);
+      if (!facts || facts === unknownValue || !request.copy && !request.arguments && facts & otherPrimitive) opaque(request.result, request.site);
     }
     settle();
     if (index < pendingOperations.length) continue;
@@ -1380,6 +1612,48 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (!facts || facts === unknownValue || facts & nullValue) dataReceiverStore(request.receiver, request.key, request.from, request.site);
     }
     settle();
+    const invocationEnd = pendingInvocations.length;
+    for (; invocationIndex < invocationEnd; invocationIndex += 1) {
+      const request = pendingInvocations[invocationIndex];
+      const facts = prototypeValueFacts(request.source, false);
+      if (!facts && !request.absent || facts === unknownValue) opaque(request.result, request.site);
+    }
+    const loadEnd = pendingLoads.length;
+    for (; loadIndex < loadEnd; loadIndex += 1) {
+      const request = pendingLoads[loadIndex];
+      const facts = prototypeValueFacts(request.source, false);
+      if (!facts || facts === unknownValue || facts & otherPrimitive) {
+        // Boxing can expose user accessors on primitive prototypes. A known
+        // string's own length is the sole primitive property summary here.
+        if (request.key === 'length' && request.source.stringLength !== undefined) request.result.knownPrimitive = true;
+        else opaque(request.result, request.site);
+      }
+    }
+    settle();
+    settleOperators();
+    settle();
+    const admissionEnd = pendingAdmissions.length;
+    for (; admissionIndex < admissionEnd; admissionIndex += 1) {
+      const request = pendingAdmissions[admissionIndex];
+      if (request.target ? !literalAdmission(request.source) && !transparentPrototypeOperation(request.source, request.site, true)
+        : !literalAggregateAdmission(request.source, request.type) || !transparentPrototypeOperation(request.source, request.site, true)) {
+        opaqueEffects.add(request.site);
+        if (!request.target) add(request.result, 'opaque-value');
+      }
+    }
+    settle();
+  }
+  for (const request of pendingReceivers) {
+    // A global capability has its separately keyed store/delete summary.
+    // Other incomplete alternatives, including primitive boxing setters,
+    // cannot disappear just because no aggregate candidate was collected.
+    const facts = prototypeValueFacts(request.source, false, new Set(), true);
+    if (!facts || facts === unknownValue || request.store && facts & otherPrimitive) opaqueEffects.add(request.site);
+  }
+  settleOperators();
+  settle();
+  for (const request of pendingCoercions) {
+    if (primitiveKeyState(request.source) !== 'primitive') opaqueEffects.add(request.site);
   }
   for (const request of pendingDescriptorReads) {
     const facts = prototypeValueFacts(request.source, false);
@@ -1456,7 +1730,67 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     visit(from);
     return exhausted ? new Set(options.unknown) : result;
   };
+  // A deferred body's operations do not precede every top-level capture.
+  // Project its effects to the calls found by this graph, retaining the body
+  // itself separately for reads that can execute in a later activation.
+  const owner = (site: ParseNode): Callable | false | undefined => {
+    let child = site;
+    for (let at = site.parent; at; child = at, at = at.parent) {
+      if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition')
+        && (at.ClassElementName === child || at.Decorators?.some((decorator) => decorator === child))) continue;
+      if (at.type === 'FieldDefinition' && !at.static) return false;
+      if (parameterKeys.some((key) => key in at)) return functions.get(at) ?? false;
+    }
+    return undefined;
+  };
+  const repeatedActivations = new Map<ParseNode, boolean>();
+  const activationMayRepeat = (site: ParseNode): boolean => {
+    const cached = repeatedActivations.get(site);
+    if (cached !== undefined) return cached;
+    const pending = [site], seen = new Set<Callable>();
+    let repeat = false;
+    while (pending.length && !repeat) {
+      if (--remaining < 0 || seen.size >= 256) {
+        exhausted = true; repeat = true; break;
+      }
+      const next = pending.pop()!;
+      for (let at = next.parent; at; at = at.parent) {
+        if (/^(For|While|DoWhile)/.test(at.type)) {
+          repeat = true; break;
+        }
+        if (parameterKeys.some((key) => key in at)) break;
+      }
+      const fn = owner(next);
+      if (fn === false || fn && seen.has(fn)) repeat = true;
+      else if (fn) {
+        seen.add(fn); pending.push(...fn.sites);
+      }
+    }
+    repeatedActivations.set(site, repeat);
+    return repeat;
+  };
+  const executionSites = (site: ParseNode, within?: ParseNode): readonly ParseNode[] | undefined => {
+    if (exhausted) return undefined;
+    if (owner(site) === undefined) return within ? [] : undefined;
+    const pending = [site], seen = new Set<ParseNode>(), result = new Set<ParseNode>();
+    while (pending.length) {
+      if (--remaining < 0) {
+        exhausted = true;
+        return undefined;
+      }
+      const next = pending.pop()!;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      const fn = owner(next);
+      if (within && fn === functions.get(within)) result.add(next);
+      else if (fn === undefined) {
+        if (!within) result.add(next);
+      } else if (fn) pending.push(...fn.sites);
+    }
+    return [...result];
+  };
   return {
+    executionSites, activationMayRepeat,
     // This proves only that invocation flow already accounts for the bound
     // target/arguments. It supplies no purity or receiving-result contract.
     boundInvocation: (node) => {

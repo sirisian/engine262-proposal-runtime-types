@@ -494,9 +494,10 @@ test('the relational operators take the same rule as the arithmetic ones', () =>
   // comparison is refused before it runs rather than throwing a RangeError.
   expect(thrownKind('(1 := uint8) < 300;')).toBe('StaticTypeError');
   // A typed value does not compare with a BigInt either, which the comparison
-  // path would otherwise do by its own BigInt cases.
-  expect(thrownKind('(1 := uint8) < 2n;')).toBe('TypeError');
-  expect(thrownKind('2n < (1 := uint8);')).toBe('TypeError');
+  // path would otherwise do by its own BigInt cases. Both numeric domains
+  // are known here; only an erased operand defers this failure to runtime.
+  expect(thrownKind('(1 := uint8) < 2n;')).toBe('StaticTypeError');
+  expect(thrownKind('2n < (1 := uint8);')).toBe('StaticTypeError');
   // Same type compares; a literal takes the type; untyped and BigInt-only and
   // string comparisons are untouched.
   expect(evaluated('String((1 := uint8) < (2 := uint8));')).toBe('true');

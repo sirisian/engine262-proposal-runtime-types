@@ -79,6 +79,12 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
         }
         break;
       }
+      case 'parameter':
+        if (copy.Constraint) copy.Constraint = walk(copy.Constraint, context);
+        break;
+      case 'family-pattern':
+        copy.Template = walk(copy.Template, context);
+        break;
       case 'array':
         copy.Element = walk(copy.Element, context);
         if (typeof copy.Extent === 'object') copy.Extent = walk(copy.Extent, context);
@@ -102,6 +108,8 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
         break;
       case 'function':
         copy.Signatures = copy.Signatures.map((signature) => ({ ...signature,
+          ...(signature.TypeParameters ? { TypeParameters: signature.TypeParameters.map((parameter) => ({ ...parameter,
+            Constraint: parameter.Constraint && walk(parameter.Constraint, context) })) } : {}),
           Parameters: signature.Parameters.map((parameter) => ({ ...parameter, Type: walk(parameter.Type, context) })),
           Return: signature.Return && walk(signature.Return, context),
           ...(signature.InferredReturn ? { InferredReturn: walk(signature.InferredReturn, context) } : {}),

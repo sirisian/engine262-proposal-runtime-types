@@ -9330,24 +9330,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Namespace identity comes from the resolved import, not an object's shape.
   // Const aliases retain that identity; mutable storage and arbitrary objects do not.
   const importedNamespace = (expression: ParseNode, seen = new Set<ParseNode>()): AbstractModuleRecord | undefined => {
-    const node = patternExpression(expression)!;
-    if (seen.has(node) || seen.size >= 256) return undefined;
-    seen.add(node);
-    if (node.type === 'MemberExpression') {
-      const resolution = importedNamespaceMember(node, seen);
-      return resolution?.BindingName === 'namespace' || resolution?.BindingName === 'deferred-namespace'
-        ? resolution.Module : undefined;
+    const members: ParseNode.MemberExpression[] = [];
+    let node = patternExpression(expression)!;
+    let namespace: AbstractModuleRecord | undefined;
+    while (!seen.has(node) && seen.size < 256) {
+      seen.add(node);
+      if (node.type === 'MemberExpression') {
+        members.push(node); node = patternExpression(node.MemberExpression)!; continue;
+      }
+      if (node.type !== 'IdentifierReference') return undefined;
+      let source: ParseNode = node;
+      while (source.parent) source = source.parent;
+      if (source === root && hasDirectEval) return undefined;
+      const binding = ResolveBindingDeclaration(node, node.name);
+      if (binding?.kind === 'import') namespace = moduleCheckInputs.get(source)?.namespaces?.get(node.name);
+      else if (!binding && source === root) namespace = resolvedNamespaceBinding(checkingEnvironment, node.name);
+      else if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
+        && !(binding.node as { Ref?: boolean }).Ref) {
+        node = patternExpression(binding.initializer)!; continue;
+      }
+      break;
     }
-    if (node.type !== 'IdentifierReference') return undefined;
-    let source: ParseNode = node;
-    while (source.parent) source = source.parent;
-    if (source === root && hasDirectEval) return undefined;
-    const binding = ResolveBindingDeclaration(node, node.name);
-    if (binding?.kind === 'import') return moduleCheckInputs.get(source)?.namespaces?.get(node.name);
-    if (!binding && source === root) return resolvedNamespaceBinding(checkingEnvironment, node.name);
-    if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
-        && !(binding.node as { Ref?: boolean }).Ref) return importedNamespace(binding.initializer, seen);
-    return undefined;
+    for (const member of members.reverse()) {
+      if (!namespace) return undefined;
+      const key = memberKey(member);
+      if (typeof key !== 'string') return undefined;
+      const resolution = namespace.ResolveExport(Value(key));
+      namespace = resolution && resolution !== 'ambiguous'
+        && (resolution.BindingName === 'namespace' || resolution.BindingName === 'deferred-namespace') ? resolution.Module : undefined;
+    }
+    return namespace;
   };
   const importedNamespaceMember = (node: ParseNode.MemberExpression, seen = new Set<ParseNode>()): ResolvedBindingRecord | undefined => {
     const namespace = importedNamespace(node.MemberExpression, seen);
@@ -20335,12 +20347,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (contributionAlternatives.has(type)) contributionAlternatives.set(result, contributionAlternatives.get(type)!);
     return result;
   };
-  const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
-    const type = aggregateValue(withPartialStructure(inferStaticType(node)));
-    const value = node.type === 'CallExpression' ? callValueType(type) : type;
-    if (value?.Kind !== 'literal' && value?.Kind !== 'union') return value;
-    return isNumericConstantExpression(node) ? value : fixedNumericDomain(value);
-  });
+  const memberInference = new Map<ParseNode, Known>();
+  const staticType = (node: ParseNode): Known => {
+    if (memberInference.has(node)) return memberInference.get(node)!;
+    // Infer long ordinary dot chains from the receiver outward. The temporary
+    // answers belong to this one query and are discarded before any later
+    // control-flow/context change; there is no syntax-wide type cache.
+    if (node.type === 'MemberExpression' && memberInference.size === 0) {
+      const chain: ParseNode.MemberExpression[] = [];
+      let receiver: ParseNode = node;
+      while (receiver.type === 'MemberExpression' && receiver.IdentifierName && !receiver.Expression) {
+        chain.push(receiver); receiver = receiver.MemberExpression;
+      }
+      if (chain.length >= 64) {
+        try {
+          memberInference.set(receiver, staticType(receiver));
+          for (const member of chain.reverse()) memberInference.set(member, staticType(member));
+          return memberInference.get(node)!;
+        } finally {
+          memberInference.clear();
+        }
+      }
+    }
+    return withPatternScope(node, () => {
+      const type = aggregateValue(withPartialStructure(inferStaticType(node)));
+      const value = node.type === 'CallExpression' ? callValueType(type) : type;
+      if (value?.Kind !== 'literal' && value?.Kind !== 'union') return value;
+      return isNumericConstantExpression(node) ? value : fixedNumericDomain(value);
+    });
+  };
 
   const resolvedLibraryArguments = (name: string, written: readonly ParseNode.Type[]): readonly TypeRecord[] | null => {
     const arguments_: TypeRecord[] = [];
@@ -32831,77 +32866,79 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Operand-domain errors need a typed contract, not merely a known JS builtin
   // result. In particular Symbol(), BigInt(), and their ordinary const aliases
   // do not opt legacy code into a new early-error rule.
-  const operandParticipates = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
-    const node = patternExpression(expression)!;
-    if (node.type === 'IdentifierReference') {
-      for (let i = scope; i >= 0; i -= 1) {
-        const frame = frames[i];
-        // A flow fact changes the value type, not the declaration's contract.
-        if (frame.narrowed?.has(node.name) && !frame.declaredNames.has(node.name)) continue;
-        const contribution = unaryBindingParticipation.get(frame)?.get(node.name);
-        if (contribution !== undefined) return contribution;
-        const origin = invocationOrigins.get(frame)?.get(node.name);
-        if (origin) {
-          if (origin.annotated) return frame.bindings.get(node.name)?.Kind !== 'any';
-          if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration'].includes(origin.node.type)) {
-            return typedInvocationSignature(origin.node);
+  const operandParticipates = (expression: ParseNode, scope = frames.length - 1): boolean => {
+    // This is reachability of a typed contribution, not recursive evaluation.
+    // Deep syntax/immutable-alias chains must not consume the host stack. A
+    // syntax node is revisited only when its lexical frame differs.
+    const pending = [{ expression, scope }];
+    const visited = new Map<ParseNode, Set<number>>();
+    while (pending.length) {
+      const next = pending.pop()!;
+      const node = patternExpression(next.expression)!;
+      let scopes = visited.get(node);
+      if (scopes?.has(next.scope)) continue;
+      if (!scopes) visited.set(node, scopes = new Set());
+      scopes.add(next.scope);
+      const enqueue = (expression: ParseNode | undefined, scope = next.scope): void => {
+        if (expression) pending.push({ expression, scope });
+      };
+      if (node.type === 'IdentifierReference') {
+        for (let i = next.scope; i >= 0; i -= 1) {
+          const frame = frames[i];
+          if (frame.narrowed?.has(node.name) && !frame.declaredNames.has(node.name)) continue;
+          const contribution = unaryBindingParticipation.get(frame)?.get(node.name);
+          if (contribution !== undefined) {
+            if (contribution) return true;
+            break;
           }
-          if (!origin.immutable || seen.has(origin)) return false;
-          seen.add(origin);
-          return operandParticipates(origin.node, i, seen);
+          const origin = invocationOrigins.get(frame)?.get(node.name);
+          if (origin) {
+            if (origin.annotated) {
+              if (frame.bindings.get(node.name)?.Kind !== 'any') return true;
+            } else if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration'].includes(origin.node.type)) {
+              if (typedInvocationSignature(origin.node)) return true;
+            } else if (origin.immutable) enqueue(origin.node, i);
+            break;
+          }
+          // A known value type is not itself an operand contract. An ordinary
+          // mutable binding never acquires one merely from its initializer.
+          if (frame.bindings.has(node.name) || frame.declaredNames.has(node.name)
+            || frame.bindingKinds.has(node.name) || frame.dynamicBindings) break;
         }
-        // A binding DECLARED here that reached this point has no origin and no
-        // recorded participation - at least not yet. Its static type alone is no
-        // contract: #sec-unary-operators-for-typed-values makes participation "an
-        // operand contract: an annotation, a declared member, a declared or
-        // published return, or an inferred contribution carrying such a
-        // contract", and "an ordinary unannotated mutable binding does not
-        // acquire a permanent contract from its initializer".
-        //
-        // This answered from the type, and the type is known early: an earlier
-        // pass declares `const k = 5n` as a `bigint` before the body's origins
-        // are recorded, so `+k` in untyped code was refused before the program
-        // ran - with `let v = 5n`, `let [a] = [5n]` and `let s = Symbol()` - while
-        // plain JavaScript runs it and throws at run time. A contract is never
-        // lost by answering false here: an annotated binding, a parameter, and a
-        // `const` carrying a contract are each found by the origin or the
-        // recorded participation on a later lookup, and a refusal needs only one
-        // lookup to say so.
-        if (frame.bindings.has(node.name)) return false;
-        if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return false;
+        continue;
       }
-      return false;
+      switch (node.type) {
+        case 'CommaOperator': enqueue(node.ExpressionList.at(-1)); break;
+        case 'CallExpression':
+          if (callProvenance.has(node)) return true;
+          enqueue(node.CallExpression); break;
+        case 'MemberExpression': enqueue(node.MemberExpression); break;
+        case 'NewExpression':
+          if (node.MemberExpression && invocationFact(node.MemberExpression, next.scope)?.typed === true) return true;
+          break;
+        case 'ThisExpression': case 'SuperProperty':
+          if (staticType(node) !== null) return true;
+          break;
+        case 'TypedConversionExpression': case 'RangeExpression': return true;
+        case 'FunctionDeclaration': case 'FunctionExpression': case 'ArrowFunction':
+        case 'AsyncFunctionDeclaration': case 'AsyncFunctionExpression': case 'AsyncArrowFunction':
+        case 'GeneratorDeclaration': case 'GeneratorExpression': case 'AsyncGeneratorDeclaration': case 'AsyncGeneratorExpression':
+          if (typedInvocationSignature(node)) return true;
+          break;
+        case 'ConditionalExpression':
+          enqueue(node.AssignmentExpression_a); enqueue(node.AssignmentExpression_b); break;
+        case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral': case 'NullLiteral': break;
+        default:
+          for (const [key, value] of Object.entries(node)) {
+            if (['parent', 'location', 'sourceText', 'strict'].includes(key)) continue;
+            if (key === 'TypeAnnotation' && value) return true;
+            for (const child of Array.isArray(value) ? value : [value]) {
+              if (child && typeof child === 'object' && 'type' in child) enqueue(child as ParseNode);
+            }
+          }
+      }
     }
-    switch (node.type) {
-      case 'CommaOperator':
-        return !!node.ExpressionList.length && operandParticipates(node.ExpressionList.at(-1)!, scope, seen);
-      case 'CallExpression':
-        return callProvenance.has(node) || operandParticipates(node.CallExpression, scope, seen);
-      case 'MemberExpression':
-        return !!node.MemberExpression && operandParticipates(node.MemberExpression, scope, seen);
-      case 'NewExpression':
-        return !!node.MemberExpression && invocationFact(node.MemberExpression, scope)?.typed === true;
-      case 'ThisExpression': case 'SuperProperty':
-        return staticType(node) !== null;
-      case 'TypedConversionExpression': case 'RangeExpression':
-        return true;
-      case 'FunctionDeclaration': case 'FunctionExpression': case 'ArrowFunction':
-      case 'AsyncFunctionDeclaration': case 'AsyncFunctionExpression': case 'AsyncArrowFunction':
-      case 'GeneratorDeclaration': case 'GeneratorExpression': case 'AsyncGeneratorDeclaration': case 'AsyncGeneratorExpression':
-        return typedInvocationSignature(node);
-      case 'ConditionalExpression':
-        return operandParticipates(node.AssignmentExpression_a, scope, new Set(seen))
-          || operandParticipates(node.AssignmentExpression_b, scope, new Set(seen));
-      case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral': case 'NullLiteral':
-        return false;
-      default:
-        return Object.entries(node).some(([key, value]) => {
-          if (['parent', 'location', 'sourceText', 'strict'].includes(key)) return false;
-          if (key === 'TypeAnnotation' && value) return true;
-          return (Array.isArray(value) ? value : [value]).some((child) => child && typeof child === 'object'
-            && 'type' in child && operandParticipates(child as ParseNode, scope, new Set(seen)));
-        });
-    }
+    return false;
   };
 
   const primitiveConversionFailures = new WeakSet<ParseNode>();
@@ -37973,6 +38010,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const flattenedMemberBases = new Set<ParseNode>();
   const walkNode = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
@@ -41560,7 +41598,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // a member base was never walked, so the literal evaluated from the
         // double the lexer scanned - and for a 60-digit literal that produced
         // '0', which no rounding of the true value gives.
+        let flattened = false;
+        if (!flattenedMemberBases.has(n)) {
+          const chain: ParseNode.MemberExpression[] = [];
+          let receiver: ParseNode = n.MemberExpression;
+          while (receiver.type === 'MemberExpression' && receiver.IdentifierName && !receiver.Expression) {
+            chain.push(receiver); receiver = receiver.MemberExpression;
+          }
+          if (chain.length >= 64) {
+            // Keep each member's ordinary walk/flow bookkeeping, in receiver
+            // order, without nesting hundreds of walk/walkNode host frames.
+            walk(receiver);
+            for (const member of chain.reverse()) {
+              flattenedMemberBases.add(member);
+              try {
+                walk(member);
+              } finally {
+                flattenedMemberBases.delete(member);
+              }
+            }
+            flattened = true;
+          }
+        }
         for (const key of Object.keys(n)) {
+          if (key === 'MemberExpression' && (flattened || flattenedMemberBases.has(n))) continue;
           if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
             continue;
           }

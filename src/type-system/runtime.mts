@@ -8097,7 +8097,16 @@ export function* ConstraintAdmits(candidate: TypeRecord, constraint: TypeRecord 
     EnterTypeComputation('a family declaration default');
     const context = surroundingAgent.runningExecutionContext;
     const savedEnvironment = context.LexicalEnvironment;
-    if (record.DefaultEnvironment) context.LexicalEnvironment = record.DefaultEnvironment as typeof savedEnvironment;
+    if (record.DefaultEnvironment) {
+      let declaration: ParseNode | undefined = record.DefaultNode;
+      while (declaration && declaration.type !== 'TypeParameter') declaration = declaration.parent;
+      const parameters = declaration?.parent?.type === 'TypeParameters' ? declaration.parent.TypeParameterList : undefined;
+      // Computed defaults evaluate ordinary expressions as well as type names.
+      // The candidate's completed operands must therefore inhabit the lexical
+      // parameter environment, not only the type-record substitution frame.
+      const environment = record.DefaultEnvironment as typeof savedEnvironment;
+      context.LexicalEnvironment = parameters ? NewTypeParameterEnvironment(environment, parameters, frame) : environment;
+    }
     try {
       const result = EnsureCompletion(skipDebugger(TypeNodeToTypeRecord(record.DefaultNode!)));
       if (result.Type !== 'normal') {

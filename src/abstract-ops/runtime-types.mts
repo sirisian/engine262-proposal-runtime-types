@@ -3526,6 +3526,18 @@ export function LookupTupleConversion(value: Value): Value | null {
   return null;
 }
 
+/** Raw registration evidence for static effect analysis; performs no lookup
+ * through user properties and does not invoke an operator. */
+export function HasOwnClassOperator(prototype: ObjectValue, opText: string): boolean {
+  return classOperatorTables.get(prototype)?.has(opText) ?? false;
+}
+
+/** A bare intrinsic receiving type has no inbound user conversion; source
+ * conversion registrations still prevent a transparent admission summary. */
+export function HasOwnClassConversion(prototype: ObjectValue): boolean {
+  return [...classOperatorTables.get(prototype)?.keys() ?? []].some((key) => key.startsWith('convert '));
+}
+
 export function LookupClassOperator(value: Value, opText: string): Value | null {
   let proto: unknown = (value as { Prototype?: unknown }).Prototype;
   while (proto && proto instanceof Object && !(proto as { type?: string, constructor: unknown } instanceof Array)) {

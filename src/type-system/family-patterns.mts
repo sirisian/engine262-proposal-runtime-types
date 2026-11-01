@@ -178,7 +178,8 @@ export function matchesFamilyPattern(candidate: TypeRecord, pattern: FamilyPatte
     if (typeof wanted !== 'number' && typeof subject !== 'number'
         && (wanted.Kind === 'primitive' || wanted.Kind === 'nominal') && wanted.Kind === subject.Kind) {
       const correctHead = wanted.Kind === 'primitive' ? subject.Kind === 'primitive' && wanted.Name === subject.Name
-        : subject.Kind === 'nominal' && (wanted.LibraryName ? wanted.LibraryName === subject.LibraryName : wanted.Declaration === subject.Declaration);
+        : subject.Kind === 'nominal' && (wanted.LibraryName ? wanted.LibraryName === subject.LibraryName
+          : !subject.LibraryName && wanted.Declaration === subject.Declaration && wanted.DeclarationIdentity === subject.DeclarationIdentity);
       if (!correctHead || wanted.Arguments.length !== subject.Arguments.length) return false;
       return wanted.Arguments.every((argument, i) => match(subject.Arguments[i], argument));
     }

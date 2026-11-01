@@ -72,8 +72,8 @@ function assumed(assumptions: readonly Assumption[], s: TypeRecord, t: TypeRecor
       || s.Kind !== 'nominal' || t.Kind !== 'nominal') {
       return false;
     }
-    return p.First.Declaration === s.Declaration
-      && p.Second.Declaration === t.Declaration
+    return p.First.Declaration === s.Declaration && p.First.DeclarationIdentity === s.DeclarationIdentity
+      && p.Second.Declaration === t.Declaration && p.Second.DeclarationIdentity === t.DeclarationIdentity
       && sameArguments(p.First.Arguments, s.Arguments)
       && sameArguments(p.Second.Arguments, t.Arguments);
   });
