@@ -228,10 +228,8 @@ interface Frame {
   readonly letConstants: Set<string>;
 
   /**
-   * Names this frame binds IMMUTABLY - a `const` declaration. Read by
-   * `derivationIsStable`: a call through such a name cannot be a call to a
-   * replaced function, which is what lets its return annotation license an
-   * elision.
+   * Names this frame binds immutably. This preserves a value but does not
+   * establish that a shallow callable contract describes its implementation.
    */
   readonly immutableNames: Set<string>;
 
@@ -4127,6 +4125,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     whereChecks.set(call, checks);
   };
   const signatureDeclarations = new WeakMap<object, ParseNode>();
+  const literalElisionImplementations = new WeakMap<object, ParseNode>();
   const formalPatternBindings = new WeakMap<object, ReadonlyMap<string, TypeRecord>>();
 
   // The outermost frame is the session's where there is one, so a console entry
@@ -4245,8 +4244,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const binding = n.BindingIdentifier as { name?: string } | undefined;
       if (binding?.name) assignedNames.add(binding.name);
     } else if (n.type === 'CallExpression') {
-      const callee = n.CallExpression ?? n.MemberExpression;
-      const c = callee as { type?: string, name?: string } | null | undefined;
+      let c = (n.CallExpression ?? n.MemberExpression) as ParseNode | null | undefined;
+      while (c?.type === 'ParenthesizedExpression') c = c.Expression;
       if (c && c.type === 'IdentifierReference' && c.name === 'eval') {
         hasDirectEval = true;
       }
@@ -5473,13 +5472,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * prevents is that admission being compounded by an elision that assumes it
    * never happens.
    *
-   * A call through an immutable binding is stable: nothing can replace the
-   * callee, so its return annotation is the fact the checker read. Everything
-   * else that yields a Static Type - a binding read, a parameter, a member of a
-   * typed shape, a literal, an operator over stable operands - is checked at
-   * its own boundary and stays stable.
+   * A call needs both binding/lookup stability and the actual implementation's
+   * enforced result. An immutable shallowly admitted callable lacks the latter.
+   * A typed property view likewise does not prove its current descriptor.
+   * Binding reads that already crossed their own boundary retain that contract.
    */
   const immutablyBound = (name: string, reference?: ParseNode): boolean => {
+    // Even a const elsewhere can be hidden by dynamic name lookup or sloppy
+    // eval declaration injection. Its storage immutability is not lookup proof.
+    if (hasDirectEval) return false;
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       if (frames[i].immutableNames.has(name)) {
         return true;
@@ -5488,16 +5489,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
     }
-    // A name the source text never assigns to is immutable IN FACT, whatever
-    // form declared it: a function declaration creates a mutable binding, but a
-    // program that never writes to that binding cannot replace the function the
-    // checker read a signature from. This is the same judgment a real engine
-    // makes when it guards an assumed callee and deoptimizes on reassignment,
-    // and it is what keeps the rule from charging every ordinary call for a
-    // replacement that no program performs. A direct `eval` can assign to any
-    // name in scope, so its presence withdraws the judgment for the whole
-    // source text.
-    return !hasDirectEval && ((reference && lexicalUnassigned(reference, name)) ?? !assignedNames.has(name));
+    // This existing contribution screen preserves published declaration
+    // contracts. Its spelling fallback is not implementation evidence and
+    // must not authorize check elision; establishedCallable requires the
+    // positive lexical proof separately. Global property writes also withdraw
+    // an otherwise unproved declaration-result assumption.
+    return (reference && lexicalUnassigned(reference, name))
+      ?? (!assignedNames.has(name) && !assignedGlobalProperties.has(name));
+  };
+
+  const establishedCallable = (expression: ParseNode | undefined, seen = new Set<ParseNode>()): ParseNode | undefined => {
+    const node = patternExpression(expression);
+    if (!node || seen.has(node) || seen.size >= 256) return undefined;
+    seen.add(node);
+    if (node.type === 'TypeArgumentsExpression') return establishedCallable(node.Expression, seen);
+    if (isFunctionLiteral(node)) return node;
+    if (node.type !== 'IdentifierReference' || !immutablyBound(node.name, node)
+      || lexicalUnassigned(node, node.name) !== true) return undefined;
+    const binding = ResolveBindingDeclaration(node, node.name);
+    if (binding?.kind === 'function') {
+      const declaration = binding.node as ParseNode.FunctionDeclaration;
+      const exported = declaration.parent?.type === 'ExportDeclaration' ? declaration.parent : undefined;
+      return declaration.Decorators?.length || exported?.Decorators?.length ? undefined : declaration;
+    }
+    // A const destination preserves a value, not the implementation advertised
+    // by a shallow function storage annotation. Follow its actual initializer.
+    if (binding?.kind === 'const' && binding.initializer && !(binding.node as { Ref?: boolean }).Ref) {
+      return establishedCallable(binding.initializer, seen);
+    }
+    return undefined;
   };
 
   const derivationIsStable = (node: ParseNode | null | undefined): boolean => {
@@ -5507,22 +5527,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type === 'OptionalExpression') {
       return derivationIsStable(optionalChainView(node, false).expression);
     }
-    if (node.type === 'MemberExpression') {
-      // A range's static property view does not prove the identity of a public
-      // getter. Own properties and prototype changes can replace that getter;
-      // keep the receiving boundary unless an independent guard proves it.
-      const receiver = operationalType(staticType(node.MemberExpression));
-      const carriesRange = (type: Known): boolean => type?.Kind === 'union'
-        ? type.Members.some(carriesRange) : type?.Kind === 'nominal' && isRangeFamilyName(type.LibraryName);
-      if (carriesRange(receiver)) return false;
-      // An inferred binding can preserve a conforming plain array without
-      // installing typed storage. Its static array/tuple view therefore does
-      // not prove that a later indexed read survived an erased backing write.
-      // Keep the receiving check unless storage stability is independently
-      // established; membership at initialization is not such a proof.
-      const carriesSequence = (type: Known): boolean => type?.Kind === 'union'
-        ? type.Members.some(carriesSequence) : type?.Kind === 'array' || type?.Kind === 'tuple';
-      if (carriesSequence(receiver)) return false;
+    if (node.type === 'TaggedTemplateExpression') {
+      return derivationIsStable(templateCallView(node));
+    }
+    if (node.type === 'MemberExpression' || node.type === 'SuperProperty') {
+      // A property view does not prove the actual descriptor or getter. Own
+      // shadowing, erased aliases and prototype changes can replace a declared
+      // member, including a readonly one. As with ranges and plain sequences,
+      // retain admission of the value already read; do not perform another Get.
+      return false;
     }
     if (node.type === 'CallExpression') {
       const callee = (node as unknown as { CallExpression?: ParseNode, MemberExpression?: ParseNode });
@@ -5544,17 +5557,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
-      // Only a call through a PLAIN NAME is judged here. A method call reaches
-      // its callee through a property, which a program can also replace, so the
-      // same reasoning applies to it - but the demonstrated failure is the
-      // reassigned function binding above, and a property is a wider question
-      // (a frozen intrinsic, a `readonly` field, and an ordinary property are
-      // not alike). Recorded as a gap rather than closed by a rule that would
-      // charge every method call for a hazard this one does not demonstrate.
-      if (target && target.type === 'IdentifierReference'
-          && !immutablyBound((target as unknown as { name: string }).name, target)) {
-        return false;
-      }
+      // Keep the boundary unless the captured callee has the implementation
+      // whose enforced result supplied this signature. Property signatures,
+      // parameters and shallow callable admission do not establish that fact.
+      // This checks metadata only; it never repeats lookup or invocation.
+      const implementation = establishedCallable(target);
+      const type = target && callableForm(staticType(target));
+      if (!implementation || type?.Kind !== 'function' || !type.Signatures.length
+        || !type.Signatures.every((signature) => literalElisionImplementations.get(signature) === implementation
+          || declaredCallableResults.get(signature) === true && signatureDeclarations.get(signature) === implementation)) return false;
     }
     for (const key of Object.keys(node)) {
       if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
@@ -20523,6 +20534,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ...(adoptedThis ? { ThisType: adoptedThis } : {}),
             }],
           } as unknown as TypeRecord;
+          if (literal.TypeAnnotation && Return && Return.Kind !== 'any' && result.Kind === 'function') {
+            literalElisionImplementations.set(result.Signatures[0], node);
+          }
           if (anchored) literalContractAnchors.add(result);
           return result;
         } finally {
@@ -21699,28 +21713,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // from its enclosing declaration environment.
             return null;
           }
-          // A signature is trusted only where the CALLEE'S NAME cannot be replaced.
-      //
-      // A `function` declaration creates a MUTABLE binding, so
-      // `function g(p: uint32){ return "s"; } g = function(p){ return 1; }`
-      // leaves `g` holding a function that returns a number. The checker read
-      // `string` from the declaration and refused `const q: number = g(...)` -
-      // rejecting a program that is CORRECT, before it ran.
-      //
-      // #sec-check-elision states the rule and this engine already implements it
-      // there: "the condition is on the source text rather than on the form of
-      // the declaration, because A NAME THAT NOTHING ASSIGNS CANNOT BE REPLACED,
-      // whatever declared it. An ordinary program therefore keeps every elision
-      // it had; only one that writes to the name pays for the possibility, and
-      // it pays at the boundaries that read a signature from it."
-      //
-      // `immutablyBound` is that judgment, and it was consulted at exactly one
-      // site - the elision check. Reading a call's Static Type is the other
-      // boundary "that reads a signature from it", and it asked nothing.
-      //
-      // The predicate is REUSED rather than restated so that its second half
-      // comes along: a direct `eval` can assign to any name in scope, so its
-      // presence withdraws the judgment for the whole source text.
+      // Keep the existing declaration-result contribution screen: known
+      // lexical/global-property writes and direct eval withdraw the assumption.
+      // A positive result here is not a lifetime proof of implementation
+      // identity. Receiving-check elision requires establishedCallable and
+      // result-enforcement provenance separately. Broader global-alias and
+      // source-position contribution analysis must preserve independently
+      // published contracts and activation dependencies, not erase them merely
+      // because an optimization lacks an identity proof.
       const calleeName = ((node as { CallExpression?: ParseNode }).CallExpression as {
         type?: string, name?: string
       } | undefined);

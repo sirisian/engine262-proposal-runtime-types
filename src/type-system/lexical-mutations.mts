@@ -95,8 +95,11 @@ export function LexicalMutationAnalysis(root: ParseNode): {
     }
     let scope = enclosing;
     if (node.type === 'WithStatement' || node.type === 'RefExpression' || node.type === 'RefRebindingStatement' || node.Ref) dynamic = true;
-    if (node.type === 'CallExpression' && isNode(node.CallExpression)
-      && node.CallExpression.type === 'IdentifierReference' && node.CallExpression.name === 'eval') dynamic = true;
+    if (node.type === 'CallExpression') {
+      let callee: unknown = node.CallExpression;
+      while (isNode(callee) && callee.type === 'ParenthesizedExpression') callee = callee.Expression;
+      if (isNode(callee) && callee.type === 'IdentifierReference' && callee.name === 'eval') dynamic = true;
+    }
     // Annex B may copy a block function into another environment. Until that
     // copy has an identity here, it cannot justify relaxing the spelling screen.
     if (functions.has(node.type)) {

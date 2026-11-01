@@ -22,11 +22,10 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * permitted to go unreported; what the stability rule prevents is that
  * admission being compounded by an elision that assumes it never happened.
  *
- * The judgment is deliberately not "a function declaration is mutable, so never
- * elide a call": a name the source text never assigns to cannot be replaced, so
- * the ordinary call keeps its elision, and only a program that actually writes
- * to the name pays. A direct `eval` can assign to any name in scope and so
- * withdraws the judgment for the whole source text.
+ * A lexical inventory can prove an isolated local declaration unchanged, but
+ * cannot prove a global object binding unchanged. Immutable storage also does
+ * not prove the implementation of a shallowly admitted callable. These wider
+ * cases and single-evaluation controls are in call-result-stability.test.mts.
  */
 
 function run(source: string) {
@@ -61,9 +60,8 @@ test('a replaced callee cannot deliver a value the annotation refuses', () => {
     let sink = g();`);
 });
 
-test('a name the source never assigns keeps its elision', () => {
-  // The ordinary case pays nothing: no assignment to `f` appears, so the call
-  // through it is stable and both boundaries elide as before.
+test('an unchanged global callee retains its ordinary result', () => {
+  // This observes the value, not an unconditional proof of global identity.
   expect(value(`function f(): uint32 { return 5; }
     function g(): uint32 { return f(); }
     const n: uint32 = g();
