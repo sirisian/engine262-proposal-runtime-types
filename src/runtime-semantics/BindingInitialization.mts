@@ -17,8 +17,7 @@ import {
   PutValue,
   ResolveBinding,
   RequireObjectCoercible,
-  GetIterator,
-  ApplyTupleConversionForDestructuring,
+  GetIteratorForDestructuring,
   IteratorClose,
 } from '#self';
 
@@ -77,17 +76,9 @@ export function* BindingInitialization(node: ParseNode.ForBinding | ParseNode.Fo
       return yield* BindingInitialization_ObjectBindingPattern(node, value, environment, sourceResult);
     }
     case 'ArrayBindingPattern': {
-      // proposal-runtime-types sec-user-defined-conversions: "a conversion to a
-      // tuple type is what makes a class destructurable". Destructuring is
-      // defined over the ITERATION protocol, so a value whose class declares one
-      // but has no `[Symbol.iterator]` reached `GetIterator` and threw
-      // "[object Object] is not iterable" - the design's own example among them.
-      //
-      // Iteration is attempted FIRST, so a class declaring both keeps its
-      // iterator; this reaches only values that would otherwise throw.
-      const destructured = Q(yield* ApplyTupleConversionForDestructuring(value));
-      // 1. Let iteratorRecord be ? GetIterator(value).
-      const iteratorRecord = Q(yield* GetIterator(destructured, 'sync'));
+      // Preserve the captured iterator method across the tuple-conversion
+      // fallback; acquiring it twice could repeat a getter or change targets.
+      const iteratorRecord = Q(yield* GetIteratorForDestructuring(value));
       // 2. Let result be IteratorBindingInitialization of ArrayBindingPattern with arguments iteratorRecord and environment.
       const result = EnsureCompletion(yield* IteratorBindingInitialization_ArrayBindingPattern(node, iteratorRecord, environment));
       // 3. If iteratorRecord.[[Done]] is false, return ? IteratorClose(iteratorRecord, result).

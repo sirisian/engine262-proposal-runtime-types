@@ -1,10 +1,11 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ResolveInitializedBinding, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import type { Realm } from '../execution-context/Realm.mts';
-import { Value } from '../value.mts';
+import { ObjectValue, Value, wellKnownSymbols } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
-import { intrinsicData } from './intrinsic-origin.mts';
+import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { GlobalEffectValues } from './global-effect-values.mts';
+import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 type Origin = 'global' | 'eval' | 'Function' | 'dynamic-function' | 'global-bound' | 'Object' | 'Reflect'
@@ -187,8 +188,37 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     return true;
   };
+  const arrayIterationProofs = new Map<ParseNode, boolean>();
+  const arrayIterationIsStable = (site: ParseNode): boolean => {
+    // Awaiting values and delegation can re-enter user code between steps.
+    if (site.type === 'ForAwaitStatement' || site.type === 'YieldExpression') return false;
+    const cached = arrayIterationProofs.get(site);
+    if (cached !== undefined) return cached;
+    const arrayPrototype = realm.Intrinsics['%Array.prototype%'];
+    const iteratorPrototype = realm.Intrinsics['%ArrayIteratorPrototype%'];
+    let stable = intrinsicData(arrayPrototype, wellKnownSymbols.iterator) === realm.Intrinsics['%Array.prototype.values%']
+      && intrinsicData(iteratorPrototype, Value('next')) === realm.Intrinsics['%ArrayIteratorPrototype.next%'];
+    // Even an intrinsic iterator can acquire a user-defined close hook.
+    let prototype: Value = iteratorPrototype;
+    const seen = new Set<Value>();
+    while (stable && prototype !== Value.null) {
+      if (!(prototype instanceof ObjectValue) || prototype.Get !== ObjectValue.prototype.Get || seen.has(prototype)
+        || prototype.properties.has(Value('return')) || !('Prototype' in prototype)) {
+        stable = false;
+        break;
+      }
+      seen.add(prototype);
+      prototype = prototype.Prototype as Value;
+    }
+    stable &&= intrinsicSourceIsStable(root, realm, (node) => node === site, site);
+    arrayIterationProofs.set(site, stable);
+    return stable;
+  };
+  const statements = root.type === 'Script' ? root.ScriptBody?.StatementList ?? []
+    : root.type === 'Module' ? root.ModuleBody?.ModuleItemList ?? [] : [];
+  const provenDelegations = ProvenResumedDelegations(root, statements, realm);
   const values = GlobalEffectValues(nodes, {
-    binding: bindingAt, inputs, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
+    binding: bindingAt, inputs, arrayIterationIsStable, provenDelegations, scalar: scalarOrigins, key: (node) => keyOf(node as Node), propertyKey: (node) => propertyKey(node as Node),
     external: (node) => {
       const declaration = ResolveBindingDeclaration(node, node.name);
       return !declaration || declaration.kind === 'import' ? externalValue(node.name) : undefined;
@@ -295,9 +325,31 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     for (let at: ParseNode | undefined = read; at && at !== operation; at = at.parent) if (at === pattern) return true;
     return false;
   };
+  const contains = (ancestor: ParseNode, node: ParseNode): boolean => {
+    for (let at: ParseNode | undefined = node; at; at = at.parent) if (at === ancestor) return true;
+    return false;
+  };
+  const precedes = (effect: ParseNode, read: ParseNode): boolean => {
+    // Pattern syntax precedes its RHS in text, but all pattern operations run
+    // after that initializer. Rest copies follow the preceding defaults.
+    for (let at: ParseNode | undefined = effect; at; at = at.parent) {
+      if ((at.type === 'LexicalBinding' || at.type === 'VariableDeclaration') && at.BindingPattern && contains(at.BindingPattern, effect)) {
+        if (at.Initializer && contains(at.Initializer, read)) return false;
+        break;
+      }
+      if (at.type === 'AssignmentExpression' && contains(at.LeftHandSideExpression, effect)) {
+        if (contains(at.AssignmentExpression, read)) return false;
+        break;
+      }
+    }
+    if (effect.type === 'ArrayBindingPattern' || effect.type === 'ArrayLiteral') {
+      if (contains(effect, read)) return true;
+    }
+    return inPattern(read, effect) || !effect.location || !read.location || effect.location.endIndex <= read.location.startIndex;
+  };
   const affected = (node: ParseNode.IdentifierReference): boolean => values.exhausted() && globalName(node, false) || effects.some((effect) =>
     globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && (deferred(node) || deferred(effect.node)
-      || inPattern(node, effect.node) || !effect.node.location || !node.location || effect.node.location.endIndex <= node.location.startIndex));
+      || precedes(effect.node, node)));
   const affects = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
     const node = unwrap(expression);
     if (!node) return false;

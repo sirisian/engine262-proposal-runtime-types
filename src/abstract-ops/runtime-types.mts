@@ -51,6 +51,7 @@ import {
   PlanOrdinaryNominalConversion, OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
   wellKnownSymbols, InstantiateReturnDependency, RetainCheckedResult, InstantiateCheckedBindings, NormalizeInferredClassArguments,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
+  GetIterator, GetIteratorFromMethod, GetMethod, type IteratorRecord,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
   IsComposite, CompositeFromShape } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
@@ -3480,6 +3481,22 @@ export function LookupPrimitiveOperatorLevels(value: Value, opText: string): rea
   return names.map((name) => tables.get(name)?.get(opText) ?? []);
 }
 
+/** Acquire an iterator once, using a declared tuple conversion only when absent. */
+export function* GetIteratorForDestructuring(value: Value): PlainEvaluator<IteratorRecord> {
+  // Composite tuples iterate by kind; primitive handling remains GetIterator's.
+  if (!(value instanceof ObjectValue) || IsComposite(value) && IsArray(value) === Value.true) {
+    return Q(yield* GetIterator(value, 'sync'));
+  }
+  // Retain the actual first method read. A throwing or non-callable method is
+  // an abrupt completion, not an invitation to retry or try a conversion.
+  const iteratorFn = Q(yield* GetMethod(value, wellKnownSymbols.iterator));
+  if (!(iteratorFn instanceof UndefinedValue)) return Q(yield* GetIteratorFromMethod(value, iteratorFn));
+  const fn = LookupTupleConversion(value);
+  if (!fn || !IsCallable(fn)) return Throw.TypeError('$1 is not iterable', value);
+  const converted = Q(yield* Call(fn, value, []));
+  return Q(yield* GetIterator(converted, 'sync'));
+}
+
 /**
  * The conversion a class declares to a TUPLE type, or *null* where it declares
  * none.
@@ -3493,36 +3510,6 @@ export function LookupPrimitiveOperatorLevels(value: Value, opText: string): rea
  * A tuple's display begins with `[` and is not an array's `[].<T>` or `[3].<T>`,
  * which is what distinguishes the two here.
  */
-/**
- * The value an array destructuring should iterate: the result of a declared
- * tuple conversion where the value is not otherwise iterable, else the value
- * unchanged.
- *
- * Returning the value unchanged on every other path is what keeps this
- * invisible to programs that work today - an iterable object, a string, an
- * array, and a class with neither an iterator nor a conversion all pass
- * straight through and reach the same `GetIterator` they always did, including
- * its error.
- */
-export function* ApplyTupleConversionForDestructuring(value: Value): PlainEvaluator<Value> {
-
-  if (!(value instanceof ObjectValue)) {
-    return value;
-  }
-  // Iteration wins: a class declaring both keeps its iterator. Asked before the
-  // conversion rather than after, so this changes behaviour only where
-  // `GetIterator` would throw.
-  const iteratorFn = Q(yield* Get(value, wellKnownSymbols.iterator));
-  if (iteratorFn !== Value.undefined && iteratorFn !== Value.null) {
-    return value;
-  }
-  const fn = LookupTupleConversion(value);
-  if (!fn || !IsCallable(fn)) {
-    return value;
-  }
-  return Q(yield* Call(fn, value, []));
-}
-
 export function LookupTupleConversion(value: Value): Value | null {
   let proto: unknown = (value as { Prototype?: unknown }).Prototype;
   while (proto && proto instanceof Object && !(proto as { type?: string, constructor: unknown } instanceof Array)) {

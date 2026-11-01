@@ -3,8 +3,9 @@ import { ObjectValue, Value } from '../value.mts';
 import { intrinsicData } from './intrinsic-origin.mts';
 
 type Node = ParseNode & Record<string, unknown>;
-type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean };
-type Aggregate = { kind: 'aggregate', slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue };
+type Flow = { values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean };
+type Aggregate = { kind: 'aggregate', slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, array?: boolean,
+  slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
 type Callable = { kind: 'callable', parameters: readonly Node[], result: Flow, receiver: Flow };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], receiver: Flow };
 type Candidate = string | Aggregate | Callable | Bound;
@@ -18,6 +19,8 @@ const newFlow = (): Flow => ({ values: new Set(), users: new Set() });
  * code and establish neither a public contract nor a stable implementation.
  */
 export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
+  arrayIterationIsStable: (site: ParseNode) => boolean,
+  provenDelegations: ReadonlySet<ParseNode.YieldExpression>,
   binding: (node: ParseNode, name: string) => object,
   inputs: ReadonlyMap<object, readonly ParseNode[]>,
   scalar: (node: ParseNode) => Iterable<string>,
@@ -79,7 +82,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     queue.length = 0;
   };
-  const aggregate = (): Aggregate => ({ kind: 'aggregate', slots: new Map(), all: newFlow() });
+  const aggregate = (array = false): Aggregate => ({ kind: 'aggregate', slots: new Map(), all: newFlow(), array, slotUsers: new Set() });
   const globalObject = aggregate();
   const nativeValue = (value: Value | undefined, to: Flow): void => {
     if (!value) return;
@@ -88,7 +91,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       kinds.forEach((kind) => add(to, kind));
       if (!kinds.some((kind) => kind === 'String' || kind === 'Symbol')) return;
     }
-    if (!(value instanceof ObjectValue)) return;
+    if (!(value instanceof ObjectValue)) {
+      to.knownPrimitive = true;
+      return;
+    }
     if (value.Get !== ObjectValue.prototype.Get) {
       add(to, 'opaque-value');
       return;
@@ -118,6 +124,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
         else add(found, 'opaque-value');
       }
     }
+    for (const user of object.slotUsers) user(key, found);
     return found;
   };
   const load = (base: Flow, key: string | undefined, to: Flow, site?: ParseNode): void => watch(base, (value) => {
@@ -168,6 +175,70 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   const project = (base: Flow, key: string | undefined, site?: ParseNode): Flow => {
     const result = newFlow(); load(base, key, result, site); return result;
   };
+  const opaque = (result: Flow, site: ParseNode): void => {
+    add(result, 'opaque-value');
+    opaqueEffects.add(site);
+  };
+  const pendingIterations: { source: Flow, result: Flow, site: ParseNode, copy?: boolean }[] = [];
+  const iterate = (source: Flow, site: ParseNode, index?: number): Flow => {
+    const result = newFlow();
+    pendingIterations.push({ source, result, site });
+    watch(source, (value) => {
+      if (typeof value !== 'string' && value.kind === 'aggregate' && value.array && options.arrayIterationIsStable(site)) {
+        edge(project(source, index === undefined ? undefined : String(index)), result);
+      } else opaque(result, site);
+    });
+    return result;
+  };
+  const observeSlots = (object: Aggregate, visit: (key: string | undefined, flow: Flow) => void): void => {
+    object.slotUsers.add(visit);
+    for (const [key, flow] of object.slots) visit(key, flow);
+  };
+  const copyRest = (source: Flow, site: ParseNode, excluded = new Set<string>()): Flow => {
+    const result = newFlow(), copy = aggregate(); add(result, copy);
+    pendingIterations.push({ source, result: slot(copy, undefined), site, copy: true });
+    watch(source, (value) => {
+      if (typeof value === 'string' || value.kind !== 'aggregate') {
+        opaque(slot(copy, undefined), site);
+      } else if (value.native) {
+        if (value.native.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys
+          || value.native.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty) {
+          opaque(slot(copy, undefined), site);
+          return;
+        }
+        // Enumerate only engine-owned ordinary own descriptors. A proxy never
+        // reaches this path. Excluded/non-enumerable accessors are not read.
+        for (const [name, descriptor] of value.native.properties) {
+          const key = typeof name === 'string' ? name : 'stringValue' in name ? name.stringValue() : undefined;
+          if (key !== undefined && excluded.has(key) || descriptor.Enumerable !== Value.true) continue;
+          if (descriptor.Value === undefined) opaque(slot(copy, key), site);
+          else nativeValue(descriptor.Value, slot(copy, key));
+        }
+        observeSlots(value, (key, flow) => {
+          if (key === undefined || !excluded.has(key) && value.native!.properties.get(Value(key))?.Enumerable !== Value.false) edge(flow, slot(copy, key));
+        });
+      } else observeSlots(value, (key, flow) => {
+        if (key === undefined || !excluded.has(key)) edge(flow, slot(copy, key));
+      });
+    });
+    return result;
+  };
+  const arrayRest = (source: Flow, site: ParseNode, start: number): Flow => {
+    const result = newFlow(), copy = aggregate(true); add(result, copy);
+    // Iteration is an operation even when no remaining element is collected.
+    const values = iterate(source, site);
+    watch(source, (value) => {
+      if (typeof value !== 'string' && value.kind === 'aggregate' && value.array && options.arrayIterationIsStable(site)) {
+        observeSlots(value, (key, flow) => {
+          if (key === undefined) edge(flow, slot(copy, undefined));
+          else if (/^(0|[1-9][0-9]*)$/.test(key) && Number(key) >= start) edge(flow, slot(copy, String(Number(key) - start)));
+        });
+      } else edge(values, slot(copy, undefined));
+    });
+    // Empty candidate sets are not proof that iteration cannot run user code.
+    pendingIterations.push({ source, result: slot(copy, undefined), site });
+    return result;
+  };
   const target = (value: unknown, source: Flow, site?: ParseNode): void => {
     if (!isNode(value)) return;
     const node = value;
@@ -179,23 +250,43 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     else if (node.type === 'SingleNameBinding' || node.type === 'BindingElement') {
       target(node.BindingIdentifier ?? node.BindingPattern, source, site);
       if (node.Initializer) target(node.BindingIdentifier ?? node.BindingPattern, expression(node.Initializer), site);
-    } else if (node.type === 'ObjectBindingPattern') {
+    } else if (node.type === 'BindingRestProperty' || node.type === 'BindingRestElement' || node.type === 'ForBinding') {
+      target(node.BindingIdentifier ?? node.BindingPattern, source, site);
+    } else if (node.type === 'ForDeclaration') target(node.ForBinding, source, site);
+    else if (node.type === 'ObjectBindingPattern') {
+      const excluded = new Set<string>();
       for (const property of node.BindingPropertyList) {
         const key = property.type === 'SingleNameBinding' ? property.BindingIdentifier.name : options.propertyKey(property.PropertyName);
+        if (key !== undefined) excluded.add(key);
         target(property.type === 'SingleNameBinding' ? property : property.BindingElement, project(source, key, site), site);
       }
+      if (node.BindingRestProperty) target(node.BindingRestProperty, copyRest(source, node.BindingRestProperty, excluded), site);
     } else if (node.type === 'ArrayBindingPattern') {
-      node.BindingElementList.forEach((part, index) => target(part, project(source, String(index), site), site));
+      iterate(source, node);
+      node.BindingElementList.forEach((part, index) => target(part, iterate(source, node, index), site));
+      if (node.BindingRestElement) target(node.BindingRestElement, arrayRest(source, node, node.BindingElementList.length), site);
     } else if (node.type === 'ArrayLiteral') {
-      node.ElementList.forEach((part, index) => target(part, project(source, String(index), site), site));
+      iterate(source, node);
+      node.ElementList.forEach((part, index) => {
+        if (part.type === 'SpreadElement') target(part.AssignmentExpression, arrayRest(source, node, index), site);
+        else target(part, iterate(source, node, index), site);
+      });
     } else if (node.type === 'ObjectLiteral') {
+      const excluded = new Set<string>();
       for (const property of node.PropertyDefinitionList) {
-        if (property.type === 'IdentifierReference') target(property, project(source, property.name, site), site);
-        else if (property.type === 'CoverInitializedName') {
+        if (property.type === 'IdentifierReference') {
+          excluded.add(property.name);
+          target(property, project(source, property.name, site), site);
+        } else if (property.type === 'CoverInitializedName') {
+          excluded.add(property.IdentifierReference.name);
           target(property.IdentifierReference, project(source, property.IdentifierReference.name, site), site);
           target(property.IdentifierReference, expression(property.Initializer), site);
         } else if (property.type === 'PropertyDefinition' && property.PropertyName) {
-          target(property.AssignmentExpression, project(source, options.propertyKey(property.PropertyName), site), site);
+          const key = options.propertyKey(property.PropertyName);
+          if (key !== undefined) excluded.add(key);
+          target(property.AssignmentExpression, project(source, key, site), site);
+        } else if (property.type === 'PropertyDefinition') {
+          target(property.AssignmentExpression, copyRest(source, property, excluded), site);
         }
       }
     } else if (node.type === 'AssignmentExpression' && node.AssignmentOperator === '=') {
@@ -237,12 +328,28 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
     if (typeof value === 'string' || value.kind !== 'callable') return;
     value.parameters.forEach((parameter, index) => {
+      if (parameter.type === 'BindingRestElement') {
+        const rest = aggregate(true), flow = newFlow(); add(flow, rest);
+        if (packed) edge(project(packed, undefined, site), slot(rest, undefined));
+        else args.slice(index).forEach((argument, offset) => edge(argument, slot(rest, String(offset))));
+        target(parameter, flow, site);
+        return;
+      }
       const argument = packed ? project(packed, String(index), site) : args[index];
       if (argument) target(parameter, argument, site);
     });
     edge(receiver, value.receiver);
     edge(value.result, result);
   });
+  const isAssignmentTarget = (node: ParseNode): boolean => {
+    for (let at = node; at.parent; at = at.parent) {
+      const parent = at.parent;
+      if (parent.type === 'AssignmentExpression') return parent.LeftHandSideExpression === at;
+      if (parent.type === 'ForOfStatement' || parent.type === 'ForAwaitStatement') return parent.LeftHandSideExpression === at;
+      if (!['ArrayLiteral', 'ObjectLiteral', 'PropertyDefinition', 'SpreadElement', 'AssignmentRestElement', 'ParenthesizedExpression'].includes(parent.type)) return false;
+    }
+    return false;
+  };
   const expression = (value: unknown): Flow => {
     if (!isNode(value)) return newFlow();
     const node = value;
@@ -270,11 +377,11 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     } else if (node.type === 'AssignmentExpression' && node.AssignmentOperator === '=') {
       edge(expression(node.AssignmentExpression), result);
       target(node.LeftHandSideExpression, result, node);
-    } else if (node.type === 'ObjectLiteral' || node.type === 'ArrayLiteral') {
-      const object = aggregate(); add(result, object);
+    } else if ((node.type === 'ObjectLiteral' || node.type === 'ArrayLiteral') && !isAssignmentTarget(node)) {
+      const object = aggregate(node.type === 'ArrayLiteral' && !node.ElementList.some((part) => part.type === 'Elision')); add(result, object);
       if (node.type === 'ArrayLiteral') {
         node.ElementList.forEach((part, index) => {
-          if (part.type === 'SpreadElement') edge(project(expression(part.AssignmentExpression), undefined, part), slot(object, undefined));
+          if (part.type === 'SpreadElement') edge(iterate(expression(part.AssignmentExpression), part), slot(object, undefined));
           else edge(expression(part), slot(object, String(index)));
         });
       } else for (const property of node.PropertyDefinitionList) {
@@ -288,6 +395,13 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           else if (property.PropertySetParameterList === null) edge(callable(property as Node).result, slot(object, key));
         }
       }
+    } else if (node.type === 'AssignmentRestElement' || node.type === 'SpreadElement') {
+      if (!isAssignmentTarget(node)) edge(iterate(expression(node.AssignmentExpression), node), result);
+    } else if (node.type === 'YieldExpression' && node.hasStar) {
+      // Retain the independently proven local resumed-input boundary. This
+      // does not establish that arbitrary generator execution is effect-free.
+      if (options.provenDelegations.has(node)) add(result, 'opaque-value');
+      else edge(iterate(expression(node.AssignmentExpression), node), result);
     } else if (node.type === 'MemberExpression') load(expression(node.MemberExpression), options.key(node), result, node);
     else if (parameterKeys.some((key) => key in node)) {
       const fn = callable(node); add(result, fn);
@@ -303,7 +417,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     } else if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       let callee: ParseNode = node.type === 'CallExpression' ? node.CallExpression : node.MemberExpression;
       while (callee.type === 'ParenthesizedExpression') callee = callee.Expression;
-      let args = (node.Arguments ?? []).map(expression);
+      let argumentNodes: readonly ParseNode.ArgumentListElement[] = node.Arguments ?? [];
+      let args = argumentNodes.map(expression);
       let receiver = callee.type === 'MemberExpression' ? expression(callee.MemberExpression) : newFlow();
       let packed: Flow | undefined;
       if (callee.type === 'MemberExpression' && options.key(callee) === 'bind') {
@@ -318,7 +433,16 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           if (packed) project(packed, 'length', node);
         }
         args = options.key(callee) === 'call' ? args.slice(1) : [];
+        argumentNodes = options.key(callee) === 'call' ? argumentNodes.slice(1) : [];
         callee = callee.MemberExpression;
+      }
+      if (!packed && argumentNodes.some((argument) => argument.type === 'AssignmentRestElement')) {
+        const argumentsObject = aggregate(true); packed = newFlow(); add(packed, argumentsObject);
+        let uncertain = false;
+        argumentNodes.forEach((argument, index) => {
+          uncertain ||= argument.type === 'AssignmentRestElement';
+          edge(args[index], slot(argumentsObject, uncertain ? undefined : String(index)));
+        });
       }
       invoke(expression(callee), args, receiver, result, packed, node);
       const argument = (index: number): Flow => packed ? project(packed, String(index), node) : args[index] ?? newFlow();
@@ -341,6 +465,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const node = value as Node;
     expression(node);
     if (node.type === 'LexicalBinding' || node.type === 'VariableDeclaration') target(node.BindingIdentifier ?? node.BindingPattern, expression(node.Initializer), node);
+    if (node.type === 'ForOfStatement' || node.type === 'ForAwaitStatement') {
+      target(node.LeftHandSideExpression ?? node.ForBinding ?? node.ForDeclaration, iterate(expression(node.AssignmentExpression), node), node);
+    }
     if (node.type === 'ReturnStatement') for (let at = node.parent; at; at = at.parent) {
       if (parameterKeys.some((key) => key in at)) {
         edge(expression(node.Expression), callable(at as Node).result);
@@ -349,6 +476,14 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     }
   }
   settle();
+  for (let index = 0; index < pendingIterations.length;) {
+    const end = pendingIterations.length;
+    for (; index < end; index += 1) {
+      const request = pendingIterations[index];
+      if (!request.source.values.size && !(request.copy && (request.source.primitiveLiteral || request.source.knownPrimitive))) opaque(request.result, request.site);
+    }
+    settle();
+  }
   const summarize = (from: Flow, deep: boolean): Set<string> => {
     const result = new Set<string>();
     const seen = new Set<Flow>();
