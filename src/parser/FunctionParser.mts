@@ -151,7 +151,7 @@ export abstract class FunctionParser extends IdentifierParser {
       // #sec-check-elision names, and the one README's own
       // `where U <= Unit.Hour` uses - was a Syntax Error.
       if (surroundingAgent.feature('runtime-types') && this.test('where')) {
-        (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
+        (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
       }
 
       // #sec-callable-overload-contracts: an OWNER - a declaration whose list holds

@@ -1314,7 +1314,7 @@ export abstract class TypeParser extends ExpressionParser {
     // through the signature is held to them, and an implementation may only
     // repeat or weaken them.
     if (this.test('where')) {
-      (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
+      (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
     }
     return this.finishNode(node, 'MethodSignature');
   }
@@ -1641,7 +1641,7 @@ export abstract class TypeParser extends ExpressionParser {
     return this.finishNode(node, 'OperatorDefinition');
   }
 
-  parseWhereClauses(): ParseNode.WhereClause[] {
+  parseWhereClauses(allowReturn = false): ParseNode.WhereClause[] {
     const clauses: ParseNode.WhereClause[] = [];
     while (this.test('where')) {
       const node = this.startNode<ParseNode.WhereClause>();
@@ -1649,12 +1649,17 @@ export abstract class TypeParser extends ExpressionParser {
       // `return` is a |PrimaryExpression| only
       // HERE, so the flag is raised across the predicate and lowered after it
       // rather than being a property of the expression parser.
+      // #sec-checked-contracts: only a function form's clauses have a
+      // result, so `return` is a reference in those alone.
       const outer = (this as { inRefinementPredicate?: boolean }).inRefinementPredicate;
+      const outerReturn = (this as { returnInPredicate?: boolean }).returnInPredicate;
       (this as { inRefinementPredicate?: boolean }).inRefinementPredicate = true;
+      (this as { returnInPredicate?: boolean }).returnInPredicate = allowReturn;
       try {
         node.RefinementPredicate = this.parseRefinementPredicate();
       } finally {
         (this as { inRefinementPredicate?: boolean }).inRefinementPredicate = outer;
+        (this as { returnInPredicate?: boolean }).returnInPredicate = outerReturn;
       }
       clauses.push(this.finishNode(node, 'WhereClause'));
     }

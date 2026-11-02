@@ -1868,7 +1868,8 @@ export abstract class ExpressionParser extends FunctionParser {
     //
     // The second sentence is why this needs no guard against ambiguity: outside
     // a predicate the token still falls through to the ordinary error.
-    if (this.test(Token.RETURN) && (this as { inRefinementPredicate?: boolean }).inRefinementPredicate) {
+    if (this.test(Token.RETURN) && (this as { inRefinementPredicate?: boolean }).inRefinementPredicate
+        && (this as { returnInPredicate?: boolean }).returnInPredicate) {
       const node = this.startNode<ParseNode.ContractReturn>();
       this.next();
       return this.finishNode(node, 'ContractReturn') as unknown as ParseNode.PrimaryExpression;
@@ -3668,7 +3669,7 @@ export abstract class ExpressionParser extends FunctionParser {
     });
     node.TypeAnnotation = surroundingAgent.feature('runtime-types') && this.test(Token.COLON) ? this.parseTypeAnnotation(true) : null;
     if (surroundingAgent.feature('runtime-types') && this.test('where')) {
-      (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
+      (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
     }
     this.semicolon();
     return this.finishNode(node, 'AbstractMethodDefinition');
@@ -4457,7 +4458,7 @@ export abstract class ExpressionParser extends FunctionParser {
       // own; both are bound at the specialization the clause is checked at.
       if (surroundingAgent.feature('runtime-types') && this.test('where')) {
         (node as ParseNode.Unfinished<ParseNode.MethodDefinition> & { WhereClauses?: ParseNode.WhereClause[] })
-          .WhereClauses = this.parseWhereClauses();
+          .WhereClauses = this.parseWhereClauses(true);
       }
 
       // #sec-abstract-classes: "A member is

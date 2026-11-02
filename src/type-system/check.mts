@@ -858,6 +858,8 @@ export interface GenericWhereCheck {
    * its declaration and is evaluated there, and refused if it does not hold.
    */
   readonly closed?: boolean;
+  /** #sec-generic-where: the defaults whose substitution this check decides, refused if it fails. */
+  readonly unreachableDefault?: readonly string[];
   /**
    * Round 5, Gap 1: a runtime-subject predicate over value parameters, decided
    * at a call whose arguments are compile-time evaluable. Each named parameter
@@ -3530,6 +3532,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * subjects, the declaration's parameters, `this` and `return`, are names
    * the clause supplies.
    */
+  /**
+   * #sec-generic-where: a clause reads only its subjects and never suspends.
+   * It may not read `new.target`, contain `await` or `yield`, or read `this`
+   * or `super` where its declaration has no receiver: a function that is not
+   * a method, or a class's own clauses. A refinement's `this` is its subject
+   * and a method's is its receiver.
+   */
+  const whereClauseForbiddenRead = (predicate: ParseNode, declaration: ParseNode): string | undefined => {
+    const receiverless = /^(FunctionDeclaration|FunctionExpression|GeneratorDeclaration|GeneratorExpression|AsyncFunctionDeclaration|AsyncFunctionExpression|AsyncGeneratorDeclaration|AsyncGeneratorExpression|ClassTail|ClassDeclaration|ClassExpression)$/.test(declaration.type);
+    let found: string | undefined;
+    const visit = (value: unknown, inFunction: boolean, inArrow: boolean): void => {
+      if (found !== undefined || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item, inFunction, inArrow);
+        return;
+      }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (!inFunction && !inArrow && (node.type === 'AwaitExpression' || node.type === 'YieldExpression')) {
+        found = `${node.type === 'AwaitExpression' ? 'an await' : 'a yield'} expression, which would suspend the clause`;
+        return;
+      }
+      if (!inFunction && node.type === 'NewTarget') {
+        found = 'new.target, which is no input of the declaration';
+        return;
+      }
+      if (!inFunction && receiverless && (node.type === 'ThisExpression' || node.type === 'SuperProperty' || node.type === 'SuperCall')) {
+        found = 'a read of `this`, which a declaration without a receiver does not have';
+        return;
+      }
+      const arrow = node.type === 'ArrowFunction' || node.type === 'AsyncArrowFunction';
+      const fn = !arrow && /Function|Method|Class/.test(node.type);
+      for (const [key, child] of Object.entries(node)) {
+        if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child, inFunction || fn, inArrow || arrow);
+      }
+    };
+    visit(predicate, false, false);
+    return found;
+  };
+
   const whereClauseUnresolvedName = (predicate: ParseNode, declaration: ParseNode): string | undefined => {
     const globalObject = surroundingAgent.currentRealmRecord.GlobalObject;
     for (const reference of LexicalFreeReferences(predicate)) {
@@ -3547,7 +3589,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // interface, class or enum of the program.
       if (builtinTypeRecord(reference.name) || aliasNodes.has(reference.name) || interfaceNodes.has(reference.name)
           || classNodes.has(reference.name) || enumNodes.has(reference.name) || lookupAlias(reference.name)) continue;
-      void declaration;
+      const signatureParameters = (declaration as { FunctionTypeParameterList?: readonly ParseNode[] }).FunctionTypeParameterList ?? [];
+      if (signatureParameters.some((parameter) => (parameter as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name === reference.name)) continue;
+      if (((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [])
+        .some((parameter) => parameter.BindingIdentifier?.name === reference.name)) continue;
       return reference.name;
     }
     return undefined;
@@ -3591,7 +3636,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (Array.isArray(value)) { value.forEach(visit); return; }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
-      if (node.type === 'ThisExpression') { found = true; return; }
+      if (node.type === 'ThisExpression' || node.type === 'SuperProperty' || node.type === 'SuperCall') { found = true; return; }
       if (/Function|Arrow|Method|Class/.test(node.type)) return;
       for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
     };
@@ -3839,10 +3884,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const inherited = (base as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
     if (inherited.length === 0) return false;
     const text = (clause: ParseNode.WhereClause): string => ((clause.RefinementPredicate as { sourceText?: string }).sourceText ?? '').replace(/\s+/g, '');
-    const parameterNames = (declaration: ParseNode): string[] => [
-      ...((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [])
-        .map((parameter) => parameter.BindingIdentifier.name),
-    ];
+    // Type parameters, then formal parameters, by position: a signature's
+    // formals are its FunctionTypeParameterList.
+    const parameterNames = (declaration: ParseNode): string[] => {
+      const shape = declaration as { UniqueFormalParameters?: unknown, FormalParameters?: unknown, FunctionTypeParameterList?: unknown };
+      const list = (shape.UniqueFormalParameters ?? shape.FormalParameters ?? shape.FunctionTypeParameterList ?? []) as readonly unknown[];
+      return [
+        ...((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [])
+          .map((parameter) => parameter.BindingIdentifier.name),
+        ...(Array.isArray(list) ? list : []).map((formal) => {
+          const f = formal as { BindingIdentifier?: { name?: string }, SingleNameBinding?: { BindingIdentifier?: { name?: string } } };
+          return f.BindingIdentifier?.name ?? f.SingleNameBinding?.BindingIdentifier?.name ?? '?';
+        }),
+      ];
+    };
     const ownNames = parameterNames(override);
     const baseNames = parameterNames(base);
     const comparison = (clause: ParseNode.WhereClause, names: readonly string[]): { index: number, op: string, bound: bigint } | null => {
@@ -13838,6 +13893,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           reportType('rt-compile-time-evaluability', clause, 'a where clause must be compile-time evaluable: $1', Value(store));
           continue;
         }
+        const forbidden = whereClauseForbiddenRead(predicate, n);
+        if (forbidden !== undefined) {
+          reportType('rt-compile-time-evaluability', clause, 'a where clause must be compile-time evaluable: $1', Value(forbidden));
+          continue;
+        }
         // #sec-generic-where: a `where` naming `return` is a contract over the
         // function's result; a function declared `void` has none to constrain.
         const returnAnnotation = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
@@ -13868,6 +13928,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (violation !== undefined) reportType('rt-compile-time-evaluability', clause,
           'a specialization predicate must be compile-time evaluable: $1', Value(violation));
       }
+    }
+    if (Array.isArray(n.WhereClauses) && (n.type === 'MethodSignature' || (/Method/.test(n.type) && !(n as { FunctionBody?: unknown }).FunctionBody))) {
+      walkSignatureClauses(n);
     }
     for (const key of Object.keys(n)) {
       if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'strict') continue;
@@ -14787,7 +14850,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               try {
                 const body = resolveType(genericDeclaration.Type);
                 checkSpecializedDeclaration(genericDeclaration, bindings);
-                return body && substituteFreeTypeParameters(body, bindings, genericParameters);
+                const applied = body && substituteFreeTypeParameters(body, bindings, genericParameters);
+                // #sec-where-clauses: an application of a generic alias whose
+                // clause reads `this` is a generic dependent record type, the
+                // applied body refined by the declaration's predicate, so it
+                // keeps the wrapper the non-generic refinement keeps.
+                const valueParameterNames = valueTypeParameterNames(genericDeclaration);
+                const refining = (genericDeclaration.WhereClauses ?? []).some((clause) => whereClauseNamesThis(clause.RefinementPredicate as ParseNode))
+                  && !(genericDeclaration.WhereClauses ?? []).some((clause) => LexicalFreeReferences(clause.RefinementPredicate as ParseNode).some((reference) => valueParameterNames.has(reference.name)));
+                if (applied && refining) {
+                  return { Kind: 'nominal', Declaration: genericDeclaration, Arguments: parameters.map((parameter) => bindings.get(parameter.Name)!), Structure: applied } as unknown as Known;
+                }
+                return applied;
               } finally {
                 typeParameterScopes.pop();
                 resolvingAliases.delete(genericDeclaration);
@@ -28297,6 +28371,80 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
   /**
+   * #sec-generic-where: a method signature's clauses, in an interface, an
+   * object type or an abstract method, are the contract every implementer
+   * inherits, and are judged at the signature as a declaration's are.
+   */
+  const walkSignatureClauses = (signature: ParseNode): void => {
+    const clauses = (signature as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    if (clauses.length === 0) return;
+    const parameters = ((signature as { FunctionTypeParameterList?: readonly ParseNode[] }).FunctionTypeParameterList
+      ?? (signature as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? []);
+    const before = captureFlow();
+    const pushedScope = pushTypeParameterScopeOf(signature);
+    frames.push(emptyFrame());
+    try {
+      const formals = new Set<string>();
+      for (const parameter of parameters) {
+        const name = (parameter as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+        if (!name) continue;
+        const annotation = (parameter as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        const typeNode = annotation?.Type ?? (parameter as { Type?: ParseNode | null }).Type;
+        declare(name, (typeNode ? resolveType(typeNode as ParseNode.Type) ?? anyTypeRecord : anyTypeRecord) as Known);
+        formals.add(name);
+      }
+      const resultAnnotation = (signature as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+      const result = resultAnnotation ? resolveType(resultAnnotation.Type) as Known | null : null;
+      walkDeclarationClauses(signature, clauses, { formals, valueParameters: valueTypeParameterNames(signature), returnType: result && result.Kind !== 'void' ? result : null });
+    } finally {
+      frames.pop();
+      if (pushedScope) typeParameterScopes.pop();
+      restoreFlow(before);
+    }
+  };
+  /**
+   * #sec-generic-where: a constant default its own declaration's clause
+   * rejects can never be taken. A parameter default is decided as an omitted
+   * argument is at a call, and a generic default as an application's binding.
+   */
+  const recordDefaultWhereChecks = (declaration: ParseNode, clauses: readonly ParseNode.WhereClause[], formals: readonly ParseNode[]): void => {
+    const names: string[] = [];
+    const defaulted = new Map<string, TypeRecord>();
+    for (const formal of formals) {
+      if (formal.type !== 'SingleNameBinding') return;
+      const binding = formal as ParseNode.SingleNameBinding;
+      names.push(binding.BindingIdentifier.name);
+      const initializer = (binding as { Initializer?: ParseNode | null }).Initializer;
+      const value = initializer ? decidedArgumentValue(initializer as never, binding) : undefined;
+      if (value) defaulted.set(binding.BindingIdentifier.name, value);
+    }
+    const parameters = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+    const generic = new Map<string, TypeRecord>();
+    for (const parameter of parameters) {
+      const defaultNode = (parameter as { TypeParameterDefault?: ParseNode | null }).TypeParameterDefault;
+      const value = defaultNode && parameter.BindingIdentifier ? resolveType(defaultNode as ParseNode.Type) : null;
+      if (value) generic.set(parameter.BindingIdentifier.name, value as TypeRecord);
+    }
+    const allGenericDefaulted = parameters.length > 0 && parameters.every((parameter) => parameter.BindingIdentifier && generic.has(parameter.BindingIdentifier.name));
+    for (const clause of clauses) {
+      const predicate = clause.RefinementPredicate as ParseNode;
+      if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+      const references = LexicalFreeReferences(predicate);
+      const readsGeneric = [...new Set(references.filter((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter').map((reference) => reference.name))];
+      const readsFormal = [...new Set(references.map((reference) => reference.name).filter((name) => names.includes(name)))];
+      let check: GenericWhereCheck | undefined;
+      if (readsGeneric.length === 0 && readsFormal.length > 0 && readsFormal.every((name) => defaulted.has(name))) {
+        check = { declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: new Map(), values: new Map(readsFormal.map((name) => [name, defaulted.get(name)!])), unreachableDefault: readsFormal, sourceModule: importedDeclarationSourceModule(declaration) };
+      } else if (readsFormal.length === 0 && readsGeneric.length > 0 && allGenericDefaulted && readsGeneric.every((name) => generic.has(name))) {
+        check = { declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: generic, unreachableDefault: readsGeneric, sourceModule: importedDeclarationSourceModule(declaration) };
+      }
+      if (!check) continue;
+      const checks = whereChecks.get(clause) ?? [];
+      checks.push(check);
+      whereChecks.set(clause, checks);
+    }
+  };
+  /**
    * #sec-generic-where: a declaration's clauses are judged where it is
    * declared, each under the facts the clauses written before it establish,
    * whether or not the declaration is applied, called or reached. A formal
@@ -34857,7 +35005,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               errors.splice(mark);
             }
-            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' ? result as Known : null });
+            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' ? result as Known : null, thisType: /Method/.test(owner.type) ? thisTypeFrames.at(-1) ?? undefined : undefined });
+            recordDefaultWhereChecks(owner, clauses, params ?? []);
           } finally {
             restoreFlow(beforeClauses);
           }
@@ -39515,6 +39664,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const pushedAliasScope = pushTypeParameterScopeOf(n);
           try {
             walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n) });
+            recordDefaultWhereChecks(n, aliasClauses, []);
           } finally {
             if (pushedAliasScope) typeParameterScopes.pop();
             restoreFlow(beforeClauses);
@@ -41783,6 +41933,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const pushedClassScope = pushTypeParameterScopeOf(n);
             try {
               walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n) });
+              recordDefaultWhereChecks(n, ownClauses, []);
             } finally {
               if (pushedClassScope) typeParameterScopes.pop();
               restoreFlow(beforeClassClauses);

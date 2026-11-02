@@ -1693,6 +1693,30 @@ function* InstantiateGenericAliasInContext(
           if (cycle !== null) return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', Value(entry.declaration.BindingIdentifier.name), Value(cycle));
         }
       }
+      // #sec-where-clauses: an application of a generic alias whose clause
+      // reads `this` is a generic dependent record type, the applied body
+      // refined by the declaration's predicate under these arguments. It binds
+      // as a nominal record carrying the declaration and the arguments, which
+      // the boundary check substitutes and runs the clauses under.
+      // A clause that reads a value parameter is left out until its binding is
+      // converted into the parameter's domain: compared against a converted
+      // `this`, the unconverted binding does not mix.
+      const valueParameters = new Set(params.filter((parameter) => (parameter as { IsValueParameter?: boolean }).IsValueParameter).map((parameter) => parameter.BindingIdentifier.name));
+      const readsValueParameter = (value: unknown): boolean => {
+        if (!value || typeof value !== 'object') return false;
+        if (Array.isArray(value)) return value.some(readsValueParameter);
+        const node = value as { type?: string, name?: string };
+        if (typeof node.type !== 'string') return false;
+        if (node.type === 'IdentifierReference' && node.name !== undefined && valueParameters.has(node.name)) return true;
+        return Object.entries(node).some(([key, child]) => !['parent', 'location', 'sourceText', 'strict'].includes(key) && readsValueParameter(child));
+      };
+      if (!enclosing && clauses && clauses.length > 0 && mentionsThis(clauses) && !clauses.some((clause) => readsValueParameter(clause.RefinementPredicate))) {
+        // The arguments as the frame binds them, converted into each
+        // parameter's domain, so the boundary reads what this instantiation read.
+        const bound = params.map((parameter) => frame.get(parameter.BindingIdentifier.name));
+        const applied = bound.every((record) => record !== undefined) ? bound as TypeRecord[] : argRecords;
+        return { Kind: 'nominal', Declaration: declaration, Arguments: applied, Structure: expansion.placeholder } as unknown as TypeRecord;
+      }
       return enclosing ? body : expansion.placeholder;
     } finally {
       typeParameterFrames.pop();
@@ -5120,6 +5144,25 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // this and costs nothing.
         const whereClauses = (t.Declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
         if (whereClauses && whereClauses.length > 0) {
+          // A generic refinement's clauses may read its type parameters,
+          // bound here to the application's arguments (#sec-where-clauses).
+          const parameters = (t.Declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+          const applied = (t as { Arguments?: readonly TypeRecord[] }).Arguments ?? [];
+          if (parameters.length > 0 && applied.length > 0) {
+            // Bound as the instantiation binds them: in the frame, and as an
+            // environment a value parameter is read through.
+            const frame = new Map(parameters.flatMap((parameter, index) => (applied[index] ? [[parameter.BindingIdentifier.name, applied[index]] as const] : [])));
+            const context = surroundingAgent.runningExecutionContext;
+            const prior = context.LexicalEnvironment;
+            pushTypeParameterFrame(frame);
+            context.LexicalEnvironment = NewTypeParameterEnvironment(prior, parameters, frame);
+            try {
+              return Q(yield* EvaluateWhereClauses(value, whereClauses));
+            } finally {
+              context.LexicalEnvironment = prior;
+              typeParameterFrames.pop();
+            }
+          }
           return Q(yield* EvaluateWhereClauses(value, whereClauses));
         }
         return true;

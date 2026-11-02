@@ -31,7 +31,9 @@ test('every compile-time-evaluable argument form decides the clause (round 5, Q9
   refused('function f(i: uint32) where i > 10 { return i; } f(...[5]);');
   refused('function f(i: uint32) where i > 10 { return i; } f(2 + 3);');
   refused('function f(i: uint32) where i > 10 { return i; } const n = 2 + 3; f(n);');
-  refused('function f(i: uint32 = 5) where i > 10 { return i; } f();');
+  // #sec-generic-where: a default its own clause rejects can never be taken,
+  // so the declaration is refused before any call omits the argument.
+  expect(observeScript('function f(i: uint32 = 5) where i > 10 { return i; } f();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-unreachable-default' } });
   // An omitted optional parameter binds undefined and the predicate decides, as the run time does.
   refused('function f(i?: uint32) where i > 10 { return i; } f();');
   expect(evaluated('function f(i?: uint32) where i === undefined || i > 10 { return 1; } String(f());')).toBe('1');

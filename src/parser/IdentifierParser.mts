@@ -41,7 +41,7 @@ export abstract class IdentifierParser extends BaseParser {
 
   // Supplied by TypeParser further down the chain; declared here so a function
   // declaration can take the  clauses #sec-checked-contracts gives it.
-  protected abstract parseWhereClauses(): ParseNode.WhereClause[];
+  protected abstract parseWhereClauses(allowReturn?: boolean): ParseNode.WhereClause[];
 
   // IdentifierName
   parseIdentifierName() {

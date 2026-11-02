@@ -51,7 +51,9 @@ test('a read of the random source or the clock is refused as not compile-time ev
 });
 
 test('a specialization predicate over defaulted parameters is checked when the argument list is omitted', () => {
-  expect(observeScript('function f<N: uint32 = 0>() where N > 0 { return N; } f();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-where-unsatisfied' } });
+  // #sec-generic-where: a default its own clause rejects can never be taken,
+  // so the declaration is refused before the argument list is omitted.
+  expect(observeScript('function f<N: uint32 = 0>() where N > 0 { return N; } f();')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-unreachable-default' } });
   expect(evaluated('function f<N: uint32 = 1>() where N > 0 { return N; } String(f());')).toBe('1');
 });
 

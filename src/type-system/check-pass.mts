@@ -918,6 +918,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           return CreateTypeDiagnostic('rt-impossible-test', clause, 'pre-evaluation',
             'this $1 clause does not depend on what it constrains and is always false, so nothing can satisfy it', Value('where'));
         }
+        // #sec-generic-where: a default its own clause rejects can never be taken.
+        if (check.unreachableDefault && !result.Value) {
+          return CreateTypeDiagnostic('rt-unreachable-default', clause, 'pre-evaluation', 'the default of $2 can never be taken: this $1 clause rejects it',
+            Value('where'), Value(check.unreachableDefault.join(', ')));
+        }
         if (!result.Value) {
           return check.values
             ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
@@ -927,7 +932,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
               ? CreateTypeDiagnostic('rt-assignability', clause, 'pre-evaluation', 'this value is not a $1: it fails the refinement $2', Value(check.targetName ?? 'refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
         }
-        MarkGenericWhereVerified(clause, frame);
+        // The memo answers for every later use of the clause under this frame,
+        // so only a verdict that holds for every use may enter it: a
+        // specialization's bindings or a closed clause. A verdict for one
+        // call's arguments, one return or one literal source, or for a
+        // default, says nothing about the next one.
+        if (!check.values && !check.returnValue && !check.thisLiteral && !check.unreachableDefault) MarkGenericWhereVerified(clause, frame);
       }
     } finally {
       sourceContext.LexicalEnvironment = callerEnvironment;
