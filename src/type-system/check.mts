@@ -19,6 +19,7 @@ import { TV } from '../static-semantics/TemplateStrings.mts';
 import { NumericValue } from '../static-semantics/NumericValue.mts';
 import { LexicallyDeclaredNames } from '../static-semantics/LexicallyDeclaredNames.mts';
 import { VarDeclaredNames } from '../static-semantics/VarDeclaredNames.mts';
+import { PropName } from '../static-semantics/PropName.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
@@ -73,6 +74,7 @@ import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
+import { DiscriminatingChainOf } from './DiscriminatingChain.mts';
 import { GlobalBindingMutations } from './global-binding-mutations.mts';
 import { NondeterministicMember } from './evaluable-fragment.mts';
 import { ExcludedGlobalReach } from './fragment-library.mts';
@@ -851,6 +853,11 @@ export interface GenericWhereCheck {
   readonly declaration: ParseNode.FunctionDeclaration | ParseNode.TypeAliasDeclaration | ParseNode.MethodDefinition;
   readonly clauses: readonly ParseNode.WhereClause[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
+  /**
+   * #sec-generic-where: a clause that reads none of its subjects is closed at
+   * its declaration and is evaluated there, and refused if it does not hold.
+   */
+  readonly closed?: boolean;
   /**
    * Round 5, Gap 1: a runtime-subject predicate over value parameters, decided
    * at a call whose arguments are compile-time evaluable. Each named parameter
@@ -3889,6 +3896,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return found;
   };
 
+  /**
+   * #sec-generic-where: a method takes its clauses as a function declaration
+   * does, so a clause over its formal parameters is decided at a call whose
+   * arguments are compile-time evaluable, as a function call's is. A clause
+   * that also reads a type parameter, `this` or `return` is left to the call's
+   * other checks.
+   */
+  const recordMethodArgumentWhereCheck = (call: ParseNode.CallExpression, declaration: ParseNode): void => {
+    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    const formals = (declaration as { FormalParameters?: readonly ParseNode[] }).FormalParameters
+      ?? (declaration as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? [];
+    const names: string[] = [];
+    for (const formal of formals) {
+      if (formal.type !== 'SingleNameBinding' || (formal as { Ref?: boolean }).Ref) return;
+      names.push((formal as ParseNode.SingleNameBinding).BindingIdentifier.name);
+    }
+    const written = positionalArguments(call.Arguments, names);
+    if (written === null) return;
+    const values = new Map<string, TypeRecord>();
+    const decided: ParseNode.WhereClause[] = [];
+    for (const clause of clauses) {
+      const predicate = clause.RefinementPredicate;
+      const references = LexicalFreeReferences(predicate);
+      if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate)
+        || references.some((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter')) continue;
+      const reads = references.map((reference) => reference.name).filter((name) => names.includes(name));
+      if (reads.length === 0) continue;
+      let complete = true;
+      for (const name of reads) {
+        const index = names.indexOf(name);
+        const value = decidedArgumentValue(written[index], formals[index] as ParseNode.SingleNameBinding);
+        if (!value) {
+          complete = false;
+          break;
+        }
+        values.set(name, value);
+      }
+      if (complete) decided.push(clause);
+    }
+    if (decided.length === 0) return;
+    const checks = whereChecks.get(call) ?? [];
+    if (checks.some((check) => check.declaration === declaration && check.values)) return;
+    checks.push({ declaration: declaration as ParseNode.MethodDefinition, clauses: decided, bindings: new Map(), values, sourceModule: importedDeclarationSourceModule(declaration) });
+    whereChecks.set(call, checks);
+  };
+
   /** A plain call of a method whose clause reads only its class's parameters (round 5, Q7). */
   const recordClassParameterWhereCheck = (call: ParseNode.CallExpression): void => {
     const callee = call.CallExpression;
@@ -3900,6 +3953,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) return;
     const outer = receiverClassBindings((callee as ParseNode.MemberExpression).MemberExpression as ParseNode);
     if (outer) recordWhereCheck(call, declaration, new Map(), outer);
+    recordMethodArgumentWhereCheck(call, declaration);
   };
 
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
@@ -7102,6 +7156,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const pushImpossibleTest = (verdict: 'never-succeeds' | 'never-fails', form: string, site: ParseNode): void => {
+    if (verdict === 'never-fails' && sparedCertainTests.has(site)) return;
     reportType('rt-impossible-test', site, verdict === 'never-succeeds'
       ? 'the $1 test can never succeed, so the branch it guards is dead code'
       : 'the $1 test can never fail, so the branch it guards is dead code', Value(form));
@@ -21031,6 +21086,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return superMember(node)?.type ?? null;
       case 'SuperCall':
         return thisTypeFrames.at(-1) ?? null;
+      case 'ContractReturn':
+        // #sec-checked-contracts: `return` in a result contract is the result.
+        return contractReturnFrames.at(-1) ?? null;
       case 'ThisExpression':
         // #sec-this-adoption: within
         // an adopting literal's body, "`this` has that type". Outside one there
@@ -24921,6 +24979,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (e.type === 'ThisExpression') {
       return THIS_PATH;
     }
+    if (e.type === 'ContractReturn') {
+      return CONTRACT_RETURN_PATH;
+    }
     if (e.type === 'MemberExpression') {
       return narrowablePath(e);
     }
@@ -28080,6 +28141,208 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       whereClauseWalkDepth -= 1;
     }
   };
+
+  /** `return` in a result contract, typed while the contract is judged at its declaration (#sec-checked-contracts). */
+  const contractReturnFrames: Known[] = [];
+  const CONTRACT_RETURN_PATH = '\u0000return';
+  /** A `match` in a predicate position, which carries an implicit `default: false` (#sec-where-clauses). */
+  const implicitDefaultMatches = new WeakSet<ParseNode>();
+  /** The last test of a discriminating chain, which may be certain (#sec-discriminated-where-chains). */
+  const sparedCertainTests = new WeakSet<ParseNode>();
+  /**
+   * The value of a predicate written as one of the explicit constants
+   * #sec-narrowfrom exempts - `true`, `false`, `0` or `1` under parentheses and
+   * `!` - or undefined for any other predicate.
+   */
+  const whereLiteralValue = (predicate: ParseNode): boolean | undefined => {
+    let node = predicate;
+    let negated = false;
+    for (;;) {
+      if (node.type === 'ParenthesizedExpression') {
+        node = (node as unknown as { Expression: ParseNode }).Expression;
+      } else if (node.type === 'UnaryExpression' && (node as ParseNode.UnaryExpression).operator === '!') {
+        negated = !negated;
+        node = (node as ParseNode.UnaryExpression).UnaryExpression as ParseNode;
+      } else {
+        break;
+      }
+    }
+    let value: boolean | undefined;
+    if (node.type === 'BooleanLiteral') {
+      value = (node as ParseNode.BooleanLiteral).value;
+    } else if (node.type === 'NumericLiteral') {
+      const raw = (node as ParseNode.NumericLiteral).value;
+      value = raw === 1 ? true : raw === 0 ? false : undefined;
+    }
+    return value === undefined ? undefined : value !== negated;
+  };
+  /** The names of a declaration's value type parameters, which a clause compares against constants. */
+  const valueTypeParameterNames = (declaration: ParseNode | undefined): Set<string> => new Set(
+    ((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | undefined)?.TypeParameters?.TypeParameterList ?? [])
+      .filter((parameter) => (parameter as { IsValueParameter?: boolean }).IsValueParameter && parameter.BindingIdentifier)
+      .map((parameter) => parameter.BindingIdentifier.name),
+  );
+  interface ClauseSubjects {
+    readonly formals: ReadonlySet<string>;
+    readonly valueParameters: ReadonlySet<string>;
+    readonly thisType?: Known;
+    readonly returnType?: Known | null;
+  }
+  /**
+   * #sec-where-clauses: the conditional form's AssignmentExpression decides a
+   * branch and a `match` predicate's patterns are pattern positions, so both
+   * are judged as they are in any other position. A branch predicate is
+   * walked under the facts its branch establishes.
+   */
+  const spareCertainTest = (root: ParseNode): void => {
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      const n = value as ParseNode;
+      if (typeof n.type !== 'string') return;
+      sparedCertainTests.add(n);
+      for (const [key, child] of Object.entries(n)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(root);
+  };
+  /**
+   * `chain` is undefined at the head of a conditional chain, which classifies
+   * itself, and carries the head's classification down its else-links.
+   */
+  const walkRefinementPredicate = (predicate: ParseNode, chain?: boolean): TestFlow | undefined => {
+    const node = unparenthesized(predicate);
+    if (node.type === 'ConditionalRefinement') {
+      const conditional = node as unknown as ParseNode.ConditionalRefinement;
+      // #sec-discriminated-where-chains: the last test of a discriminating
+      // chain whose conditions exhaust its discriminant is certain by
+      // construction, so the judgment that refuses a test that can never fail
+      // spares that test. Any other chain's certain last test is refused.
+      const discriminating = chain ?? DiscriminatingChainOf({ RefinementPredicate: node } as unknown as ParseNode) !== undefined;
+      if (chain !== undefined && discriminating && !conditional.Alternate) spareCertainTest(conditional.Test as ParseNode);
+      const outcome = walkWhereClause(conditional.Test as ParseNode);
+      const before = captureFlow();
+      try {
+        if (outcome.whenTrue) {
+          restoreFlow(outcome.whenTrue);
+          walkRefinementPredicate(conditional.Consequent as ParseNode);
+        }
+        if (conditional.Alternate && outcome.whenFalse) {
+          restoreFlow(outcome.whenFalse);
+          walkRefinementPredicate(conditional.Alternate as ParseNode, discriminating);
+        }
+      } finally {
+        restoreFlow(before);
+      }
+      return undefined;
+    }
+    if (node.type === 'MatchExpression') {
+      implicitDefaultMatches.add(node);
+      whereClauseWalkDepth += 1;
+      try {
+        walkTest(node, false, false);
+      } finally {
+        whereClauseWalkDepth -= 1;
+      }
+      return undefined;
+    }
+    // A `match` nested inside a larger predicate has no implicit default to
+    // judge its exhaustiveness against, so that predicate is not walked.
+    if (whereClauseContainsMatch(node)) return undefined;
+    return walkWhereClause(predicate);
+  };
+  /**
+   * #sec-callable-overload-contracts: whether a declaration shares its group
+   * with another, so that a failing clause makes it inapplicable while
+   * selection proceeds among the rest instead of refusing every use. A
+   * function's or class's group is its same-named declarations in one scope; a
+   * method's is the same-named methods of one class body or object literal.
+   */
+  const sharesDeclarationGroup = (declaration: ParseNode): boolean => {
+    const unwrap = (item: ParseNode): ParseNode => (item.type === 'ExportDeclaration'
+      ? ((item as { HoistableDeclaration?: ParseNode, ClassDeclaration?: ParseNode, Declaration?: ParseNode }).HoistableDeclaration
+        ?? (item as { ClassDeclaration?: ParseNode }).ClassDeclaration ?? (item as { Declaration?: ParseNode }).Declaration ?? item)
+      : item);
+    const nameOf = (node: ParseNode | undefined): string | undefined => (node as { BindingIdentifier?: { name?: string } | null } | undefined)?.BindingIdentifier?.name;
+    if (/^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration|ClassDeclaration)$/.test(declaration.type)) {
+      const name = nameOf(declaration);
+      if (!name) return false;
+      let holder = declaration.parent as unknown;
+      if ((holder as ParseNode | undefined)?.type === 'ExportDeclaration') holder = (holder as ParseNode).parent;
+      const shape = holder as { StatementList?: readonly ParseNode[], FunctionStatementList?: readonly ParseNode[], ScriptBody?: { StatementList?: readonly ParseNode[] }, ModuleBody?: { ModuleItemList?: readonly ParseNode[] }, ModuleItemList?: readonly ParseNode[] } | undefined;
+      const list = shape?.StatementList ?? shape?.FunctionStatementList ?? shape?.ScriptBody?.StatementList ?? shape?.ModuleBody?.ModuleItemList ?? shape?.ModuleItemList
+        ?? (Array.isArray(holder) ? holder as readonly ParseNode[] : undefined);
+      const family = declaration.type === 'ClassDeclaration' ? /^ClassDeclaration$/ : /^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration)$/;
+      return (list ?? []).map(unwrap).filter((item) => family.test(item.type) && nameOf(item) === name).length > 1;
+    }
+    if (/Method/.test(declaration.type) || declaration.type === 'MethodDefinition') {
+      let owner = declaration.parent as ParseNode | undefined;
+      while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression' && owner.type !== 'ObjectLiteral') owner = owner.parent as ParseNode | undefined;
+      if (!owner) return false;
+      const elements = (owner.type === 'ObjectLiteral'
+        ? (owner as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList
+        : (owner as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } }).ClassTail?.ClassBody) ?? [];
+      const keyOf = (node: ParseNode): string | undefined => {
+        const element = (node as { MethodDefinition?: ParseNode }).MethodDefinition ?? node;
+        if (!/Method/.test(element.type)) return undefined;
+        const name = (element as { ClassElementName?: ParseNode }).ClassElementName;
+        const key = name ? PropName(name) : undefined;
+        return key === undefined ? undefined : `${(node as { static?: boolean }).static || (element as { static?: boolean }).static ? 'static ' : ''}${key}`;
+      };
+      const own = keyOf(declaration);
+      return own !== undefined && elements.filter((element) => keyOf(element) === own).length > 1;
+    }
+    return false;
+  };
+  /**
+   * #sec-generic-where: a declaration's clauses are judged where it is
+   * declared, each under the facts the clauses written before it establish,
+   * whether or not the declaration is applied, called or reached. A formal
+   * parameter is read at its declared type, a value type parameter at its
+   * domain, `this` at a dependent record type's base and `return` at the
+   * effective result. A clause that reads none of these is closed: the
+   * judgments that apply to any test apply to it, and what they leave open is
+   * evaluated at the checking boundary.
+   */
+  const walkDeclarationClauses = (declaration: ParseNode, clauses: readonly ParseNode.WhereClause[], subjects: ClauseSubjects): void => {
+    for (const clause of clauses) {
+      const predicate = clause.RefinementPredicate as ParseNode;
+      const references = LexicalFreeReferences(predicate);
+      const readsFormal = references.some((reference) => subjects.formals.has(reference.name));
+      if (whereClauseAssigns(predicate) && !readsFormal) continue;
+      const readsThis = whereClauseNamesThis(predicate);
+      const readsReturn = whereClauseNamesReturn(predicate);
+      if ((readsThis && !subjects.thisType) || (readsReturn && !subjects.returnType)) continue;
+      const readsValueParameter = references.some((reference) => subjects.valueParameters.has(reference.name));
+      const readsTypeParameter = references.some((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter');
+      const readsSubject = readsFormal || readsValueParameter || readsThis || readsReturn;
+      // A clause over a type parameter alone is decided where an application binds it.
+      if (!readsSubject && readsTypeParameter) continue;
+      if (subjects.thisType) thisTypeFrames.push(subjects.thisType);
+      if (readsReturn) contractReturnFrames.push(subjects.returnType!);
+      const mark = errors.length;
+      try {
+        const outcome = walkRefinementPredicate(predicate);
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      } finally {
+        if (readsReturn) contractReturnFrames.pop();
+        if (subjects.thisType) thisTypeFrames.pop();
+      }
+      // What the judgments leave open of a closed clause is evaluated at the
+      // checking boundary where its failure would refuse every use: a false one
+      // is refused, and a true one is a static assertion about the declarations
+      // it reads. An explicit constant keeps its written meaning, and a
+      // declaration sharing its group is only made inapplicable by a failing
+      // clause (#sec-callable-overload-contracts), so neither is evaluated.
+      if (!readsSubject && !readsTypeParameter && errors.length === mark && whereLiteralValue(predicate) === undefined && !sharesDeclarationGroup(declaration)) {
+        const checks = whereChecks.get(clause) ?? [];
+        checks.push({ declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: new Map(), closed: true, sourceModule: importedDeclarationSourceModule(declaration) });
+        whereChecks.set(clause, checks);
+      }
+    }
+  };
   const orderedComparison = (test: ParseNode): { place: string, op: string, bound: bigint, min: bigint, max: bigint } | null => {
     const t = unparenthesized(test);
     if (t.type !== 'RelationalExpression') return null;
@@ -29445,7 +29708,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const uncovered = unionSubject.Members.filter((member) => !me.Clauses.some((clause) => clause.Pattern !== null
           && !clause.Guard && (structuralPatternCovers(clause.Pattern, member) || literalPatternCovers(clause.Pattern, member))));
         if (uncovered.length > 0) {
-          reportType('rt-nonexhaustive-match', me, 'match over $1 is missing $2 and has no default', Value(displayType(subjectType!)), Value(uncovered.map((member) => displayType(member)).join(', ')));
+          if (!implicitDefaultMatches.has(me)) reportType('rt-nonexhaustive-match', me, 'match over $1 is missing $2 and has no default', Value(displayType(subjectType!)), Value(uncovered.map((member) => displayType(member)).join(', ')));
         }
       }
       if (!me.All && chainAtoms.length > 0 && !overEnumerators) {
@@ -29469,7 +29732,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!chainDefault) {
           if (missing.length > 0) {
             const completion = CreateTypeDiagnostic('rt-nonexhaustive-match', me, diagnosticPhase, 'match over $1 is missing $2 and has no default', Value(displayType(subjectType!)), Value(missing.map((a) => a.key).join(', '))) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+            if (!implicitDefaultMatches.has(me)) errors.push(completion.Value as ObjectValue);
           }
         } else if (missing.length === 0 && coveredAtoms.size > 0
           && subjectType?.Kind === 'primitive' && (subjectType as { Name?: string }).Name === 'boolean') {
@@ -29522,7 +29785,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!hasDefault) {
           if (missing.length > 0) {
             const completion = CreateTypeDiagnostic('rt-nonexhaustive-match', me, diagnosticPhase, 'match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+            if (!implicitDefaultMatches.has(me)) errors.push(completion.Value as ObjectValue);
           }
         } else if (missing.length === 0 && covered.size > 0) {
           // The other half of #sec-match-exhaustiveness's reachability rule,
@@ -29575,7 +29838,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               .join(', ');
             const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
             const completion = CreateTypeDiagnostic('rt-nonexhaustive-match', me, diagnosticPhase, 'match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+            if (!implicitDefaultMatches.has(me)) errors.push(completion.Value as ObjectValue);
           }
         }
       }
@@ -29626,7 +29889,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || (subjectType.Kind === 'literal' && me.Clauses.some((clause) => clause.Pattern !== null && !clause.Guard
             && literalPatternCovers(clause.Pattern, subjectType)));
         if (!catchAll && !exhaustedByNarrowing) {
-          reportType('rt-nonexhaustive-match', me, 'match over $1 needs a catch-all: the type has no cases to cover, so add a default or an unguarded binding or wildcard clause', Value(displayType(subjectType)));
+          if (!implicitDefaultMatches.has(me)) reportType('rt-nonexhaustive-match', me, 'match over $1 needs a catch-all: the type has no cases to cover, so add a default or an unguarded binding or wildcard clause', Value(displayType(subjectType)));
         }
       }
       const adapt = (type: TypeRecord): TypeRecord => {
@@ -34551,62 +34814,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
-      // Round 5, Gap 4: a `where` predicate over the parameters is walked here,
-      // as an expression in the parameter scope, so the comparison and
-      // truthiness judgments that apply to any test apply to it: a predicate
-      // no value of the parameter's type satisfies (`i > 300` on a uint8) is
-      // `rt-numeric-range`, and one every value satisfies is
-      // `rt-constant-condition`. Its narrowing is dropped afterwards, since
-      // the body sees the parameter's declared type, not the clause's.
+      // #sec-generic-where: the clauses of every function form and method are
+      // judged at the declaration, a method's under its class's clauses. The
+      // narrowing is dropped before the body, which sees the declared types.
       {
         const owner = (Array.isArray(body) ? body[0] : body)?.parent as ParseNode | undefined;
-        const clauses = owner && owner.type === 'FunctionDeclaration'
-          ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
-        // Round 5 follow-up, Q11, the merge: a method's clauses hold under its
-        // class's, so they are walked after the class's; a method clause no
-        // value the class admits can satisfy can never succeed, and one every
-        // such value satisfies can never fail.
-        if (owner && owner.type === 'MethodDefinition') {
-          let classNode: ParseNode | undefined = owner.parent as ParseNode | undefined;
-          while (classNode && classNode.type !== 'ClassDeclaration' && classNode.type !== 'ClassExpression') classNode = classNode.parent as ParseNode | undefined;
+        const clauses = (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
+        if (owner && clauses.length > 0) {
+          let classNode: ParseNode | undefined;
+          if (/Method/.test(owner.type)) {
+            classNode = owner.parent as ParseNode | undefined;
+            while (classNode && classNode.type !== 'ClassDeclaration' && classNode.type !== 'ClassExpression' && classNode.type !== 'ObjectLiteral') classNode = classNode.parent as ParseNode | undefined;
+            if (classNode?.type === 'ObjectLiteral') classNode = undefined;
+          }
           const classClauses = (classNode as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } } | undefined)?.ClassTail?.WhereClauses ?? [];
-          const methodClauses = (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
-          if (classClauses.length > 0 && methodClauses.length > 0) {
-            const beforeMerge = captureFlow();
-            try {
-              for (const clause of [...classClauses, ...methodClauses]) {
+          const formals = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
+          const valueParameters = new Set([...valueTypeParameterNames(owner), ...valueTypeParameterNames(classNode)]);
+          // #sec-checked-contracts: `return` is read at the effective result,
+          // which a `void` function does not have.
+          let result = hasDeclaredReturn ? returnTypes[returnTypes.length - 1] as Known | null : null;
+          if (!hasDeclaredReturn && clauses.some((clause) => whereClauseNamesReturn(clause.RefinementPredicate as ParseNode))) {
+            // An unannotated function's contract reads its published inferred result.
+            const parameterTypes = (params ?? []).map((formal) => {
+              const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+              return (annotation ? resolveType(annotation.Type) : anyTypeRecord) as Known;
+            });
+            const mode = /Generator/.test(owner.type) ? 'generator-return' : /Async/.test(owner.type) ? 'resolve' : 'return';
+            const inferred = inferredReturnType(owner, parameterTypes, null, { anchored: false }, mode as never) as Known | null;
+            result = inferred && inferred.Kind !== 'any' ? inferred : null;
+          }
+          const beforeClauses = captureFlow();
+          try {
+            // The class's clauses establish the facts a method clause is
+            // judged under; their own judgments are reported at the class.
+            if (classClauses.length > 0) {
+              const mark = errors.length;
+              for (const clause of classClauses) {
                 const predicate = clause.RefinementPredicate;
                 if (predicate.type === 'ConditionalRefinement' || whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
                 const outcome = walkWhereClause(predicate as ParseNode);
                 if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
               }
-            } finally {
-              restoreFlow(beforeMerge);
+              errors.splice(mark);
             }
+            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' ? result as Known : null });
+          } finally {
+            restoreFlow(beforeClauses);
           }
-        }
-        const formalNames = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
-        // Each clause is walked under the clauses before it (round 5, Q5): a
-        // conjunction of clauses no value satisfies is a test that can never
-        // succeed, and the narrowing is dropped before the body.
-        const beforeClauses = captureFlow();
-        try {
-          for (const clause of clauses ?? []) {
-            const predicate = clause.RefinementPredicate;
-            // A clause over a value type parameter is walked too (round 5
-            // follow-up, Q11): `where N > 5 where N < 5` is the same
-            // contradiction over a parameter the application binds.
-            const valueTypeParameters = new Set(((owner as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | undefined)?.TypeParameters?.TypeParameterList ?? [])
-              .filter((parameter) => (parameter as { IsValueParameter?: boolean }).IsValueParameter).map((parameter) => parameter.BindingIdentifier.name));
-            if (predicate.type !== 'ConditionalRefinement' && !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate)
-                && (LexicalFreeReferences(predicate).some((reference) => formalNames.has(reference.name))
-                  || (!whereClauseAssigns(predicate) && LexicalFreeReferences(predicate).some((reference) => valueTypeParameters.has(reference.name))))) {
-              const outcome = walkWhereClause(predicate as ParseNode);
-              if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
-            }
-          }
-        } finally {
-          restoreFlow(beforeClauses);
         }
       }
       walk(body);
@@ -39245,26 +39499,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `where this.a >= 0` is a constant condition, and a member the base
         // declares nothing like is an undeclared read where the base is closed
         // and admitted where it is open. The walk's narrowing is dropped.
-        if (isPlainAlias && resolved && !mentionsTypeParameter(placeholder)) {
+        const aliasClauses = (n as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+        if (aliasClauses.length > 0 && isPlainAlias && resolved && !mentionsTypeParameter(placeholder)) {
           const base = resolved.Kind === 'parameterized' ? ((resolved as { Base?: TypeRecord }).Base ?? resolved) : resolved;
-          // Each clause is walked under the clauses before it (round 5, Q5).
           const beforeClauses = captureFlow();
-          thisTypeFrames.push(base);
           try {
-            for (const clause of ((n as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [])) {
-              const predicate = clause.RefinementPredicate;
-              // A `match` in a refinement has an implicit `default: false`
-              // (#sec-discriminated-where-chains: a value no clause matches is
-              // refused at the boundary), so the exhaustiveness judgment of an
-              // ordinary `match` does not apply to it; such a predicate is not
-              // walked here.
-              if (predicate.type === 'ConditionalRefinement' || !whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate)
-                  || whereClauseContainsMatch(predicate)) continue;
-              const outcome = walkWhereClause(predicate as ParseNode);
-              if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
-            }
+            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: new Set(), thisType: base as Known });
           } finally {
-            thisTypeFrames.pop();
+            restoreFlow(beforeClauses);
+          }
+        } else if (aliasClauses.length > 0 && n.TypeParameters) {
+          // #sec-generic-where: a generic alias's clauses over its parameters
+          // are judged at its declaration, as a generic function's are.
+          const beforeClauses = captureFlow();
+          const pushedAliasScope = pushTypeParameterScopeOf(n);
+          try {
+            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n) });
+          } finally {
+            if (pushedAliasScope) typeParameterScopes.pop();
             restoreFlow(beforeClauses);
           }
         }
@@ -41240,7 +41492,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (expr) {
           let owner: ParseNode | undefined = n.parent;
           while (owner && !/^(FunctionDeclaration|MethodDefinition|FunctionExpression|ArrowFunction|AsyncFunctionDeclaration|GeneratorDeclaration|AsyncGeneratorDeclaration|AsyncArrowFunction|GeneratorExpression|AsyncFunctionExpression|AsyncGeneratorExpression)$/.test(owner.type)) owner = owner.parent;
-          const clauses = owner && /^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration)$/.test(owner.type)
+          const clauses = owner && /^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration|FunctionExpression|GeneratorExpression|AsyncFunctionExpression|AsyncGeneratorExpression|MethodDefinition)$/.test(owner.type)
             ? (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses : null;
           const literal = clauses?.length ? staticType(expr) : null;
           if (literal?.Kind === 'literal') {
@@ -41522,6 +41774,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ClassExpression': {
         checkInheritedFieldRedeclarations(n);
         checkDeclaredSize(n);
+        // #sec-generic-where: a class's clauses are judged at its declaration,
+        // over its parameters' domains, whether or not it is ever applied.
+        {
+          const ownClauses = (n.ClassTail as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+          if (ownClauses.length > 0) {
+            const beforeClassClauses = captureFlow();
+            const pushedClassScope = pushTypeParameterScopeOf(n);
+            try {
+              walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n) });
+            } finally {
+              if (pushedClassScope) typeParameterScopes.pop();
+              restoreFlow(beforeClassClauses);
+            }
+          }
+        }
         const heritage = n.ClassTail.ClassHeritage;
         if (heritage) pushBlock(() => {
           // The class self-name is still in its TDZ during heritage evaluation.

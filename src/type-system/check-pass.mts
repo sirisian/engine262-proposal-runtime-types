@@ -784,7 +784,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     try {
       // The method's own parameters shadow its class's of the same name, and
       // each name is bound once.
-      const parameters = [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
+      const parameters = check.closed ? [] : [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
         .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()];
       const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
@@ -910,6 +910,13 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           if (IsBudgetExhausted()) return result;
           return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
             'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
+        }
+        // #sec-generic-where: a closed clause is evaluated at its declaration. A
+        // false one leaves the declaration unusable; a true one is a static
+        // assertion about the declarations it reads, and stands.
+        if (check.closed && !result.Value) {
+          return CreateTypeDiagnostic('rt-impossible-test', clause, 'pre-evaluation',
+            'this $1 clause does not depend on what it constrains and is always false, so nothing can satisfy it', Value('where'));
         }
         if (!result.Value) {
           return check.values
