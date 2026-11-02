@@ -55,6 +55,7 @@ const propertyKey = (node: Node): string | undefined => node.type === 'Identifie
  */
 export function GlobalBindingMutations(root: ParseNode, environment: EnvironmentRecord, realm: Realm): {
   affects: (expression: ParseNode) => boolean,
+  bindingIsStableAtKnownInvocations: (read: ParseNode.IdentifierReference) => boolean,
   mayPrecede: (operation: ParseNode, observation?: ParseNode) => boolean,
   admissionsAreTransparent: (observation: ParseNode | undefined, proof: (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type) => boolean) => boolean,
 } {
@@ -582,8 +583,8 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       return deferred(site) || deferred(effect.node) || precedes(effect.node, site);
     });
   };
-  const affected = (node: ParseNode.IdentifierReference): boolean => !provenDelegationCallees.has(node) && (values.exhausted() && globalName(node, false) || effects.some((effect) =>
-    globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && effectMayPrecede(effect, node)));
+  const affected = (node: ParseNode.IdentifierReference, observation: ParseNode = node): boolean => !provenDelegationCallees.has(node) && (values.exhausted() && globalName(node, false) || effects.some((effect) =>
+    globalName(node, !effect.lexical) && (!effect.names || effect.names.has(node.name)) && effectMayPrecede(effect, observation)));
   const affects = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
     const node = unwrap(expression);
     if (!node) return false;
@@ -612,5 +613,15 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   };
   const admissionsAreTransparent = (observation: ParseNode | undefined, proof: (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type) => boolean): boolean =>
     !values.exhausted() && values.admissionEffects().every((effect) => !mayPrecede(effect.site, observation) || effect.transparent(proof));
-  return { affects, mayPrecede, admissionsAreTransparent };
+  const bindingIsStableAtKnownInvocations = (read: ParseNode.IdentifierReference): boolean => {
+    const sites = values.executionSites(read, undefined, (site, callable) =>
+      // Iterator creation is not body entry. For ordinary calls, validate
+      // every enclosing activation too: an await or effect before a helper
+      // call cannot disappear when both project to the same initial call.
+      !callable.type.includes('Generator') && !affected(read, site));
+    // An uncalled/escaped body may first run in a later Script. Absence of a
+    // preceding effect in this source does not close that invocation context.
+    return !!sites?.length && !values.exhausted();
+  };
+  return { affects, mayPrecede, admissionsAreTransparent, bindingIsStableAtKnownInvocations };
 }

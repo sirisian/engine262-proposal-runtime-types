@@ -9273,7 +9273,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
   }).ClassTail?.ClassBody ?? [];
   type ClassOrigin = ImportedConstructorOrigin;
-  const classValueOrigins = ClassValueOrigins(root);
+  const classValueOrigins = ClassValueOrigins(root, (read) => globalBindingMutations.bindingIsStableAtKnownInvocations(read));
   const constructorSelections = new WeakMap<ParseNode, ConstructorSelection>();
   // Contribution queries can reach a const before its ordinary source walk.
   // Re-enter that declaration's prepared scope, never the querying function's.

@@ -1,0 +1,578 @@
+{
+  "cases": [
+    {
+      "name": "script-direct",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "script-inherited",
+      "source": "class B{static [Symbol.hasInstance](x:uint8):boolean{return true;}}class C extends B{}function f(x:string){return x instanceof C;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "script-specialized",
+      "source": "class C<T:type>{static [Symbol.hasInstance](x:T):boolean{return true;}}function f(x:string){return x instanceof C.<uint8>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "block-direct",
+      "source": "{class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "block-inherited",
+      "source": "{class B{static [Symbol.hasInstance](x:uint8):boolean{return true;}}class C extends B{}function f(x:string){return x instanceof C;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "block-specialized",
+      "source": "{class C<T:type>{static [Symbol.hasInstance](x:T):boolean{return true;}}function f(x:string){return x instanceof C.<uint8>;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "deferred-arrow",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const f=(x:string)=>x instanceof C;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "deferred-async",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}async function f(x:string){return x instanceof C;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "deferred-generator",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function* f(x:string){yield x instanceof C;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "deferred-nested",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function outer(){return function f(x:string){return x instanceof C;};}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "deferred-method",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const o={m(x:string){return x instanceof C;}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "deferred-getter",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const o={get value():boolean{const x:string=\"s\";return x instanceof C;}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "deferred-default",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string,y=x instanceof C){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "var-class-expression",
+      "source": "var C=class{static [Symbol.hasInstance](x:uint8):boolean{return true;}};function f(x:string){return x instanceof C;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "const-class-expression",
+      "source": "const C=class{static [Symbol.hasInstance](x:uint8):boolean{return true;}};function f(x:string){return x instanceof C;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "same-spelled-local-write",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function unrelated(){let C;C=0;}function f(x:string){return x instanceof C;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "lexical-global-property-distinction",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}globalThis.C=class{};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1
+      }
+    },
+    {
+      "name": "captured-alias-retains-origin",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const Saved=C;function f(x:string){return x instanceof Saved;}globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "indirect-eval-after-known-call",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}f(\"bad\");globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-self-name",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}static f(x:string){return x instanceof C;}}C=class{};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "compatible-hook",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:uint8){return x instanceof C;}String(f(1));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "true"
+      }
+    },
+    {
+      "name": "later-direct-write",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};String(f(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "true"
+      }
+    },
+    {
+      "name": "later-indirect-eval",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");String(f(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "true"
+      }
+    },
+    {
+      "name": "later-dynamic-function",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}Function(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\")();String(f(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "true"
+      }
+    },
+    {
+      "name": "later-unknown-call-uncalled",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}Function(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\")();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "later-getter-invokes-eval",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}let count=0;const o={get value(){count+=1;globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");return 0;}};o.value;if(count!==1||f(\"s\")!==true)throw new Error(\"replay\");\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "global-object-binding-replaced",
+      "source": "var C=class{static [Symbol.hasInstance](x:uint8):boolean{return true;}};function f(x:string){return x instanceof C;}Object.defineProperty(globalThis,\"C\",{value:class{static [Symbol.hasInstance](x:string):boolean{return true;}}});String(f(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "true"
+      }
+    },
+    {
+      "name": "repeated-activation",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}let count=0;function f(x:string){count+=1;if(count===1){globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");return false;}return x instanceof C;}if(f(\"s\")!==false||f(\"s\")!==true)throw new Error(\"ordering\");\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "direct-eval-in-body",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");return x instanceof C;}String(f(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "true"
+      }
+    },
+    {
+      "name": "parameter-default-effect",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}globalThis.change=Function(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");function f(x:string,y=globalThis.change()){return x instanceof C;}String(f(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "true"
+      }
+    },
+    {
+      "name": "called-script-direct",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-script-inherited",
+      "source": "class B{static [Symbol.hasInstance](x:uint8):boolean{return true;}}class C extends B{}function f(x:string){return x instanceof C;}f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-script-specialized",
+      "source": "class C<T:type>{static [Symbol.hasInstance](x:T):boolean{return true;}}function f(x:string){return x instanceof C.<uint8>;}f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-deferred-arrow",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const f=(x:string)=>x instanceof C;f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-deferred-async",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}async function f(x:string){return x instanceof C;}f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-deferred-nested",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function outer(){return function f(x:string){return x instanceof C;};}outer()(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-deferred-method",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const o={m(x:string){return x instanceof C;}};o.m(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-deferred-getter",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}const o={get value():boolean{const x:string=\"s\";return x instanceof C;}};o.value;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-deferred-default",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string,y=x instanceof C){}f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-same-spelled-local-write",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function unrelated(){let C;C=0;}function f(x:string){return x instanceof C;}f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "called-lexical-global-property-distinction",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}globalThis.C=class{};f(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-creation-is-not-entry",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function* g(x:string){return x instanceof C;}const it=g(\"s\");globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");String(it.next().value);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "true"
+      }
+    },
+    {
+      "name": "generator-helper-creation-is-not-entry",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}function* g(){return f(\"s\");}const it=g();globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");String(it.next().value);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "true"
+      }
+    },
+    {
+      "name": "argument-effect-precedes-deferred-read",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}String(f((globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\"),\"s\")));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 2,
+        "value": "true"
+      }
+    },
+    {
+      "name": "async-helper-before-suspension",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}async function g(x:string){const result=f(x);await 0;return result;}g(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntries": 0,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INSTANCEOF_PROTOCOL",
+          "rule": "rt-instanceof-declared-call",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "caller-default-effect-precedes-helper",
+      "source": "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}globalThis.change=Function(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");function g(x:string,y=globalThis.change()){return f(x);}String(g(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntries": 1,
+        "value": "true"
+      }
+    }
+  ],
+  "sequences": [
+    {
+      "name": "later Script replaces the global constructor before first invocation",
+      "sources": [
+        "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}\"declared\";",
+        "C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};String(f(\"s\"));"
+      ],
+      "expected": [
+        {
+          "completion": "normal",
+          "bodyEntries": 1,
+          "value": "declared"
+        },
+        {
+          "completion": "normal",
+          "bodyEntries": 1,
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "name": "later Script supplies the first invalid invocation",
+      "sources": [
+        "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}\"declared\";",
+        "f(\"s\");"
+      ],
+      "expected": [
+        {
+          "completion": "normal",
+          "bodyEntries": 1,
+          "value": "declared"
+        },
+        {
+          "completion": "throw",
+          "bodyEntries": 1,
+          "errorClass": "TypeError"
+        }
+      ]
+    },
+    {
+      "name": "async-read-after-suspension",
+      "sources": [
+        "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}globalThis.settled=\"pending\";async function g(x:string){await 0;return x instanceof C;}g(\"s\").then(v=>{globalThis.settled=String(v);},e=>{globalThis.settled=\"rejected\";});globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");\"started\";",
+        "String(globalThis.settled);"
+      ],
+      "expected": [
+        {
+          "completion": "normal",
+          "bodyEntries": 2,
+          "value": "started"
+        },
+        {
+          "completion": "normal",
+          "bodyEntries": 1,
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "name": "async-helper-after-suspension",
+      "sources": [
+        "class C{static [Symbol.hasInstance](x:uint8):boolean{return true;}}function f(x:string){return x instanceof C;}globalThis.settled=\"pending\";async function g(x:string){await 0;return f(x);}g(\"s\").then(v=>{globalThis.settled=String(v);},e=>{globalThis.settled=\"rejected\";});globalThis.eval(\"C=class{static [Symbol.hasInstance](x:string):boolean{return true;}};\");\"started\";",
+        "String(globalThis.settled);"
+      ],
+      "expected": [
+        {
+          "completion": "normal",
+          "bodyEntries": 2,
+          "value": "started"
+        },
+        {
+          "completion": "normal",
+          "bodyEntries": 1,
+          "value": "true"
+        }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,7 @@ type PropertyWrite = { key: string | undefined, source: Flow, site?: ParseNode }
 type PrototypeChange = { source: Flow, site: ParseNode };
 type Aggregate = { kind: 'aggregate', sourceClass?: ParseNode.ClassDeclaration | ParseNode.ClassExpression, typedKeys: Set<string | undefined>, writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
-type Callable = { kind: 'callable', sites: Set<ParseNode>, parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
+type Callable = { kind: 'callable', definition: ParseNode, sites: Set<ParseNode>, parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], packed?: Flow, receiver: Flow, properties: Aggregate };
 type Candidate = string | Aggregate | Callable | Bound;
 const isNode = (value: unknown): value is Node => !!value && typeof value === 'object' && typeof (value as Node).type === 'string';
@@ -60,7 +60,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   exhausted: () => boolean,
   opaqueEffects: () => ReadonlySet<ParseNode>,
   admissionEffects: () => readonly AdmissionEffect[],
-  executionSites: (site: ParseNode, within?: ParseNode) => readonly ParseNode[] | undefined,
+  executionSites: (site: ParseNode, within?: ParseNode, canProject?: (site: ParseNode, callable: ParseNode) => boolean) => readonly ParseNode[] | undefined,
   activationMayRepeat: (site: ParseNode) => boolean,
   globalWrites: () => readonly { site: ParseNode, key?: string }[],
 } {
@@ -1149,7 +1149,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const existing = functions.get(node);
     if (existing) return existing;
     const parameters = parameterKeys.flatMap((key) => Array.isArray(node[key]) ? node[key] as Node[] : isNode(node[key]) ? [node[key] as Node] : []);
-    const result = { kind: 'callable' as const, sites: new Set<ParseNode>(), parameters, result: newFlow(), receiver: newFlow(), properties: functionProperties(node) };
+    const result = { kind: 'callable' as const, definition: node, sites: new Set<ParseNode>(), parameters, result: newFlow(), receiver: newFlow(), properties: functionProperties(node) };
     functions.set(node, result);
     const body = node.FunctionBody ?? node.ConciseBody;
     const ordinary = ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunction', 'MethodDefinition'].includes(node.type);
@@ -1812,7 +1812,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     repeatedActivations.set(site, repeat);
     return repeat;
   };
-  const executionSites = (site: ParseNode, within?: ParseNode): readonly ParseNode[] | undefined => {
+  const executionSites = (site: ParseNode, within?: ParseNode, canProject?: (site: ParseNode, callable: ParseNode) => boolean): readonly ParseNode[] | undefined => {
     if (exhausted) return undefined;
     if (owner(site) === undefined) return within ? [] : undefined;
     const pending = [site], seen = new Set<ParseNode>(), result = new Set<ParseNode>();
@@ -1825,6 +1825,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       if (seen.has(next)) continue;
       seen.add(next);
       const fn = owner(next);
+      // Some proofs require more than possible execution sites: each step
+      // from an observation to its caller must preserve the requested fact.
+      if (canProject && (fn === false || fn && !canProject(next, fn.definition))) return undefined;
       if (within && fn === functions.get(within)) result.add(next);
       else if (fn === undefined) {
         if (!within) result.add(next);

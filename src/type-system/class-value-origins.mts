@@ -5,6 +5,7 @@ type Node = ParseNode & Record<string, unknown>;
 interface Origin {
   source: ParseNode;
   arguments?: ParseNode.TypeArguments;
+  deferredGlobal?: boolean;
 }
 interface Binding {
   declaration: BindingDeclaration;
@@ -31,7 +32,8 @@ const unwrap = (value: unknown): Node | undefined => {
 };
 const children = (node: Node): Node[] => Object.entries(node).flatMap(([key, value]) =>
   ignored.has(key) ? [] : (Array.isArray(value) ? value : [value]).filter(isNode));
-const same = (a: Origin | undefined, b: Origin | undefined): boolean => a?.source === b?.source && a?.arguments === b?.arguments;
+const same = (a: Origin | undefined, b: Origin | undefined): boolean => a?.source === b?.source
+  && a?.arguments === b?.arguments && a?.deferredGlobal === b?.deferredGlobal;
 const copy = (state: State): State => ({ values: new Map(state.values), live: state.live });
 const join = (into: State, a: State, b: State): void => {
   into.live = a.live || b.live;
@@ -45,7 +47,8 @@ const join = (into: State, a: State, b: State): void => {
       * effect cannot rewrite a value already captured by a heritage or new operand.
         * Unsupported effects withdraw evidence; declaration contracts remain separate.
           */
-export function ClassValueOrigins(root: ParseNode): WeakMap<ParseNode, Origin | undefined> {
+export function ClassValueOrigins(root: ParseNode,
+  globalBindingIsStable: (read: ParseNode.IdentifierReference) => boolean): WeakMap<ParseNode, Origin | undefined> {
   const observations = new WeakMap<ParseNode, Origin | undefined>();
   const bindings = new Map<ParseNode, Map<string, Binding>>();
   const written = new Set<Binding>();
@@ -176,7 +179,16 @@ export function ClassValueOrigins(root: ParseNode): WeakMap<ParseNode, Origin | 
     }
     const binding = bindingAt(node, name);
     if (binding?.declaration.kind === 'import') return { source: node };
-    return binding && state.values.get(binding);
+    // A deferred read can follow later source initialization or another
+    // activation. Keeping its declaration-entry candidate is conditional on
+    // the shared global-effect proof at this actual read, not a snapshot of
+    // the global cell when the function was declared.
+    const value = binding && state.values.get(binding);
+    if (!value?.deferredGlobal) return value;
+    if (!globalBindingIsStable(node as ParseNode.IdentifierReference)) return undefined;
+    // This expression has now captured the value. A later alias is not a
+    // promise to reread the original global cell.
+    return { source: value.source, arguments: value.arguments };
   };
   const store = (target: unknown, value: Origin | undefined, state: State): void => {
     targets(target, (node, name) => {
@@ -198,7 +210,10 @@ export function ClassValueOrigins(root: ParseNode): WeakMap<ParseNode, Origin | 
     const entry = copy(state);
     entry.live = true;
     for (const binding of entry.values.keys()) {
-      if (!binding.immutable && (binding.global || written.has(binding))) entry.values.delete(binding);
+      if (!binding.immutable && written.has(binding)) entry.values.delete(binding);
+      else if (!binding.immutable && binding.global) {
+        entry.values.set(binding, { ...entry.values.get(binding)!, deferredGlobal: true });
+      }
     }
     deferred.push({ node, state: entry });
   };
