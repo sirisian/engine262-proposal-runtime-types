@@ -1,0 +1,705 @@
+{
+  "cases": [
+    {
+      "name": "dynamic-source-adds-missing-owner",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);function receive(x:any){const result:float32.<{a:1,b:2}>=x;if(!(String(result)===\"3\"&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");}receive(source);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-source-adds-missing-owner",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"3\"&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "known-uncalled-conversion-does-not-run-body",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");throw new Error(\"uncalled\");}}function unused(x:float32.<{a:1}>):float32.<{a:1,b:2}>{return x;}if(!(globalThis.calls.length===0))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-missing-owners-compose",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return Number(this)*2;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2,c:3}>=source;if(!(String(result)===\"8\"&&globalThis.calls.join(\",\")===\"B,C\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cast-order-is-declaration-order",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return Number(this)*2;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);const result:float32.<{c:3,b:2,a:1}>=source;if(!(String(result)===\"7\"&&globalThis.calls.join(\",\")===\"C,B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "subtype-admission-does-not-run-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return true;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");throw new Error(\"unneeded\");}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(globalThis.calls.length===0))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nondefault-source-cannot-use-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1,b:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nondefault-incompatibility-is-static",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}function unused(x:float32.<{a:1,b:1}>):float32.<{a:1,b:2}>{return x;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "missing-cast-is-static",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];function unused(x:float32.<{a:1}>):float32.<{a:1,b:2}>{return x;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "later-missing-owner-fails-before-cast-effects",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2,c:3}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-incompatible-owner-fails-before-cast-effects",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return this;}}const source=(3:=float32.<{a:1,c:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2,c:3}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ambiguous-casts-fail-before-effects",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ambiguous-casts-are-static",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}function unused(x:float32.<{a:1}>):float32.<{a:1,b:2}>{return x;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "exact-whole-target-can-complete-admitted-owner",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<{a:1,b:2}>(){globalThis.calls.push(\"exact\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"4\"&&globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exact-whole-target-preferred-to-owner-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}primitive float32{operator float32.<{a:1,b:2}>(){globalThis.calls.push(\"exact\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"4\"&&globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-fixed-target-does-not-cover-combined",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<{b:2}>(){globalThis.calls.push(\"fixed\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "whole-target-cast-cannot-bypass-source-incompatibility",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<{a:1,b:2}>(){globalThis.calls.push(\"exact\");return Number(this)+1;}}const source=(3:=float32.<{a:9}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "completed-default-counts-as-absent-source",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1,b:0}>);const result:float32.<{a:1,b:2}>=source;if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-target-default-needs-no-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");throw new Error(\"default\");}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:0}>=source;if(!(globalThis.calls.length===0))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "target-default-can-reject-nondefault-source",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1,b:2}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:0}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unmentioned-source-owner-is-carried",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);const result:float32.<{b:2}>=source;if(!(String(Reflect.getReflection(Reflect.typeOf(result)).metadata.a)===\"1\"&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-carrier-is-unchanged",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(source)===\"3\"&&Reflect.typeOf(source)===type float32.<{a:1}>&&String(result)===\"4\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "capture-roles-use-original-source-and-destination",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32<const X:A,const Y:B>{operator float32.<Y>(){globalThis.calls.push(String(X.a)+\":\"+String(Y.b));return Number(this)+Number(Y.b);}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"5\"&&globalThis.calls.join(\",\")===\"1:2\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "earlier-cast-does-not-change-receiver-capture",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}primitive float32<const X:B,const Y:C>{operator float32.<Y>(){globalThis.calls.push(\"C\");if(String(X.b)!==\"0\"||String(Y.c)!==\"3\")throw new Error(\"capture\");return Number(this)*2;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2,c:3}>=source;if(!(String(result)===\"8\"&&globalThis.calls.join(\",\")===\"B,C\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-capture-closures-keep-their-crossing",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];globalThis.readers=[];primitive float32<const X:A,const Y:B>{operator float32.<Y>(){globalThis.readers.push(()=>String(X.a)+\":\"+String(Y.b));return this;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;const other=(4:=float32.<{a:4}>);const result2:float32.<{a:4,b:5}>=other;if(!(globalThis.readers[0]()===\"1:2\"&&globalThis.readers[1]()===\"4:5\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct-eval-sees-cast-destination",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32<const X:B>{operator float32.<X>(){if(String(eval(\"X\").b)!==\"2\")throw new Error(\"eval\");globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflect-assignability-does-not-become-cast-availability",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}type Source=float32.<{a:1}>;type Target=float32.<{a:1,b:2}>;if(!(!Reflect.isAssignable(Source,Target)&&globalThis.calls.length===0))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "membership-does-not-invoke-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);if(!(!(source is float32.<{a:1,b:2}>)&&globalThis.calls.length===0))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reference-location-is-not-converted",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}let source:float32.<{a:1}>=(3:=float32.<{a:1}>);function f(ref x:float32.<{a:1,b:2}>){ }f(ref source);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_REFERENCE_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "argument-boundary",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);function receive(x:float32.<{a:1,b:2}>){return String(x);}if(!(receive(source)===\"4\"))throw new Error(\"result\");if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-boundary",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);function receive():float32.<{a:1,b:2}>{return source;}if(!(String(receive())===\"4\"))throw new Error(\"result\");if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-boundary",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);class Box{x:float32.<{a:1,b:2}>=source;}if(!(String(new Box().x)===\"4\"))throw new Error(\"result\");if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "assignment-boundary",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);let result:float32.<{a:1,b:2}>=(1:=float32.<{a:1,b:2}>);result=source;if(!(String(result)===\"4\"))throw new Error(\"result\");if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "abrupt-body-restores-state",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];globalThis.fail=true;primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");if(globalThis.fail)throw new Error(\"cast\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof Error;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");globalThis.fail=false;globalThis.calls=[];const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"4\"&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "raw-base-failure-prevents-next-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}globalThis.bad=\"bad\";primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return globalThis.bad;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2,c:3}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cast-stage-validation-prevents-later-repair",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}validate(v,c){return Number(v)>=Number(c.b);}}type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return 0;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return 100;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2,c:3}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "final-validation-checks-earlier-cast-owner",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}validate(v,c){return Number(v)>=Number(c.b);}}type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return 5;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return 0;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2,c:3}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B,C\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cast-before-exact-factor-and-quantization",
+      "modules": {
+        "main": "type U={u:number};meta U{default={u:1};subtype(x,y){return true;}conversionFactor(x,y){return x.u/y.u;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}quantize(v,c){return v+(4:=float32);}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{u:6}>);const result:float32.<{u:2,b:2}>=source;if(!(String(result)===\"16\"&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "casting-owner-factor-still-participates",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}conversionFactor(x,y){return 3;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"12\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "transported-constraint-is-rescaled",
+      "modules": {
+        "main": "type U={u:number};meta U{default={u:1};subtype(x,y){return true;}conversionFactor(x,y){return x.u/y.u;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}type Bound={hi:number};meta Bound{default={hi:0};subtype(x,y){return true;}rescale(c,f){return {hi:c.hi*f};}validate(v,c){return Number(v)<=c.hi;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{u:6,hi:10}>);const result:float32.<{u:2,b:2}>=source;if(!(String(result)===\"12\"&&String(Reflect.getReflection(Reflect.typeOf(result)).metadata.hi)===\"30\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "final-validation-checks-carried-constraint",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}type Bound={hi:number};meta Bound{default={hi:0};subtype(x,y){return true;}validate(v,c){return Number(v)<=c.hi;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+10;}}const source=(3:=float32.<{a:1,hi:5}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-factor-is-not-absence",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}conversionFactor(x,y){return \"bad\";}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-quantization-is-not-absence",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}quantize(v,c){return \"bad\";}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "family-decimal128",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive decimal128{operator decimal128.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=decimal128.<{a:1}>);const result:decimal128.<{a:1,b:2}>=source;if(!(globalThis.calls.join(\",\")===\"B\"&&result instanceof decimal128))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "family-rational64",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive rational64{operator rational64.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=rational64.<{a:1}>);const result:rational64.<{a:1,b:2}>=source;if(!(globalThis.calls.join(\",\")===\"B\"&&result instanceof rational64))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "family-complex",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive complex<const E>{operator complex.<E>.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3+2i:=complex.<float64>.<{a:1}>);const result:complex.<float64>.<{a:1,b:2}>=source;if(!(globalThis.calls.join(\",\")===\"B\"&&result instanceof complex.<float64>))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-cast-keeps-own-context",
+      "modules": {
+        "lib": "export type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}export type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}",
+        "main": "import {A,B} from \"lib\";globalThis.calls=[];const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(String(result)===\"4\"&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exact-whole-target-runs-once-for-two-missing-owners",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<{a:1,b:2,c:3}>(){globalThis.calls.push(\"exact\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2,c:3}>=source;if(!(String(result)===\"4\"&&globalThis.calls.join(\",\")===\"exact\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "number-source-block-does-not-hijack-typed-source",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive number{operator float32.<B>(){throw new Error(\"wrong source\");}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2}>=source;if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-over-family-with-declaration-order",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive uint<const W>{operator uint.<W>.<B>(){globalThis.calls.push(\"family\");return this;}operator uint.<W>.<C>(){globalThis.calls.push(\"C\");return this;}}primitive uint8{operator uint8.<B>(){globalThis.calls.push(\"fixed\");return this;}}const source=(3:=uint8.<{a:1}>);const result:uint8.<{a:1,b:2,c:3}>=source;if(!(globalThis.calls.join(\",\")===\"C,fixed\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "whole-target-overlap-across-lookup-levels-is-ambiguous",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive uint{operator uint8.<{a:1,b:2,c:3}>(){globalThis.calls.push(\"exact\");return this;}}primitive uint8{operator uint8.<B>(){globalThis.calls.push(\"fixed\");return this;}}const source=(3:=uint8.<{a:1}>);let failed=false;try{function receive(x:any){const result:uint8.<{a:1,b:2,c:3}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "quantize-order-a:1,b:2,c:3",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return true;}quantize(v,c){return v+(1:=float32);}}type C={c:int32};meta C{default={c:0};subtype(x,y){return true;}quantize(v,c){return v*(2:=float32);}}const source=(3:=float32.<{a:1}>);const result:float32.<{a:1,b:2,c:3}>=source;if(!(String(result)===\"8\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "quantize-order-c:3,b:2,a:1",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return true;}quantize(v,c){return v+(1:=float32);}}type C={c:int32};meta C{default={c:0};subtype(x,y){return true;}quantize(v,c){return v*(2:=float32);}}const source=(3:=float32.<{a:1}>);const result:float32.<{c:3,b:2,a:1}>=source;if(!(String(result)===\"8\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "base-form-subtype-veto-before-cast-body",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];meta float32{default={};subtype(x,y){return false;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}const source=(3:=float32.<{a:1}>);let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "base-form-veto-remains-static",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];meta float32{default={};subtype(x,y){return false;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return this;}}function unused(x:float32.<{a:1}>):float32.<{a:1,b:2}>{return x;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "source-expression-evaluated-once",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}globalThis.reads=0;function getSource():any{globalThis.reads++;return 3:=float32.<{a:1}>;}const result:float32.<{a:1,b:2}>=getSource();if(!(String(result)===\"4\"&&globalThis.reads===1&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "raw-body-cannot-reenter-metadata-cast",
+      "modules": {
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];type C={c:int32};meta C{default={c:0};subtype(x,y){return x.c===y.c;}}primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");const nested:float32.<{a:1,c:3}>=globalThis.source;return nested;}}primitive float32{operator float32.<C>(){globalThis.calls.push(\"C\");return this;}}const source=(3:=float32.<{a:1}>);globalThis.source=source;let failed=false;try{function receive(x:any){const result:float32.<{a:1,b:2}>=x;}receive(source);}catch(e){failed=e instanceof TypeError;}if(!(failed&&globalThis.calls.join(\",\")===\"B\"))throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

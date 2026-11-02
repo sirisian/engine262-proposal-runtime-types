@@ -55,6 +55,9 @@ test('a block for one meta type judges only its portion, and the result merges p
   // exactly - so it is precise before the program runs.
   expect(evaluated(`${two} const c: float32.<{ m: 2, lo: 0 }> = a * b; String(Reflect.typeOf(c));`)).toBe('float32.<{ m: 2, lo: 0 }>');
   expect(evaluated(`${two} const c: float32.<{ m: 2 }> = a * b; String(c);`)).toBe('12');
-  expectEarlyError(`${two} const c: float32.<{ m: 2, lo: 5 }> = a * b;`, 'StaticTypeError');
+  // The result's B portion is the default. Its declared cast can supply a
+  // nondefault receiving requirement, without changing D's admitted portion.
+  expect(evaluated(`${two} const c: float32.<{ m: 2, lo: 5 }> = a * b; String(c) + ' ' + String(Reflect.typeOf(c));`))
+    .toBe('12 float32.<{ m: 2, lo: 5 }>');
   expectEarlyError(`${two} const c: float32.<{ m: 1, lo: 5 }> = a * b;`, 'StaticTypeError');
 });

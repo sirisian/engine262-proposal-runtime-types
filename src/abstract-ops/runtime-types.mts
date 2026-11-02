@@ -4379,22 +4379,22 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
   return MetaTypeGoverns(metadata, metaType, target.Base);
 }
 
-/** Select a complete bare crossing before running any cast body. */
-export function PlanBareImplicitCasts(target: TypeRecord, fromNumber: boolean): {
-  casts: readonly PrimitiveCast[];
-  failure?: 'missing' | 'ambiguous';
-} {
-  if (target.Kind !== 'parameterized' || target.Base.Kind !== 'primitive') return { casts: [] };
+interface ImplicitCastPlan {
+  readonly casts: readonly PrimitiveCast[];
+  readonly failure?: 'missing' | 'ambiguous';
+}
+
+/** Select providers only for the owners the receiving operation requires. */
+function PlanImplicitCastsForOwners(target: TypeRecord, fromNumber: boolean, owners: readonly (object | undefined)[]): ImplicitCastPlan {
+  if (owners.length === 0) return { casts: [] };
+  if (target.Kind !== 'parameterized' || target.Base.Kind !== 'primitive') {
+    return { casts: [], failure: 'missing' };
+  }
   const base = target.Base;
   const first = base.Arguments?.[0];
   const name = typeof first === 'number' ? `${base.Name}${first}` : base.Name;
   const keys = [...new Set(fromNumber ? ['number', name, base.Name] : [name, base.Name])];
   const candidates = keys.map((key) => PrimitiveCastsFor(key).filter((cast) => CastCoversTarget(cast.target, target)));
-  const governing = GoverningMetaTypes(target.Metadata);
-  const owners: (object | undefined)[] = governing.types.filter((owner) => MetaTypeGoverns(target.Metadata, owner, base));
-  // Unclaimed/base-form metadata needs an exact declaration. A written default
-  // needs no per-owner cast, but retains the existing exact-target route.
-  if (governing.unclaimed.length > 0 || owners.length === 0) owners.push(undefined);
   const selected = new Set<PrimitiveCast>();
   let missing = false;
   for (const owner of owners) {
@@ -4420,6 +4420,33 @@ export function PlanBareImplicitCasts(target: TypeRecord, fromNumber: boolean): 
   // A whole-target declaration may cover several owners; invoke that body once.
   const casts = [...selected].sort((a, b) => a.order - b.order);
   return { casts, ...(missing ? { failure: 'missing' as const } : {}) };
+}
+
+/** Select a complete bare crossing before running any cast body. */
+export function PlanBareImplicitCasts(target: TypeRecord, fromNumber: boolean): ImplicitCastPlan {
+  if (target.Kind !== 'parameterized' || target.Base.Kind !== 'primitive') return { casts: [] };
+  const governing = GoverningMetaTypes(target.Metadata);
+  const owners: (object | undefined)[] = governing.types.filter((owner) => MetaTypeGoverns(target.Metadata, owner, target.Base));
+  // Unclaimed/base-form metadata needs an exact declaration. A written default
+  // needs no per-owner cast, but retains the existing exact-target route.
+  if (governing.unclaimed.length > 0 || owners.length === 0) owners.push(undefined);
+  return PlanImplicitCastsForOwners(target, fromNumber, owners);
+}
+
+/** A body sees an advancing raw payload, but the original capture subjects. */
+function* InvokePrimitiveCast(value: Value, cast: PrimitiveCast, source: TypeRecord, target: TypeRecord): ValueEvaluator {
+  const frame = PrimitiveCastBindings(cast, source, target);
+  pushTypeParameterFrame(frame);
+  EnterOperatorBody();
+  try {
+    const raw: Value = Q(yield* Call(cast.fn as never, WithoutMetadata(value), []));
+    const primitive: Value = raw instanceof ObjectValue && 'NumberData' in raw
+      ? (raw as unknown as { NumberData: Value }).NumberData : raw;
+    return Q(yield* RequireType(WithoutMetadata(primitive), RawOperatorResultType(target)));
+  } finally {
+    LeaveOperatorBody();
+    popTypeParameterFrame();
+  }
 }
 
 /** Retain an admitted numeric payload without mutating a source carrier. */
@@ -4503,20 +4530,7 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
   const source = RuntimeTypeOf(value);
   let result: Value = value;
   for (const cast of plan.casts) {
-    // Arguments retain the original crossing's source and destination. The raw
-    // payload, unlike the capture roles, advances through the selected bodies.
-    const frame = PrimitiveCastBindings(cast, source, t);
-    pushTypeParameterFrame(frame);
-    EnterOperatorBody();
-    try {
-      const raw: Value = Q(yield* Call(cast.fn as never, WithoutMetadata(result), []));
-      const primitive: Value = raw instanceof ObjectValue && 'NumberData' in raw
-        ? (raw as unknown as { NumberData: Value }).NumberData : raw;
-      result = Q(yield* RequireType(WithoutMetadata(primitive), RawOperatorResultType(t)));
-    } finally {
-      LeaveOperatorBody();
-      popTypeParameterFrame();
-    }
+    result = Q(yield* InvokePrimitiveCast(result, cast, source, t));
   }
   // Every intermediate result has its actual base representation. Attach the
   // destination only after the complete pipeline; the caller validates it.
@@ -4779,46 +4793,94 @@ export function* ConvertMetadataOperand(value: Value, target: TypeRecord): Value
   return Q(yield* ConvertParameterization(value, source, target));
 }
 
+interface ParameterizationConversionPlan {
+  readonly participating: readonly object[];
+  readonly quantizing: readonly object[];
+  readonly required: readonly object[];
+  readonly casts: readonly PrimitiveCast[];
+  readonly failure?: 'missing' | 'ambiguous' | 'incompatible';
+  readonly refusedOwner?: object;
+}
+
+/** Decide admission and providers without invoking a conversion body. Subtype
+ * hooks use the original portions; a declared conversion is not a subtype. */
+export function* PlanParameterizationConversion(from: TypeRecord & { Kind: 'parameterized' }, to: TypeRecord & { Kind: 'parameterized' }): PlainEvaluator<ParameterizationConversionPlan> {
+  const empty = { participating: [], quantizing: [], required: [], casts: [] };
+  if (!SameType(from.Base, to.Base)) return { ...empty, failure: 'incompatible' };
+  const mentioned = new Set([
+    ...GoverningMetaTypes(from.Metadata).types,
+    ...GoverningMetaTypes(to.Metadata).types,
+  ]);
+  // Protocol order follows established declarations, not metadata key order.
+  const governing = [...new Set(claimsForAgent().values())].filter((owner) => mentioned.has(owner));
+  const pinned = new Set(GoverningMetaTypes(to.Metadata).types);
+  const participating = governing.filter((owner) => pinned.has(owner)
+    && (MetaTypeGoverns(from.Metadata, owner, from.Base) || MetaTypeGoverns(to.Metadata, owner, to.Base)));
+  const quantizing = governing.filter((owner) => MetaTypeGoverns(to.Metadata, owner, to.Base));
+  const required: object[] = [];
+  for (const owner of participating) {
+    const fp = MetadataPortion(from.Metadata, owner, from.Base);
+    const tp = MetadataPortion(to.Metadata, owner, to.Base);
+    const admits = Q(yield* ApplyMetaHook(owner, 'subtype', [fp, tp], to.Base));
+    if (admits === Value.true) continue;
+    if (MetaTypeGoverns(from.Metadata, owner, from.Base)) {
+      return { participating, quantizing, required, casts: [], failure: 'incompatible', refusedOwner: owner };
+    }
+    required.push(owner);
+  }
+  // A base-form judgment is additional; a key-owner cast cannot bypass it.
+  const baseOwner = GetTypeObject(to.Base);
+  const baseVerdict = Q(yield* ApplyMetaHook(baseOwner, 'subtype', [from.Metadata, to.Metadata], to.Base));
+  if (baseVerdict !== undefined && baseVerdict !== Value.true) {
+    return { participating, quantizing, required, casts: [], failure: 'incompatible', refusedOwner: baseOwner };
+  }
+  const plan = PlanImplicitCastsForOwners(to, false, required);
+  return { participating, quantizing, required, ...plan };
+}
+
 export function* ConvertParameterization(value: Value, from: TypeRecord, to: TypeRecord): ValueEvaluator {
   if (from.Kind !== 'parameterized' || to.Kind !== 'parameterized') {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
   }
-  const governing = new Set<object>([
-    ...GoverningMetaTypes(from.Metadata).types,
-    ...GoverningMetaTypes(to.Metadata).types,
-  ]);
-  // The participation rule, replacing the former all-declared quantifier: a
-  // meta type takes part in the crossing
-  // when it GOVERNS either side, its portion differing structurally from its
-  // default. `quantize` keys on the TARGET alone, since it maps a value onto
-  // the representation the target's constraint requires and a default
-  // constraint requires nothing. With completion in place only a meta type
-  // with a written claimed key can govern, so the key union above stays the
-  // iteration and these are filters, provably equivalent to the rule.
-  const pinned = new Set(GoverningMetaTypes(to.Metadata).types);
-  const participating = [...governing].filter((m) => pinned.has(m) && (MetaTypeGoverns(from.Metadata, m, from.Base) || MetaTypeGoverns(to.Metadata, m, to.Base)));
-  const quantizing = [...governing].filter((m) => MetaTypeGoverns(to.Metadata, m, to.Base));
-  for (const metaType of participating) {
-    const fp = MetadataPortion(from.Metadata, metaType);
-    const tp = MetadataPortion(to.Metadata, metaType);
-    const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp], to.Base));
-    if (admits === Value.true) {
-      continue;
-    }
-    // The clause's second way through is an implicit cast operator declared on
-    // the base, which this engine has no declaration form for yet. Until it does,
-    // a meta type that does not admit the crossing refuses it - and the message
-    // "names _M_ and, where _M_ defines `describe`, its descriptions of _fp_
-    // and _tp_", which is the difference between a units error that says what
-    // it means and one that dumps a record.
-    const named = LookupMetaTypeName(metaType) ?? 'a meta type';
-    const fd = Q(yield* DescribePortion(metaType, fp));
-    const td = Q(yield* DescribePortion(metaType, tp));
-    if (fd !== undefined && td !== undefined) {
-      return Throw.TypeError('$1 does not admit converting $2 to $3', Value(named), Value(fd), Value(td));
-    }
-    return Throw.TypeError('$1 does not admit converting $2 to $3', Value(named), Value(displayType(from)), Value(displayType(to)));
+  const plan = Q(yield* PlanParameterizationConversion(from, to));
+  if (plan.failure === 'ambiguous') {
+    return Throw.TypeError('more than one implicit cast supplies $1', Value(displayType(to)));
   }
+  if (plan.failure) {
+    const owner = plan.refusedOwner;
+    if (owner) {
+      const named = LookupMetaTypeName(owner) ?? 'a meta type';
+      const fd = Q(yield* DescribePortion(owner, MetadataPortion(from.Metadata, owner, from.Base)));
+      const td = Q(yield* DescribePortion(owner, MetadataPortion(to.Metadata, owner, to.Base)));
+      if (fd !== undefined && td !== undefined) {
+        return Throw.TypeError('$1 does not admit converting $2 to $3', Value(named), Value(fd), Value(td));
+      }
+      return Throw.TypeError('$1 does not admit converting $2 to $3', Value(named), Value(displayType(from)), Value(displayType(to)));
+    }
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
+  }
+  if (plan.casts.length > 0 && IsInsideOperatorBody()) {
+    return Throw.TypeError('an implicit cast cannot re-enter an operator body');
+  }
+  let converted: Value = value;
+  for (const cast of plan.casts) {
+    converted = Q(yield* InvokePrimitiveCast(converted, cast, from, to));
+    // This protocol retains its cast-stage check as well as final validation
+    // after scaling, quantization and source-portion transport.
+    for (const owner of plan.required) {
+      if (!SameType(cast.target, to) && (cast.target as { MetaType?: object }).MetaType !== owner) continue;
+      const portion = MetadataPortion(to.Metadata, owner, to.Base);
+      const verdict = Q(yield* ApplyValidateHook(owner, converted, portion, to.Base));
+      if (verdict === false) {
+        const named = LookupMetaTypeName(owner) ?? 'a meta type';
+        const described = Q(yield* DescribePortion(owner, portion));
+        if (described !== undefined) return Throw.TypeError('$1 does not admit $2', Value(named), Value(described));
+        return Throw.TypeError('$1 is not assignable to $2', converted, Value(displayType(to)));
+      }
+    }
+  }
+  const { participating, quantizing } = plan;
+  const pinned = new Set(GoverningMetaTypes(to.Metadata).types);
   // The factor is the product over every meta type that defines one, so two
   // independent scalings compose rather than one winning.
   let numerator = 1n;
@@ -4854,7 +4916,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   } else {
     factorValue = Value(numerator === 0n && negativeFactor ? -0 : roundRationalToBinaryFloat(numerator, denominator, 64));
   }
-  let converted = Q(yield* ScaleMetadataValue(value, numerator, denominator, to.Base, numerator === 0n && negativeFactor));
+  converted = Q(yield* ScaleMetadataValue(converted, numerator, denominator, to.Base, numerator === 0n && negativeFactor));
   for (const metaType of quantizing) {
     const q = Q(yield* ApplyMetaHook(metaType, 'quantize', [
       converted,

@@ -4,7 +4,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity, RefBindingHolder } from '../execution-context/Environment.mts';
 import { BoundNames } from '../static-semantics/BoundNames.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { RequireType, ConvertValue, PushContractReturn, PopContractReturn, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PlanBareImplicitCasts } from '../abstract-ops/runtime-types.mts';
+import { RequireType, ConvertValue, PushContractReturn, PopContractReturn, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PlanBareImplicitCasts, PlanParameterizationConversion } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   BeginTypeDeclarationPreparation,
@@ -1382,7 +1382,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
   }
   for (const pair of TakeDeferredMetadataChecks(root)) {
-    const admits = Q(yield* MetadataSubtypeJudgment(pair));
+    // Numeric receiving boundaries can admit a declared conversion without
+    // making it a subtype or running its ordinary body during checking.
+    const numeric = pair.source.Base.Kind === 'primitive' && isNumericTypeName(pair.source.Base.Name)
+      && pair.target.Base.Kind === 'primitive' && isNumericTypeName(pair.target.Base.Name);
+    let admits: boolean;
+    if (numeric) {
+      const plan = Q(yield* PlanParameterizationConversion(pair.source, pair.target));
+      admits = !plan.failure;
+    } else {
+      admits = Q(yield* MetadataSubtypeJudgment(pair));
+    }
     if (!admits) {
       return CreateTypeDiagnostic('rt-assignability', pair.node, 'pre-evaluation', '$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
     }
