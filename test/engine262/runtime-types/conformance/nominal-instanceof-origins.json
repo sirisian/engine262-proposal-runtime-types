@@ -1,0 +1,1080 @@
+{
+  "cases": [
+    {
+      "name": "local-stable",
+      "modules": {
+        "main": "class C {}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-replacement",
+      "modules": {
+        "main": "class C {}Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-later-top-level-replacement",
+      "modules": {
+        "main": "class C {}function f(c:C){if(c instanceof C){}}Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-unrelated-unused-body",
+      "modules": {
+        "main": "class C {}function unused(){unknown();}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-unknown-call",
+      "modules": {
+        "main": "class C {}globalThis.effect=()=>{};globalThis.effect();function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-lhs-effect",
+      "modules": {
+        "main": "class C {}function change(c:C):C{Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return c;}function f(c:C){if(change(c) instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-stable",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-replacement",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import {C} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-later-top-level-replacement",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-unrelated-unused-body",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import {C} from \"dep\";function unused(){unknown();}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-unknown-call",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import {C} from \"dep\";globalThis.effect=()=>{};globalThis.effect();function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-lhs-effect",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import {C} from \"dep\";function change(c:C):C{Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return c;}function f(c:C){if(change(c) instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-stable",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import * as ns from \"dep\";const C=ns.C;function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-replacement",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import * as ns from \"dep\";const C=ns.C;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-later-top-level-replacement",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import * as ns from \"dep\";const C=ns.C;function f(c:C){if(c instanceof C){}}Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-unrelated-unused-body",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import * as ns from \"dep\";const C=ns.C;function unused(){unknown();}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-unknown-call",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import * as ns from \"dep\";const C=ns.C;globalThis.effect=()=>{};globalThis.effect();function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-lhs-effect",
+      "modules": {
+        "dep": "export class C {}",
+        "main": "import * as ns from \"dep\";const C=ns.C;function change(c:C):C{Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return c;}function f(c:C){if(change(c) instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-stable",
+      "modules": {
+        "lib": "export class C {}",
+        "dep": "export {C} from \"lib\";",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-replacement",
+      "modules": {
+        "lib": "export class C {}",
+        "dep": "export {C} from \"lib\";",
+        "main": "import {C} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-later-top-level-replacement",
+      "modules": {
+        "lib": "export class C {}",
+        "dep": "export {C} from \"lib\";",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-unrelated-unused-body",
+      "modules": {
+        "lib": "export class C {}",
+        "dep": "export {C} from \"lib\";",
+        "main": "import {C} from \"dep\";function unused(){unknown();}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexport-unknown-call",
+      "modules": {
+        "lib": "export class C {}",
+        "dep": "export {C} from \"lib\";",
+        "main": "import {C} from \"dep\";globalThis.effect=()=>{};globalThis.effect();function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-lhs-effect",
+      "modules": {
+        "lib": "export class C {}",
+        "dep": "export {C} from \"lib\";",
+        "main": "import {C} from \"dep\";function change(c:C):C{Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return c;}function f(c:C){if(change(c) instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "lib",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-producer-replacement",
+      "modules": {
+        "dep": "export class C {}Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-declared-custom-hook",
+      "modules": {
+        "main": "class C{static [Symbol.hasInstance](v:any){return false;}}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-declared-custom-hook",
+      "modules": {
+        "dep": "export class C{static [Symbol.hasInstance](v:any){return false;}}",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-narrowing",
+      "modules": {
+        "main": "class A{x:uint8=1;}function f(v:A|null):uint8{if(v instanceof A)return v.x;return 0;}if(f(new A())!==1)throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-value-query",
+      "modules": {
+        "main": "class A{x:uint8=1;}const v=new A();if(String(v instanceof A)!==\"true\")throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-narrowing",
+      "modules": {
+        "dep": "export class A{x:uint8=1;}",
+        "main": "import {A} from \"dep\";function f(v:A|null):uint8{if(v instanceof A)return v.x;return 0;}if(f(new A())!==1)throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-value-query",
+      "modules": {
+        "dep": "export class A{x:uint8=1;}",
+        "main": "import {A} from \"dep\";const v=new A();if(String(v instanceof A)!==\"true\")throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-unknown-admission",
+      "modules": {
+        "main": "class C{}function f(raw:any){const c:C=raw;if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-unknown-return-admission",
+      "modules": {
+        "main": "class C{}function convert(raw:any):C{return raw;}function f(raw:any){const c=convert(raw);if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-conversion-hook",
+      "modules": {
+        "main": "class C{}let n=0;class S{operator C(){n+=1;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return new C();}}function f(raw:any){const c:C=raw;if(c instanceof C)throw new Error(\"hook ignored\");}f(new S());if(n!==1)throw new Error(\"conversion replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-getter-hook-once",
+      "modules": {
+        "main": "class C{}let reads=0,calls=0;Object.defineProperty(C,Symbol.hasInstance,{get(){reads+=1;return function(v:any){calls+=1;return false;};}});function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());if(reads!==1||calls!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-throwing-hook",
+      "modules": {
+        "main": "class C{}let n=0;Object.defineProperty(C,Symbol.hasInstance,{value(){n+=1;throw 42;}});function f(c:C){if(c instanceof C){}}try{f(new C());throw new Error(\"missed throw\");}catch(e){if(e!==42)throw e;}if(n!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-inherited-replacement",
+      "modules": {
+        "main": "class C{}const p={ [Symbol.hasInstance](v:any){return false;} };Object.setPrototypeOf(C,p);function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-lhs-hook-once",
+      "modules": {
+        "main": "class C{}let n=0;function change(c:C):C{Object.defineProperty(C,Symbol.hasInstance,{value(){n+=1;return false;}});return c;}function f(c:C){if(change(c) instanceof C)throw new Error(\"hook ignored\");}f(new C());if(n!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-repeated-activation",
+      "modules": {
+        "main": "class C{}let n=0;function f(c:C){let result=false;if(c instanceof C)result=true;Object.defineProperty(C,Symbol.hasInstance,{configurable:true,value(){n+=1;return false;}});return result;}const c=new C();if(f(c)!==true||f(c)!==false||n!==1)throw new Error(\"ordering\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-unused-admission",
+      "modules": {
+        "main": "class C{}function unused(raw:any){const c:C=raw;}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-unknown-admission",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";function f(raw:any){const c:C=raw;if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-unknown-return-admission",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";function convert(raw:any):C{return raw;}function f(raw:any){const c=convert(raw);if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-conversion-hook",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";let n=0;class S{operator C(){n+=1;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return new C();}}function f(raw:any){const c:C=raw;if(c instanceof C)throw new Error(\"hook ignored\");}f(new S());if(n!==1)throw new Error(\"conversion replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-getter-hook-once",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";let reads=0,calls=0;Object.defineProperty(C,Symbol.hasInstance,{get(){reads+=1;return function(v:any){calls+=1;return false;};}});function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());if(reads!==1||calls!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-throwing-hook",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";let n=0;Object.defineProperty(C,Symbol.hasInstance,{value(){n+=1;throw 42;}});function f(c:C){if(c instanceof C){}}try{f(new C());throw new Error(\"missed throw\");}catch(e){if(e!==42)throw e;}if(n!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-inherited-replacement",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";const p={ [Symbol.hasInstance](v:any){return false;} };Object.setPrototypeOf(C,p);function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-lhs-hook-once",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";let n=0;function change(c:C):C{Object.defineProperty(C,Symbol.hasInstance,{value(){n+=1;return false;}});return c;}function f(c:C){if(change(c) instanceof C)throw new Error(\"hook ignored\");}f(new C());if(n!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-repeated-activation",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";let n=0;function f(c:C){let result=false;if(c instanceof C)result=true;Object.defineProperty(C,Symbol.hasInstance,{configurable:true,value(){n+=1;return false;}});return result;}const c=new C();if(f(c)!==true||f(c)!==false||n!==1)throw new Error(\"ordering\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-unused-admission",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";function unused(raw:any){const c:C=raw;}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-import-stable",
+      "modules": {
+        "dep": "export default class C{}",
+        "main": "import C from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "direct-namespace-stable",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import * as ns from \"dep\";function f(c:ns.C){if(c instanceof ns.C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "side-effect-dependency",
+      "modules": {
+        "dep": "export class C{}",
+        "change": "import {C} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});",
+        "main": "import {C} from \"dep\";import \"change\";function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "change",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer-unused-effect",
+      "modules": {
+        "dep": "export class C{};function unused(){unknown();}",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "producer-scalar-alias-admission",
+      "modules": {
+        "dep": "export class C{};const raw=true;const flag:boolean=raw;",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-field-conversion",
+      "modules": {
+        "main": "class C{}let n=0;class T{operator T(v:number){n+=1;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return new T();}}class D{static value:T=0;}function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());if(n!==1)throw new Error(\"conversion replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "instance-field-conversion",
+      "modules": {
+        "main": "class C{}let n=0;class T{operator T(v:number){n+=1;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return new T();}}class D{value:T=0;}const d=new D();function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());if(n!==1)throw new Error(\"conversion replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exported-guard-consumer-mutation",
+      "modules": {
+        "dep": "export class C{}export function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}",
+        "main": "import {C,f} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});f(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-called-before-replacement",
+      "modules": {
+        "main": "class C{}function f(c:C){if(c instanceof C){}}f(new C());Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-loop-repetition",
+      "modules": {
+        "main": "class C{}let n=0;function f(c:C){if(c instanceof C)n+=1;Object.defineProperty(C,Symbol.hasInstance,{configurable:true,value:()=>false});}const c=new C();for(let i=0;i<2;i+=1)f(c);if(n!==1)throw new Error(\"ordering\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-called-before-replacement",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}f(new C());Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-loop-repetition",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";let n=0;function f(c:C){if(c instanceof C)n+=1;Object.defineProperty(C,Symbol.hasInstance,{configurable:true,value:()=>false});}const c=new C();for(let i=0;i<2;i+=1)f(c);if(n!==1)throw new Error(\"ordering\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exported-alias-consumer-mutation",
+      "modules": {
+        "dep": "class C{}function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}export {C,f};",
+        "main": "import {C,f} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});f(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exported-factory-consumer-mutation",
+      "modules": {
+        "dep": "export class C{}export function make(){return function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");};}",
+        "main": "import {C,make} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});make()(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-instance-field-admission",
+      "modules": {
+        "main": "class C{}class T{operator T(v:number){Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return new T();}}class Unused{value:T=0;}function f(c:C){if(c instanceof C){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "partial-result-conversion",
+      "modules": {
+        "main": "class C{operator C(v:undefined){Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return new C();}}function make(flag){if(flag)return new C();}function f(flag){const raw:any=make(flag);const c:C=raw;if(c instanceof C)throw new Error(\"hook ignored\");}f(false);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-admission",
+      "modules": {
+        "main": "class C{}let n=0;class S{operator uint8(){n+=1;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});return 1;}}class D{constructor(raw:any){const n:uint8=raw;}}new D(new S());function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());if(n!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async-result-assimilation",
+      "modules": {
+        "main": "class C{}let n=0;async function change(){return {get then(){n+=1;Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});}};}change();function f(c:C){if(c instanceof C)throw new Error(\"hook ignored\");}f(new C());if(n!==1)throw new Error(\"replay\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "completed-result-readmission",
+      "modules": {
+        "main": "class A{x:uint8=1;}function read():A|null{return new A();}const v:A|null=read();if((v instanceof A)&&v.x!==1)throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-heritage-protocol",
+      "modules": {
+        "main": "class B{static [Symbol.hasInstance](v:any){return false;}}function run(Base:any){class C extends Base{}function f(c:C){if(c instanceof C){}}}run(B);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ],
+  "sequences": [
+    {
+      "name": "cached stable protocol in a later graph",
+      "modules": {
+        "dep": "export class C{}",
+        "first": "import {C} from \"dep\";",
+        "second": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "entries": [
+        "first",
+        "second"
+      ],
+      "expected": [
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "dep",
+            "first"
+          ]
+        },
+        {
+          "status": "rejected",
+          "bodyEntries": [],
+          "errorClass": "StaticTypeError",
+          "diagnostic": {
+            "code": "RT_IMPOSSIBLE_TEST",
+            "phase": "static"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cached own protocol in a later graph",
+      "modules": {
+        "dep": "export class C{}",
+        "first": "import {C} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{value:()=>false});",
+        "second": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "entries": [
+        "first",
+        "second"
+      ],
+      "expected": [
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "dep",
+            "first"
+          ]
+        },
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "second"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cached getter protocol in a later graph",
+      "modules": {
+        "dep": "export class C{}",
+        "first": "import {C} from \"dep\";Object.defineProperty(C,Symbol.hasInstance,{get(){throw new Error(\"getter executed\");}});",
+        "second": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "entries": [
+        "first",
+        "second"
+      ],
+      "expected": [
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "dep",
+            "first"
+          ]
+        },
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "second"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cached inherited protocol in a later graph",
+      "modules": {
+        "dep": "export class C{}",
+        "first": "import {C} from \"dep\";Object.setPrototypeOf(C,{[Symbol.hasInstance](){return false;}});",
+        "second": "import {C} from \"dep\";function f(c:C){if(c instanceof C){}}"
+      },
+      "entries": [
+        "first",
+        "second"
+      ],
+      "expected": [
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "dep",
+            "first"
+          ]
+        },
+        {
+          "status": "fulfilled",
+          "bodyEntries": [
+            "second"
+          ]
+        }
+      ]
+    }
+  ]
+}

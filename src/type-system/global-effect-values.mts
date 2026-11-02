@@ -6,9 +6,12 @@ import { intrinsicData } from './intrinsic-origin.mts';
 import { isIntrinsicPrototypeGetter } from './intrinsic-effect-origin.mts';
 import { OrdinaryDataReadSupported } from './runtime.mts';
 import { ScalarRestOwner } from './scalar-rests.mts';
+import { CompletionPaths } from './completion-values.mts';
 
 type Node = ParseNode & Record<string, unknown>;
-type Flow = { absent?: boolean, primitiveContract?: string, values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, primitiveKinds?: Set<'null' | 'undefined' | 'other'>, stringLength?: number, expression?: ParseNode };
+type AdmissionProof = (source: ParseNode | undefined, target: ParseNode.Type, admitted?: ParseNode.Type) => boolean;
+type AdmissionEffect = { site: ParseNode, transparent: (proof: AdmissionProof) => boolean };
+type Flow = { admittedType?: ParseNode.Type, absent?: boolean, primitiveContract?: string, values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, primitiveKinds?: Set<'null' | 'undefined' | 'other'>, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
 type PropertyWrite = { key: string | undefined, source: Flow, site?: ParseNode };
 type PrototypeChange = { source: Flow, site: ParseNode };
@@ -56,6 +59,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   element: (node: ParseNode | undefined, index: number) => Set<string>,
   exhausted: () => boolean,
   opaqueEffects: () => ReadonlySet<ParseNode>,
+  admissionEffects: () => readonly AdmissionEffect[],
   executionSites: (site: ParseNode, within?: ParseNode) => readonly ParseNode[] | undefined,
   activationMayRepeat: (site: ParseNode) => boolean,
   globalWrites: () => readonly { site: ParseNode, key?: string }[],
@@ -65,6 +69,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   const functions = new Map<ParseNode, Callable>();
   const native = new Map<ObjectValue, Aggregate>();
   const opaqueEffects = new Set<ParseNode>();
+  const admissionEffects: AdmissionEffect[] = [];
+  const directSources = new Set<Flow>();
   const globalWrites: { site: ParseNode, key?: string }[] = [];
   const queue: [Candidate, (value: Candidate) => void][] = [];
   // Bound propagation work, not elapsed time. Exhaustion loses precision; it
@@ -72,7 +78,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   let remaining = Math.min(1048576, Math.max(16384, nodes.length * 128));
   let exhausted = false;
   let depth = 0;
-  const add = (to: Flow, value: Candidate): void => {
+  const add = (to: Flow, value: Candidate, propagated = false): void => {
+    if (!propagated) directSources.add(to);
     if (exhausted || to.values.has(value)) return;
     to.values.add(value);
     for (const user of to.users) queue.push([value, user]);
@@ -98,7 +105,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       inputs.set(to, sources);
     }
     sources.add(from);
-    watch(from, (value) => add(to, value));
+    watch(from, (value) => add(to, value, true));
   };
   const settle = (): void => {
     for (let index = 0; index < queue.length && !exhausted; index += 1) {
@@ -1038,6 +1045,21 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
           : /^(?:number|bigint|uint|int|float)/.test(receiver) ? receiver : 'number';
     }
   };
+  // Completed receiving operations may establish membership for a later
+  // admission. This is value flow from enforcement, not a callable annotation
+  // promoted to an observed result. Unknown/direct alternatives and cycles
+  // prevent an all-input proof; the original operations keep their own effects.
+  const admissionSourceProven = (source: Flow, target: ParseNode.Type, proof: AdmissionProof, seen = new Set<Flow>(), budget = { remaining: 4096 }): boolean => {
+    if (--budget.remaining < 0 || exhausted || seen.has(source) || seen.size >= 256) return false;
+    if (source.admittedType) return proof(undefined, target, source.admittedType);
+    if (source.expression && proof(source.expression, target)) return true;
+    const sources = inputs.get(source);
+    if (directSources.has(source) || !sources?.size) return false;
+    seen.add(source);
+    const answer = [...sources].every((input) => admissionSourceProven(input, target, proof, seen, budget));
+    seen.delete(source);
+    return answer;
+  };
   const pendingAdmissions: { source: Flow, result: Flow, target?: string, type: ParseNode.Type, site: ParseNode }[] = [];
   const admit = (source: Flow, type: ParseNode.Type | undefined, site: ParseNode): Flow => {
     if (!type) return source;
@@ -1046,6 +1068,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     // Admission can convert a value and install storage obligations. A simple
     // primitive target constrains the result, independently of input effects.
     const result = newFlow();
+    result.admittedType = type;
     if (target) {
       result.knownPrimitive = true; result.primitiveContract = target;
     } else {
@@ -1055,10 +1078,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     pendingAdmissions.push({ source, result, target, type, site });
     return result;
   };
-  const target = (value: unknown, source: Flow, site?: ParseNode): void => {
+  const target = (value: unknown, source: Flow, site?: ParseNode, admitted = false): void => {
     if (!isNode(value)) return;
     const node = value;
-    const annotation = (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type ?? options.admissionType(node);
+    const annotation = admitted ? undefined : (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type ?? options.admissionType(node);
     // A pattern default is evaluated before that element's admission. Keep
     // its boundary on the element, rather than at the enclosing pattern start.
     const admissionSite = site && ['LexicalBinding', 'VariableDeclaration'].includes(site.type)
@@ -1075,7 +1098,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     } else if (node.type === 'MemberExpression') store(expression(node.MemberExpression), options.key(node), source, site);
     else if (node.type === 'ParenthesizedExpression') target(node.Expression, source, site);
     else if (node.type === 'SingleNameBinding' || node.type === 'BindingElement') {
-      target(node.BindingIdentifier ?? node.BindingPattern, source, site);
+      // The parent and its BindingIdentifier describe one receiving boundary.
+      target(node.BindingIdentifier ?? node.BindingPattern, source, site, !!node.BindingIdentifier && !!annotation);
       if (node.Initializer) target(node.BindingIdentifier ?? node.BindingPattern, expression(node.Initializer), site);
     } else if (node.type === 'BindingRestProperty' || node.type === 'BindingRestElement' || node.type === 'ForBinding') {
       target(node.BindingIdentifier ?? node.BindingPattern, source, site);
@@ -1127,6 +1151,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     const parameters = parameterKeys.flatMap((key) => Array.isArray(node[key]) ? node[key] as Node[] : isNode(node[key]) ? [node[key] as Node] : []);
     const result = { kind: 'callable' as const, sites: new Set<ParseNode>(), parameters, result: newFlow(), receiver: newFlow(), properties: functionProperties(node) };
     functions.set(node, result);
+    const body = node.FunctionBody ?? node.ConciseBody;
+    const ordinary = ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunction', 'MethodDefinition'].includes(node.type);
+    const fallsThrough = !isNode(body) || body.type !== 'ConciseBody'
+      && (body.type !== 'FunctionBody' || CompletionPaths(body.FunctionStatementList).length > 0);
+    // A result graph with only written returns is incomplete when execution
+    // can fall through. Async/generator invocation returns a different channel.
+    if (!ordinary || fallsThrough) directSources.add(result.result);
+    if (ordinary && fallsThrough && isNode(body)) {
+      const annotation = (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type;
+      admit({ ...newFlow(), absent: true }, annotation, body);
+    }
     for (const parameter of parameters) {
       const annotation = (parameter as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation?.Type;
       const kind = annotation && options.intrinsicAdmission(annotation);
@@ -1535,6 +1570,13 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     expression(node);
     if (node.type === 'AssignmentExpression' && node.AssignmentOperator !== '=') target(node.LeftHandSideExpression, expression(node.AssignmentExpression), node);
     if (node.type === 'UpdateExpression') target(node.LeftHandSideExpression ?? node.UnaryExpression, newFlow(), node);
+    if (node.type === 'FieldDefinition') {
+      // An instance field's boundary belongs to construction, not class
+      // declaration. Its initializer/annotation retains that deferred owner;
+      // constructing a nonempty class has a separate opaque invocation effect.
+      const field = node as ParseNode.FieldDefinition;
+      admit(expression(field.Initializer), field.TypeAnnotation?.Type, field.static ? field : field.Initializer ?? field.TypeAnnotation ?? field);
+    }
     if (node.type === 'LexicalBinding' || node.type === 'VariableDeclaration') target(node.BindingIdentifier ?? node.BindingPattern, expression(node.Initializer), node);
     if (node.type === 'ForOfStatement' || node.type === 'ForAwaitStatement') {
       target(node.LeftHandSideExpression ?? node.ForBinding ?? node.ForDeclaration, iterate(expression(node.AssignmentExpression), node), node);
@@ -1637,6 +1679,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       const request = pendingAdmissions[admissionIndex];
       if (request.target ? !literalAdmission(request.source) && !transparentPrototypeOperation(request.source, request.site, true)
         : !literalAggregateAdmission(request.source, request.type) || !transparentPrototypeOperation(request.source, request.site, true)) {
+        admissionEffects.push({ site: request.site, transparent: (proof) => admissionSourceProven(request.source, request.type, proof) });
         opaqueEffects.add(request.site);
         if (!request.target) add(request.result, 'opaque-value');
       }
@@ -1809,6 +1852,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     },
     exhausted: () => exhausted,
     opaqueEffects: () => opaqueEffects,
+    admissionEffects: () => admissionEffects,
     globalWrites: () => globalWrites,
   };
 }

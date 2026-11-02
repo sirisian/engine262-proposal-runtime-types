@@ -53,7 +53,11 @@ const propertyKey = (node: Node): string | undefined => node.type === 'Identifie
  * callee identity or removes a receiving check. Binding identities keep local
  * and module names distinct from properties of the global object.
  */
-export function GlobalBindingMutations(root: ParseNode, environment: EnvironmentRecord, realm: Realm): { affects: (expression: ParseNode) => boolean } {
+export function GlobalBindingMutations(root: ParseNode, environment: EnvironmentRecord, realm: Realm): {
+  affects: (expression: ParseNode) => boolean,
+  mayPrecede: (operation: ParseNode, observation?: ParseNode) => boolean,
+  admissionsAreTransparent: (observation: ParseNode | undefined, proof: (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type) => boolean) => boolean,
+} {
   const nodes: Node[] = [];
   const bindings = new Map<ParseNode, Map<string, Binding>>();
   const inputs = new Map<Binding, Node[]>();
@@ -597,5 +601,16 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     if (node.type === 'ConditionalExpression') return affects(node.AssignmentExpression_a, new Set(seen)) || affects(node.AssignmentExpression_b, seen);
     return false;
   };
-  return { affects };
+  // Other origin proofs share the same operation scheduling. This supplies
+  // order only; the caller must still establish what each operation can do.
+  const mayPrecede = (operation: ParseNode, observation?: ParseNode): boolean => {
+    if (values.exhausted()) return true;
+    const executions = values.executionSites(operation);
+    if (!observation) return executions === undefined || executions.length > 0;
+    return effectMayPrecede({ node: operation, deferredOnly: executions !== undefined }, observation)
+      || (executions ?? []).some((site) => effectMayPrecede({ node: site, source: operation }, observation));
+  };
+  const admissionsAreTransparent = (observation: ParseNode | undefined, proof: (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type) => boolean): boolean =>
+    !values.exhausted() && values.admissionEffects().every((effect) => !mayPrecede(effect.site, observation) || effect.transparent(proof));
+  return { affects, mayPrecede, admissionsAreTransparent };
 }

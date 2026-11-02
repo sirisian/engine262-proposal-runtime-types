@@ -2,7 +2,7 @@ import { contextualParameters } from './contextual-parameters.mts';
 import { DeclaredMemberImplements } from './implements-member.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
-import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
+import { BigIntValue, NumberValue, TypedNumberValue, Value, ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { skipDebugger, type Evaluator } from '../evaluator.mts';
@@ -128,7 +128,7 @@ import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDefer
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint, rememberDeclaredDefault, rememberGenericTypeCaptures } from './records.mts';
 import {
-  R, Throw, wellKnownSymbols, RegisterSymbolKeyDeclaration, RememberCheckedPropertyKey,
+  R, Throw, wellKnownSymbols, RegisterSymbolKeyDeclaration, RememberCheckedPropertyKey, LexicalClassFamily,
 } from '#self';
 import { ArgumentContexts, FreshArraySpreadSource } from './argument-construction.mts';
 
@@ -12793,20 +12793,181 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * ordinary constructor, in which case there is no Static Type to narrow against
    * and the form is left alone.
    */
+  const nominalProtocolScreens = new Map<ParseNode, ReturnType<typeof GlobalBindingMutations>>();
+  const nominalProtocolStable = (expression: ParseNode): boolean => {
+    // A module API can be invoked by a consumer outside this dependency graph.
+    // Without an escape/caller proof its deferred guards cannot assume that
+    // initialization is the last opportunity to replace the protocol.
+    if (root.type === 'Module' && root.ModuleBody?.ModuleItemList.some((item) => item.type === 'ExportDeclaration')) {
+      for (let at = expression.parent; at; at = at.parent) {
+        if (['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'].some((key) => key in at)
+          || at.type === 'FieldDefinition' && !at.static) return false;
+      }
+    }
+    const realm = surroundingAgent.currentRealmRecord;
+    const sources = new Map<ParseNode, AbstractModuleRecord>();
+    const pending = [moduleCheckInputs.get(root)?.sourceModule].filter((module): module is AbstractModuleRecord => !!module);
+    const seen = new Set<AbstractModuleRecord>();
+    while (pending.length) {
+      const module = pending.pop()!;
+      if (seen.has(module)) continue;
+      if (seen.size >= 256 || !('ECMAScriptCode' in module) || !('LoadedModules' in module)
+        || !('RequestedModules' in module)) return false;
+      seen.add(module);
+      const source = module.ECMAScriptCode as ParseNode.Module;
+      sources.set(source, module);
+      const loaded = module.LoadedModules as readonly { Module: AbstractModuleRecord }[];
+      if (loaded.length < (module.RequestedModules as readonly unknown[]).length) return false;
+      pending.push(...loaded.map((entry) => entry.Module));
+    }
+    const selectedTest = (candidate: ParseNode): boolean => {
+      if (candidate.type === 'ParenthesizedExpression') return selectedTest(candidate.Expression);
+      if (candidate.type === 'UnaryExpression' && candidate.operator === '!') return selectedTest(candidate.UnaryExpression);
+      return candidate.type === 'RelationalExpression' && candidate.operator === 'instanceof'
+        && candidate.ShiftExpression === expression;
+    };
+    const scalarTarget = (type: ParseNode.Type): boolean => {
+      if (type.type === 'PredefinedType') return ['any', 'void', 'number', 'string', 'boolean', 'bigint'].includes(type.keyword);
+      if (type.type !== 'TypeReference' || type.TypeArguments || type.TypeName.MemberNames.length) return false;
+      const reference = type.TypeName.IdentifierReference;
+      if (ResolveWrittenBindingDeclaration(reference, reference.name)
+        || !/^(?:any|void|string|boolean|number|bigint|uint(?:8|16|32|64)?|int(?:8|16|32|64)?|float(?:16|32|64))$/.test(reference.name)
+        || realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(reference.name))) return false;
+      const visited = new Set<ObjectValue>();
+      for (let at: Value = realm.GlobalObject; at !== Value.null;) {
+        if (!(at instanceof ObjectValue) || at.Get !== ObjectValue.prototype.Get || !('Prototype' in at)
+          || visited.has(at) || visited.size >= 256 || at.properties.has(Value(reference.name))) return false;
+        visited.add(at); at = at.Prototype as Value;
+      }
+      return true;
+    };
+    const constructed = new Map<ParseNode, boolean>();
+    const constructorBodyIsTransparent = (node: ParseNode): boolean => {
+      const origin = stableClassOrigin(node);
+      if (!origin || origin.arguments || origin.declaration.TypeParameters || origin.declaration.ClassTail.ClassHeritage
+        || origin.declaration.Decorators?.length || origin.declaration.ClassTail.ClassBody?.some((element) =>
+          element.type === 'MethodDefinition' && !element.static && element.ClassElementName.type === 'IdentifierName'
+          && element.ClassElementName.name === 'constructor')) return false;
+      let answer = constructed.get(origin.declaration);
+      if (answer === undefined) {
+        answer = intrinsicSourceIsStable(origin.declaration, realm, undefined, undefined, (annotation) => scalarTarget(annotation.Type));
+        constructed.set(origin.declaration, answer);
+      }
+      return answer;
+    };
+    // An admission has an independent effect boundary. A direct default
+    // construction already belongs to its exact plain family; this proves
+    // membership, not the absence of effects in its constructor or fields.
+    const completedMembership = (from: ParseNode.Type, to: ParseNode.Type, budget = { remaining: 1024 }): boolean => {
+      if (--budget.remaining < 0) return false;
+      if (from.type === 'UnionType') return from.Types.every((part) => completedMembership(part, to, budget));
+      if (to.type === 'UnionType') return to.Types.some((part) => completedMembership(from, part, budget));
+      if (from.type === 'PredefinedType' && from.keyword === 'null') return to.type === 'PredefinedType' && to.keyword === 'null';
+      if (scalarTarget(from) && scalarTarget(to)
+        && !(from.type === 'PredefinedType' && ['any', 'void'].includes(from.keyword))
+        && !(from.type === 'TypeReference' && ['any', 'void'].includes(from.TypeName.IdentifierReference.name))) return true;
+      if (from.type !== 'TypeReference' || from.TypeArguments || from.TypeName.MemberNames.length
+        || to.type !== 'TypeReference' || to.TypeArguments || to.TypeName.MemberNames.length) return false;
+      const source = stableClassOrigin(from.TypeName.IdentifierReference), target = stableClassOrigin(to.TypeName.IdentifierReference);
+      if (!source || !target || source.arguments || target.arguments || source.declaration.TypeParameters
+        || source.declaration !== target.declaration) return false;
+      // A completed value can come from an earlier activation. Equal source
+      // declarations do not equate freshly evaluated local class families.
+      for (let at = source.declaration.parent; at; at = at.parent) {
+        if (['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'].some((key) => key in at)
+          || /^(For|While|DoWhile)/.test(at.type) || at.type === 'FieldDefinition' || at.type === 'ClassStaticBlock') return false;
+      }
+      return true;
+    };
+    const transparentNominalAdmission = (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type): boolean => {
+      if (admitted) return completedMembership(admitted, type);
+      if (!source) return false;
+      const value = unparenthesized(source);
+      if (['StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(value.type) || value.type === 'NumericLiteral' && !value.Imaginary) return scalarTarget(type);
+      if (value.type !== 'NewExpression') return false;
+      const origin = stableClassOrigin(value.MemberExpression);
+      if (!origin || origin.arguments || origin.declaration.TypeParameters || origin.declaration.ClassTail.ClassHeritage
+        || origin.declaration.Decorators?.length || origin.declaration.ClassTail.ClassBody?.some((element) =>
+          element.type === 'MethodDefinition' && element.ClassElementName.type === 'IdentifierName' && element.ClassElementName.name === 'constructor')) return false;
+      let remaining = 1024;
+      const matches = (target: ParseNode.Type): boolean => {
+        if (--remaining < 0) return false;
+        if (target.type === 'UnionType') return target.Types.some(matches);
+        if (target.type !== 'TypeReference' || target.TypeArguments || target.TypeName.MemberNames.length) return false;
+        const receiving = stableClassOrigin(target.TypeName.IdentifierReference);
+        return !!receiving && !receiving.arguments && receiving.declaration === origin.declaration;
+      };
+      return matches(type);
+    };
+    const screen = (source: ParseNode, module?: AbstractModuleRecord): boolean => {
+      const endpoint = source === root ? expression : undefined;
+      let mutations = source === root ? globalBindingMutations : nominalProtocolScreens.get(source);
+      if (!mutations) {
+        mutations = GlobalBindingMutations(source, module?.Environment ?? realm.GlobalEnv, realm);
+        nominalProtocolScreens.set(source, mutations);
+      }
+      let unsupportedInvocation = false;
+      const safe = (candidate: ParseNode): boolean => {
+        if (!mutations.mayPrecede(candidate, endpoint)) return true;
+        if (candidate.type === 'NewExpression' && stableClassOrigin(candidate.MemberExpression)
+          && !constructorBodyIsTransparent(candidate.MemberExpression)) unsupportedInvocation = true;
+        if (candidate.type === 'CallExpression') {
+          const callee = unparenthesized(candidate.CallExpression);
+          const declaration = callee.type === 'IdentifierReference' ? ResolveWrittenBindingDeclaration(callee, callee.name)?.node : undefined;
+          if (declaration && /Async|Generator/.test(declaration.type)) unsupportedInvocation = true;
+        }
+        if (candidate.type === 'ImportDeclaration') return sources.has(source);
+        if (selectedTest(candidate)) return true;
+        if (candidate.type === 'MemberExpression' && namespaceClassOrigin(candidate)) return true;
+        if (candidate.parent?.type === 'NewExpression' && candidate.parent.MemberExpression === candidate) {
+          return constructorBodyIsTransparent(candidate);
+        }
+        return false;
+      };
+      return mutations.admissionsAreTransparent(endpoint, transparentNominalAdmission)
+        && intrinsicSourceIsStable(source, realm, safe, endpoint) && !unsupportedInvocation;
+    };
+    return screen(root, sources.get(root))
+      && [...sources].every(([source, module]) => source === root || screen(source, module));
+  };
+
   const nominalInstanceTarget = (expression: ParseNode): Known => {
     const node = unparenthesized(expression);
     const origin = stableClassOrigin(node);
     if (origin) {
       if (origin.arguments) return null;
-      const direct = expression === node && node.type === 'IdentifierReference'
-        && ResolveBindingDeclaration(node, node.name)?.kind === 'class';
-      const selectedTest = (candidate: ParseNode): boolean => {
-        if (candidate.type === 'ParenthesizedExpression') return selectedTest(candidate.Expression);
-        if (candidate.type === 'UnaryExpression' && candidate.operator === '!') return selectedTest(candidate.UnaryExpression);
-        return candidate.type === 'RelationalExpression' && candidate.operator === 'instanceof'
-          && candidate.ShiftExpression === expression;
-      };
-      if (!direct && !intrinsicSourceIsStable(root, surroundingAgent.currentRealmRecord, selectedTest, expression)) return null;
+      // A prior evaluated activation may have been changed by a different
+      // source. Inspect only retained ordinary internal descriptors; never Get
+      // the hook, invoke it, or reconstruct this identity from the candidate.
+      const module = importedDeclarationSourceModule(origin.declaration) ?? moduleCheckInputs.get(root)?.sourceModule;
+      const environment = module?.Environment ?? checkingEnvironments.get(root);
+      const actual = environment && LexicalClassFamily(origin.declaration, environment);
+      if (actual) {
+        const intrinsic = surroundingAgent.currentRealmRecord.Intrinsics['%Function.prototype%'];
+        const visited = new Set<Value>();
+        let at: Value = actual;
+        while (at !== intrinsic) {
+          if (!(at instanceof ObjectValue) || at.Get !== ObjectValue.prototype.Get
+            || at.GetPrototypeOf !== ObjectValue.prototype.GetPrototypeOf || !('Prototype' in at)
+            || at.properties.has(wellKnownSymbols.hasInstance) || visited.has(at) || visited.size >= 256) return null;
+          visited.add(at);
+          at = at.Prototype as Value;
+        }
+      } else if (module && 'Status' in module && module.Status === 'evaluated') return null;
+      if (!actual) {
+        const visited = new Set<ParseNode>();
+        let declaration = origin.declaration;
+        while (declaration.ClassTail.ClassHeritage) {
+          if (visited.has(declaration) || visited.size >= 256) return null;
+          visited.add(declaration);
+          const heritage = unparenthesized(declaration.ClassTail.ClassHeritage);
+          if (heritage.type === 'NullLiteral') break;
+          const base = stableClassOrigin(heritage);
+          if (!base || base.arguments) return null;
+          declaration = base.declaration;
+        }
+      }
+      if (!nominalProtocolStable(expression)) return null;
       const shape = classObjectTypeOfNode(origin.declaration);
       if (shape?.Kind === 'object' && shape.Properties.some((property) => property.key === wellKnownSymbols.hasInstance)) return null;
       return instanceTypeOf(origin.declaration);
