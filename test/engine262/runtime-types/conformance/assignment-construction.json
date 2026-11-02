@@ -1654,7 +1654,7 @@
     {
       "name": "effects-and-captured-target",
       "modules": {
-        "main": "type Item={readonly tag:number,fn:(value:string)=>string}|{readonly tag:number,fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let log=\"\";class C{a:Item={tag:1,fn(value:U):U{return value;}};}const first=new C();let target:C=first;function left():C{log+=\"l\";return target;}function key():\"a\"{log+=\"k\";return \"a\";}function change(c:Reflect.Object){log+=\"r\";target=new C();}left()[key()]=@change {get tag():number{log+=\"g\";return 1;},fn(value:U):U{return value;}};if(log[0]!==\"l\"||log[1]!==\"k\"||log[2]!==\"r\"||log.indexOf(\"g\")<3)throw new Error(\"order\");verify(first.a);"
+        "main": "(()=>{type Item={readonly tag:number,fn:(value:string)=>string}|{readonly tag:number,fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let log=\"\";class C{a:Item={tag:1,fn(value:U):U{return value;}};}const first=new C();let target:C=first;function left():C{log+=\"l\";return target;}function key():\"a\"{log+=\"k\";return \"a\";}function change(c:Reflect.Object){log+=\"r\";target=new C();}left()[key()]=@change {get tag():number{log+=\"g\";return 1;},fn(value:U):U{return value;}};if(log[0]!==\"l\"||log[1]!==\"k\"||log[2]!==\"r\"||log.indexOf(\"g\")<3)throw new Error(\"order\");verify(first.a);})();"
       },
       "script": true,
       "expected": {
@@ -1828,7 +1828,7 @@
     {
       "name": "returned-reference",
       "modules": {
-        "main": "type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let a:Item={fn(value:U):U{return value;}};function target():ref Item{return ref a;}target()={fn(value:U):U{return value;}};verify(a);"
+        "main": "(()=>{type Item={fn:(value:string)=>string}|{fn:<U:type>(value:U)=>U};function verify(item:any){const f:any=item.fn;if(f.<number>(7)!==7||f.<string>(\"ok\")!==\"ok\")throw new Error(\"specialization\");}function ordinary(item:any){const f:any=item.fn;if(Reflect.getReflection(Reflect.typeOf(f)).signatures[0].typeParameters!==undefined)throw new Error(\"inherited choice\");}let a:Item={fn(value:U):U{return value;}};function target():ref Item{return ref a;}target()={fn(value:U):U{return value;}};verify(a);})();"
       },
       "script": true,
       "expected": {

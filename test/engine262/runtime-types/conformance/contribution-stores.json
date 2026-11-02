@@ -973,7 +973,7 @@
     },
     {
       "name": "runtime store evaluated once",
-      "source": "let calls:number=0;function source():string{calls++;return \"s\";}function f(x:string|number){x=source();const s=x;return g();function g(){return s;}}const result:string=f(0);calls+\":\"+result;",
+      "source": "{let calls:number=0;function source():string{calls++;return \"s\";}function f(x:string|number){x=source();const s=x;return g();function g(){return s;}}const result:string=f(0);calls+\":\"+result;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

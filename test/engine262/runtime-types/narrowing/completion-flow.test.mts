@@ -17,7 +17,7 @@ test("closed enum facts survive a block exit", () => {
 });
 
 test("sealed subclass facts survive a finalizer", () => {
-  evaluated("sealed abstract class S {} class A extends S {} class B extends S {} function f(s: S) { try { if (s instanceof A) return; } finally {} let b: B = s; }");
+  evaluated("{ sealed abstract class S {} class A extends S {} class B extends S {} function f(s: S) { try { if (s instanceof A) return; } finally {} let b: B = s; } }");
 });
 
 test("logical-and", () => {

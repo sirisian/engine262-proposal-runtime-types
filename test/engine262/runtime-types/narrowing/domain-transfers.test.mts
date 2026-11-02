@@ -96,19 +96,19 @@ test("catch-residual: first-handler", () => {
 });
 
 test("never-call: if-call", () => {
-  expectStaticTypeError("function stop():never{throw 0;}function f(x:uint8|string){if(x is uint8)stop();if(x is uint8){}}");
+  expectStaticTypeError("function f(x:uint8|string){function stop():never{throw 0;}if(x is uint8)stop();if(x is uint8){}}");
 });
 
 test("never-call: switch-call", () => {
-  expectStaticTypeError("function stop():never{throw 0;}function f(x:uint8|string){switch(typeof x){case \"number\":stop();}if(x is uint8){}}");
+  expectStaticTypeError("function f(x:uint8|string){function stop():never{throw 0;}switch(typeof x){case \"number\":stop();}if(x is uint8){}}");
 });
 
 test("never-call: short-circuit", () => {
-  expectStaticTypeError("function stop():never{throw 0;}function f(x:uint8|string){if((x is uint8)||stop()){if(x is string){}}}");
+  expectStaticTypeError("function f(x:uint8|string){function stop():never{throw 0;}if((x is uint8)||stop()){if(x is string){}}}");
 });
 
 test("never-call: loop-break", () => {
-  expectStaticTypeError("function stop():never{throw 0;}function f(x:uint8|string){while(true){if(x is uint8)stop();break;}if(x is uint8){}}");
+  expectStaticTypeError("function f(x:uint8|string){function stop():never{throw 0;}while(true){if(x is uint8)stop();break;}if(x is uint8){}}");
 });
 
 test("never-call: explicit-throw", () => {
@@ -120,7 +120,7 @@ test("never-call: may-return", () => {
 });
 
 test("never-call: caught-throw", () => {
-  evaluated("function stop():never{throw 0;}function f(x:uint8|string){try{if(x is uint8)stop();}catch{}if(x is uint8){}}");
+  evaluated("function f(x:uint8|string){function stop():never{throw 0;}try{if(x is uint8)stop();}catch{}if(x is uint8){}}");
 });
 
 test("never-call: promise-of-never", () => {
@@ -344,7 +344,7 @@ test("runtime: typed-catch-order", () => {
 });
 
 test("runtime: never-return", () => {
-  expect(evaluated("function stop():never{throw 0;}function f(x:uint8|string){if(x is uint8)stop();return x is uint8;}let a=\"\";try{f(uint8(1));}catch{a=\"threw\";}a+\",\"+String(f(\"s\"));")).toBe("threw,false");
+  expect(evaluated("function f(x:uint8|string){function stop():never{throw 0;}if(x is uint8)stop();return x is uint8;}let a=\"\";try{f(uint8(1));}catch{a=\"threw\";}a+\",\"+String(f(\"s\"));")).toBe("threw,false");
 });
 
 test("runtime: bare-boolean", () => {
@@ -436,15 +436,15 @@ test("never call satisfies a declared return", () => {
 });
 
 test("never finalizer removes normal completion", () => {
-  expectStaticTypeError("function stop():never{throw 0;}function f(x:uint8|string){if(x is uint8){try{}finally{stop();}}if(x is uint8){}}");
+  expectStaticTypeError("function f(x:uint8|string){function stop():never{throw 0;}if(x is uint8){try{}finally{stop();}}if(x is uint8){}}");
 });
 
 test("caught never call retains normal completion", () => {
-  evaluated("function stop():never{throw 0;}function f(x:uint8|string){if(x is uint8){try{stop();}catch{}}if(x is uint8){}}");
+  evaluated("function f(x:uint8|string){function stop():never{throw 0;}if(x is uint8){try{stop();}catch{}}if(x is uint8){}}");
 });
 
 test("never call in a completion block retains the live producer", () => {
-  expectStaticTypeError("function stop():never{throw 0;}function f(x:uint8|string){if(do{if(x is uint8)stop(); x is string;}){}}");
+  expectStaticTypeError("function f(x:uint8|string){function stop():never{throw 0;}if(do{if(x is uint8)stop(); x is string;}){}}");
 });
 
 test("optional comparison with reversed operands", () => {
@@ -589,7 +589,7 @@ test('an optional never call leaves only its skipped path', () => {
 });
 
 test('a never-returning tagged call removes its normal edge', () => {
-  expectStaticTypeError('function stop(strings:any):never{throw 0;}function f(x:uint8|string){if(x is uint8)stop`tag`;if(x is uint8){}}');
+  expectStaticTypeError('function f(x:uint8|string){function stop(strings:any):never{throw 0;}if(x is uint8)stop`tag`;if(x is uint8){}}');
 });
 
 test('array predicate shadowing does not establish an intrinsic result', () => {
@@ -609,4 +609,11 @@ test('array predicate identity is checked across scripts', () => {
     'Array.isArray=(v:any):boolean=>true;',
     'function f(s:string){if(Array.isArray(s))return "live";return "other";}f("s");',
   ])).toBe('live');
+});
+
+// The global declaration does not freeze a later body's callee. Keep the
+// replacement control beside the local never-returning flow examples.
+test('a replaced global never declaration retains its normal edge', () => {
+  expect(evaluated('function stop():never{throw 0;}function f(x:uint8|string){if(x is uint8)stop();return x is uint8;}'
+    + '(0,eval)("stop=function(){};");String(f(uint8(1)));')).toBe('true');
 });

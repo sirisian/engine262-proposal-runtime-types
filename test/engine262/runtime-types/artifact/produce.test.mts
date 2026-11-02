@@ -76,3 +76,12 @@ test('a module with no exported types yields no artifact', async () => {
   expect(ProduceArtifact(await evaluateGraph({ 'only.mts': 'export const x = 1;\n' }, 'only.mts')))
     .toBe(undefined);
 });
+
+test('exported class denotations survive replacement and type-valued stores remain contracts', async () => {
+  const artifact = ProduceArtifact(await evaluateGraph({ 'main.mts':
+    'export class C { n:uint8; } C=class D{}; export let current:type=uint8;',
+  }, 'main.mts'))!;
+  const root = (name: string) => artifact.table.types[artifact.table.exports[name]];
+  expect(root('C')).toMatchObject({ Kind: 'nominal', nominal: { name: 'C', source: 'main.mts' } });
+  expect(root('current')).toMatchObject({ Kind: 'primitive', Name: 'type' });
+});

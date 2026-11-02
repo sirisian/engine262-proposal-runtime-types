@@ -50,9 +50,11 @@ function expectOk(source: string) {
 
 // The half that works, kept beside the half that does not so the difference is
 // the key rather than anything else: same value, same function-typed property
-// checks, string keys only.
+// checks, string keys only. Publish IteratorResult explicitly: an uncontextualized
+// mutable object result widens its `done` field to Boolean and does not promise
+// the discriminated result union required by the interface.
 test('a string-keyed shape is checked correctly', () => {
-  expectOk(`const it = { next() { return { value: (1 := uint8), done: false }; } };
+  expectOk(`const it = { next(): IteratorResult.<uint8> { return { value: (1 := uint8), done: false }; } };
     function anyv(x) { return x; }
     const i: Iterator.<uint8> = anyv(it);`);
   expectOk(`function* g(): uint8 { yield 1; }
@@ -67,7 +69,7 @@ test('the value is iterable in fact', () => {
 });
 
 test('a hand-built iterable satisfies Iterable', () => {
-  expectOk(`const it = { [Symbol.iterator]() { return { next() { return { value: (1 := uint8), done: false }; } }; } };
+  expectOk(`const it = { [Symbol.iterator](): Iterator.<uint8> { return { next(): IteratorResult.<uint8> { return { value: (1 := uint8), done: false }; } }; } };
     function anyv(x) { return x; }
     const i: Iterable.<uint8> = anyv(it);`);
 });
@@ -85,7 +87,7 @@ test('an array satisfies Iterable', () => {
 });
 
 test('IterableIterator accepts what satisfies both halves', () => {
-  expectOk(`const it = { next() { return { value: (1 := uint8), done: false }; }, [Symbol.iterator]() { return this; } };
+  expectOk(`const it = { next(): IteratorResult.<uint8> { return { value: (1 := uint8), done: false }; }, [Symbol.iterator](): IterableIterator.<uint8> { return this; } };
     function anyv(x) { return x; }
     const i: IterableIterator.<uint8> = anyv(it);`);
 });

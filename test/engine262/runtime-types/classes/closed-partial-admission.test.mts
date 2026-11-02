@@ -35,3 +35,10 @@ test('a failed application can be retried after another module registers the par
     expect(result.diagnostic).toBeUndefined();
   }
 });
+
+test('partial value-parameter environments belong to each specialization', async () => {
+  expect(await observeModuleGraph({ main: 'class E<N:uint32>{}partial class E{get():uint32{return N;}callback(){return ()=>N;}shadow():uint32{const N:uint32=3;return N;}}'
+    + 'const a=new E.<7>();const b=new E.<9>();const callback=a.callback();'
+    + 'if(a.get()!==(7:=uint32)||b.get()!==(9:=uint32)||callback()!==(7:=uint32)||a.shadow()!==(3:=uint32))throw Error("environment");' }))
+    .toMatchObject({ status: 'fulfilled', bodyEntries: ['main'], errorClass: undefined });
+});

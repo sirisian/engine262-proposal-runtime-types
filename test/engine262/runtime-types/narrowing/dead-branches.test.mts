@@ -51,7 +51,7 @@ test('a test nested in a guard decides the same branch', () => {
   expectStaticTypeError('function f(a: uint8) { do {} while (a is string); }');
   expectStaticTypeError('function f(a: uint8) { for (; a is string;) {} }');
   // The right operand is judged inside the narrowing its left operand makes.
-  expect(evaluated('class A { x: uint8 = 1; } function f(v: A | null) { return ((v instanceof A) && v.x === 1) ? "yes" : "no"; } f(new A());')).toBe('yes');
+  expect(evaluated('{ class A { x: uint8 = 1; } function f(v: A | null) { return ((v instanceof A) && v.x === 1) ? "yes" : "no"; } f(new A()); }')).toBe('yes');
   // In a value position the right operand is the result, not a branch.
   expect(evaluated('function f(a: uint8, b: boolean) { let r = b && a instanceof uint8; return r; } String(f((1 := uint8), true));')).toBe('true');
 });
@@ -169,7 +169,7 @@ test('the global constructors usable as type names are class types', () => {
   expectStaticTypeError('function f(d: Date) { if (d is Map) {} }');
   expectStaticTypeError('function f(e: TypeError) { if (e instanceof Error) {} }');
   expectStaticTypeError('try {} catch (e: TypeError) { if (e instanceof RangeError) {} }');
-  expectStaticTypeError('class A {} function f(d: Date) { if (d instanceof A) {} }');
+  expectStaticTypeError('function f(d: Date) { class A {} if (d instanceof A) {} }');
   // A test that can go either way, and a subclass of a constructor type.
   expect(evaluated('function f(e: Error) { if (e instanceof TypeError) {} } function g(d: Date | Map) { if (d is Date) {} } "ok";')).toBe('ok');
   expect(evaluated('class D extends Date {} function f(d: Date) { if (d instanceof D) {} } String(new D() instanceof Date);')).toBe('true');

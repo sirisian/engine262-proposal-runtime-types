@@ -65,14 +65,16 @@ function value(source: string): string {
 const SETUP = 'class C { m(): string { return "s"; } } function g(): string { return "s"; } '
   + 'let outerArr: [].<uint8> = [1]; ';
 
+// Keep the inference dependencies local: deferred calls cannot assume an
+// ordinary mutable Script-global callee still holds its declaration.
 /** Assert that a body returning a string is REFUSED at a number-returning position. */
 function expectInferred(body: string) {
-  expectThrows(`${SETUP}function f(x: number) { ${body} } const a: (x: number) => number = f;`);
+  expectThrows(`{ ${SETUP}function f(x: number) { ${body} } const a: (x: number) => number = f; }`);
 }
 
 /** Assert that a body's type does NOT reach the position - the gap, or by design. */
 function expectNotInferred(body: string) {
-  expectOk(`${SETUP}function f(x: number) { ${body} } const a: (x: number) => number = f;`);
+  expectOk(`{ ${SETUP}function f(x: number) { ${body} } const a: (x: number) => number = f; }`);
 }
 
 test('a returned expression carries its type', () => {

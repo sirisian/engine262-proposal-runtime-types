@@ -898,6 +898,62 @@
           }
         }
       ]
+    },
+    {
+      "name": "nested signature key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function f():[].<{[k]:uint8}>{return [{[k]:uint8(1)}];}const table={f};String(table.f()[0][k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong callable key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\"),wrong=Symbol(\"p\");function f():{[k]:uint8}{return {[k]:uint8(1)};}function change(o:any){o.f=function():{[wrong]:uint8}{return {[wrong]:uint8(2)};};}const table={f};try{change(table);const h=table.f();String(h[k]);}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred closure at declared key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const f:()=>{[k]:uint8}=()=>({[k]:uint8(1)});String(f()[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive forwarded private function key",
+      "steps": [
+        {
+          "source": "function outer(){function make(depth:number){const k=Symbol(\"p\");if(depth){const f=make(0);return()=>f();}return()=>({[k]:uint8(1)});}const f=make(1);const obj=f();return String(obj[Object.getOwnPropertySymbols(obj)[0]]);}outer();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
     }
   ]
 }

@@ -31,3 +31,8 @@ test.each([
 ])('retains an open or omission-compatible specialization: %s', (source) => {
   expect(ok(source)).toBe(true);
 });
+
+test('inherited obligations follow declaration identities across renamed parameters', () => {
+  expectStaticTypeError('class A<U:type>{m(x?:U):void{}}class B<T:type> extends A.<T>{m(x:T):void{}}new B.<uint8>();');
+  expect(ok('class A<U:type>{m(x?:U):void{}}class B<T:type> extends A.<T>{m(x?:T):void{}}new B.<uint8>();')).toBe(true);
+});

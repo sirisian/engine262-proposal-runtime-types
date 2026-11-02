@@ -248,35 +248,35 @@ test("constant-key: structural", () => {
 });
 
 test("constructor-origin: parenthesized", () => {
-  expectStaticTypeError("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){if(x instanceof (A)){if(x is B){}}}");
+  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){if(x instanceof (A)){if(x is B){}}} }");
 });
 
 test("constructor-origin: same-class", () => {
-  expectStaticTypeError("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A){if(x instanceof (A)){}}");
+  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A){if(x instanceof (A)){}} }");
 });
 
 test("constructor-origin: alias", () => {
-  expectStaticTypeError("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}}");
+  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}} }");
 });
 
 test("constructor-origin: do-while", () => {
-  expectStaticTypeError("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){do{if(x instanceof (A)){if(x is B){}}}while(false);}");
+  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){do{if(x instanceof (A)){if(x is B){}}}while(false);} }");
 });
 
 test("constructor-origin: bare", () => {
-  expectStaticTypeError("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){if(x instanceof A){if(x is B){}}}");
+  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){if(x instanceof A){if(x is B){}}} }");
 });
 
 test("constructor-origin: unknown-constructor", () => {
-  evaluated("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,C:any){if(x instanceof C){if(x is B){}}}");
+  evaluated("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,C:any){if(x instanceof C){if(x is B){}}} }");
 });
 
 test("constructor-origin: constructor-selection", () => {
-  evaluated("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,b:boolean){const C=b?A:B;if(x instanceof C){if(x is B){}}}");
+  evaluated("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,b:boolean){const C=b?A:B;if(x instanceof C){if(x is B){}}} }");
 });
 
 test("constructor-origin: subject-write", () => {
-  evaluated("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,y:A|B){if(x instanceof (A)){x=y;if(x is B){}}}");
+  evaluated("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,y:A|B){if(x instanceof (A)){x=y;if(x is B){}}} }");
 });
 
 test("scalar-truthiness: truthy-string", () => {
@@ -507,19 +507,19 @@ test("key-value-query", () => {
 });
 
 test("constructor-alias-chain", () => {
-  expectStaticTypeError("class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B){const C=A;const D=C;if(x instanceof D){if(x is B){}}}");
+  expectStaticTypeError("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B){const C=A;const D=C;if(x instanceof D){if(x is B){}}} }");
 });
 
 test("constructor-shadow", () => {
-  evaluated("class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B,C:any){const D=A;{const D=C;if(x instanceof D){if(x is B){}}}}");
+  evaluated("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B,C:any){const D=A;{const D=C;if(x instanceof D){if(x is B){}}}} }");
 });
 
 test("constructor-custom-hook", () => {
-  evaluated("class A{a:uint8=0;static [Symbol.hasInstance](x:any):boolean{return true;}}class B{b:uint8=0;}function f(x:A|B){if(x instanceof (A)){if(x is B){}}}");
+  evaluated("{ class A{a:uint8=0;static [Symbol.hasInstance](x:any):boolean{return true;}}class B{b:uint8=0;}function f(x:A|B){if(x instanceof (A)){if(x is B){}}} }");
 });
 
 test("constructor-hook-replaced", () => {
-  evaluated("class A{a:uint8=0;}class B{b:uint8=0;}Object.defineProperty(A,Symbol.hasInstance,{value:()=>true});function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}}");
+  evaluated("{ class A{a:uint8=0;}class B{b:uint8=0;}Object.defineProperty(A,Symbol.hasInstance,{value:()=>true});function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}} }");
 });
 
 test("truthy-number-nan", () => {
@@ -563,7 +563,7 @@ test("yield-delegate-boolean", () => {
 });
 
 test("constructor-unknown-call", () => {
-  evaluated("class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B,g:any){g();if(x instanceof (A)){if(x is B){}}}");
+  evaluated("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B,g:any){g();if(x instanceof (A)){if(x is B){}}} }");
 });
 
 test("ordered-getter", () => {
@@ -683,5 +683,5 @@ test("category: unknown logical-not effect", () => {
 });
 
 test("constructor: negated grouped origin", () => {
-  expectStaticTypeError("class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B){if(!(x instanceof (A))){if(x is A){}}}");
+  expectStaticTypeError("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B){if(!(x instanceof (A))){if(x is A){}}} }");
 });

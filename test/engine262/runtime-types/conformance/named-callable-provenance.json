@@ -1339,7 +1339,7 @@
     {
       "name": "published-callable-conditional",
       "modules": {
-        "main": "function producer(seed:number){function helper(){return \"s\";}return helper;}const f=Math.random()>0.5?producer(1):producer(2);function make(){return f;}const n:number=make();"
+        "main": "{function producer(seed:number){function helper(){return \"s\";}return helper;}const f=Math.random()>0.5?producer(1):producer(2);function make(){return f;}const n:number=make();}"
       },
       "script": true,
       "requirement": "Joining independently published callable results retains their contribution evidence.",
@@ -1529,7 +1529,7 @@
     {
       "name": "generic-published-producer",
       "modules": {
-        "main": "function producer<T:type>(seed:T){function helper(){return \"s\";}return helper;}const f=producer(1);function make(){return f;}const n:number=make();"
+        "main": "{function producer<T:type>(seed:T){function helper(){return \"s\";}return helper;}const f=producer(1);function make(){return f;}const n:number=make();}"
       },
       "script": true,
       "requirement": "An instantiated published generic result retains its independent callable contribution evidence.",

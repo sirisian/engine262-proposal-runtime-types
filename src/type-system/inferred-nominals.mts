@@ -4,7 +4,7 @@ import { ObjectValue, Value } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import type { TypeRecord } from './records.mts';
 import { SameArgumentList } from './relations.mts';
-import { InstantiateCheckedBindings } from './checked-bindings.mts';
+import { InstantiateCheckedBindings, InstantiateLexicalSymbolKeys } from './checked-bindings.mts';
 
 // Read only ordinary, initialized value bindings. In particular, this operation
 // never dereferences a reference, follows an import, or asks an object environment
@@ -101,7 +101,11 @@ export function CloseInferredNominal(type: TypeRecord, value: unknown,
     const environment = (value as { Environment?: EnvironmentRecord }).Environment;
     return environment ? InstantiateCheckedBindings(new Map([['result', type]]), environment).get('result')! : type;
   }
-  if (type.Kind !== 'nominal' || type.Constructor || type.DeclarationIdentity
+  if (type.Kind !== 'nominal') {
+    const environment = (value as { Environment?: EnvironmentRecord }).Environment;
+    return environment ? InstantiateLexicalSymbolKeys(type, environment) : type;
+  }
+  if (type.Constructor || type.DeclarationIdentity
     || (type.Declaration.type !== 'ClassDeclaration' && type.Declaration.type !== 'ClassExpression')) return type;
   const seen = new Set<unknown>();
   const pending: unknown[] = [value];

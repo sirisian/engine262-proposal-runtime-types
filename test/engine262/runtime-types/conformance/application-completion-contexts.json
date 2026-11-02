@@ -555,6 +555,16 @@
       "source": "function f(){let x=1;let s=\"x\";let q=x===s;}\"ok\";",
       "checking": "forced",
       "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forced checking retains explicit operand contracts",
+      "source": "function f(){let x:uint8=1;let s:string=\"x\";let q=x===s;}\"ok\";",
+      "checking": "forced",
+      "expected": {
         "completion": "throw",
         "bodyEntered": false,
         "errorClass": "StaticTypeError",

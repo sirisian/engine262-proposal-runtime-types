@@ -4591,6 +4591,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type InvocationOrigin = { node: ParseNode, immutable: boolean, annotated: boolean };
   const invocationOrigins = new WeakMap<Frame, Map<string, InvocationOrigin>>();
   const unaryBindingParticipation = new WeakMap<Frame, Map<string, boolean>>();
+  // Earlier initialized immutable bindings retain their enforced contracts.
+  // Literal-name evidence alone does not opt an ordinary constant into checks.
+  unaryBindingParticipation.set(outerConstants, new Map([...outerConstants.bindings]
+    .map(([name, contract]) => [name, !!contract && contract.Kind !== 'any'])));
   const recordInvocationOrigin = (frame: Frame, name: string, node: ParseNode, immutable: boolean, annotated = false): void => {
     let origins = invocationOrigins.get(frame);
     if (!origins) {
@@ -5666,7 +5670,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkOverrideArgumentObligations = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): void => {
     for (const { key, source, target } of overrideArgumentObligations.get(declaration) ?? []) {
       const specialize = (signature: SignatureRecord): SignatureRecord => {
-        const type = substituteTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings);
+        const type = substituteFreeTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings,
+          (declaration as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList);
         return type?.Kind === 'function' ? type.Signatures[0] : signature;
       };
       const actual = specialize(source);
@@ -22921,6 +22926,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         if ((strictOperator === '===' || strictOperator === '!==')
             && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
+            && operandNodes.every((operand) => operandParticipates(operand))
             && !namesLiteral(0) && !namesLiteral(1)
             && (classPair || AreDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord)
               || closedSetsDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord))) {
@@ -24405,6 +24411,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               } else if (member.type === 'AsyncMethod') {
                 inferred = libraryTypeRecord('Promise', [inferred, anyTypeRecord]);
               }
+              // An adopted result is the method's contract, even when a body
+              // inference pass has not yet inferred its loop bindings. Publish
+              // the same result that the static member signature exposes.
+              const taken = expected?.Return;
+              if (taken && taken.Kind !== 'void' && taken.Kind !== 'any' && taken.Kind !== 'parameter') inferred = taken;
               signature.InferredReturn = inferred;
               // Own and captured binders remain symbolic until this method's
               // runtime application supplies them, as for function declarations.
@@ -32666,6 +32677,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (targets) return targets;
     }
     if (target.type === 'MemberExpression') {
+      const receiver = staticType(target.MemberExpression);
+      const keys = memberKeys(target);
+      // A private aggregate description tracks current data values, not a
+      // storage contract. It must not contextualize a replacement literal at
+      // the old value's shape. Independent admitted and accessor contracts
+      // continue through the ordinary member-write path below.
+      if (receiver && aggregateOrigins.has(receiver) && keys?.length
+          && keys.every((key) => aggregateDataKeys.get(receiver)?.has(key))) return [];
       const targets = memberWriteTypes(target);
       if (targets.length) return targets;
     }
@@ -33592,6 +33611,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
     infer = false, frame = frames[frames.length - 1], selected?: ReadonlyMap<PatternNode, PatternSource>): void => {
     let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? operandParticipates(incoming.expression) : incoming.type !== null) };
+    // A whole-pattern annotation has already converted the aggregate; raw
+    // initializer literals no longer describe its extracted member values.
+    if (source.annotated) source = { ...source, expression: undefined, immutableCopy: false };
     const annotation = node.TypeAnnotation ? captureLexicalTypeParameters(resolveType(node.TypeAnnotation.Type), node as ParseNode) : null;
     if (declaring) requireBindingType(annotation);
     // #sec-typed-destructuring: optional members use undefined as the sentinel.
@@ -40081,7 +40103,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // annotation here, so a mismatch surfaced only at run time and the
           // names were untyped.
           const patternAnnotation = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          const annotatedType = patternAnnotation ? resolveType(patternAnnotation.Type) : null;
+          const annotatedType = patternAnnotation ? captureLexicalTypeParameters(resolveType(patternAnnotation.Type), n) : null;
           if (annotatedType) {
             // The names first, so a `void` member reports the binding rule
             // rather than the initializer that could never satisfy it.

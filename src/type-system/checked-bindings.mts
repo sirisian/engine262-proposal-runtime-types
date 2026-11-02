@@ -3,7 +3,7 @@ import type { TypeRecord } from './records.mts';
 import { resolvedDeclaration, declarationModuleEnvironment } from './resolving-aliases.mts';
 import {
   type EnvironmentRecord, LexicalClassFamily, ClassFamilyIdentityOf, ClassTypeEnvironmentOf,
-  SpecializedClassConstructor, LookupClassType, isTypeObject,
+  SpecializedClassConstructor, LookupClassType, isTypeObject, IsSymbolicPropertyKey, InitializedSymbolKey,
 } from '#self';
 
 /** Instantiate checked declaration dependencies in this call's lexical context.
@@ -12,6 +12,17 @@ import {
  */
 export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRecord>,
   environment: EnvironmentRecord, application?: TypeRecord): Map<string, TypeRecord> {
+  return instantiateDependencies(bindings, environment, application, false);
+}
+
+/** Close retained key declarations without changing nominal result evidence. */
+export function InstantiateLexicalSymbolKeys(type: TypeRecord, environment: EnvironmentRecord): TypeRecord {
+  if (type.Kind === 'primitive' || type.Kind === 'any' || type.Kind === 'void' || type.Kind === 'literal') return type;
+  return instantiateDependencies(new Map([['result', type]]), environment, undefined, true).get('result')!;
+}
+
+function instantiateDependencies(bindings: ReadonlyMap<string, TypeRecord>, environment: EnvironmentRecord,
+  application: TypeRecord | undefined, keysOnly: boolean): Map<string, TypeRecord> {
   const contexts = new Map<EnvironmentRecord, Map<TypeRecord, TypeRecord>>();
   const walk = (type: TypeRecord, context = environment): TypeRecord => {
     let seen = contexts.get(context);
@@ -28,6 +39,7 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
     switch (copy.Kind) {
       case 'nominal': {
         copy.Arguments = copy.Arguments.map((argument) => typeof argument === 'number' ? argument : walk(argument, context));
+        if (keysOnly) break;
         if (copy.Declaration.type === 'InterfaceDeclaration') {
           let published = resolvedDeclaration(context, copy.Declaration);
           if (!published) {
@@ -102,8 +114,18 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
         copy.Base = walk(copy.Base, context);
         break;
       case 'object':
-        copy.Properties = copy.Properties.map((property) => ({ ...property, type: walk(property.type, context),
-          ...(property.writeType ? { writeType: walk(property.writeType, context) } : {}) }));
+        copy.Properties = copy.Properties.map((property) => {
+          // An initialized lexical key is independent of callable/result
+          // evidence. Complete it inside signatures and type arguments too,
+          // without replacing a key already supplied by a producer activation.
+          const key = property.key;
+          if (IsSymbolicPropertyKey(key)) {
+            const actual = InitializedSymbolKey(key, context);
+            if (actual) property = { ...property, key: actual, keyDependency: key };
+          }
+          return { ...property, type: walk(property.type, context),
+            ...(property.writeType ? { writeType: walk(property.writeType, context) } : {}) };
+        });
         copy.IndexSignatures = copy.IndexSignatures.map((index) => ({ ...index, Key: walk(index.Key, context), Value: walk(index.Value, context) }));
         break;
       case 'function':

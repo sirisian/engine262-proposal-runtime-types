@@ -653,7 +653,7 @@
       "name": "whole decorator original contribution",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function replace(c){c.objectContext.p=choose(false);}try{const h=@replace {p:choose(true)};\"accepted\";}catch(e){e.name+\":\"+log;}",
+          "source": "let log=\"\";const make=function(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};};const a=make(\"a\"),b=make(\"b\");const choose=function(flag:boolean){if(flag)return a(\"x\");return b(\"x\");};function replace(c){c.objectContext.p=choose(false);}try{const h=@replace {p:choose(true)};\"accepted\";}catch(e){e.name+\":\"+log;}",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -667,7 +667,7 @@
       "name": "member decorator original contribution",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function replace(c){c.objectContext.p=choose(false);}try{const h={@replace p:choose(true)};\"accepted\";}catch(e){e.name+\":\"+log;}",
+          "source": "let log=\"\";const make=function(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};};const a=make(\"a\"),b=make(\"b\");const choose=function(flag:boolean){if(flag)return a(\"x\");return b(\"x\");};function replace(c){c.objectContext.p=choose(false);}try{const h={@replace p:choose(true)};\"accepted\";}catch(e){e.name+\":\"+log;}",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -681,7 +681,7 @@
       "name": "whole decorator getter reads once",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function replace(c){Object.defineProperty(c.objectContext,\"p\",{get(){log+=\"g\";return choose(true);}});}const h=@replace {p:choose(true)};log;",
+          "source": "let log=\"\";const make=function(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};};const a=make(\"a\"),b=make(\"b\");const choose=function(flag:boolean){if(flag)return a(\"x\");return b(\"x\");};function replace(c){Object.defineProperty(c.objectContext,\"p\",{get(){log+=\"g\";return choose(true);}});}const h=@replace {p:choose(true)};log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -741,7 +741,7 @@
       "name": "failed initialization state",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function replace(c){c.objectContext.p=choose(false);}const first={p:choose(true)};const second=@replace {p:choose(true)};",
+          "source": "let log=\"\";const make=function(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};};const a=make(\"a\"),b=make(\"b\");const choose=function(flag:boolean){if(flag)return a(\"x\");return b(\"x\");};function replace(c){c.objectContext.p=choose(false);}const first={p:choose(true)};const second=@replace {p:choose(true)};",
           "expected": {
             "completion": "throw",
             "errorClass": "TypeError",

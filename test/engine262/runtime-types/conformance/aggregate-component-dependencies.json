@@ -398,14 +398,10 @@
         {
           "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return choose?.(flag);}use(true).tag;",
           "expected": {
-            "completion": "throw",
-            "bodyEntered": false,
-            "scriptBodies": 0,
-            "errorClass": "StaticTypeError",
-            "diagnostic": {
-              "code": "RT_IMPOSSIBLE_TEST",
-              "phase": "static"
-            }
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
           }
         }
       ]
@@ -416,14 +412,10 @@
         {
           "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return choose?.(flag);}use(false).tag;",
           "expected": {
-            "completion": "throw",
-            "bodyEntered": false,
-            "scriptBodies": 0,
-            "errorClass": "StaticTypeError",
-            "diagnostic": {
-              "code": "RT_IMPOSSIBLE_TEST",
-              "phase": "static"
-            }
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
           }
         }
       ]

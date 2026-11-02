@@ -1152,7 +1152,7 @@
     {
       "name": "captured-typed",
       "modules": {
-        "main": "const box={seed:1:=number,x:\"s\":=string};function make(){return box?.x;}const n:number=make();"
+        "main": "{const box={seed:1:=number,x:\"s\":=string};function make(){return box?.x;}const n:number=make();}"
       },
       "script": true,
       "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",

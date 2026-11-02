@@ -128,7 +128,7 @@ export function* PlanOrdinaryNominalConversion(value: Value, type: TypeRecord): 
 /** These real numeric values use ObjectValue only as an interpreter
  * representation. Their intrinsic payload conversions are pure; ordinary
  * objects, metadata and a potentially selected class operator are not. */
-function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert): boolean {
+function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert, explicit = convert === ConvertValue): boolean {
   if (type.Kind !== 'primitive') return false;
   const carried = CarriedTypeRecordOf(value);
   if (value instanceof ReferenceValue || (carried !== undefined && carried.Kind !== 'primitive')) return false;
@@ -137,7 +137,7 @@ function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert):
   // These explicit cases return through the intrinsic payload path before
   // CheckedConvertValue's class-operator fallback. An unrelated operator must
   // not turn a pure, failed candidate into a selected effectful conversion.
-  if (convert === ConvertValue && type.Kind === 'primitive'
+  if (explicit && type.Kind === 'primitive'
       && ['string', 'boolean', 'number', 'bigint', 'int', 'uint', 'float16', 'float32', 'float64'].includes(type.Name)) return true;
   return LookupClassOperator(value, `convert ${displayType(type)}`) === null;
 }
@@ -145,7 +145,8 @@ function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert):
 /** Pure intrinsic scalar computations may be retained. User conversion code is
  * only classified here and runs once, after assignment has been selected. */
 export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], items: readonly ScalarRestItem[],
-  convert: Convert, accepts: (index: number, type: TypeRecord, value?: Value) => boolean = () => true): PlainEvaluator<Value[]> {
+  convert: Convert, accepts: (index: number, type: TypeRecord, value?: Value) => boolean = () => true,
+  explicit = convert === ConvertValue): PlainEvaluator<Value[]> {
   const unchanged = AssignScalarRests(patterns, items.length, (i, type) => items[i]!.value !== undefined
     && ScalarRestMember(items[i]!.value!, type) && accepts(i, type, items[i]!.value),
   (i, _chosen, required) => ScalarRestMember(items[i]!.value!, required));
@@ -171,11 +172,11 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
           const candidate = Q(yield* PlanOrdinaryNominalConversion(item.value, type));
           if (candidate && 'failure' in candidate) failure ??= candidate.failure;
           else if (candidate && 'candidate' in candidate && accepts(candidates.length, type)) row.set(type, candidate.candidate);
-        } else if (pureScalarConversion(item.value, type, convert)) {
+        } else if (pureScalarConversion(item.value, type, convert, explicit)) {
           const result = EnsureCompletion(yield* convert(item.value, type));
           if (result.Type === 'normal' && ScalarRestMember(result.Value, type)) retain(type, result.Value);
           else if (result.Type === 'throw') failure ??= result;
-        } else if (ScalarRestConversionApplicable(item.value, type, convert)) retain(type);
+        } else if (ScalarRestConversionApplicable(item.value, type, convert, explicit)) retain(type);
       }
     }
     candidates.push(row);

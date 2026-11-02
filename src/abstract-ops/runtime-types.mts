@@ -1271,9 +1271,8 @@ function isBooleanConversionSource(value: Value): boolean {
 
 /** Applicability only: this must not invoke a class conversion while searching. */
 export function ScalarRestConversionApplicable(value: Value, t: ScalarRestType,
-  convert: (v: Value, type: TypeRecord) => ValueEvaluator): boolean {
+  convert: (v: Value, type: TypeRecord) => ValueEvaluator, explicit = convert === ConvertValue): boolean {
   if (t.Kind !== 'primitive') return false;
-  const explicit = convert === ConvertValue;
   if (!explicit && IsCallable(LookupClassOperator(value, `convert ${displayType(t)}`) ?? Value.undefined)) return true;
   if (t.Name === 'boolean') return explicit || isBooleanConversionSource(value);
   if (t.Name === 'string') return isStringConversionSource(value);
@@ -2111,7 +2110,7 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
     if (t.Kind === 'array') {
       return Q(yield* ConvertArrayElementwise(value, t, (v, m) => ConvertValue(v, m, observations), sequenceObservation));
     }
-    return Q(yield* ConvertTupleElementwise(value, t, (v, m) => ConvertValue(v, m, observations), sequenceObservation));
+    return Q(yield* ConvertTupleElementwise(value, t, (v, m) => ConvertValue(v, m, observations), sequenceObservation, true));
   }
   // The explicit structural-object step of ConvertValue converts each member
   // explicitly, in place. Reuse the observation/write/admission path while
@@ -6882,7 +6881,8 @@ function* ConvertArrayElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'a
  * matter of shape, checked in both modes; an unsupplied position takes its
  * default, converted as a supplied value would be.
  */
-function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'tuple' }, convertElement: ElementConversion, observation?: SequenceObservation): ValueEvaluator {
+function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'tuple' }, convertElement: ElementConversion,
+  observation?: SequenceObservation, explicit = false): ValueEvaluator {
   const len = Q(yield* SequenceConversionLength(value, observation));
   const elements = t.Elements;
   const shape = TupleStorageShapeOf(t);
@@ -6897,7 +6897,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     // The caller supplies the semantic operation, including a checked member's
     // RequireType guards. Its callback may carry construction choices, so do
     // not infer admission mode by comparing function identities.
-    const values = Q(yield* ConvertScalarRestItems([scalar], items, convertElement));
+    const values = Q(yield* ConvertScalarRestItems([scalar], items, convertElement, undefined, explicit));
     const out = X(ArrayCreate(len));
     for (let i = 0; i < len; i += 1) {
       X(CreateDataPropertyOrThrow(out, Value(String(i)), values[i]!));

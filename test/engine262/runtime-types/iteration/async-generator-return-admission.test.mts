@@ -61,3 +61,18 @@ test('Module rejects a known direct mismatch before entry', async () => {
   const result = await observeModuleGraph({ main: 'async function* make():AsyncGenerator.<uint8,string,void>{return "body";}await make().return(5);' });
   expect(result).toMatchObject({ status: 'rejected', bodyEntries: [], errorClass: 'StaticTypeError', diagnostic: { code: 'RT_ASSIGNABILITY', phase: 'static' } });
 });
+
+test('a typed resolving callback remains admissible and fulfills the request', async () => {
+  const result = await observeModuleGraph({ main: 'async function* g():AsyncGenerator.<uint8,string,void>{return "body";}'
+    + 'const result=await g().return({then(resolve:(v:string)=>void,reject:(e:any)=>void){resolve("ok");}});'
+    + 'if(result.value!=="ok")throw new Error("result");' });
+  expect(result).toMatchObject({ status: 'fulfilled', bodyEntries: ['main'] });
+  expect(result.diagnostic).toBeUndefined();
+});
+
+test('a typed thenable still admits its actual fulfillment at runtime', async () => {
+  const result = await observeModuleGraph({ main: 'async function* g():AsyncGenerator.<uint8,string,void>{return "body";}'
+    + 'await g().return({then(resolve:(v:{bad:boolean})=>void,reject:(e:any)=>void){resolve({bad:true});}});' });
+  expect(result).toMatchObject({ status: 'rejected', bodyEntries: ['main'], errorClass: 'TypeError' });
+  expect(result.diagnostic).toBeUndefined();
+});

@@ -16,7 +16,7 @@ test.each([
   ],
   [
     "static setter call",
-    "class C{static set x(v:()=>void){}}function f(p:number){C.x();}"
+    "function f(p:number){class C{static set x(v:()=>void){}}C.x();}"
   ],
   [
     "private setter call",

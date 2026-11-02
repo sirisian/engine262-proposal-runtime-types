@@ -14,7 +14,7 @@ test.each([
 });
 
 test('static and private resumable methods expose signatures', () => {
-  expectEarlyError('class C { static *m(x: uint8): uint8 { yield x; } } function unused() { C.m("s"); }', 'StaticTypeError');
+  expectEarlyError('function unused() { class C { static *m(x: uint8): uint8 { yield x; } } C.m("s"); }', 'StaticTypeError');
   expectEarlyError('class C { *#m(x: uint8): uint8 { yield x; } f() { this.#m("s"); } }', 'StaticTypeError');
   expectEarlyError('class C { *m(): uint8 { yield 1; } } function unused(c: C) { const x: string = c.m(); }', 'StaticTypeError');
 });

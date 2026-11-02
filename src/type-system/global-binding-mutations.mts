@@ -179,7 +179,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       return !external || !objectOnly && external.mutable !== false
         && external === realm.GlobalEnv.DeclarativeRecord.bindings.get(Value(node.name));
     }
-    if (root.type !== 'Script' || !(objectOnly ? ['function', 'var'] : ['function', 'var', 'let']).includes(binding.kind)) return false;
+    if (root.type !== 'Script' || !(objectOnly ? ['function', 'var'] : ['function', 'var', 'let', 'class']).includes(binding.kind)) return false;
     for (let at = binding.node.parent; at && at !== root; at = at.parent) {
       if (functionKeys.some((key) => key in at) || ['ClassDeclaration', 'ClassExpression', 'ClassStaticBlock'].includes(at.type)) return false;
       if (binding.kind !== 'var' && (at.type === 'Block'
@@ -476,6 +476,9 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     for (let at = node.parent; at; child = at, at = at.parent) {
       if ((at.type === 'MethodDefinition' || at.type === 'FieldDefinition')
         && (at.ClassElementName === child || at.Decorators?.some((decorator) => decorator === child))) continue;
+      // The iterable is evaluated once on entry, before any loop protocol or body.
+      if ((at.type === 'ForInStatement' && at.Expression === child
+        || (at.type === 'ForOfStatement' || at.type === 'ForAwaitStatement') && at.AssignmentExpression === child)) continue;
       if (functionKeys.some((key) => key in at) || at.type === 'FieldDefinition' && !at.static
         || ['ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement', 'WhileStatement', 'DoWhileStatement'].includes(at.type)) return true;
     }
@@ -537,8 +540,25 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     }
     return precedes(effect, read);
   };
+  // An iterable expression runs once before this loop's protocol, stores and
+  // body. An enclosing repeating loop can still run those effects before the
+  // next evaluation of the inner iterable, so it cancels this ordering proof.
+  const sourcePrecedesLoopEffect = (read: ParseNode, effect: ParseNode): boolean => {
+    let child = read;
+    let before = false;
+    for (let at = read.parent; at; child = at, at = at.parent) {
+      if (functionKeys.some((key) => key in at)) break;
+      if (!/^(For|While|DoWhile)/.test(at.type) || !contains(at, effect)) continue;
+      const source = at.type === 'ForInStatement' ? at.Expression
+        : at.type === 'ForOfStatement' || at.type === 'ForAwaitStatement' ? at.AssignmentExpression : undefined;
+      if (source === child && (effect === at || !contains(source, effect))) before = true;
+      else return false;
+    }
+    return before;
+  };
   const effectMayPrecede = (effect: Effect, read: ParseNode): boolean => {
     const owner = activationOwner(read);
+    if (!owner && sourcePrecedesLoopEffect(read, effect.node)) return false;
     if (!owner) return !effect.deferredOnly && (deferred(read) || deferred(effect.node) || precedes(effect.node, read));
     if (effect.deferredOnly) {
       const sites = values.executionSites(effect.node, owner);

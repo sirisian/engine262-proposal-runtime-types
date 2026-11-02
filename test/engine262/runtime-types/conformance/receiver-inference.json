@@ -103,7 +103,7 @@
     },
     {
       "name": "static receiver: incompatible",
-      "source": "class C{static m(){return this.f();}static f(){return this.x;}static x:string=\"s\";}function unused(){const q:number=C.m();}",
+      "source": "{class C{static m(){return this.f();}static f(){return this.x;}static x:string=\"s\";}function unused(){const q:number=C.m();}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -126,7 +126,7 @@
     },
     {
       "name": "static separate namespace: incompatible",
-      "source": "class C{x:number=1;static x:string=\"s\";static m(){return this.x;}}function unused(){const q:number=C.m();}",
+      "source": "{class C{x:number=1;static x:string=\"s\";static m(){return this.x;}}function unused(){const q:number=C.m();}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -218,7 +218,7 @@
     },
     {
       "name": "static private method: incompatible",
-      "source": "class C{static m(){return this.#f();}static #f(){return this.#x;}static #x:string=\"s\";}function unused(){const q:number=C.m();}",
+      "source": "{class C{static m(){return this.#f();}static #f(){return this.#x;}static #x:string=\"s\";}function unused(){const q:number=C.m();}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

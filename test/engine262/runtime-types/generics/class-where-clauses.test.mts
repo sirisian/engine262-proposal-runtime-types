@@ -17,7 +17,7 @@ const unsatisfied = (source: string): void => {
 
 test('an application the class clause rejects is refused before the body', () => {
   unsatisfied('class V<N: uint32> where N > 2 { } new V.<1>();');
-  unsatisfied('class V<N: uint32> where N > 2 { } function f() { return new V.<1>(); }');
+  unsatisfied('function f() { class V<N: uint32> where N > 2 { } return new V.<1>(); }');
   unsatisfied('class V<N: uint32> where N > 2 { } class W extends V.<1> { }');
   expect(evaluated('class V<N: uint32> where N > 2 { m(): uint32 { return N; } } String(new V.<3>().m());')).toBe('3');
 });

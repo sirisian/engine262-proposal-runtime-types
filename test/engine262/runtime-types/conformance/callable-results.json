@@ -17,8 +17,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -40,8 +40,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -63,8 +63,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -86,8 +86,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -109,8 +109,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -132,8 +132,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -155,8 +155,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -178,8 +178,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -201,8 +201,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -224,8 +224,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -247,8 +247,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -270,8 +270,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -293,8 +293,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -316,8 +316,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -339,8 +339,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -658,8 +658,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
@@ -796,6 +796,29 @@
           "rule": "rt-assignability",
           "phase": "static",
           "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic binder identity: renamed runtime",
+      "source": "function run(){function id<T:type>(x:T){return x;}const h:<U:type>(x:U)=>U=id;const n:number=h.<number>(1);const s:string=h.<string>(\"s\");return String(n)+s;}run();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "generic binder identity: captured outer not own",
+      "source": "function factory<T:type>(seed:T){function id<U:type>(x:U){return seed;}const h:<V:type>(x:V)=>V=id;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
         }
       }
     }

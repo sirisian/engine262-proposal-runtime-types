@@ -1976,7 +1976,7 @@
     {
       "name": "captured-nested-typed",
       "modules": {
-        "main": "const {inner:{x}}={inner:{x:\"s\":=string}};function make(){return x;}const n:number=make();"
+        "main": "{const {inner:{x}}={inner:{x:\"s\":=string}};function make(){return x;}const n:number=make();}"
       },
       "script": true,
       "expected": {
@@ -2032,7 +2032,7 @@
     {
       "name": "typed-cycle",
       "modules": {
-        "main": "function first(flag){if(flag)return second(false);const {inner:{x}}={inner:{x:\"s\":=string}};return x;}function second(flag){return flag?first(false):\"s\";}const n:number=first(true);"
+        "main": "{function first(flag){if(flag)return second(false);const {inner:{x}}={inner:{x:\"s\":=string}};return x;}function second(flag){return flag?first(false):\"s\";}const n:number=first(true);}"
       },
       "script": true,
       "expected": {
@@ -2064,7 +2064,7 @@
     {
       "name": "captured-default-typed",
       "modules": {
-        "main": "const {x=\"s\":=string}={x:undefined};function make(){return x;}const n:number=make();"
+        "main": "{const {x=\"s\":=string}={x:undefined};function make(){return x;}const n:number=make();}"
       },
       "script": true,
       "expected": {
@@ -2080,7 +2080,7 @@
     {
       "name": "captured-rest-typed",
       "modules": {
-        "main": "const {skip,...rest}={skip:1,x:\"s\":=string};function make(){return rest.x;}const n:number=make();"
+        "main": "{const {skip,...rest}={skip:1,x:\"s\":=string};function make(){return rest.x;}const n:number=make();}"
       },
       "script": true,
       "expected": {
@@ -2126,7 +2126,7 @@
     {
       "name": "captured-later-default",
       "modules": {
-        "main": "const {x,y=x}={x:\"s\":=string,y:undefined};function make(){return y;}const n:number=make();"
+        "main": "{const {x,y=x}={x:\"s\":=string,y:undefined};function make(){return y;}const n:number=make();}"
       },
       "script": true,
       "expected": {

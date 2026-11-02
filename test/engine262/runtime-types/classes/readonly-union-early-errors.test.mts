@@ -21,7 +21,7 @@ test('symbol-keyed union writes enforce readonly too', () => {
 });
 
 test('narrowing and declaring-constructor writes remain valid', () => {
-  expect(evaluated('class A { readonly x: uint8 = 1; } class B { x: uint8 = 2; } function f(o: A | B) { if (o instanceof B) { o.x = 3; } return String(o.x); } f(new B());')).toBe('3');
+  expect(evaluated('{ class A { readonly x: uint8 = 1; } class B { x: uint8 = 2; } function f(o: A | B) { if (o instanceof B) { o.x = 3; } return String(o.x); } f(new B()); }')).toBe('3');
   expect(evaluated('class A { readonly x: uint8; constructor() { this.x = 1; } } String(new A().x);')).toBe('1');
   expectStaticTypeError('class A { readonly x: uint8; constructor() { const f = () => { this.x = 1; }; } }');
 });

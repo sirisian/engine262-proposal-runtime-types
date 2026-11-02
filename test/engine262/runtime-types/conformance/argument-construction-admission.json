@@ -1477,7 +1477,7 @@
     {
       "name": "effects-selected-failure",
       "modules": {
-        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values \"+String(a)+\" != \"+String(b));}let trace=\"\";const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){trace+=\"g\";return raw;}});}function later():number{trace+=\"d\";return 1;}function run(a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U},b:number=later()){trace+=\"body\";}let caught=false;try{run(@mutate {x:1,fn(value:U):U{return value;}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}verify(caught,true);verify(trace,\"dgg\");"
+        "main": "function verify(a:any,b:any){if(a!==b)throw new Error(\"values \"+String(a)+\" != \"+String(b));}let trace=\"\";const raw:any=\"bad\";function mutate(c:Reflect.Object){const obj:any=c.objectContext;Object.defineProperty(obj,\"x\",{get(){trace+=\"g\";return raw;}});}function later():number{trace+=\"d\";return 1;}function run(a:{readonly x:string,fn:(value:string)=>string}|{readonly x:number,fn:<U:type>(value:U)=>U},b:number=later()){trace+=\"body\";}let caught=false;try{run(@mutate {x:1,fn(value:U):U{return value;}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}verify(caught,true);verify(trace,\"dg\");"
       },
       "script": true,
       "expected": {

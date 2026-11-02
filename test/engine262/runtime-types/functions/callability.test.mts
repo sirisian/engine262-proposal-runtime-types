@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown, ok, expectThrownKind, expectStaticTypeError, expectEarlyError } from '../harness.mts';
+import { evaluated, expectThrown, ok, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-type-errors. A determinable type violation is an Early Error, so
@@ -197,13 +197,11 @@ test('an OPTIONAL call still tolerates absence, which is its point', () => {
   // can be called. A nullable callee is exactly what `?.` is for.
   expect(ok(dead('function check(f: (() => uint8) | null) { let q = f?.(); }'))).toBe(true);
   expect(ok(dead('function check(f: (() => uint8) | undefined) { let q = f?.(); }'))).toBe(true);
-  // #sec-narrowing lists `?.` with `??`: on a base that can never be nullish
-  // the optional branch is dead, so these are refused for that rather than
-  // for callability.
-  expectEarlyError(dead('function f() { return 1; } let q = f?.();'), 'StaticTypeError', 'forced');
-  expectThrown(dead('let n: uint8 = uint8(1); let q = n?.x;'), 'can never succeed');
-  expectThrown(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m();'), 'can never succeed');
-  expectThrown(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m?.();'), 'can never succeed');
+  // A nonnullish base still reaches the written continuation of `?.`.
+  expect(ok(dead('function f() { return 1; } let q = f?.();'))).toBe(true);
+  expect(ok(dead('let n: uint8 = uint8(1); let q = n?.x;'))).toBe(true);
+  expect(ok(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m();'))).toBe(true);
+  expect(ok(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m?.();'))).toBe(true);
   expect(ok(dead('let a: any = () => 1; let q = a?.();'))).toBe(true);
   // And short-circuits at run time.
   expect(evaluated('let o = null; String(o?.());')).toBe('undefined');

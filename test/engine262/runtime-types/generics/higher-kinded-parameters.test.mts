@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import {
   ok, evaluated, run,
 } from '../harness.mts';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 /**
  * Spec: #sec-higher-kinded-parameters (Higher-Kinded Parameters).
@@ -363,41 +363,15 @@ test('deep but finite nesting completes', () => {
   expect(ok('type Bx<T: type> = [].<T>; class B<W<_>: type> {} const b: B.<Bx> = new B.<Bx>();')).toBe(true);
 });
 
-/**
- * THE BUDGET NOW REACHES GENERIC ALIAS INSTANTIATION, with one caveat.
- *
- * `type R<T> = R.<T>` used to overflow the HOST stack - a RangeError that is
- * not an engine262 completion, so no program could observe it and the
- * diagnostic #sec-evaluation-budget requires never appeared. It now reports a
- * type error naming the alias, which is what the clause asks for.
- *
- * Two things had to be true and each hid the other. The instantiation had to
- * CONSUME steps, which it never did. And a budget frame had to be OPEN: the
- * checking pass brackets one, but a `const` annotation resolves on a runtime
- * path that never entered it, so ConsumeEvaluationSteps found no frame and
- * silently returned. Opening a frame around the check alone was still not
- * enough - each recursion opened a fresh one and started from zero - so the
- * frame spans the recursive instantiation, which BeginTypeEvaluation supports
- * by joining an enclosing frame rather than nesting a new one.
- *
- * THE CAVEAT: at the DEFAULT budget the host stack still overflows first. Ten
- * million steps is far more recursion than a JavaScript stack survives, so the
- * budget is correct and its floor is above what the host can reach. The
- * specification fixes that floor - DEFAULT_STEP_LIMIT is
- * "#sec-evaluation-budget's floor a host meets or exceeds" - so lowering it is
- * a specification question rather than an engine one, and a host that wants the
- * diagnostic configures a lower limit, as the test below does.
- *
- * That is worth raising against the clause: a floor a host cannot reach without
- * crashing is not a floor.
- */
-
+// Growing the applied argument visits distinct specializations until metering
+// stops evaluation. An exact self-alias is instead rejected immediately: it
+// denotes no type and is not a budget-exhaustion witness.
 test('an unbounded type evaluation exhausts the budget and reports', () => {
   // The failing direction, at a lowered budget - which is
   // what a host does when it wants the diagnostic rather than the stack.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
-  const completion = realm.evaluateScriptSkipDebugger('type R<T: type> = R.<T>; const a: R.<uint8> = 1;') as unknown as { Type: string, Value: unknown };
+  const completion = realm.evaluateScriptSkipDebugger('type R<T: type> = R.<[].<T>>; const a: R.<uint8> = 1;') as unknown as { Type: string, Value: unknown };
 
   expect(completion.Type).toBe('throw');
   let message = '';
@@ -410,6 +384,13 @@ test('an unbounded type evaluation exhausts the budget and reports', () => {
   // A reportable type error naming the alias, not a host RangeError.
   expect(message).toContain('budget');
   expect(message).toContain('R');
+});
+
+test('an exact self-alias is rejected without exhausting the budget', () => {
+  const completion = EnsureCompletion(run('type R<T: type> = R.<T>; const a: R.<uint8> = 1;'));
+  expect(completion.Type).toBe('throw');
+  expect(TypeDiagnosticOf(completion.Value)).toMatchObject({ code: 'RT_TYPE_EVALUATION', phase: 'pre-evaluation' });
+  expect((completion.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain('defined as itself');
 });
 
 test('an ordinary alias is unaffected by the metering', () => {

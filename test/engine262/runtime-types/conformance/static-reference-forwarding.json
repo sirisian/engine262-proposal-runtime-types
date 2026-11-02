@@ -490,7 +490,7 @@
       "name": "static method, source []",
       "steps": [
         {
-          "source": "class C {static g(...ys:[].<uint8>){}}function unused(ref ...xs:[].<uint8>){C.g(...xs);}\"accepted\";",
+          "source": "function unused(ref ...xs:[].<uint8>){class C {static g(...ys:[].<uint8>){}}C.g(...xs);}\"accepted\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,
@@ -508,7 +508,7 @@
       "name": "static method, source [0]",
       "steps": [
         {
-          "source": "class C {static g(...ys:[].<uint8>){}}function unused(ref ...xs:[0].<uint8>){C.g(...xs);}\"accepted\";",
+          "source": "function unused(ref ...xs:[0].<uint8>){class C {static g(...ys:[].<uint8>){}}C.g(...xs);}\"accepted\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,
@@ -526,7 +526,7 @@
       "name": "static method, source [1]",
       "steps": [
         {
-          "source": "class C {static g(...ys:[].<uint8>){}}function unused(ref ...xs:[1].<uint8>){C.g(...xs);}\"accepted\";",
+          "source": "function unused(ref ...xs:[1].<uint8>){class C {static g(...ys:[].<uint8>){}}C.g(...xs);}\"accepted\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

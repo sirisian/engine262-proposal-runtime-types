@@ -91,8 +91,8 @@ test('the catch-all rule leaves untyped subjects, `match all`, and atom-bearing 
   expect(evaluated('let x = 5; String(match (x) { when 5: 0; });')).toBe('0');
   expectThrownKind('let x = 6; match (x) { when 5: 0; };', 'TypeError');
   expect(ok('let x: uint8 = 2; let r = match all (x) { when 1: 0; };')).toBe(true);
-  expect(evaluated('let x: boolean = true; String(match (x) { when true: 0; when false: 1; });')).toBe('0');
-  expect(evaluated('let x: uint8 | string = 1; String(match (x) { when uint8: 0; when string: 1; });')).toBe('0');
+  expect(evaluated('function f(x: boolean): string { return String(match (x) { when true: 0; when false: 1; }); } f(true);')).toBe('0');
+  expect(evaluated('function f(x: uint8 | string): string { return String(match (x) { when uint8: 0; when string: 1; }); } f(1);')).toBe('0');
   expect(ok('function f<T: type>(v: T): uint8 { return match (v) { when let n: uint8: n; default: 0; }; }')).toBe(true);
 });
 

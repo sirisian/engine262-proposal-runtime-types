@@ -538,8 +538,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "rule": "rt-assignability",
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "rule": "rt-implements-contract",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }

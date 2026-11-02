@@ -16,7 +16,7 @@
     },
     {
       "name": "projection-mismatch-4-forward",
-      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};} const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -40,7 +40,7 @@
     },
     {
       "name": "projection-mismatch-4-reverse",
-      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -64,7 +64,7 @@
     },
     {
       "name": "projection-mismatch-10-forward",
-      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -88,7 +88,7 @@
     },
     {
       "name": "projection-mismatch-10-reverse",
-      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -112,7 +112,7 @@
     },
     {
       "name": "projection-mismatch-16-forward",
-      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -136,7 +136,7 @@
     },
     {
       "name": "projection-mismatch-16-reverse",
-      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -160,7 +160,7 @@
     },
     {
       "name": "projection-mismatch-24-forward",
-      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",
@@ -184,7 +184,7 @@
     },
     {
       "name": "projection-mismatch-24-reverse",
-      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "source": "{function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";}",
       "checking": "automatic",
       "expected": {
         "completion": "throw",

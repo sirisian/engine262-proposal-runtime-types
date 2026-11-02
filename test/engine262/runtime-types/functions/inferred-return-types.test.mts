@@ -21,6 +21,9 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  * boundary error names the VALUE ("s" is not assignable to "number").
  */
 
+// Local bindings preserve the callee evidence these inference cases test.
+const localSource = (source: string) => `{ ${source} }`;
+
 function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
@@ -207,21 +210,21 @@ test('a method publishes into the shape its member belongs to', () => {
   // #sec-inference-and-function-forms. A member call types through the
   // published return, so the mistake is the checker's rather than the
   // boundary's - the message names a TYPE.
-  expectEarly('class C { m(a: uint32) { return "s"; } } const n: number = new C().m(1);', 'string');
-  expectOk('class C { m(a: uint32) { return "s"; } } const s: string = new C().m(1);');
+  expectEarly(localSource('class C { m(a: uint32) { return "s"; } } const n: number = new C().m(1);'), 'string');
+  expectOk(localSource('class C { m(a: uint32) { return "s"; } } const s: string = new C().m(1);'));
   // Anchored rather than signature-typed: the method declares nothing and what
   // it returns derives from a declared type.
-  expectEarly('function f(): uint32 { return 5; } class C { m() { return f(); } } const s: string = new C().m();', 'uint.<32>');
+  expectEarly(localSource('function f(): uint32 { return 5; } class C { m() { return f(); } } const s: string = new C().m();'), 'uint.<32>');
   // A method with no annotation and no anchor stays legacy.
-  expect(thrown('class C { m() { return "s"; } } const n: number = new C().m();')).toContain('"s" is not assignable');
+  expect(thrown(localSource('class C { m() { return "s"; } } const n: number = new C().m();'))).toContain('"s" is not assignable');
 });
 
 test('a getter publishes the type its property reads at', () => {
   // A getter is the single-value position: no parameters, and its returns ARE
   // the member's type, so it can only participate by anchoring.
-  expectEarly('function f(): uint32 { return 5; } class C { get v() { return f(); } } const s: string = new C().v;', 'uint.<32>');
-  expectOk('function f(): uint32 { return 5; } class C { get v() { return f(); } } const u: uint32 = new C().v;');
-  expect(thrown('class C { get v() { return "s"; } } const n: number = new C().v;')).toContain('"s" is not assignable');
+  expectEarly(localSource('function f(): uint32 { return 5; } class C { get v() { return f(); } } const s: string = new C().v;'), 'uint.<32>');
+  expectOk(localSource('function f(): uint32 { return 5; } class C { get v() { return f(); } } const u: uint32 = new C().v;'));
+  expect(thrown(localSource('class C { get v() { return "s"; } } const n: number = new C().v;'))).toContain('"s" is not assignable');
 });
 
 test('a method return is enforced like any other', () => {
@@ -273,9 +276,9 @@ test('yield* contributes the delegated element type', () => {
   // #sec-inference-and-function-forms: delegation contributes yielded values.
   const source = 'function f(): uint8 { return 1; } function* inner() { yield f(); }'
     + ' function* g(a: uint32) { yield* inner(); } ';
-  expectEarly(source + 'const n: number = g(1);', 'Generator.<uint.<8>, undefined, void>');
-  expectStaticTypeError(source + 'for (const x of g(1)) { let s: string = x; }');
-  expectOk(source + 'for (const x of g(1)) { let n: uint8 = x; }');
+  expectEarly(localSource(source + 'const n: number = g(1);'), 'Generator.<uint.<8>, undefined, void>');
+  expectStaticTypeError(localSource(source + 'for (const x of g(1)) { let s: string = x; }'));
+  expectOk(localSource(source + 'for (const x of g(1)) { let n: uint8 = x; }'));
 });
 
 test('an async declaration reads its declared return type', () => {
@@ -310,20 +313,20 @@ test('reflection reports a published return type', () => {
   //
   // Asserted by INTERNING rather than by display: a published signature must be
   // the same Type Object as the written annotation, not merely print alike.
-  expectOk(`function k(a: uint32) { return 's'; }
+  expectOk(localSource(`function k(a: uint32) { return 's'; }
     function d(a: uint32): string { return 's'; }
-    if (Reflect.typeOf(k) !== Reflect.typeOf(d)) { throw new Error('x'); }`);
+    if (Reflect.typeOf(k) !== Reflect.typeOf(d)) { throw new Error('x'); }`));
   // An anchored wrapper reports what it publishes.
-  expectOk(`function f(): uint32 { return 5; }
+  expectOk(localSource(`function f(): uint32 { return 5; }
     function g() { return f(); }
     function d(): uint32 { return 5; }
-    if (Reflect.typeOf(g) !== Reflect.typeOf(d)) { throw new Error('x'); }`);
+    if (Reflect.typeOf(g) !== Reflect.typeOf(d)) { throw new Error('x'); }`));
   // A function that publishes nothing reports no signature, which is the
   // unannotated rule the note protects: reporting an all-`any` signature for a
   // function that declared none would be inference the program did not ask for.
-  expectOk(`function k() { return 's'; }
+  expectOk(localSource(`function k() { return 's'; }
     function d(a: uint32): string { return 's'; }
-    if (Reflect.typeOf(k) === Reflect.typeOf(d)) { throw new Error('x'); }`);
+    if (Reflect.typeOf(k) === Reflect.typeOf(d)) { throw new Error('x'); }`));
 });
 
 test('assignability reads the effective return type', () => {
@@ -333,24 +336,24 @@ test('assignability reads the effective return type', () => {
   // to look at the other field.
   //
   // Refused: `g` returns a `uint32` and the position wants a `string`.
-  expectEarly(`function f(): uint32 { return 5; }
+  expectEarly(localSource(`function f(): uint32 { return 5; }
     function g() { return f(); }
-    let cb: () => string = g;`, '() => uint.<32>');
+    let cb: () => string = g;`), '() => uint.<32>');
   // Accepted: the same function at a position that matches what it returns.
-  expectOk(`function f(): uint32 { return 5; }
+  expectOk(localSource(`function f(): uint32 { return 5; }
     function g() { return f(); }
-    let cb: () => uint32 = g;`);
+    let cb: () => uint32 = g;`));
   // A function that publishes nothing is unaffected, and the shallow function
   // check admits it as before.
-  expectOk('function g() { return 5; } let cb: () => string = g;');
+  expectOk(localSource('function g() { return 5; } let cb: () => string = g;'));
 });
 
 test('a generic call is typed where its return is concrete', () => {
   // #sec-generics. A generic call had no Static Type at all, because
   // the CALLEE `g.<uint8>` - a TypeArgumentsExpression - had none, so nothing
   // downstream could be checked however completely the function was annotated.
-  expectEarly('function f(): uint32 { return 5; } function g<T: type>(a: T) { return f(); } const s: string = g.<uint8>(1);', 'uint.<32>');
-  expectOk('function f(): uint32 { return 5; } function g<T: type>(a: T) { return f(); } const u: uint32 = g.<uint8>(1);');
+  expectEarly(localSource('function f(): uint32 { return 5; } function g<T: type>(a: T) { return f(); } const s: string = g.<uint8>(1);'), 'uint.<32>');
+  expectOk(localSource('function f(): uint32 { return 5; } function g<T: type>(a: T) { return f(); } const u: uint32 = g.<uint8>(1);'));
 });
 
 test('a return that names a type parameter is bound by the call', () => {

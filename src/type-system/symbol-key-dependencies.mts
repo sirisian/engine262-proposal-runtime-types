@@ -43,10 +43,10 @@ export function RetainSymbolBinding(reference: ReferenceRecord, declaration: Par
 }
 
 /** Use lexical environments, never the dynamic caller or an equal spelling. */
-export function InitializedSymbolKey(key: SymbolValue): SymbolValue | undefined {
+export function InitializedSymbolKey(key: SymbolValue, context = surroundingAgent.runningExecutionContext?.LexicalEnvironment): SymbolValue | undefined {
   const declaration = declarations.get(key);
   if (!declaration) return undefined;
-  let environment: EnvironmentRecord | null | undefined = surroundingAgent.runningExecutionContext?.LexicalEnvironment;
+  let environment: EnvironmentRecord | null | undefined = context;
   while (environment) {
     const value = initialized.get(environment)?.get(declaration);
     if (value) return value;

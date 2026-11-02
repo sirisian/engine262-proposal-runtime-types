@@ -297,8 +297,12 @@ function asyncGeneratorReturnInput(type: TypeRecord): TypeRecord {
   // Like a typed Promise resolver, accept promises and callable thenables
   // without pretending their eventual value is already admitted. Incompatible
   // direct scalars remain visible to the ordinary call checker.
+  // Assimilation supplies callable values, not arbitrary scalar arguments.
+  // They accept an optional gradual payload; the result is deliberately
+  // gradual, so this view does not invent a result obligation for a thenable.
+  const callback = fnType([anyType], anyType);
   const then: TypeRecord = { Kind: 'function', Signatures: [{
-    Parameters: [parameter(anyType), parameter(anyType)], Return: anyType,
+    Parameters: [parameter(callback), parameter(callback)], Return: anyType,
   }] };
   const thenable = objectType([{ key: 'then', type: then }]);
   return CanonicalizeType({ Kind: 'union', Members: [

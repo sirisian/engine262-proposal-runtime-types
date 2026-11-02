@@ -304,7 +304,7 @@ test("awaited-result: await-false-loop", () => {
 });
 
 test("awaited-result: await-never", () => {
-  expectStaticTypeError("async function stop():Promise.<never>{throw 0;}async function f(x:uint8|string){if(x is uint8)await stop();if(x is uint8){}}");
+  expectStaticTypeError("async function f(x:uint8|string){async function stop():Promise.<never>{throw 0;}if(x is uint8)await stop();if(x is uint8){}}");
 });
 
 test("awaited-result: read-result", () => {
@@ -320,7 +320,7 @@ test("awaited-result: unawaited-never", () => {
 });
 
 test("awaited-result: caught-rejection", () => {
-  evaluated("async function stop():Promise.<never>{throw 0;}async function f(x:uint8|string){try{if(x is uint8)await stop();}catch(e){}if(x is uint8){}}");
+  evaluated("async function f(x:uint8|string){async function stop():Promise.<never>{throw 0;}try{if(x is uint8)await stop();}catch(e){}if(x is uint8){}}");
 });
 
 test("saved-boolean-retest", () => {
@@ -468,7 +468,7 @@ test("switch-earlier-write", () => {
 });
 
 test("await-finally", () => {
-  expectStaticTypeError("async function stop():Promise.<never>{throw 0;}async function f(x:uint8|string){try{if(x is uint8)await stop();}finally{}if(x is uint8){}}");
+  expectStaticTypeError("async function f(x:uint8|string){async function stop():Promise.<never>{throw 0;}try{if(x is uint8)await stop();}finally{}if(x is uint8){}}");
 });
 
 test("await-unknown-result", () => {
@@ -580,11 +580,11 @@ test("runtime: 10-awaited-true", () => {
 });
 
 test("runtime: 10-awaited-never", () => {
-  expect(settledAfterJobs("async function stop():Promise.<never>{throw 0;}async function f(x:uint8|string){if(x is uint8)await stop();return x is uint8;}globalThis.settled=\"pending\";f(uint8(1)).then(x=>{globalThis.settled=String(x);},e=>{globalThis.settled=\"rejected\";});\"scheduled\";")).toBe("rejected");
+  expect(settledAfterJobs("async function f(x:uint8|string){async function stop():Promise.<never>{throw 0;}if(x is uint8)await stop();return x is uint8;}globalThis.settled=\"pending\";f(uint8(1)).then(x=>{globalThis.settled=String(x);},e=>{globalThis.settled=\"rejected\";});\"scheduled\";")).toBe("rejected");
 });
 
 test("runtime: 10-caught-rejection", () => {
-  expect(settledAfterJobs("async function stop():Promise.<never>{throw 0;}async function f(x:uint8|string){try{if(x is uint8)await stop();}catch(e){}return x is uint8;}globalThis.settled=\"pending\";f(uint8(1)).then(x=>{globalThis.settled=String(x);},e=>{globalThis.settled=\"rejected\";});\"scheduled\";")).toBe("true");
+  expect(settledAfterJobs("async function f(x:uint8|string){async function stop():Promise.<never>{throw 0;}try{if(x is uint8)await stop();}catch(e){}return x is uint8;}globalThis.settled=\"pending\";f(uint8(1)).then(x=>{globalThis.settled=String(x);},e=>{globalThis.settled=\"rejected\";});\"scheduled\";")).toBe("true");
 });
 
 test("saved-inferred", () => {

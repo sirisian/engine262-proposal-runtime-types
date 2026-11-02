@@ -265,7 +265,7 @@
     },
     {
       "name": "while-impossible-test",
-      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} while (f11(0) is string) {}",
+      "source": "{function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} while (f11(0) is string) {}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -279,7 +279,7 @@
     },
     {
       "name": "do-impossible-test",
-      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} do {} while (f11(0) is string);",
+      "source": "{function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} do {} while (f11(0) is string);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -293,7 +293,7 @@
     },
     {
       "name": "for-impossible-test",
-      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} for (;f11(0) is string;) {}",
+      "source": "{function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} for (;f11(0) is string;) {}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -421,7 +421,7 @@
     },
     {
       "name": "for-of-forward",
-      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}for(const x of [f11(0)]){if(x is string){}}",
+      "source": "{function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}for(const x of [f11(0)]){if(x is string){}}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -449,7 +449,7 @@
     },
     {
       "name": "async-forward",
-      "source": "async function f0(n:uint32){return n>1?await f1(n):(7 := uint32);}\nasync function f1(n:uint32){return n>1?await f2(n):await f0(n);}\nasync function f2(n:uint32){return n>1?await f3(n):await f1(n);}\nasync function f3(n:uint32){return n>1?await f4(n):await f2(n);}\nasync function f4(n:uint32){return n>1?await f5(n):await f3(n);}\nasync function f5(n:uint32){return n>1?await f6(n):await f4(n);}\nasync function f6(n:uint32){return n>1?await f7(n):await f5(n);}\nasync function f7(n:uint32){return n>1?await f8(n):await f6(n);}\nasync function f8(n:uint32){return n>1?await f9(n):await f7(n);}\nasync function f9(n:uint32){return n>1?await f10(n):await f8(n);}\nasync function f10(n:uint32){return n>1?await f11(n):await f9(n);}\nasync function f11(n:uint32){return await f10(n);}function consume():Promise.<string>{return f11(0);} \"ok\";",
+      "source": "{async function f0(n:uint32){return n>1?await f1(n):(7 := uint32);}\nasync function f1(n:uint32){return n>1?await f2(n):await f0(n);}\nasync function f2(n:uint32){return n>1?await f3(n):await f1(n);}\nasync function f3(n:uint32){return n>1?await f4(n):await f2(n);}\nasync function f4(n:uint32){return n>1?await f5(n):await f3(n);}\nasync function f5(n:uint32){return n>1?await f6(n):await f4(n);}\nasync function f6(n:uint32){return n>1?await f7(n):await f5(n);}\nasync function f7(n:uint32){return n>1?await f8(n):await f6(n);}\nasync function f8(n:uint32){return n>1?await f9(n):await f7(n);}\nasync function f9(n:uint32){return n>1?await f10(n):await f8(n);}\nasync function f10(n:uint32){return n>1?await f11(n):await f9(n);}\nasync function f11(n:uint32){return await f10(n);}function consume():Promise.<string>{return f11(0);} \"ok\";}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -502,7 +502,7 @@
     },
     {
       "name": "for-of-reverse",
-      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}for(const x of [f11(0)]){if(x is string){}}",
+      "source": "{function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}for(const x of [f11(0)]){if(x is string){}}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -530,7 +530,7 @@
     },
     {
       "name": "async-reverse",
-      "source": "async function f11(n:uint32){return await f10(n);}\nasync function f10(n:uint32){return n>1?await f11(n):await f9(n);}\nasync function f9(n:uint32){return n>1?await f10(n):await f8(n);}\nasync function f8(n:uint32){return n>1?await f9(n):await f7(n);}\nasync function f7(n:uint32){return n>1?await f8(n):await f6(n);}\nasync function f6(n:uint32){return n>1?await f7(n):await f5(n);}\nasync function f5(n:uint32){return n>1?await f6(n):await f4(n);}\nasync function f4(n:uint32){return n>1?await f5(n):await f3(n);}\nasync function f3(n:uint32){return n>1?await f4(n):await f2(n);}\nasync function f2(n:uint32){return n>1?await f3(n):await f1(n);}\nasync function f1(n:uint32){return n>1?await f2(n):await f0(n);}\nasync function f0(n:uint32){return n>1?await f1(n):(7 := uint32);}function consume():Promise.<string>{return f11(0);} \"ok\";",
+      "source": "{async function f11(n:uint32){return await f10(n);}\nasync function f10(n:uint32){return n>1?await f11(n):await f9(n);}\nasync function f9(n:uint32){return n>1?await f10(n):await f8(n);}\nasync function f8(n:uint32){return n>1?await f9(n):await f7(n);}\nasync function f7(n:uint32){return n>1?await f8(n):await f6(n);}\nasync function f6(n:uint32){return n>1?await f7(n):await f5(n);}\nasync function f5(n:uint32){return n>1?await f6(n):await f4(n);}\nasync function f4(n:uint32){return n>1?await f5(n):await f3(n);}\nasync function f3(n:uint32){return n>1?await f4(n):await f2(n);}\nasync function f2(n:uint32){return n>1?await f3(n):await f1(n);}\nasync function f1(n:uint32){return n>1?await f2(n):await f0(n);}\nasync function f0(n:uint32){return n>1?await f1(n):(7 := uint32);}function consume():Promise.<string>{return f11(0);} \"ok\";}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

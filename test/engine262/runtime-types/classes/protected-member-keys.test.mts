@@ -20,7 +20,7 @@ test.each([
   ],
   [
     "protected static good syntax",
-    "class A{static protected x:uint8;}function f(){A.x;}"
+    "function f(){class A{static protected x:uint8;}A.x;}"
   ],
   [
     "protected single",
@@ -44,7 +44,7 @@ test.each([
   ],
   [
     "static method",
-    "class A{static protected f():void{}}function f(){A['f']();}"
+    "function f(){class A{static protected f():void{}}A['f']();}"
   ],
   [
     "optional access",

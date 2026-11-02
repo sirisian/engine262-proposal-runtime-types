@@ -2,13 +2,15 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind, ok } from '../harness.mts';
 
 // Getter presence gives a read contract; only setter presence permits a store.
+// Use a local class for the static-member case; deferred bodies do not retain
+// the value of a mutable Script-global class binding.
 test.each([
   'class C { get x(): uint8 { return 1; } bad() { this.x = 2; } }',
   'class C { get x(): uint8 { return 1; } } function unused(c: C) { c.x++; }',
   'class C { get x(): uint8 { return 1; } } function unused(c: C) { c.x += 2; }',
   'class C { get x(): uint8 { return 1; } } function unused(c: C) { [c.x] = [uint8(2)]; }',
   'class C { get x(): uint8 { return 1; } } function unused(c: C) { for (c.x of [uint8(2)]) {} }',
-  'class C { static get x(): uint8 { return 1; } } function unused() { C.x = 2; }',
+  'function unused() { class C { static get x(): uint8 { return 1; } } C.x = 2; }',
   'class B { get x(): uint8 { return 1; } } class C extends B {} function unused(c: C) { c.x = 2; }',
   'class C { get #x(): uint8 { return 1; } bad() { this.#x = 2; } }',
   'class B { get x(): uint8 { return 1; } } class C extends B { bad() { super.x = 2; } }',

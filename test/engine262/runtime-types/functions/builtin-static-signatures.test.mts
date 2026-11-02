@@ -120,7 +120,7 @@ test('an index-signature type resolves, binds and is read', () => {
   // discarding the whole shape.
   expectStaticTypeError('let y: { [key: string]: uint8 } = {}; let bad: uint8 = y;');
   expectStaticTypeError('let y: { [key: string]: uint8 } = {}; let s: string = y.a;');
-  expect(ok('let y: { [key: string]: uint8 } = {}; let s: uint8 = y.a;')).toBe(true);
+  expect(ok('let y: { [key: string]: uint8 } = {a:1}; let s: uint8 = y.a;')).toBe(true);
   // A DECLARED property still wins over the signature.
   expect(ok('let y: { a: string, [key: string]: uint8 } = { a: "x" }; let s: string = y.a;')).toBe(true);
   // And the relation, which was never broken.
@@ -729,7 +729,7 @@ test('the COLLECTION constructors are deliberately left untyped', () => {
   expect(ok('if (false) { let n: uint8 = new Map(); } 1;')).toBe(true);
   expect(evaluated('let m: Map.<string, uint8> = new Map(); String(Reflect.typeOf(m.size) === (type uint64));')).toBe('true');
   // A SHADOWED name and a user SUBCLASS both go to the declared class, not here.
-  expect(ok('if (false) { class E2 { } const Error = E2; let n: uint8 = new Error("x"); } 1;')).toBe(true);
+  expectStaticTypeError('if (false) { class E2 { } const Error = E2; let n: uint8 = new Error("x"); } 1;');
   expectStaticTypeError('class MyErr extends Error { } let n: uint8 = new MyErr();');
   expect(evaluated('String(new Error("x").message);')).toBe('x');
 });

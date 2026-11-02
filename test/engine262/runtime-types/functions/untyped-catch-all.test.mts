@@ -33,13 +33,13 @@ test('untyped does not mean unjudged where the function PUBLISHES a return', () 
   // but such a function still participates in inference when a contribution of
   // it is anchored, and then it publishes. Reading [[Untyped]] alone would
   // return before the published type could be read.
-  expectStaticTypeError(`function f(): uint32 { return 5; }
+  expectStaticTypeError(`{ function f(): uint32 { return 5; }
     function g() { return f(); }
-    let cb: () => string = g;`);
+    let cb: () => string = g; }`);
   // The same function where the position matches what it publishes.
-  okSrc(`function f(): uint32 { return 5; }
+  okSrc(`{ function f(): uint32 { return 5; }
     function g() { return f(); }
-    let cb: () => uint32 = g;`);
+    let cb: () => uint32 = g; }`);
   // And one that publishes nothing keeps the catch-all.
   okSrc('function g() { return 5; } let cb: () => string = g;');
 });

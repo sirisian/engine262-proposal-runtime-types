@@ -1284,7 +1284,7 @@
     {
       "name": "generic-published-object",
       "modules": {
-        "main": "function producer<T:type>(seed:T){return {inner:{x:\"s\"}};}const box=producer(1);function make(){return box.inner.x;}const n:number=make();"
+        "main": "{function producer<T:type>(seed:T){return {inner:{x:\"s\"}};}const box=producer(1);function make(){return box.inner.x;}const n:number=make();}"
       },
       "script": true,
       "requirement": "",

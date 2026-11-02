@@ -1755,10 +1755,13 @@ function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumpti
     // Pairs by RECORD where both signatures were built under a frame; pairs by
     // NAME otherwise (the checker mints a fresh ~parameter~ record per
     // reference, so its records have no stable identity to pair). The
-    // parameter-vs-parameter branch of SameTypeWithAssumptions honours both.
+    // Preserve binder declarations as well as names: inferred results carry
+    // captures, which must match their own binder rather than a shadowing one.
+    // The parameter-vs-parameter relation honours both forms.
     const pair = u.Parameter && w.Parameter
       ? { First: u.Parameter, Second: w.Parameter }
-      : { First: { Kind: 'parameter', Name: u.Name, Arity: u.Arity } as TypeRecord, Second: { Kind: 'parameter', Name: w.Name, Arity: w.Arity } as TypeRecord };
+      : { First: { Kind: 'parameter', Name: u.Name, Arity: u.Arity, CapturedDeclaration: u.Declaration } as TypeRecord,
+        Second: { Kind: 'parameter', Name: w.Name, Arity: w.Arity, CapturedDeclaration: w.Declaration } as TypeRecord };
     // Alpha-renaming identifies parameters in both comparison directions,
     // including contravariant inputs. Ordinary subtype assumptions stay directed.
     out.push(pair, { First: pair.Second, Second: pair.First });

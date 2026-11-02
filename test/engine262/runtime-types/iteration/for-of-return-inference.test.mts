@@ -121,3 +121,9 @@ test('a guard against a typed bound does not block', () => {
   expect(evaluated(`${T} function h(): uint8 { const lim: uint8 = 5; for (const i of 0..<3) { `
     + 't = String(Reflect.typeOf(i)); if (i > lim) return i; } return 0; } h(); t;')).toBe('uint.<8>');
 });
+
+test('the adopted method result survives an erased extraction', () => {
+  expect(evaluated('type O={m():uint8};const o:O={m(){for(const i of 0..<3){return i;}return 0;}};'
+    + 'const f:any=o.m;String(Reflect.typeOf(f.call(o)));')).toBe('uint.<8>');
+  expectStaticTypeError('type O={m():uint8};const o:O={m(){for(const i of 0..<300){return i;}return 0;}};');
+});

@@ -286,7 +286,10 @@ export function ClassValueOrigins(root: ParseNode): WeakMap<ParseNode, Origin | 
         visit(node.Decorators, state); effect(state, node);
       }
       const origin = { source: node };
-      if (node.type === 'ClassDeclaration' && !node.ClassModifiers?.includes('partial')) store(node.BindingIdentifier, origin, state);
+      // A specialization contributes a case to the existing family binding.
+      // It does not replace that binding with its nongeneric case declaration.
+      if (node.type === 'ClassDeclaration' && !node.ClassModifiers?.includes('partial')
+        && (!node.TypeParameters || node.TypeParameters.ListKind === 'parameters')) store(node.BindingIdentifier, origin, state);
       return observe(node, origin);
     }
     switch (node.type) {

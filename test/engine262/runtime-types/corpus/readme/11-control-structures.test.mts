@@ -33,7 +33,7 @@ test('if else: a typed object and a typed array are always truthy', () => {
 test('switch: a typed integral discriminant matches a value case', () => {
   expect(evaluated('let a: uint32 = (1 := uint32); let r = "none"; switch (a) { case (1 := uint32): r = "one"; break; case (2 := uint32): r = "two"; break; } r;')).toBe('one');
   // a string discriminant
-  expect(evaluated('let a: string = "b"; let r = "none"; switch (a) { case "a": r = "A"; break; case "b": r = "B"; break; } r;')).toBe('B');
+  expect(evaluated('function f(a: string): string { let r = "none"; switch (a) { case "a": r = "A"; break; case "b": r = "B"; break; } return r; } f("b");')).toBe('B');
 });
 
 // -- switch: matching on an enum value -----------------------------------------
@@ -81,14 +81,14 @@ test('switch: a bare-range case is reserved without the ranges extension', () =>
   expect(evaluated('let a = 5; switch (a) { case 0..<10: "in"; break; default: "out"; } "ran";')).toBe('ran');
 });
 
-test('a bare test narrows a NULLABLE, and nothing else', () => {
-  // table-narrowing-forms: "`v` as the test itself, where _s_ is a ~union~ with
-  // a `null` or an `undefined` member" - NarrowFrom(_s_, `null | undefined`)
-  // where the test succeeds, NarrowTo where it fails.
+test('truthiness excludes nullish values on the true edge but preserves zero on the false edge', () => {
+  // #sec-falsy-and-truthy-parts: numeric members contribute to both edges;
+  // falsity does not distinguish zero from absence.
   expect(evaluated('function f(n: uint8 | null): uint8 { if (n) { return n; } return (0 := uint8); } `${f(null)}`;')).toBe('0');
   expect(evaluated('function f(n: uint8 | undefined): uint8 { if (n) { return n; } return (0 := uint8); } `${f(undefined)}`;')).toBe('0');
-  // The else branch is the nullish one, so the binding takes `null` there.
-  expect(evaluated('function f(n: uint8 | null): string { if (n) { return "p"; } else { let x: null = n; return "a"; } } `${f(null)}`;')).toBe('a');
+  expectThrown('function f(n: uint8 | null) { if (n) {} else { let x: null = n; } }');
+  expect(evaluated('function f(n: uint8 | null): string { if (n) { return "p"; } else { let x: uint8 | null = n; return String(x); } } f(null) + "/" + f(0);')).toBe('null/0');
+  expect(evaluated('function f(n: uint8 | null): string { if (n !== null) { return "p"; } else { let x: null = n; return "a"; } } f(null);')).toBe('a');
   // `!v` inverts, and a conditional expression narrows as an `if` does.
   expect(evaluated('function f(n: uint8 | null): uint8 { if (!n) { return (0 := uint8); } else { return n; } } `${f(null)}`;')).toBe('0');
   expect(evaluated('function f(n: uint8 | null): uint8 { return n ? n : (0 := uint8); } `${f(null)}`;')).toBe('0');

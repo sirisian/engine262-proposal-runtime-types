@@ -47,16 +47,11 @@ test('all TWELVE block contexts now exist', () => {
     + '.filter((n) => typeof Reflect[n] === "object").length);')).toBe('12');
 });
 
-test('a match ARM cannot be decorated yet - grammar, not reflection', () => {
-  // This was called "a missing reflection rather than a missing feature", on the
-  // reasoning that `match` is implemented. **Measuring shows that was half
-  // right**: the reflection is now registered, and no arm can carry a decorator,
-  // so nothing ever builds the context.
-  //
-  // The same mistake as the block forms earlier in this project - assuming a
-  // decoration position exists because the thing it would decorate does.
-  expect(evaluated('const s: number = 1; const r = match (s) { when 1: "one"; when _: "other"; }; r;')).toBe('one');
-  expect(evaluated('try { eval(\'const s: number = 1; const r = match (s) { when 1: (do { "one" }); when _: "o"; };\'); "ACCEPTED"; }'
+test('a match arm expression cannot take a block decorator', () => {
+  // Arm blocks support decorators; an expression position does not. A broad
+  // parameter keeps both arms reachable while testing this grammar distinction.
+  expect(evaluated('function h(s: number) { return match (s) { when 1: "one"; when _: "other"; }; } h(1);')).toBe('one');
+  expect(evaluated('try { eval(\'function h(s: number) { return match (s) { when 1: (do { "one" }); when _: "o"; }; } h(1);\'); "ACCEPTED"; }'
     + ' catch (e) { e.constructor.name; }')).toBe('ACCEPTED');
   expect(evaluated('try { eval(\'function g(c){} const s: number = 1; const r = match (s) { when 1: @g (do { 1 }); when _: 0; };\'); "ACCEPTED"; }'
     + ' catch (e) { e.constructor.name; }')).toBe('SyntaxError');
@@ -94,10 +89,10 @@ test('a match arm block takes a decorator and reports its clause', () => {
   expect(evaluated(`${grab} match (1+1) { when 2: @f { "two"; } }; String(c.subject);`)).toBe('1+1');
   expect(evaluated(`${grab} match (2) { when 2: @f { "b"; } }; String(c.pattern);`)).toBe('2');
   // `index` is the clause's position among its siblings.
-  expect(evaluated(`${grab} const s: 1 | 2 = 2; match (s) { when 1: { "a"; } when 2: @f { "b"; } }; String(c.index);`)).toBe('1');
+  expect(evaluated(`${grab} function h(s: 1 | 2) { match (s) { when 1: { "a"; } when 2: @f { "b"; } }; } h(2); String(c.index);`)).toBe('1');
   // A `default` clause has no pattern, and an unguarded one no guard - present
   // and undefined either way, so a reader walks one shape.
-  expect(evaluated(`${grab} const s: number = 9; match (s) { when 1: { "a"; } default: @f { "d"; } }; String(c.pattern);`)).toBe('undefined');
+  expect(evaluated(`${grab} function h(s: number) { match (s) { when 1: { "a"; } default: @f { "d"; } }; } h(9); String(c.pattern);`)).toBe('undefined');
   expect(evaluated(`${grab} match (2) { when 2: @f { "b"; } }; String(c.guard);`)).toBe('undefined');
   // Per ENTRY, as every block decorator is: two calls, two contexts.
   expect(evaluated(`let n = 0; function g(x) { n += 1; } function h() { return match (1) { when 1: @g { 0; } }; } h(); h(); String(n);`)).toBe('2');

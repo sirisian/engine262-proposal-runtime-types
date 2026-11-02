@@ -860,7 +860,7 @@
     },
     {
       "name": "async generator completion assimilates promise",
-      "source": "function p():Promise.<string,any>{return Promise.resolve(\"s\");} async function* g(x:number){yield 1;return p();} const q:AsyncGenerator.<number,string,void>=g(0); \"ok\";",
+      "source": "{function p():Promise.<string,any>{return Promise.resolve(\"s\");} async function* g(x:number){yield 1;return p();} const q:AsyncGenerator.<number,string,void>=g(0); \"ok\";}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

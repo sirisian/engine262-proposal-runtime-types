@@ -1,7 +1,12 @@
-import { SerializeTypeTable, DeserializeTypeTable, type TypeTable } from './artifact.mts';
+import { AgentSignifier, surroundingAgent } from '../execution-context/Agent.mts';
+import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
+import type { Realm } from '../execution-context/Realm.mts';
+import { Value } from '../value.mts';
+import { ResolveInitializedBinding, type EnvironmentRecord } from '../execution-context/Environment.mts';
+import { SerializeTypeTable, DeserializeTypeTable, TYPE_TABLE_VERSION, type TypeTable } from './artifact.mts';
 import { ModuleGraphInventory, type GraphEntry } from './module-graph.mts';
 import { GraphKey } from './graph-key.mts';
-import { GetTypeObject } from './intern.mts';
+import { GetTypeObject, isTypeObject, TypeObjectOfDenotation } from './intern.mts';
 import { DocumentationFor, type OriginDocumentation } from './documentation.mts';
 import { ExportedTypesOf, ExportedAliasesOf } from './check.mts';
 
@@ -113,6 +118,7 @@ function carriesUnboundParameter(record: unknown): boolean {
       return false;
     }
     seen.add(node as object);
+    if (isTypeObject(node)) return walk(node.TypeRecord);
     if (Array.isArray(node)) {
       return node.some(walk);
     }
@@ -141,11 +147,36 @@ function carriesUnboundParameter(record: unknown): boolean {
  * "an optimization and never a semantics" holds.
  */
 export function ProduceArtifact(module: unknown): Artifact | undefined {
-  const record = module as { ECMAScriptCode?: unknown };
+  const record = module as { ECMAScriptCode?: unknown, Realm?: Realm };
   const code = record?.ECMAScriptCode;
-  if (!code) {
+  if (!code || !record.Realm) {
     return undefined;
   }
+  return inArtifactRealm(record.Realm, () => produceArtifact(module));
+}
+
+// Host production runs after module evaluation has popped its context. Bind
+// interning and provenance to that module's owner, without selecting whichever
+// realm happened to run last or changing agent-local canonical identity.
+function inArtifactRealm<T>(realm: Realm, operation: () => T): T {
+  if (realm.AgentSignifier !== AgentSignifier()) {
+    throw new TypeError('An artifact realm must belong to the surrounding agent');
+  }
+  const context = new ExecutionContext();
+  context.Function = Value.null;
+  context.Realm = realm;
+  context.ScriptOrModule = Value.null;
+  surroundingAgent.executionContextStack.push(context);
+  try {
+    return operation();
+  } finally {
+    surroundingAgent.executionContextStack.pop(context);
+  }
+}
+
+function produceArtifact(module: unknown): Artifact | undefined {
+  const record = module as { ECMAScriptCode: unknown, Environment?: EnvironmentRecord };
+  const code = record.ECMAScriptCode;
   // The PUBLIC surface is the module's export entries, not every top-level
   // binding. `ExportedTypesOf` returns the latter - its map is built from the
   // check session's whole frame - so building an artifact from it would carry a
@@ -171,7 +202,15 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
     if (!local || !exportedAs) {
       continue;
     }
-    const bound = aliases?.get(local) ?? bindings?.get(local);
+    // Completed exported Type Objects carry their evaluated class identities
+    // and provenance. Checking records can still contain symbolic dependencies.
+    // Read only initialized declarative cells, without evaluating an export.
+    // Class denotations survive replacement; ordinary value exports describe
+    // their binding contract, not a coincidentally stored Type Object.
+    const binding = ResolveInitializedBinding(record.Environment, local);
+    const denotation = aliases?.has(local) ? TypeObjectOfDenotation(binding?.declaredClass
+      ?? (binding?.mutable === false ? binding.value : undefined)) : undefined;
+    const bound = denotation ?? aliases?.get(local) ?? bindings?.get(local);
     if (bound && typeof bound === 'object') {
       roots.set(exportedAs, bound as object);
     }
@@ -200,7 +239,7 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
   for (const [name, type] of roots) {
     // Through the interned Type Object: provenance is keyed there, because
     // canonicalization rebuilds records and a record is not a stable identity.
-    const docs = DocumentationFor(GetTypeObject(type as never) as unknown as object, graph);
+    const docs = DocumentationFor(isTypeObject(type) ? type : GetTypeObject(type as never) as unknown as object, graph);
     if (docs.length > 0) {
       documentation[name] = docs;
     }
@@ -232,11 +271,13 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
  * A HOST API, beside `ProduceArtifact`, rather than a reflective intrinsic. The
  * two halves of one mechanism belong in one world, and a program cannot reach
  * this at all - which is a stronger statement than nothing in the engine
- * consulting it.
+ * consulting it. Hosts call this with the consumer realm after evaluation has
+ * returned; an active execution context supplies that realm when omitted.
  */
 export function ReadArtifact(
   artifact: Artifact,
   resolveNominal: (name: { name?: string, source?: string }) => object | undefined,
+  realm?: Realm,
 ): Map<string, unknown> | undefined {
   if (artifact.semantics !== SEMANTICS_ID) {
     // Types computed under other rules. The graph could be identical, so the key
@@ -250,5 +291,8 @@ export function ReadArtifact(
     // caller's own sources.
     return undefined;
   }
-  return DeserializeTypeTable(artifact.table, resolveNominal);
+  if (artifact.table.version !== TYPE_TABLE_VERSION) return undefined;
+  const consumer = realm ?? surroundingAgent.executionContextStack.at(-1)?.Realm;
+  if (!consumer) throw new TypeError('ReadArtifact requires a consumer realm outside an execution context');
+  return inArtifactRealm(consumer, () => DeserializeTypeTable(artifact.table, resolveNominal));
 }

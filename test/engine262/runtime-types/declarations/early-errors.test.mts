@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectEarlyError, expectStaticTypeError, expectThrown, expectThrownKind, ok } from '../harness.mts';
+import { evaluated, expectEarlyError, expectStaticTypeError, expectThrown, expectThrownKind, ok, observeScript } from '../harness.mts';
 
 /**
  * Early errors the specification states with "it is a type error if".
@@ -68,12 +68,12 @@ test('a default no atom is left for is refused', () => {
 });
 
 test('reachability leaves the matches that need every clause', () => {
-  expect(ok('enum E { A, B } let e: E = E.A; let r = match (e) { when E.A: 1; when E.B: 2; };')).toBe(true);
-  expect(ok('enum E { A, B } let e: E = E.A; let r = match (e) { when E.A: 1; default: 2; };')).toBe(true);
-  expect(ok('let x: uint8 | string = 1; let r = match (x) { when uint8: 1; when string: 2; };')).toBe(true);
-  expect(ok('let x: uint8 = 1; let r = match (x) { when 1: "a"; when 2: "b"; default: "c"; };')).toBe(true);
-  expect(ok('type Sh = { kind: "c", r: float64 } | { kind: "r", w: float64 }; let s: Sh = { kind: "c", r: 1 }; '
-    + 'let a = match (s) { when { kind: "c" }: 1; when { kind: "r" }: 2; };')).toBe(true);
+  expect(ok('enum E { A, B } function f(e: E) { let r = match (e) { when E.A: 1; when E.B: 2; }; } f(E.A); f(E.B);')).toBe(true);
+  expect(ok('enum E { A, B } function f(e: E) { let r = match (e) { when E.A: 1; default: 2; }; } f(E.A); f(E.B);')).toBe(true);
+  expect(ok('function f(x: uint8 | string) { let r = match (x) { when uint8: 1; when string: 2; }; } f(1); f("s");')).toBe(true);
+  expect(ok('function f(x: uint8) { let r = match (x) { when 1: "a"; when 2: "b"; default: "c"; }; } f(1); f(2); f(3);')).toBe(true);
+  expect(ok('type Sh = { kind: "c", r: float64 } | { kind: "r", w: float64 }; function f(s: Sh) { '
+    + 'let a = match (s) { when { kind: "c" }: 1; when { kind: "r" }: 2; }; } f({kind:"c",r:1}); f({kind:"r",w:2});')).toBe(true);
   // `match all` is exempt: "no clause of a `match all` need match ... and a
   // later clause there is reached whether or not an earlier one matched".
   expect(ok('let x: uint8 = 1; let r = match all (x) { when uint8: 1; when uint8: 2; };')).toBe(true);
@@ -348,9 +348,9 @@ test('a default after true and false is unreachable', () => {
   // preceding clauses cover every atom of a subject with atoms is that
   // error's instance". The enum and sealed passes had this branch; the
   // chain-atom pass, which is where `boolean` is judged, did not.
-  expectStaticTypeError('let b: boolean = true; match (b) { when true: 1; when false: 2; default: 3; };');
-  expect(ok('let b: boolean = true; let r = match (b) { when true: 1; when false: 2; }; String(r);')).toBe(true);
-  expect(ok('let b: boolean = true; let r = match (b) { when true: 1; default: 2; }; String(r);')).toBe(true);
+  expectStaticTypeError('function f(b: boolean) { match (b) { when true: 1; when false: 2; default: 3; }; }');
+  expect(ok('function f(b: boolean) { let r = match (b) { when true: 1; when false: 2; }; String(r); } f(true); f(false);')).toBe(true);
+  expect(ok('function f(b: boolean) { let r = match (b) { when true: 1; default: 2; }; String(r); } f(true); f(false);')).toBe(true);
 });
 
 test('a non-numeric literal that cannot match its position is refused', () => {
@@ -365,8 +365,8 @@ test('a non-numeric literal that cannot match its position is refused', () => {
   // And through `is`.
   expectStaticTypeError("let x: uint8 = 1; if (x is 'a') {}");
   // A literal a union or its own type admits stands.
-  expect(ok("let x: uint8 | string = 'a'; let r = match (x) { when 'a': 1; default: 2; }; String(r);")).toBe(true);
-  expect(ok('let x: uint8 | null = null; let r = match (x) { when null: 1; default: 2; }; String(r);')).toBe(true);
+  expect(ok("function f(x: uint8 | string) { let r = match (x) { when 'a': 1; default: 2; }; String(r); } f('a'); f(1);")).toBe(true);
+  expect(ok('function f(x: uint8 | null) { let r = match (x) { when null: 1; default: 2; }; String(r); } f(null); f(1);')).toBe(true);
 });
 
 // ---- #sec-meta-declarations ---------------------------------------------
@@ -447,7 +447,7 @@ test('an instanceof test against a class that can never fail is refused', () => 
   // succeed or can never fail." The impossible-test check resolved only
   // aliases and built-ins, so a CLASS operand was never judged. NarrowFrom of
   // a class by itself is ~empty~, so the else branch is dead.
-  expectStaticTypeError('class P { x: uint8 = 1; } let p: P = new P(); if (p instanceof P) { } else { }');
+  expectStaticTypeError('{ class P { x: uint8 = 1; } let p: P = new P(); if (p instanceof P) { } else { } }');
   // A primitive against a class is disjoint (#sec-aredisjoint), so it can
   // never succeed.
   expectStaticTypeError('class P { x: uint8 = 1; } let x: uint8 = 1; if (x instanceof P) { }');
@@ -458,8 +458,8 @@ test('instanceof between unrelated classes can never succeed', () => {
   // other; NarrowTo now makes the same judgment, so the test that would narrow
   // to that intersection is the dead branch it is. AreDisjoint stays silent on
   // the interning path, as #sec-aredisjoint chooses.
-  expectStaticTypeError('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
-    + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; }');
+  expectStaticTypeError('{ class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+    + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; } }');
   // The `is` form judges a class too: class membership is an identity, which
   // no write to a field can change.
   expectStaticTypeError('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
@@ -503,7 +503,8 @@ test('every call that supplies a this stays legal', () => {
   expect(evaluated(`${M}const d: C | null = c; String(d?.m());`)).toBe('1');
   expect(evaluated(`${M}const f = c.m.bind(c); String(f());`)).toBe('1');
   expect(evaluated(`${M}const f = c.m; String(f.call(c));`)).toBe('1');
-  expect(evaluated(`${M}const f = C.s; String(f());`)).toBe('1');
+  expect(evaluated(`${M}const f = C.s; String(f.call(C));`)).toBe('1');
+  expectStaticTypeError(`{ ${M}const f = C.s; f(); }`);
   expect(evaluated('class B { m(): uint8 { return 1; } } class D extends B { m(): uint8 { return super.m(); } } String(new D().m());')).toBe('1');
   // An arrow field has no `this` of its own to require.
   expect(evaluated('class E { x: uint8 = 1; f = (): uint8 => this.x; } const e: E = new E(); const g = e.f; String(g());')).toBe('1');
@@ -672,7 +673,10 @@ test('a protected member read through destructuring is refused', () => {
 // ---- #sec-void-type -----------------------------------------------------
 
 test('a binding typed void through its pattern\'s annotation is refused', () => {
-  expectThrown('const { a }: { a: void } = { a: undefined };', 'a binding cannot have type void');
+  expectStaticTypeError('const { a }: { a: void } = { a: undefined };');
+  expect(observeScript('function f({ a }: { a: void }) {}')).toMatchObject({
+    bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { code: 'RT_VOID_USE', phase: 'static' },
+  });
   expectStaticTypeError('let [a]: [void] = [undefined];');
   expectStaticTypeError('function f({ a }: { a: void }) {}');
   // Line 1761: each name takes its member's type, and the initializer crosses
@@ -854,7 +858,8 @@ test('a class extending a class-expression base meets the inheritance rules', ()
   expectStaticTypeError("const B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } }");
   expectStaticTypeError('const B = class { x: uint8 = 1; }; class D extends B { x: uint8 = 2; }');
   expect(ok('interface I { a: uint8; } const B = class { a: uint8 = 1; }; class C extends B implements I { } String(1);')).toBe(true);
-  expect(ok("let B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } } String(1);")).toBe(true);
+  expectStaticTypeError("let B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } } String(1);");
+  expect(ok("function f(B) { class D extends B { m(): string { return 'x'; } } } f(class {});")).toBe(true);
 });
 
 test('a class expression is checked as a class, and its instances are typed', () => {
@@ -962,7 +967,7 @@ test('a flatMap callback returning a conditional of primitives is refused', () =
 
 test('a constructor returning an instance of an ordinary class cannot meet a callable interface', () => {
   const F = 'interface F { (x: uint8): uint8; } ';
-  expectStaticTypeError(`${F}class O { } class C implements F { constructor() { return new O(); } }`);
+  expectStaticTypeError(`{ ${F}class O { } class C implements F { constructor() { return new O(); } } }`);
   expectStaticTypeError(`${F}const O = class { }; class C implements F { constructor() { return new O(); } }`);
   expect(ok(`${F}class Fn { constructor() { return (x: uint8): uint8 => x; } } class C implements F { constructor() { return new Fn(); } } String(1);`)).toBe(true);
   expect(ok(`${F}class P { constructor(f: any) { return f; } } class C implements F { constructor() { return new P(1); } } String(1);`)).toBe(true);
@@ -980,3 +985,23 @@ test('an operator on a class-expression instance is refused as on a declared one
   expect(evaluated('const K = class { }; const k = new K(); String(k + 1);')).toBe('[object Object]1');
   expect(evaluated(`${K}String(k.x + 1);`)).toBe('2');
 });
+
+test.each([
+  'const { a }: { a:uint8 } = { a:1 }; String(a);',
+  'let { a }: { a:uint8 } = { a:1 }; a=2; String(a);',
+  'const { nested:{a} }: { nested:{a:uint8} } = { nested:{a:1} }; String(a);',
+  'const [a]:[uint8] = [1]; String(a);',
+])('pattern members retain their admitted aggregate contract: %s', (source) => {
+  expect(evaluated(source)).toBe(source.startsWith('let ') ? '2' : '1');
+});
+
+test.each([
+  'function f(x:boolean){return match(x){when true:1;when false:2;};}String(f(true))+"/"+f(false);',
+  'function f(x:"a"|"b"){return match(x){when "a":1;default:2;};}String(f("a"))+"/"+f("b");',
+])('broad match inputs retain all reachable alternatives: %s', (source) => expect(evaluated(source)).toBe('1/2'));
+
+test.each([
+  'let x:boolean=true;match(x){when true:1;when false:2;};',
+  'let x:"a"|"b"="a";match(x){when "a":1;default:2;};',
+  'type S={kind:"a",n:uint8}|{kind:"b",s:string};let x:S={kind:"a",n:1};match(x){when {kind:"a"}:1;when {kind:"b"}:2;};',
+])('initialized singleton inputs retain reachability diagnostics: %s', (source) => expectStaticTypeError(source));

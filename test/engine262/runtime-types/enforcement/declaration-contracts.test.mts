@@ -149,11 +149,16 @@ test.each([
   "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const {m} = c; m?.(); }",
 ])("optional calls preserve receiver requirements: %s", (source) => expectStaticTypeError(source));
 
+test("optional calls reject an always-nullish receiver's unreachable continuation", () => {
+  expectStaticTypeError("const f: (() => uint8) | null = null; f?.();");
+});
+
 test.each([
-  "class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());",
-  "const f: (() => uint8) | null = null; f?.();",
-  "const f: (() => uint8) | null = (): uint8 => 1; String(f?.());",
-])("optional calls reject a deciding test made constant by initialization: %s", (source) => expectStaticTypeError(source));
+  ["class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());", "0"],
+  ["const f: (() => uint8) | null = (): uint8 => 1; String(f?.());", "1"],
+])("a redundant optional call leaves no written continuation unreachable: %s", (source, expected) => {
+  expect(evaluated(source)).toBe(expected);
+});
 
 test("optional calls preserve receiver requirements preserve valid and dynamic cases", () => {
   expect(evaluated("class C { x: uint8; m(): uint8 { return this.x; } } function invoke(c: C | null) { return c?.m(); } String(invoke(new C())) + '/' + String(invoke(null));")).toBe("0/undefined");

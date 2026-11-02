@@ -48,16 +48,15 @@ test.each([
   expect(consumer.types?.get('T')).toBe(evaluated.Value);
 });
 
-test('pattern metadata resolves Type Object values in the consumer agent', () => {
+test('pattern metadata preserves its representation and consumer type identity', () => {
   const source = 'type P = string.<{ pattern: /^a$/i }>; P;';
-  const original = typeOf(source) as { TypeRecord: { MetaType: object } };
+  const original = typeOf(source) as { TypeRecord: { Metadata: object } };
   const wire = JSON.parse(JSON.stringify(SerializeTypeTable(new Map([['P', original]]))));
   const consumer = readFresh(wire);
   const read = consumer.types?.get('P') as typeof original;
-  const owner = EnsureCompletion(consumer.realm.evaluateScriptSkipDebugger('type { pattern: any };'));
-  expect(owner.Type).toBe('normal');
-  expect(read.TypeRecord.MetaType).toBe(owner.Value);
-  expect(read.TypeRecord.MetaType).not.toBe(original.TypeRecord.MetaType);
+  expect(read.TypeRecord.Metadata).toEqual(original.TypeRecord.Metadata);
+  expect(read.TypeRecord.Metadata).toMatchObject({ pattern: { source: '^a$', flags: 'i' } });
+  expect(read).not.toBe(original);
   expect(read).toBe(EnsureCompletion(consumer.realm.evaluateScriptSkipDebugger(source)).Value);
 });
 

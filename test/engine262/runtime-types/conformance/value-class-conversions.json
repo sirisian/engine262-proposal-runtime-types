@@ -492,7 +492,7 @@
       "name": "class settled positive guard is rejected",
       "steps": [
         {
-          "source": "class C{}const n:C=new C();if(n instanceof C){\"body\";}",
+          "source": "{ class C{}const n:C=new C();if(n instanceof C){\"body\";} }",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,
@@ -512,7 +512,7 @@
       "name": "class settled negated guard is rejected",
       "steps": [
         {
-          "source": "class C{}const n:C=new C();if(!(n instanceof C)){\"body\";}",
+          "source": "{ class C{}const n:C=new C();if(!(n instanceof C)){\"body\";} }",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,
@@ -546,7 +546,7 @@
       "name": "guarded logical operand in discarded conditional",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)&&v.x===1)?\"yes\":\"no\";",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)&&v.x===1)?\"yes\":\"no\"; }",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -560,7 +560,7 @@
       "name": "guarded logical operand in inferred binding",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result=(v instanceof A)&&v.x===1;String(result);",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result=(v instanceof A)&&v.x===1;String(result); }",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -574,7 +574,7 @@
       "name": "guarded logical operand in typed binding",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result:boolean=(v instanceof A)&&v.x===1;String(result);",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result:boolean=(v instanceof A)&&v.x===1;String(result); }",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -588,7 +588,7 @@
       "name": "guarded logical operand in call argument",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();String((v instanceof A)&&v.x===1);",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();String((v instanceof A)&&v.x===1); }",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -602,7 +602,7 @@
       "name": "guarded logical operand in logical OR",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();(!(v instanceof A)||v.x===1)?\"yes\":\"no\";",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();(!(v instanceof A)||v.x===1)?\"yes\":\"no\"; }",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -644,7 +644,7 @@
       "name": "guarded logical operand in typed return",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();function f(value:A|null):boolean{return (value instanceof A)&&value.x===1;}String(f(v));",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();function f(value:A|null):boolean{return (value instanceof A)&&value.x===1;}String(f(v)); }",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -658,7 +658,7 @@
       "name": "wrong AND predecessor",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();(!(v instanceof A)&&v.x===1)?\"yes\":\"no\";",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();(!(v instanceof A)&&v.x===1)?\"yes\":\"no\"; }",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,
@@ -677,7 +677,7 @@
       "name": "wrong OR predecessor",
       "steps": [
         {
-          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)||v.x===1)?\"yes\":\"no\";",
+          "source": "{ class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)||v.x===1)?\"yes\":\"no\"; }",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

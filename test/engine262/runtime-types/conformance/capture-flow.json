@@ -1200,18 +1200,11 @@
       "checking": "automatic"
     },
     {
-      "name": "inferred capture consumer optional: forced",
+      "name": "inferred capture consumer optional: nonnullish continuation",
       "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=f(\"s\")?.length;}",
       "expected": {
-        "completion": "throw",
-        "bodyEntered": false,
-        "errorClass": "StaticTypeError",
-        "diagnostic": {
-          "code": "RT_IMPOSSIBLE_TEST",
-          "rule": "rt-impossible-test",
-          "phase": "static",
-          "errorClass": "StaticTypeError"
-        }
+        "completion": "normal",
+        "bodyEntered": true
       },
       "checking": "forced"
     },

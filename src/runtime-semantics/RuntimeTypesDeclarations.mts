@@ -53,7 +53,7 @@ import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../
 import { BindTypeParameterTyped, toNumericArgument,
   SubstituteTypeArguments, GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, NewTypeParameterEnvironment, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
 import { InferGenericBindings, TypeParameterValue, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
@@ -2025,6 +2025,10 @@ function* ApplyPartialClass(extension: PartialClassExtension, primary: ParseNode
       Kind: 'nominal', Declaration: primary, DeclarationIdentity: ClassFamilyIdentityOf(ctor),
       Arguments: args, Constructor: ctor, Base: RuntimeClassBaseOf(ctor),
     });
+    // Each application retains its own lexical value-parameter bindings. The
+    // transient type frame alone cannot resolve later reads from method bodies.
+    context.LexicalEnvironment = NewTypeParameterEnvironment(extension.environment,
+      [...primary.TypeParameters?.TypeParameterList ?? [], ...extension.node.TypeParameters?.Captures ?? []], frame);
     Q(yield* PartialClassMergeEvaluation(ctor as never, extension.node.ClassTail));
   } finally {
     popTypeParameterFrame();

@@ -883,7 +883,7 @@
       "name": "optional return equivalent view does not erase inputs",
       "steps": [
         {
-          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:Iterator.<uint8,string|undefined,void>=f();it.return(true);",
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:Iterator.<uint8,string|undefined,void>=f();it.return?.(true);",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

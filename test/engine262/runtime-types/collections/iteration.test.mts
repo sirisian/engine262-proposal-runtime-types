@@ -272,3 +272,21 @@ test('control: iteration RUNS correctly whatever the binding is typed at', () =>
   expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 1); String([...m][0][0]);')).toBe('a');
   expect(evaluated('const s = new Set.<uint8>(); s.add(7); let t = 0; for (const v of s) t = v; String(Reflect.typeOf(t) === (type uint8));')).toBe('true');
 });
+
+test('for-of receives the yield contract and evaluates its source once', () => {
+  expectStaticTypeError('function* g(): Generator.<uint8, string, void> { yield 1; return "done"; } for (const v of g()) { let x: string = v; }');
+  expect(evaluated('let calls=0; function* g(): Generator.<uint8, string, void> { calls++; yield 1; return "done"; } '
+    + 'let out=""; for (const v of g()) { let x:uint8=v; out+=String(x); } out+"/"+calls;')).toBe('1/1');
+});
+
+test('a replaced generator keeps receiving checks and the replacement result', () => {
+  expect(evaluated('function* g():Generator.<uint8,void,void>{yield 1;} '
+    + 'globalThis.g=function*(){yield "replacement";}; let out=""; '
+    + 'for(const v of g()){let x:string=v;out+=x;}out;')).toBe('replacement');
+});
+
+test('an outer loop can change the next inner iterable before it is captured', () => {
+  expect(evaluated('function* g():Generator.<uint8,void,void>{yield 1;}let out="";'
+    + 'for(let i=0;i<2;i++){for(const v of g()){if(typeof v==="string")out+="s";else out+="n";}'
+    + 'globalThis.g=function*(){yield "changed";};}out;')).toBe('ns');
+});

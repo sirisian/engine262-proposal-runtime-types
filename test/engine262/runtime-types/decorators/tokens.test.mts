@@ -115,8 +115,8 @@ test('a block context carries its BLOCK as tokens', () => {
 });
 
 test('the forms that HAVE a condition carry one', () => {
-  expect(evaluated('let t=""; function g(c){ t=c.condition.toString(); } if (1 < 2) @g { 1; } t;'))
-    .toBe('1 < 2');
+  expect(evaluated('let t=""; function g(c){ t=c.condition.toString(); } function h(x: number) { if (x + 1 < 2) @g { 1; } } h(0); t;'))
+    .toBe('x + 1 < 2');
   expect(evaluated('let t=""; let n=0; function g(c){ t=c.condition.toString(); } while (n < 1) @g { n+=1; } t;'))
     .toBe('n < 1');
   // The condition belongs to the OWNING statement, which the block node cannot
@@ -157,9 +157,9 @@ test('no initializer means no tokens, at both positions', () => {
 test('a stream is an ARRAY, so a macro uses array operations', () => {
   // That is the reason the representation is a flat list with delimited runs
   // grouped: the operations a macro performs are `map`, `find` and `filter`.
-  expect(evaluated('let n=-1; function g(c){ n=c.condition.filter(t=>t.kind==="numeric").length; } if (1 < 2) @g { 1; } String(n);'))
+  expect(evaluated('let n=-1; function g(c){ n=c.condition.filter(t=>t.kind==="numeric").length; } function h(x: number) { if (x + 1 < 2) @g { 1; } } h(0); String(n);'))
     .toBe('2');
-  expect(evaluated('let v=""; function g(c){ v=c.condition.find(t=>t.kind==="punctuator").value; } if (1 < 2) @g { 1; } v;'))
+  expect(evaluated('let v=""; function g(c){ v=c.condition.find(t=>t.value==="<").value; } function h(x: number) { if (x + 1 < 2) @g { 1; } } h(0); v;'))
     .toBe('<');
 });
 

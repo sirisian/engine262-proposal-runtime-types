@@ -540,8 +540,15 @@
       "name": "captured destructuring alias",
       "source": "function outer(g:()=>number,value){function f(x:number){const {s}={s:x};return g();function g(){return s;}}const q:string=f(1);}",
       "expected": {
-        "completion": "normal",
-        "bodyEntered": true
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
       }
     },
     {
@@ -1075,6 +1082,15 @@
         "completion": "normal",
         "bodyEntered": true,
         "value": "s"
+      }
+    },
+    {
+      "name": "captured destructuring alias shadows outer callable",
+      "source": "function outer(g:()=>string){function f(x:number){const {s}={s:x};return g();function g(){return s;}}const q:number=f(1);return q;}String(outer(()=>\"outer\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
       }
     }
   ]

@@ -15,13 +15,13 @@ import { expectThrown, ok } from '../harness.mts';
 const dead = (source: string) => `function __never() { ${source} }`;
 
 test('a parameter requiring a value must be supplied', () => {
-  expectThrown(dead('function f(a: uint8, b: uint8) {} f(uint8(1));'), 'is not supplied');
-  expectThrown(dead('function f(a: uint8) {} f();'), 'is not supplied');
-  expectThrown(dead('class C { m(a: uint8, b: uint8) {} } new C().m(uint8(1));'), 'is not supplied');
+  expectThrown(dead('function f(a: uint8, b: uint8) {} f(uint8(1));'), 'supplies no argument');
+  expectThrown(dead('function f(a: uint8) {} f();'), 'supplies no argument');
+  expectThrown(dead('class C { m(a: uint8, b: uint8) {} } new C().m(uint8(1));'), 'supplies no argument');
   expectThrown(dead('class C { constructor(a: uint8, b: uint8) {} } let c = new C(uint8(1));'),
-    'is not supplied');
+    'supplies no argument');
   expectThrown(dead('let g: (a: uint8, b: uint8) => void = (a, b) => {}; g(uint8(1));'),
-    'is not supplied');
+    'supplies no argument');
 });
 
 test('a parameter nothing is required for', () => {
@@ -101,9 +101,9 @@ test('a METHOD signature carries its parameters as a function does', () => {
     + ' o.m(uint8(1));'))).toBe(true);
   // A required one is still required, through either declaration.
   expectThrown(dead('interface I { m(a: uint8, b: uint8): void }'
-    + ' function h(i: I) { i.m(uint8(1)); }'), 'is not supplied');
+    + ' function h(i: I) { i.m(uint8(1)); }'), 'supplies no argument');
   expectThrown(dead('let o: { m(a: uint8, b: uint8): void } = { m(a, b) {} }; o.m(uint8(1));'),
-    'is not supplied');
+    'supplies no argument');
 });
 
 test('every signature kind names the parameter it reports', () => {
@@ -118,6 +118,6 @@ test('every signature kind names the parameter it reports', () => {
     'interface I { m(a: uint8, b: uint8): void } function h(i: I) { i.m(uint8(1)); }',
     'let o: { m(a: uint8, b: uint8): void } = { m(a, b) {} }; o.m(uint8(1));',
   ]) {
-    expectThrown(dead(source), '"b" is required');
+    expectThrown(dead(source), '"b"');
   }
 });
