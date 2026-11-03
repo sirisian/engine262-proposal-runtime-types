@@ -967,6 +967,12 @@ function returnRequiredOfNothing(r: TypeRecord | null | undefined): boolean {
   return !r || r.Kind === 'void';
 }
 
+/** Both names admit Type Objects and associated class constructors. */
+function isTypeDenotationDomain(t: TypeRecord): boolean {
+  return (t.Kind === 'primitive' && t.Name === 'type' && t.Arguments.length === 0)
+    || (t.Kind === 'nominal' && t.LibraryName === 'Reflect.TypeObject' && t.Arguments.length === 0);
+}
+
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
   if (t?.Kind === 'family-pattern') return matchesFamilyPattern(s, t, SameTypeStructural);
   // A family bound (`extends uint`) admits every member of its family.
@@ -1006,6 +1012,9 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (SameTypeWithAssumptions(s, t, assumptions)) {
     return true;
   }
+  // Equal admission domains imply subtyping in both directions, without
+  // merging the distinct reflected records or changing constructor values.
+  if (isTypeDenotationDomain(s) && isTypeDenotationDomain(t)) return true;
   if (assumed(assumptions, s, t)) {
     return true;
   }
@@ -2468,6 +2477,13 @@ function areDisjoint(s: TypeRecord, t: TypeRecord, active: readonly Assumption[]
   }
   const sPrim = sb.Kind === 'literal' ? sb.Base : sb;
   const tPrim = tb.Kind === 'literal' ? tb.Base : tb;
+  if (isTypeDenotationDomain(sPrim) || isTypeDenotationDomain(tPrim)) {
+    const other = isTypeDenotationDomain(sPrim) ? tPrim : sPrim;
+    if (isTypeDenotationDomain(other)) return false;
+    // A primitive record named `type` describes Objects, including callable
+    // class constructors. Record kind alone cannot prove them disjoint.
+    return other.Kind === 'primitive' && other.Name !== 'object';
+  }
   // Composite uses a primitive Type Record but denotes frozen Objects, not
   // mutually exclusive scalar types. Its top contains every shaped Composite.
   const sComposite = sPrim.Kind === 'primitive' && sPrim.Name === 'Composite';

@@ -2698,9 +2698,9 @@ function writtenAnnotationAbove(node: object): boolean {
 const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
   const numberType = makePrimitive('number');
-  // sec-array-and-tuple-types: the index type is `uint64`, and `length` is of it. An
-  // entry taking `number` instead refuses an array's own length - `a.at(a.length)`
-  // - and refuses the index a callback receives, which is already this type.
+  // Storage indices and the extension's window bounds use uint64. Existing
+  // Array methods retain their ordinary quantity coercion, including signed
+  // relative indices and values already represented in a numeric type.
   const indexTypeForArray = indexTypeRecord();
   const boolType = makePrimitive('boolean');
   const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
@@ -2710,7 +2710,7 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
       return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeForArray, indexTypeForArray], 0),
         Return: libraryTypeRecord('Span', [element])! }] };
     case 'includes':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: boolType, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, anyType], 1), Return: boolType, Untyped: false }] } as unknown as Known;
     case 'indexOf':
     case 'lastIndexOf':
       // The RESULT is `number`, not the index type, and the specification says
@@ -2723,12 +2723,12 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
       // time about what the value IS. `let n: number = [1].indexOf(1)` was
       // refused; that is ordinary JavaScript.
       //
-      // The FROM-INDEX parameter keeps the index type: it is an index.
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: numberType, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, anyType], 1), Return: numberType, Untyped: false }] } as unknown as Known;
     case 'fill':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray, indexTypeForArray], 1), Return: anyType, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, anyType, anyType], 1), Return: anyType, Untyped: false }] } as unknown as Known;
     case 'at':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeForArray], 1), Return: element, Untyped: false }] } as unknown as Known;
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType], 0),
+        Return: CanonicalizeType({ Kind: 'union', Members: [element, makePrimitive('undefined')] }), Untyped: false }] } as unknown as Known;
     // A result drawn from the receiver's own elements is an array of the same
     // element type: `filter` selects, `slice` copies a range, `reverse` and
     // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
@@ -2810,8 +2810,8 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
         Kind: 'function',
         Signatures: [{
           Parameters: [
-            parameter(numberType, { Optional: true }),
-            parameter(numberType, { Optional: true }),
+            parameter(anyType, { Optional: true }),
+            parameter(anyType, { Optional: true }),
             parameter(element, { Rest: true }),
           ],
           Return: receiver,
@@ -40743,6 +40743,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           declare(n.BindingIdentifier.name, declared, bindingFrame);
           completePreparedBinding(bindingFrame, n.BindingIdentifier.name, declared);
+          if (n.TypeAnnotation) {
+            // An explicit binding contract participates even without an
+            // initializer from which invocation provenance could be retained.
+            let participation = unaryBindingParticipation.get(bindingFrame);
+            if (!participation) {
+              participation = new Map();
+              unaryBindingParticipation.set(bindingFrame, participation);
+            }
+            participation.set(n.BindingIdentifier.name, declared?.Kind !== 'any');
+          }
           if (!(n as { Ref?: boolean }).Ref) {
             const domain = storedDomain(initialized, declared);
             if (domain) declareNarrowed(n.BindingIdentifier.name, domain);

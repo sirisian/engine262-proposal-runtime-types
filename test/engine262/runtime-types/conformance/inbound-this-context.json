@@ -516,10 +516,24 @@
       ]
     },
     {
-      "name": "source body still rejects disjoint receiver comparison",
+      "name": "source body may query the unannotated undefined sentinel",
       "steps": [
         {
           "source": "class S{operator string(){const answer=this===undefined;return \"ok\";}}\"entered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "entered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source body still rejects disjoint receiver comparison",
+      "steps": [
+        {
+          "source": "class S{operator string(){let absent:undefined;const answer=this===absent;return \"ok\";}}\"entered\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

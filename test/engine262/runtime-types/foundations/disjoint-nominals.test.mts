@@ -22,10 +22,12 @@ const D = 'class C {} class D2 {} let c: C = new C(); let d: D2 = new D2();'
 test('a class instance is disjoint from a primitive', () => {
   expectThrown(dead(`${D}let q = c === s;`), 'disjoint');
   expectThrown(dead(`${D}let q = c === n;`), 'disjoint');
-  // The same defensive comparison a primitive already refuses: `uint8 ===
-  // undefined` has always been this error, and a class is no different.
-  expectThrown(dead(`${D}let q = c === undefined;`), 'disjoint');
-  expectThrown(dead(`${D}let q = c === null;`), 'disjoint');
+  // Both operands must participate. Bare null and the global undefined have
+  // no declared operand contract; annotated sentinel bindings do.
+  expect(ok(dead(`${D}let q = c === undefined;`))).toBe(true);
+  expect(ok(dead(`${D}let q = c === null;`))).toBe(true);
+  expectThrown(dead(`${D}let u: undefined; let q = c === u;`), 'disjoint');
+  expectThrown(dead(`${D}let z: null = null; let q = c === z;`), 'disjoint');
 });
 
 test('an enum follows its UNDERLYING type, not its nominal kind', () => {
