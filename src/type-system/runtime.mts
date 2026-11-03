@@ -1705,19 +1705,7 @@ function* InstantiateGenericAliasInContext(
       // refined by the declaration's predicate under these arguments. It binds
       // as a nominal record carrying the declaration and the arguments, which
       // the boundary check substitutes and runs the clauses under.
-      // A clause that reads a value parameter is left out until its binding is
-      // converted into the parameter's domain: compared against a converted
-      // `this`, the unconverted binding does not mix.
-      const valueParameters = new Set(params.filter((parameter) => (parameter as { IsValueParameter?: boolean }).IsValueParameter).map((parameter) => parameter.BindingIdentifier.name));
-      const readsValueParameter = (value: unknown): boolean => {
-        if (!value || typeof value !== 'object') return false;
-        if (Array.isArray(value)) return value.some(readsValueParameter);
-        const node = value as { type?: string, name?: string };
-        if (typeof node.type !== 'string') return false;
-        if (node.type === 'IdentifierReference' && node.name !== undefined && valueParameters.has(node.name)) return true;
-        return Object.entries(node).some(([key, child]) => !['parent', 'location', 'sourceText', 'strict'].includes(key) && readsValueParameter(child));
-      };
-      if (!enclosing && clauses && clauses.length > 0 && mentionsThis(clauses) && !clauses.some((clause) => readsValueParameter(clause.RefinementPredicate))) {
+      if (!enclosing && clauses && clauses.length > 0 && mentionsThis(clauses)) {
         // The arguments as the frame binds them, converted into each
         // parameter's domain, so the boundary reads what this instantiation read.
         const bound = params.map((parameter) => frame.get(parameter.BindingIdentifier.name));
@@ -4099,6 +4087,9 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
  * machinery a class field initializer uses to evaluate an expression with `this`
  * bound to the instance.
  */
+/** The scopes the pre-evaluation binds type parameters into by name, a value generic among them. */
+export const typeParameterBindingScopes = new WeakSet<object>();
+
 /** The `match` expressions written as a refinement predicate, which answer `false` where no clause matches. */
 export const implicitFalseDefaultMatches = new WeakSet<object>();
 

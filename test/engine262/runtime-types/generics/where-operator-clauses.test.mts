@@ -26,3 +26,9 @@ test('a conversion or spread operator takes clauses too', () => {
   expect(evaluated("class A { x = 0; operator number() where this.x > 0 { return this.x; } } let r = 'none'; try { const a = new A(); let n: number = a; r = 'ran'; } catch (e) { r = 'threw'; } r;")).toBe('threw');
   refused("class L { n: uint8 = 2; * operator ...() where this.n > 300 { yield 1; } } 'ok';", 'rt-numeric-range');
 });
+
+test('a primitive block\'s operator reads the primitive as its receiver', () => {
+  refused("primitive uint8 { operator+(rhs: string): string where this > 300 { return rhs; } } 'ok';", 'rt-numeric-range');
+  expect(evaluated("primitive uint8 { operator+(rhs: string): string where this < 200 { return String(this) + rhs; } } String((7 := uint8) + 'x');")).toBe('7x');
+  expect(evaluated("primitive uint8 { operator+(rhs: string): string where this < 5 { return String(this) + rhs; } } let r = 'none'; try { r = String((7 := uint8) + 'x'); } catch (e) { r = 'threw'; } r;")).toBe('threw');
+});

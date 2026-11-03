@@ -221,12 +221,17 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
       // of `+` is left alone.
       && !(lval instanceof JSStringValue)
       && !(rval instanceof JSStringValue)) {
-    const decided = TypedOperandType(lval, rval, {
-      left: isNumericLiteralOperand(RelationalExpression as ParseNode),
-      right: isNumericLiteralOperand(ShiftExpression as ParseNode),
-    });
-    if (decided instanceof AbruptCompletion) {
-      return decided;
+    const leftLiteral = isNumericLiteralOperand(RelationalExpression as ParseNode);
+    const rightLiteral = isNumericLiteralOperand(ShiftExpression as ParseNode);
+    // A value generic reads as the literal its value is: held as a typed
+    // value, against an untyped number it compares as that number does.
+    const typedLiteralMeetsNumber = (lval instanceof TypedNumberValue && leftLiteral && !(rval instanceof TypedNumberValue))
+      || (rval instanceof TypedNumberValue && rightLiteral && !(lval instanceof TypedNumberValue));
+    if (!typedLiteralMeetsNumber) {
+      const decided = TypedOperandType(lval, rval, { left: leftLiteral, right: rightLiteral });
+      if (decided instanceof AbruptCompletion) {
+        return decided;
+      }
     }
   }
   // proposal-runtime-types (ranges.md, #sec-range-literals): a RANGE is rejected

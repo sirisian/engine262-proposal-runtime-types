@@ -3525,6 +3525,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     observeBindingInput(input);
   };
   const whereChecks = new Map<object, GenericWhereCheck[]>();
+  // The generic declarations the program applies, and the declaration-time
+  // judgments held back until it is known whether anything applies them.
+  const appliedGenericDeclarations = new Set<object>();
+  const heldDeclarationJudgments: { declaration: object, mark: number, errors: unknown[], closed?: { clause: object, check: GenericWhereCheck } }[] = [];
   /**
    * A free name in a `where` predicate that resolves to no declaration and to
    * no property of the global object: a predicate naming it could never be
@@ -4013,6 +4017,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
     outer?: { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: ReadonlyMap<string, TypeRecord> } | null): void => {
+    appliedGenericDeclarations.add(declaration as object);
     const ownClauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
     const clauses = (ownClauses && ownClauses.length > 0 ? ownClauses : undefined)
       ?? (declaration as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses
@@ -14880,9 +14885,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // clause reads `this` is a generic dependent record type, the
                 // applied body refined by the declaration's predicate, so it
                 // keeps the wrapper the non-generic refinement keeps.
-                const valueParameterNames = valueTypeParameterNames(genericDeclaration);
-                const refining = (genericDeclaration.WhereClauses ?? []).some((clause) => whereClauseNamesThis(clause.RefinementPredicate as ParseNode))
-                  && !(genericDeclaration.WhereClauses ?? []).some((clause) => LexicalFreeReferences(clause.RefinementPredicate as ParseNode).some((reference) => valueParameterNames.has(reference.name)));
+                const refining = (genericDeclaration.WhereClauses ?? []).some((clause) => whereClauseNamesThis(clause.RefinementPredicate as ParseNode));
                 if (applied && refining) {
                   return { Kind: 'nominal', Declaration: genericDeclaration, Arguments: parameters.map((parameter) => bindings.get(parameter.Name)!), Structure: applied } as unknown as Known;
                 }
@@ -21451,6 +21454,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const whereDeclaration = declaration?.type === 'FunctionDeclaration' || declaration?.type === 'MethodDefinition'
             || declaration?.type === 'AbstractMethodDefinition' || declaration?.type === 'MethodSignature'
             || declaration?.type === 'AsyncMethod' || declaration?.type === 'GeneratorMethod' || declaration?.type === 'AsyncGeneratorMethod';
+          if (declaration) appliedGenericDeclarations.add(declaration as object);
           if (base.Signatures.length === 1 && whereDeclaration
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
             const member = declaration?.type !== 'FunctionDeclaration' ? patternExpression(specialization.Expression) : null;
@@ -28431,6 +28435,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const receiverTypesInProgress = new Set<ParseNode>();
   const declaredReceiverOf = (owner: ParseNode): Known | undefined => {
     if (!/Method|OperatorDefinition/.test(owner.type)) return undefined;
+    if (owner.type === 'OperatorDefinition') {
+      // An operator in a `primitive` block has that primitive as its receiver.
+      for (let p = (owner as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
+        if (p.type === 'PrimitiveOperatorDeclaration') {
+          const typeName = (p as { TypeName?: ParseNode }).TypeName;
+          return typeName ? (resolveType({ type: 'TypeReference', TypeName: typeName, TypeArguments: null, parent: p } as unknown as ParseNode.Type) ?? undefined) as Known | undefined : undefined;
+        }
+        if (/Class/.test(p.type)) break;
+      }
+    }
     if (typeof (owner as { static?: unknown }).static === 'boolean') return (thisTypeFrames.at(-1) ?? undefined) as Known | undefined;
     for (let p = (owner as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
       if (p.type === 'ObjectLiteral') {
@@ -28536,6 +28550,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * judgments that apply to any test apply to it, and what they leave open is
    * evaluated at the checking boundary.
    */
+  /**
+   * #sec-generic-where: a generic declaration the program applies has the
+   * clauses it binds decided by those applications. The declaration-time
+   * judgments of its specialization predicates and closed clauses are held
+   * here while walking, and stand only if nothing applies it.
+   */
+  const isGenericDeclaration = (declaration: ParseNode): boolean => {
+    const list = (declaration as { TypeParameters?: { ListKind?: string, TypeParameterList?: readonly unknown[] } | null }).TypeParameters;
+    return !!list && list.ListKind !== 'specialization' && (list.TypeParameterList?.length ?? 0) > 0;
+  };
   const walkDeclarationClauses = (declaration: ParseNode, clauses: readonly ParseNode.WhereClause[], subjects: ClauseSubjects): void => {
     for (const clause of clauses) {
       const predicate = clause.RefinementPredicate as ParseNode;
@@ -28566,10 +28590,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // it reads. An explicit constant keeps its written meaning, and a
       // declaration sharing its group is only made inapplicable by a failing
       // clause (#sec-callable-overload-contracts), so neither is evaluated.
-      if (!readsSubject && !readsTypeParameter && errors.length === mark && whereLiteralValue(predicate) === undefined && !sharesDeclarationGroup(declaration)) {
-        const checks = whereChecks.get(clause) ?? [];
-        checks.push({ declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: new Map(), closed: true, sourceModule: importedDeclarationSourceModule(declaration) });
-        whereChecks.set(clause, checks);
+      const held = isGenericDeclaration(declaration) && !readsFormal && !readsThis && !readsReturn;
+      const walkErrors = held ? errors.splice(mark) : undefined;
+      if (!readsSubject && !readsTypeParameter && (held ? walkErrors!.length === 0 : errors.length === mark) && whereLiteralValue(predicate) === undefined && !sharesDeclarationGroup(declaration)) {
+        const closedCheck = { declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: new Map(), closed: true, sourceModule: importedDeclarationSourceModule(declaration) };
+        if (held) {
+          heldDeclarationJudgments.push({ declaration, mark, errors: walkErrors!, closed: { clause, check: closedCheck } });
+        } else {
+          const checks = whereChecks.get(clause) ?? [];
+          checks.push(closedCheck);
+          whereChecks.set(clause, checks);
+        }
+      } else if (held && walkErrors!.length > 0) {
+        heldDeclarationJudgments.push({ declaration, mark, errors: walkErrors! });
       }
     }
   };
@@ -42875,6 +42908,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (owner === root) sourceTypeArgumentApplicationChecks.set(application, { owner: root, checks: [...checks] });
   }
   screenNonTypeGlobals(root as ParseNode);
+  for (let index = heldDeclarationJudgments.length - 1; index >= 0; index -= 1) {
+    const held = heldDeclarationJudgments[index];
+    if (appliedGenericDeclarations.has(held.declaration)) continue;
+    errors.splice(held.mark, 0, ...(held.errors as typeof errors));
+    if (held.closed) {
+      const checks = whereChecks.get(held.closed.clause) ?? [];
+      checks.push(held.closed.check);
+      whereChecks.set(held.closed.clause, checks);
+    }
+  }
   genericWhereChecks.set(root, [...whereChecks.values()].flat()
     .filter((check) => [...check.bindings.values()].every((bound) => !mentionsTypeParameter(bound))));
 

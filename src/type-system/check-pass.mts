@@ -16,7 +16,7 @@ import { JSStringValue, ObjectValue, Value, type SymbolValue } from '../value.mt
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  NewTypeParameterEnvironment, DefaultValueOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  NewTypeParameterEnvironment, typeParameterBindingScopes, DefaultValueOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
   EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import { BeginRequiredModuleInputs, RequireModuleInputs, RequiredModuleInputFailure } from './required-module-inputs.mts';
@@ -411,6 +411,7 @@ export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' |
     try {
       const bind = (name: string, value: Value): void => {
         if (X(scope.HasBinding(Value(name))) === Value.true) return;
+        typeParameterBindingScopes.add(scope);
         X(scope.CreateImmutableBinding(Value(name), Value.true));
         X(scope.InitializeBinding(Value(name), value));
       };
@@ -540,6 +541,7 @@ function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEv
     try {
       const bind = (name: string, value: Value): void => {
         if (scope.bindings.has(Value(name))) return;
+        typeParameterBindingScopes.add(scope);
         X(scope.CreateImmutableBinding(Value(name), Value.true));
         X(scope.InitializeBinding(Value(name), value));
       };
@@ -730,6 +732,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       const outer = context.LexicalEnvironment;
       if (check.bindings?.size) {
         const scope = new DeclarativeEnvironmentRecord(outer);
+        typeParameterBindingScopes.add(scope);
         for (const [name, bound] of check.bindings) {
           X(scope.CreateImmutableBinding(Value(name), Value.true));
           X(scope.InitializeBinding(Value(name), bound.Kind === 'literal' ? bound.Value : GetTypeObject(bound)));
@@ -864,6 +867,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           } else {
             value = GetTypeObject(bound);
           }
+          typeParameterBindingScopes.add(scope);
           X(scope.CreateImmutableBinding(Value(name), Value.true));
           X(scope.InitializeBinding(Value(name), value));
         }

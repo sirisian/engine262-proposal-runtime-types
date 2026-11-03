@@ -1,11 +1,11 @@
 import { isWellKnownNumericConstant } from '../type-system/numeric-constants.mts';
-import { contextualTypeFor } from '../type-system/runtime.mts';
+import { contextualTypeFor, typeParameterBindingScopes, currentTypeParameterFrame, isValueParameterBinding } from '../type-system/runtime.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { IsConstLiteralUse, IsLetConstantUse } from '../type-system/check.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ApplyStringOrNumericBinaryOperator, type BinaryOperator } from './all.mts';
-import { GetValue } from '#self';
+import { GetValue, surroundingAgent, DeclarativeEnvironmentRecord, Value } from '#self';
 
 /**
  * #sec-arithmetic-never-promotes: "Where one operand is a literal it takes the
@@ -17,6 +17,20 @@ import { GetValue } from '#self';
  * throws. So the operand nodes answer the question and the answer travels with
  * the values. A parenthesized literal and a negated one are literals.
  */
+/** Whether _name_ resolves to a value generic parameter in the running context. */
+function isValueGenericReference(name: string): boolean {
+  type Scope = { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } | null, IsValueParameter?: boolean }[], OuterEnv?: unknown };
+  for (let env = surroundingAgent.runningExecutionContext?.LexicalEnvironment as unknown as Scope | null; env; env = env.OuterEnv as Scope | null) {
+    const parameter = env.TypeParameterList?.find((p) => p.BindingIdentifier?.name === name);
+    if (parameter) return !!parameter.IsValueParameter;
+    if (env instanceof DeclarativeEnvironmentRecord && (env as unknown as { bindings: { has(key: Value): boolean } }).bindings.has(Value(name))) return typeParameterBindingScopes.has(env);
+  }
+  // A name no environment binds may still be a type parameter, resolved
+  // through the type-parameter frame of the evaluation in progress.
+  const bound = currentTypeParameterFrame()?.get(name);
+  return !!bound && isValueParameterBinding(bound);
+}
+
 export function isNumericLiteralOperand(node: ParseNode): boolean {
   let n = node;
   for (;;) {
@@ -43,6 +57,11 @@ export function isNumericLiteralOperand(node: ParseNode): boolean {
     // equivalently to rounding once, and `float64`'s 53 covers `float32`'s 50
     // and `float16`'s 24. Verified for all eight constants at both widths.
     if (n.type === 'MemberExpression' && isWellKnownNumericConstant(n)) {
+      return true;
+    }
+    // A value generic parameter answers yes: the spec binds it to the literal
+    // type of its value, so `this > N` means what `this > 1` means.
+    if (n.type === 'IdentifierReference' && isValueGenericReference((n as { name: string }).name)) {
       return true;
     }
     // A `const` bound to a compile-time numeric constant answers yes: its use

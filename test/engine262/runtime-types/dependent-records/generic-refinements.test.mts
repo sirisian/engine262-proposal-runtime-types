@@ -22,10 +22,7 @@ test('a boundary enforces an application\'s predicate', () => {
   expect(evaluated(`${NE} const s: any = ''; let m = 'none'; try { let b: NE.<string> = s; m = 'ran'; } catch (e) { m = 'threw'; } m;`)).toBe('threw');
 });
 
-// Pinned as `test.fails`: a clause that reads a value parameter still has its
-// predicate dropped, since the parameter's binding is not yet converted into
-// its domain and would not mix with a converted `this`.
-test.fails('a clause that reads a value parameter is evaluated under the application\'s bindings', () => {
+test('a clause that reads a value parameter is evaluated under the application\'s bindings', () => {
   const Below = 'type Below<N: uint32> = uint32 where this < N;';
   expect(evaluated(`${Below} String((5 := uint32) is Below.<10>);`)).toBe('true');
   expect(evaluated(`${Below} String((15 := uint32) is Below.<10>);`)).toBe('false');

@@ -481,6 +481,17 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
   if ((xt && y instanceof BigIntValue) || (yt && x instanceof BigIntValue)) {
     return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType((xt ?? yt)!)), Value('bigint'));
   }
+  if (xt && yt && !SameType(xt, yt) && (literals?.left || literals?.right)) {
+    // A value generic reads as the literal its value is, so against an
+    // operand of another type it takes that type, as a literal does, where
+    // the value fits.
+    const literalTarget = literals?.right ? xt : yt;
+    const literalValue = payload(literals?.right ? y : x);
+    if (!fitsNumericType(literalValue, (literalTarget as TypeRecord & { Kind: 'primitive' }).Name, (literalTarget as TypeRecord & { Kind: 'primitive' }).Arguments)) {
+      return Throw.RangeError('$1 is not in the range of $2', Value(literalValue), Value(displayType(literalTarget)));
+    }
+    return literalTarget;
+  }
   if (xt && yt && !SameType(xt, yt)) {
     const metadata = MetadataMismatchDescription(xt, yt);
     if (metadata !== undefined) return Throw.TypeError('$1', metadata);
