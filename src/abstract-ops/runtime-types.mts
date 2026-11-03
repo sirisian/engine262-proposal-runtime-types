@@ -11,7 +11,7 @@ import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { ObserveStructuralValue, AdvanceStructuralValue, type StructuralValueObservations, OrdinaryDataObservationValid, type OrdinaryDataObservation, publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope, RetainFunctionTypeParameterEnvironment } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, NewTypeParameterEnvironment, instantiateTypeInFrame, SpecializedFunctionSignatureOf, retainAdoptedParameterScope, RetainFunctionTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletion, ReturnCompletion, type ThrowCompletion } from '../completion.mts';
@@ -5880,9 +5880,19 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
     // the result binding for every clause.
     PushContractReturn(result);
     let verdict;
+    // A clause reads the function's type parameters, value generics among
+    // them, as the application bound them (#sec-generic-where).
+    const contractContext = surroundingAgent.runningExecutionContext;
+    const priorEnvironment = contractContext.LexicalEnvironment;
+    const contractParameters = functionTypeParameters(fn as never);
+    const contractFrame = currentTypeParameterFrame();
+    if (contractParameters && contractParameters.length > 0 && contractFrame) {
+      contractContext.LexicalEnvironment = NewTypeParameterEnvironment(priorEnvironment as never, contractParameters as never, contractFrame) as never;
+    }
     try {
       verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
     } finally {
+      contractContext.LexicalEnvironment = priorEnvironment;
       PopContractReturn();
     }
     if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {

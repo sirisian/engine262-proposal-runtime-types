@@ -6973,6 +6973,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // that removed nothing from a closed set keeps the type as written.
   const narrowToTested = (s: TypeRecord, t: TypeRecord): TypeRecord | typeof empty => {
     if (t.Kind === 'any') return s;
+    // #sec-where-clauses: a refinement narrows its base, so a source that
+    // shares the base narrows to the refinement, and one that does not, to
+    // nothing.
+    const refinedBase = refinementBaseOf(t);
+    if (refinedBase) return narrowToTested(s, refinedBase) === empty ? empty : t;
     const x = expandClosed(s);
     const split = enumLiteralSplit(x, t);
     const r = split ? unionOf(split.match) : NarrowTo(x, t);
@@ -7113,9 +7118,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const arrayVersusTuple = (a: TypeRecord, b: TypeRecord): boolean => (a.Kind === 'array' && (a as { Extent?: unknown }).Extent === 'dynamic' && b.Kind === 'tuple')
       || (b.Kind === 'array' && (b as { Extent?: unknown }).Extent === 'dynamic' && a.Kind === 'tuple');
     if (arrayVersusTuple(s, t)) return null;
-    if (narrowToTested(s, t) === empty && (stablyDisjoint(expandClosed(s), t) || uninhabitedVerdict(s, t))) return 'never-succeeds';
+    if (narrowToTested(s, t) === empty && (stablyDisjoint(expandClosed(s), t) || uninhabitedVerdict(s, t))) {
+      // #sec-where-clauses: a refinement admits exactly the values of its base
+      // that satisfy its predicate, so a source disjoint from it by nominal
+      // identity alone may still share values with it. Judged through the
+      // base, it can never succeed only where the source shares none.
+      const refinedBase = refinementBaseOf(t);
+      if (refinedBase) return impossibleVerdict(s, refinedBase) === 'never-succeeds' ? 'never-succeeds' : null;
+      return 'never-succeeds';
+    }
     if (narrowFromTested(s, excluded) === empty && membershipStable(expandClosed(s)) && membershipStable(excluded)) return 'never-fails';
     return null;
+  };
+  /** The base a refinement narrows, or null where _t_ is not a refinement. */
+  const refinementBaseOf = (t: TypeRecord): TypeRecord | null => {
+    if (t.Kind !== 'nominal') return null;
+    const refined = t as unknown as { Declaration?: { type?: string, WhereClauses?: readonly unknown[] | null }, Structure?: TypeRecord };
+    return refined.Declaration?.type === 'TypeAliasDeclaration' && (refined.Declaration.WhereClauses?.length ?? 0) > 0 && refined.Structure
+      ? refined.Structure : null;
   };
 
   /**
@@ -13901,7 +13921,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-generic-where: a `where` naming `return` is a contract over the
         // function's result; a function declared `void` has none to constrain.
         const returnAnnotation = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-        if (whereClauseNamesReturn(predicate) && returnAnnotation && resolveType(returnAnnotation.Type)?.Kind === 'void') {
+        // A setter declares no result, an assignment through it yielding the
+        // assigned value, and a class constructor declares none either.
+        const ownerKey = (n as { ClassElementName?: ParseNode.ClassElementName | null }).ClassElementName;
+        const resultless = (n as { PropertySetParameterList?: unknown }).PropertySetParameterList != null
+          || ((n as { static?: unknown }).static === false && classElementKey(ownerKey) === 'constructor');
+        if (whereClauseNamesReturn(predicate) && (resultless || (returnAnnotation && resolveType(returnAnnotation.Type)?.Kind === 'void'))) {
           reportType('rt-return-contract', clause, 'a result contract constrains a result this function declares it has none of');
           continue;
         }
@@ -28375,6 +28400,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * object type or an abstract method, are the contract every implementer
    * inherits, and are judged at the signature as a declaration's are.
    */
+  /**
+   * #sec-generic-where: a method's clause reads its receiver, typed as its
+   * class's instance, its object literal's type, or the interface or object
+   * type that declares the signature.
+   */
+  const receiverTypesInProgress = new Set<ParseNode>();
+  const declaredReceiverOf = (owner: ParseNode): Known | undefined => {
+    if (!/Method/.test(owner.type)) return undefined;
+    if (typeof (owner as { static?: unknown }).static === 'boolean') return (thisTypeFrames.at(-1) ?? undefined) as Known | undefined;
+    for (let p = (owner as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
+      if (p.type === 'ObjectLiteral') {
+        if (receiverTypesInProgress.has(p)) return undefined;
+        receiverTypesInProgress.add(p);
+        try {
+          return (staticType(p) ?? undefined) as Known | undefined;
+        } finally {
+          receiverTypesInProgress.delete(p);
+        }
+      }
+      if (p.type === 'InterfaceDeclaration') {
+        const name = (p as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+        return interfaceTypeOfNode(p, name ? interfaceDeclarations.get(name) : undefined);
+      }
+      if (p.type === 'ObjectType') return (resolveType(p as ParseNode.Type) ?? undefined) as Known | undefined;
+      if (/Function|Method|Class|Arrow/.test(p.type)) break;
+    }
+    return undefined;
+  };
   const walkSignatureClauses = (signature: ParseNode): void => {
     const clauses = (signature as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
     if (clauses.length === 0) return;
@@ -28395,7 +28448,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const resultAnnotation = (signature as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
       const result = resultAnnotation ? resolveType(resultAnnotation.Type) as Known | null : null;
-      walkDeclarationClauses(signature, clauses, { formals, valueParameters: valueTypeParameterNames(signature), returnType: result && result.Kind !== 'void' ? result : null });
+      walkDeclarationClauses(signature, clauses, { formals, valueParameters: valueTypeParameterNames(signature), returnType: result && result.Kind !== 'void' ? result : null, thisType: declaredReceiverOf(signature) });
+      if (signature.type === 'MethodSignature') recordDefaultWhereChecks(signature, clauses, parameters);
     } finally {
       frames.pop();
       if (pushedScope) typeParameterScopes.pop();
@@ -28411,7 +28465,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const names: string[] = [];
     const defaulted = new Map<string, TypeRecord>();
     for (const formal of formals) {
-      if (formal.type !== 'SingleNameBinding') return;
+      // A signature's parameter is a FunctionTypeParameter; its `this`
+      // parameter binds no name and takes no default.
+      if (formal.type === 'FunctionTypeParameter' && (formal as { IsThis?: boolean }).IsThis) continue;
+      const signatureParameter = formal.type === 'FunctionTypeParameter'
+        && !!(formal as { BindingIdentifier?: unknown }).BindingIdentifier && !(formal as { Rest?: boolean }).Rest;
+      if (formal.type !== 'SingleNameBinding' && !signatureParameter) return;
       const binding = formal as ParseNode.SingleNameBinding;
       names.push(binding.BindingIdentifier.name);
       const initializer = (binding as { Initializer?: ParseNode | null }).Initializer;
@@ -35005,7 +35064,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               errors.splice(mark);
             }
-            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' ? result as Known : null, thisType: /Method/.test(owner.type) ? thisTypeFrames.at(-1) ?? undefined : undefined });
+            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' ? result as Known : null, thisType: declaredReceiverOf(owner) });
             recordDefaultWhereChecks(owner, clauses, params ?? []);
           } finally {
             restoreFlow(beforeClauses);

@@ -1609,6 +1609,13 @@ function* InstantiateGenericAliasInContext(
     }
     const frame = new Map<string, TypeRecord>();
     argRecords = Q(yield* BindTypeArgumentRecordsInto(params, argRecords, argNames, frame, declaration.BindingIdentifier.name));
+    // A value generic binds as a value of its domain, as a function's or a
+    // class's does, so a clause reading it compares like with like.
+    for (const parameter of params) {
+      const name = parameter.BindingIdentifier?.name;
+      const bound = name ? frame.get(name) : undefined;
+      if (name && bound && (parameter as { IsValueParameter?: boolean }).IsValueParameter) Q(yield* BindTypeParameterTyped(frame, name, bound, parameter as never));
+    }
     // #sec-specialization-lists: an application of an alias family with CASES selects
     // its right-hand side as a class application selects its body - by the
     // function rule, once its arguments are closed, as they are here - and the
@@ -5152,6 +5159,13 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
             // Bound as the instantiation binds them: in the frame, and as an
             // environment a value parameter is read through.
             const frame = new Map(parameters.flatMap((parameter, index) => (applied[index] ? [[parameter.BindingIdentifier.name, applied[index]] as const] : [])));
+            // Converted here as well, whoever built the record, so a value
+            // parameter is read as a value of its domain.
+            for (const parameter of parameters) {
+              const name = parameter.BindingIdentifier.name;
+              const bound = frame.get(name);
+              if (bound && (parameter as { IsValueParameter?: boolean }).IsValueParameter) Q(yield* BindTypeParameterTyped(frame, name, bound, parameter as never));
+            }
             const context = surroundingAgent.runningExecutionContext;
             const prior = context.LexicalEnvironment;
             pushTypeParameterFrame(frame);

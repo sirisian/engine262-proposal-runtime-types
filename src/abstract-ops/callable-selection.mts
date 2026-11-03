@@ -727,6 +727,20 @@ export function* SelectExplicitCase(
   }
   const choice = step.value;
   if (choice.Kind === 'error') return Throw.TypeError('$1', Value(choice.Message));
+  // #sec-callable-overload-contracts: an owner's `where` clauses are part of
+  // the contract its attached declarations keep, so an application is held
+  // to them whichever declaration it selects.
+  const ownerNode = choice.Kind === 'owner' ? choice.Declaration
+    : (analysis as { Attached?: readonly { Owner: { Node: ParseNode }, Case: { Node: ParseNode } }[] }).Attached
+      ?.find((attached) => attached.Case.Node === choice.Declaration)?.Owner.Node;
+  const ownerBound = ownerNode ? boundOwners.get(ownerNode) : undefined;
+  if (ownerNode && ownerBound && ((ownerNode as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0) {
+    const ownerParameters = (ownerNode as Declaration).TypeParameters?.TypeParameterList ?? [];
+    const ownerFrame = Q(yield* TypedFrameOfBindings(ownerNode, ownerParameters.map((p, i) => ({ Capture: { Name: p.BindingIdentifier.name }, Value: ownerBound[i]! }))));
+    if (!Q(yield* CaseFilterHolds(fnOf(ownerNode), ownerFrame, classFrame))) {
+      return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+    }
+  }
   if (choice.Kind === 'owner') {
     const bound = boundOwners.get(choice.Declaration)!;
     const params = (choice.Declaration as Declaration).TypeParameters?.TypeParameterList ?? [];

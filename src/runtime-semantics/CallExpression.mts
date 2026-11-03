@@ -10,7 +10,7 @@ import { Throw } from '../host-defined/error-messages.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
-import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, BindTypeArgumentsInto, BindTypeParameterTyped } from '../type-system/runtime.mts';
 import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression, type TypeArgumentsCallTarget } from './RuntimeTypesDeclarations.mts';
 import { CaseGroupMembers, SelectExplicitCase, WithSelectedInvocation } from '../abstract-ops/callable-selection.mts';
 import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
@@ -1179,6 +1179,13 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // Constraints and defaults use the declaration's parameter environment;
       // written arguments still resolve in the caller before that scope opens.
       Q(yield* BindTypeArgumentsInto(params, typeArgs, frame, 'the call', func as never));
+      // A value generic binds as a value of its domain, as a class's does
+      // (#sec-type-parameters), so a clause reading it compares like with like.
+      for (const parameter of params) {
+        const name = parameter.BindingIdentifier?.name;
+        const bound = name ? frame.get(name) : undefined;
+        if (name && bound && (parameter as { IsValueParameter?: boolean }).IsValueParameter) Q(yield* BindTypeParameterTyped(frame, name, bound, parameter as never));
+      }
       // #sec-where-clauses: a `where` clause is "a compile-time-evaluable
       // Boolean expression over its parameters, checked at each specialization
       // once its parameters are bound. Where the expression is *false* for an
@@ -1213,10 +1220,33 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           // does; evaluated in the caller's environment, a method's own
           // parameter was "not defined" (round 5, Gap 10).
           const verdict = Q(yield* InCallableDeclarationContext(func, frame, classFrame, function* evaluateClauses(): ValueEvaluator {
+            const formals = new Set<string>();
+            const collectNames = (value: unknown): void => {
+              if (!value || typeof value !== 'object') return;
+              if (Array.isArray(value)) {
+                value.forEach(collectNames);
+                return;
+              }
+              const node = value as { type?: string, name?: string };
+              if (node.type === 'BindingIdentifier' && node.name) formals.add(node.name);
+              for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'Initializer'].includes(key)) collectNames(child);
+            };
+            collectNames((func as { FormalParameters?: unknown }).FormalParameters);
+            // A contract over the call's own values, its arguments, receiver or
+            // result, is checked at the call (#sec-checked-contracts), where they
+            // are bound; at the application none of them is yet.
+            const readsCallValues = (value: unknown): boolean => {
+              if (!value || typeof value !== 'object') return false;
+              if (Array.isArray(value)) return value.some(readsCallValues);
+              const node = value as { type?: string, name?: string };
+              if (node.type === 'ThisExpression' || node.type === 'ContractReturn' || node.type === 'SuperProperty') return true;
+              if (node.type === 'IdentifierReference' && node.name !== undefined && formals.has(node.name)) return true;
+              return Object.entries(node).some(([key, child]) => !['parent', 'location', 'sourceText'].includes(key) && readsCallValues(child));
+            };
             for (const clause of whereClauses) {
               if (GenericWhereVerified(clause, frame)) continue;
               const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
-              if (!predicate) {
+              if (!predicate || readsCallValues(predicate)) {
                 continue;
               }
               const result = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
