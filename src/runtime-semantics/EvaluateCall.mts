@@ -1,3 +1,4 @@
+import { CheckWhereCall } from '../type-system/where-predicates.mts';
 import { SameType } from '../type-system/relations.mts';
 import {
   NumberValue, ObjectValue, ReferenceRecord, ReferenceValue, TypedNumberValue, Value, isTypedNumber,
@@ -150,6 +151,8 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     const closed = substituteTypeParameters(expectedThis, currentTypeParameterFrame() ?? new Map())!;
     if (!Q(yield* IsOfType(thisValue, closed))) return Throw.TypeError('the receiver does not satisfy the declared this type');
   }
+  const invalidWhereCall = CheckWhereCall(callExpression, func);
+  if (invalidWhereCall) return invalidWhereCall;
   // 6. If tailPosition is true, perform PrepareForTailCall().
   if (tailPosition) {
     PrepareForTailCall();

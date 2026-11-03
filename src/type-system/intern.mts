@@ -332,9 +332,11 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   if (t.Kind === 'parameterized') {
     // #sec-aredisjoint decides a parameterization on its BASE, so a refinement
     // of the empty type is empty: metadata narrows a type's values and cannot
-    // add one.
+    // add one. A where callback nevertheless retains its public identity and
+    // reflection shape even when the base is empty.
     const Base = CanonicalizeType(t.Base, copies);
-    return isNeverRecord(Base) ? neverType : { ...t, Base, Metadata: NormalizeMetadataRecord(t.Metadata) };
+    return isNeverRecord(Base) && !Object.hasOwn(t.Metadata, 'where')
+      ? neverType : { ...t, Base, Metadata: NormalizeMetadataRecord(t.Metadata) };
   }
   if (t.Kind === 'primitive') {
     // A width or count is a plain number in canonical form, however it was

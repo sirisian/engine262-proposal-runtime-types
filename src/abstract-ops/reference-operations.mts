@@ -1,3 +1,4 @@
+import { CheckWhereDependencies } from '../type-system/where-predicates.mts';
 import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -104,6 +105,8 @@ function* referenceRunElement(run: ReferenceRunValue, key: Value): PlainEvaluato
 }
 
 export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
+  const invalidPredicate = CheckWhereDependencies();
+  if (invalidPredicate) return invalidPredicate;
   // `refs[k]` and `refs.length` on a ref run read through the location.
   if (V instanceof ReferenceRecord && V.Base instanceof ReferenceRunValue) {
     const element = Q(yield* referenceRunElement(V.Base, V.ReferencedName as Value));

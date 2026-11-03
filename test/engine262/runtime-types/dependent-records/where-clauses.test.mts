@@ -92,8 +92,8 @@ test('where: an independent field assignment is not checked, so an object may be
 });
 
 // -- Identity: a where clause gives the alias declaration identity -------------
-test('where: a dependent record type is nominal, a plain alias is structural', () => {
-  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('primitive');
+test('where: a dependent record carries predicate metadata, a plain alias is structural', () => {
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('parameterized');
   expect(evaluated('type Plain = { a: uint8 }; Reflect.getReflection(Plain).kind;')).toBe('object');
 });
 
@@ -153,10 +153,8 @@ test('functions without where clauses are unaffected', () => {
 
 test('dependent records: a where clause makes the alias a dependent record type', () => {
   expect(evaluated('type Pos = { a: uint8 } where this.a > 0; typeof Pos;')).toBe('object');
-  // A where clause gives the alias declaration identity, so it resolves to a
-  // nominal type (which reflects as 'primitive', as every nominal type does)
-  // rather than the transparent structural object a plain alias resolves to.
-  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('primitive');
+  // Predicate identity distinguishes the parameterization from its base.
+  expect(evaluated('type Pos = { a: uint8 } where this.a > 0; Reflect.getReflection(Pos).kind;')).toBe('parameterized');
   expect(evaluated('type Plain = { a: uint8 }; Reflect.getReflection(Plain).kind;')).toBe('object');
 });
 

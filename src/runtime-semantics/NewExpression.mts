@@ -1,3 +1,4 @@
+import { CheckWhereCall } from '../type-system/where-predicates.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
 import { SetPendingProxyRuntimeType } from '../intrinsics/Proxy.mts';
@@ -190,8 +191,10 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     // The instance takes the placement as it is CREATED, before its fields are
     // initialized, so the constructor writes into the buffer rather than into
     // properties that would then have to be moved and could not be deleted.
-    SetPendingPlacement(placementBacking);
   }
+  const invalidWhereCall = CheckWhereCall(newExpression, constructor);
+  if (invalidWhereCall) return invalidWhereCall;
+  if (placementBacking !== undefined) SetPendingPlacement(placementBacking);
   // 8. Return ? Construct(constructor, argList).
   let completion;
   // The context is handed to [[Construct]] as the placement is: set just

@@ -113,6 +113,7 @@ function propertyContextualType(contextual: TypeRecord | null | undefined, key: 
   if (!contextual || !(key instanceof JSStringValue)) {
     return null;
   }
+  while (contextual.Kind === 'parameterized') contextual = contextual.Base;
   const shape = contextual.Kind === 'object'
     ? contextual
     : (contextual.Kind === 'nominal' && contextual.Structure

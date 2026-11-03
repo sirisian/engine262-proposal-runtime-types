@@ -1,3 +1,4 @@
+import { SourceWhereType } from '../type-system/runtime.mts';
 import { RegisterFunctionTypeParameterScope, copyTypeParameterFrame, bindTypeParameter, implicitFalseDefaultMatches } from '../type-system/runtime.mts';
 import { DeclaredMemberImplements } from '../type-system/implements-member.mts';
 import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
@@ -243,12 +244,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', Value(name.stringValue()), Value(cycle));
       }
       if (node.WhereClauses && node.WhereClauses.length > 0) {
-        // proposal-runtime-types (dependentrecordtypes.md): a `where` clause
-        // makes this a dependent record type. Its identity is the declaration's
-        // (two textually identical `where` blocks are two types), so it binds as
-        // a nominal type whose structure is the base record; the predicates ride
-        // on the declaration and are checked at every boundary by IsOfType.
-        aliasContext = { Kind: 'nominal', Declaration: node, Arguments: [], Structure: record };
+        aliasContext = Q(yield* SourceWhereType(record, node.WhereClauses));
         value = GetTypeObject(aliasContext);
       } else {
         value = GetTypeObject(record);

@@ -463,6 +463,17 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
  * operands do not mix. Relational operators reach it through the same door as
  * arithmetic ones, because it is the same rule and a second copy would drift.
  */
+/** Where has no numeric operator block. Ordinary arithmetic sheds its
+ * predicate, as it sheds any meta portion whose operator defaults to empty. */
+function arithmeticUnderlyingOf(t: TypeRecord): TypeRecord {
+  t = UnderlyingOf(t);
+  if (t.Kind !== 'parameterized' || !Object.hasOwn(t.Metadata, 'where')) return t;
+  const metadata = { ...t.Metadata };
+  delete (metadata as { where?: unknown }).where;
+  const base = arithmeticUnderlyingOf(t.Base);
+  return Reflect.ownKeys(metadata).length === 0 ? base : { ...t, Base: base, Metadata: metadata };
+}
+
 export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypeRecord | ThrowCompletion {
   // proposal-runtime-types #sec-enums: an operand of an enum type is read at its
   // UNDERLYING type here, which is what the clause means by "an enum can be used
@@ -471,8 +482,8 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
   // `C.One + C.Two` are both of type `C`, and the rule of the enclosing clause
   // would give the result that type - but an enum's values are exactly its
   // enumerators, and the sum need not be one of them.
-  const xt = x instanceof TypedNumberValue ? UnderlyingOf((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
-  const yt = y instanceof TypedNumberValue ? UnderlyingOf((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const xt = x instanceof TypedNumberValue ? arithmeticUnderlyingOf((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const yt = y instanceof TypedNumberValue ? arithmeticUnderlyingOf((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
   // `bigint` is a numeric type like any other here, so a typed value does not
   // mix with one. The arithmetic operators reach the same verdict by a
   // different road - they fall through to the standard path, which raises the
@@ -530,7 +541,7 @@ export function typedUnary(op: '~', x: TypedNumberValue): TypedNumberValue | Thr
 export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue | ThrowCompletion {
   // The enum rule of TypedOperandType, at the unary operators: `-C.One` computes
   // in the underlying type and is a value of it.
-  const t = UnderlyingOf(x.TypeRecord as TypeRecord);
+  const t = arithmeticUnderlyingOf(x.TypeRecord as TypeRecord);
   // proposal-runtime-types #table-family-operations: a binary floating-point type
   // "does not define bitwiseNOT, the shifts, and the bitwise operations, since
   // each would require converting the operand to an integer type". `typedBinary`
@@ -561,8 +572,8 @@ export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue
  * types that differ; *undefined* otherwise, leaving the ordinary rule.
  */
 function ShiftDistanceExemptTarget(x: TypedNumberValue, y: TypedNumberValue): TypeRecord | undefined {
-  const xt = UnderlyingOf(x.TypeRecord as TypeRecord);
-  const yt = UnderlyingOf(y.TypeRecord as TypeRecord);
+  const xt = arithmeticUnderlyingOf(x.TypeRecord as TypeRecord);
+  const yt = arithmeticUnderlyingOf(y.TypeRecord as TypeRecord);
   const integer = (t: TypeRecord) => t.Kind === 'primitive' && (t.Name === 'int' || t.Name === 'uint');
   return integer(xt) && integer(yt) && !SameType(xt, yt) ? xt : undefined;
 }

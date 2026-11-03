@@ -1,3 +1,5 @@
+import { bootstrapWhere } from '../intrinsics/Where.mts';
+import { RememberWhereLibrary } from '../type-system/where-predicates.mts';
 import { RememberLibraryOperations } from '../type-system/library-operation-origin.mts';
 import { AddRestrictedFunctionProperties, type Intrinsics } from '../abstract-ops/realms.mts';
 import { RegisterGenericBuiltin } from '../type-system/generic-builtins.mts';
@@ -275,6 +277,7 @@ export function CreateIntrinsics(realmRec: Realm) {
   // proposal-runtime-types: a meta type this specification declares rather than
   // a program. Needs %Type.prototype% too, so it follows it.
   bootstrapStringPattern(realmRec);
+  bootstrapWhere(realmRec);
   bootstrapBrand(realmRec);
 
   bootstrapMath(realmRec);
@@ -339,6 +342,7 @@ export function CreateIntrinsics(realmRec: Realm) {
   AddRestrictedFunctionProperties(intrinsics['%Function.prototype%'], realmRec);
 
   RememberLibraryOperations(realmRec);
+  RememberWhereLibrary(realmRec);
   return intrinsics;
 }
 

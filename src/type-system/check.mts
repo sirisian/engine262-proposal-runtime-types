@@ -7137,6 +7137,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   /** The base a refinement narrows, or null where _t_ is not a refinement. */
   const refinementBaseOf = (t: TypeRecord): TypeRecord | null => {
+    if (t.Kind === 'parameterized' && Object.hasOwn(t.Metadata, 'where')) return t.Base;
     if (t.Kind !== 'nominal') return null;
     const refined = t as unknown as { Declaration?: { type?: string, WhereClauses?: readonly unknown[] | null }, Structure?: TypeRecord };
     return refined.Declaration?.type === 'TypeAliasDeclaration' && (refined.Declaration.WhereClauses?.length ?? 0) > 0 && refined.Structure

@@ -110,6 +110,10 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTabl
         return;
       }
       reachable.add(value);
+      if (value.Kind === 'nominal') {
+        collect(value.Arguments);
+        return;
+      }
       for (const nested of Object.values(value)) {
         collect(nested);
       }

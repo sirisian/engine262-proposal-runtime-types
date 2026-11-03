@@ -1,3 +1,5 @@
+import { CreateBuiltinFunction } from '../abstract-ops/function-operations.mts';
+import { RegisterSourceWherePredicate, BeginWhereDefaultObservation, EndWhereDefaultObservation, IsAdmittedWherePredicate, AdmitWherePredicate } from './where-predicates.mts';
 import { PreferredConstructionAlternative, type ConstructionSelections } from './result-dependencies.mts';
 import type { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import { Assert } from '../abstract-ops/notational-conventions.mts';
@@ -1651,7 +1653,7 @@ function* InstantiateGenericAliasInContext(
       [...params, ...selectedDeclaration?.TypeParameters?.Captures ?? []], frame);
     typeParameterFrames.push(frame);
     try {
-      const body = Q(yield* TypeNodeToTypeRecord(selectedType));
+      let body = Q(yield* TypeNodeToTypeRecord(selectedType));
       expansion.result = body;
       if (!formation.entries.some((entry) => entry.placeholder === body)) tieAliasKnot(expansion.placeholder, body);
       // The BACKSTOP. #sec-generic-where:
@@ -1673,8 +1675,9 @@ function* InstantiateGenericAliasInContext(
       const clauses = (declaration as { type?: string, WhereClauses?: readonly ParseNode.WhereClause[] | null }).type === 'TypeAliasDeclaration'
         ? (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
         : null;
-      if (clauses && clauses.length > 0 && !mentionsThis(clauses)) {
+      if (clauses && clauses.length > 0) {
         for (const clause of clauses) {
+          if (mentionsThis([clause])) continue;
           if (GenericWhereVerified(clause, frame)) continue;
           const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, Value.undefined));
           if (holds === false) {
@@ -1692,25 +1695,31 @@ function* InstantiateGenericAliasInContext(
           }
         }
       }
+      const refinements = clauses?.filter((clause) => mentionsThis([clause]));
+      if (refinements?.length) {
+        // Tie recursive edges to the refined type, not only to its bare shape.
+        // Keep the body separate from its placeholder so the wrapper's base
+        // does not accidentally become the wrapper itself.
+        body = Q(yield* SourceWhereType(body, refinements, priorEnvironment));
+        expansion.result = body;
+        tieAliasKnot(expansion.placeholder, body);
+      }
       if (!enclosing) {
         const unproductive = CompleteAliasFormation(formation);
         if (unproductive) return Throw.TypeError('$1 is defined as itself, so it denotes no type', Value(unproductive.declaration.BindingIdentifier.name));
         for (const entry of formation.entries) {
+          // Refinement wrappers are transparent for productivity. A cycle of
+          // bases alone supplies no representation to refine.
+          const bases = new Set<TypeRecord>();
+          let base = entry.placeholder;
+          while (base.Kind === 'parameterized') {
+            if (bases.has(base)) return Throw.TypeError('$1 is defined as itself, so it denotes no type', Value(entry.declaration.BindingIdentifier.name));
+            bases.add(base);
+            base = base.Base;
+          }
           const cycle = FirstInlineCycle(entry.placeholder);
           if (cycle !== null) return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', Value(entry.declaration.BindingIdentifier.name), Value(cycle));
         }
-      }
-      // #sec-where-clauses: an application of a generic alias whose clause
-      // reads `this` is a generic dependent record type, the applied body
-      // refined by the declaration's predicate under these arguments. It binds
-      // as a nominal record carrying the declaration and the arguments, which
-      // the boundary check substitutes and runs the clauses under.
-      if (!enclosing && clauses && clauses.length > 0 && mentionsThis(clauses)) {
-        // The arguments as the frame binds them, converted into each
-        // parameter's domain, so the boundary reads what this instantiation read.
-        const bound = params.map((parameter) => frame.get(parameter.BindingIdentifier.name));
-        const applied = bound.every((record) => record !== undefined) ? bound as TypeRecord[] : argRecords;
-        return { Kind: 'nominal', Declaration: declaration, Arguments: applied, Structure: expansion.placeholder } as unknown as TypeRecord;
       }
       return enclosing ? body : expansion.placeholder;
     } finally {
@@ -3849,8 +3858,16 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       if (d === undefined) {
         return undefined;
       }
-      const crossed = EnsureCompletion(yield* CrossBareValueIntoParameterization(d, t));
+      const whereOutcome = { abrupt: new Set<Value>() };
+      BeginWhereDefaultObservation(whereOutcome);
+      let crossed;
+      try {
+        crossed = EnsureCompletion(yield* CrossBareValueIntoParameterization(d, t, whereOutcome));
+      } finally {
+        EndWhereDefaultObservation();
+      }
       if (crossed.Type === 'throw') {
+        if (whereOutcome.abrupt.has(crossed.Value)) return crossed;
         // "If _crossed_ is an abrupt completion, return ~none~": a type whose
         // zero cannot cross has no default, and the caller reports THAT - a
         // declaration needing an initializer - rather than the crossing's own
@@ -4141,6 +4158,55 @@ export function* EvaluateRefinementPredicate(predicate: ParseNode.RefinementPred
   if (core.type === 'MatchExpression') implicitFalseDefaultMatches.add(core);
   const result = Q(yield* EvaluatePredicateExpression(predicate, value));
   return ToBoolean(result) === Value.true;
+}
+
+/** Source predicates capture declaration activation, private environment and
+ * generic arguments. Re-resolving one application reuses its callback; another
+ * activation or argument list gets its own identity. No callback is evaluated
+ * while the type is being constructed. */
+const sourceWhereCache = new WeakMap<EnvironmentRecord, Map<ParseNode.WhereClause, {
+  frame: ReadonlyMap<string, TypeRecord>, predicate: ObjectValue,
+}[]>>();
+export function* SourceWhereType(base: TypeRecord, clauses: readonly ParseNode.WhereClause[],
+  identityEnvironment: EnvironmentRecord = surroundingAgent.runningExecutionContext.LexicalEnvironment): PlainEvaluator<TypeRecord> {
+  const context = surroundingAgent.runningExecutionContext;
+  const environment = context.LexicalEnvironment;
+  const privateEnvironment = context.PrivateEnvironment;
+  const frame = new Map(currentTypeParameterFrame());
+  let cache = sourceWhereCache.get(identityEnvironment);
+  if (!cache) { cache = new Map(); sourceWhereCache.set(identityEnvironment, cache); }
+  for (const clause of clauses) {
+    const entries = cache.get(clause) ?? [];
+    let predicate = entries.find((entry) => entry.frame.size === frame.size
+      && [...frame].every(([name, record]) => entry.frame.has(name) && SameType(entry.frame.get(name)!, record)))?.predicate;
+    if (!predicate) {
+      predicate = X(CreateBuiltinFunction(function* ([candidate = Value.undefined]) {
+        const running = surroundingAgent.runningExecutionContext;
+        const savedEnvironment = running.LexicalEnvironment;
+        const savedPrivate = running.PrivateEnvironment;
+        const savedFrames = typeParameterFrames.splice(0);
+        running.LexicalEnvironment = environment;
+        running.PrivateEnvironment = privateEnvironment;
+        pushTypeParameterFrame(new Map(frame));
+        try {
+          const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, candidate));
+          return holds ? Value.true : Value.false;
+        } finally {
+          running.LexicalEnvironment = savedEnvironment;
+          running.PrivateEnvironment = savedPrivate;
+          typeParameterFrames.splice(0, typeParameterFrames.length, ...savedFrames);
+        }
+      }, 1, Value('where'), [], context.Realm));
+      const invalid = RegisterSourceWherePredicate(predicate, clause, environment, context.Realm);
+      if (invalid) return invalid;
+      entries.push({ frame, predicate });
+      cache.set(clause, entries);
+    } else {
+      Q(yield* AdmitWherePredicate(predicate));
+    }
+    base = { Kind: 'parameterized', Base: base, Metadata: Object.freeze({ where: predicate }) };
+  }
+  return base;
 }
 
 /**
@@ -5800,6 +5866,10 @@ export function ProjectMetadataObjectFromType(t: TypeRecord, base?: TypeRecord):
   const fields: Record<string | symbol, unknown> = Object.create(null);
   let pending = false;
   for (const property of t.Properties) {
+    if (property.key === 'where' && property.type.Kind === 'literal' && IsAdmittedWherePredicate(property.type.Value)) {
+      fields.where = property.type.Value;
+      continue;
+    }
     const owner = MetaTypeClaiming(property.key);
     let shape = owner ? MetadataShape(owner, base) : undefined;
     if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
@@ -6621,9 +6691,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
             }
             if (forward !== placeholder) {
               tieAliasKnot(placeholder, forward);
-              return aliasDeclaration.WhereClauses && aliasDeclaration.WhereClauses.length > 0
-                ? { Kind: 'nominal', Declaration: aliasDeclaration, Arguments: [], Structure: placeholder }
-                : placeholder;
+              if (aliasDeclaration.WhereClauses?.length) return Q(yield* SourceWhereType(placeholder, aliasDeclaration.WhereClauses, ref.Base instanceof EnvironmentRecord ? ref.Base : undefined));
+              return placeholder;
             }
           }
         }

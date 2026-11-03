@@ -1414,7 +1414,16 @@ function numericMetadataText(value: unknown, forDisplay = false): string | undef
   return undefined;
 }
 
+const metadataFunctionIdentities = new WeakMap<object, number>();
+let nextMetadataFunctionIdentity = 0;
+function metadataFunctionIdentity(value: object): number {
+  let identity = metadataFunctionIdentities.get(value);
+  if (identity === undefined) { identity = nextMetadataFunctionIdentity++; metadataFunctionIdentities.set(value, identity); }
+  return identity;
+}
+
 function metadataOrderKey(m: unknown): string {
+  if (m instanceof Value && 'Call' in m) return `function:${metadataFunctionIdentity(m)}`;
   const numeric = numericMetadataText(m);
   if (numeric !== undefined) return `numeric:${numeric}`;
   if (m === null || m === undefined) {
@@ -1881,6 +1890,7 @@ function displayTypeWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
 }
 
 function displayMetadataValue(m: unknown): string {
+  if (m instanceof Value && 'Call' in m) return '[where predicate]';
   const numeric = numericMetadataText(m, true);
   if (numeric !== undefined) return numeric;
   if (m === null || m === undefined) {

@@ -92,7 +92,7 @@ export interface Artifact {
  * matters is whether the RULES changed, and a release that changes no rule
  * should not invalidate every artifact in existence.
  */
-export const SEMANTICS_ID = 'proposal-runtime-types/1';
+export const SEMANTICS_ID = 'proposal-runtime-types/2';
 
 /**
  * Whether a record carries an unbound type parameter anywhere.
@@ -135,6 +135,26 @@ function carriesUnboundParameter(record: unknown): boolean {
     return Object.entries(node).some(([key, child]) => key !== 'Declaration' && walk(child));
   };
   return walk(record);
+}
+
+/** Function identity plus its lexical environment cannot be reproduced by the
+ * current wire format. Omit the export, including predicates nested in shapes,
+ * rather than silently weakening its contract to the base. */
+function carriesWherePredicate(root: unknown): boolean {
+  const seen = new Set<object>();
+  const walk = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object' || seen.has(node)) return false;
+    seen.add(node);
+    if (isTypeObject(node)) return walk(node.TypeRecord);
+    if (node instanceof Value) return false;
+    if (Array.isArray(node)) return node.some(walk);
+    const record = node as { Kind?: string, Metadata?: object, Arguments?: unknown };
+    if (record.Kind === 'parameterized' && record.Metadata && Object.hasOwn(record.Metadata, 'where')) return true;
+    if (record.Kind === 'nominal') return walk(record.Arguments);
+    if (Object.getPrototypeOf(node) !== Object.prototype && Object.getPrototypeOf(node) !== null) return false;
+    return Object.entries(node).some(([key, value]) => key !== 'Declaration' && walk(value));
+  };
+  return walk(root);
 }
 
 /**
@@ -220,12 +240,15 @@ function produceArtifact(module: unknown): Artifact | undefined {
   // refusal answer first reports an encoding gap where the clause has a rule.
   const skipped: Record<string, string> = {};
   for (const [name, type] of [...roots]) {
-    if (carriesUnboundParameter(type)) {
+    if (carriesWherePredicate(type)) {
+      skipped[name] = 'a where predicate whose function identity and lexical environment cannot be encoded';
+      roots.delete(name);
+    } else if (carriesUnboundParameter(type)) {
       skipped[name] = 'an unbound type parameter, which stands for the consumer\'s type';
       roots.delete(name);
     }
   }
-  if (roots.size === 0) {
+  if (roots.size === 0 && Object.keys(skipped).length === 0) {
     // Nothing to precompute. An empty artifact is worse than none: a consumer
     // would verify a hash and read nothing.
     return undefined;

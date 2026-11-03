@@ -1,3 +1,5 @@
+import { AdmitWherePredicate, EvaluateWherePredicate } from '../type-system/where-predicates.mts';
+import { IsWhereMetaType } from '../intrinsics/Where.mts';
 import { FunctionTypeParameterDeclarations, bindTypeParameter, markValueParameterBinding } from '../type-system/runtime.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
@@ -656,6 +658,7 @@ export function StructuralStorageEstablished(value: Value, type: TypeRecord): bo
   if (!(value instanceof ObjectValue)) return true;
   if (type.Kind === 'reference' || type.Kind === 'any') return true;
   if (type.Kind === 'shared') return StructuralStorageEstablished(value, type.Target);
+  if (type.Kind === 'parameterized' && Object.hasOwn(type.Metadata, 'where')) return StructuralStorageEstablished(value, type.Base);
   if (type.Kind === 'intersection') return type.Members.every((member) => StructuralStorageEstablished(value, member));
   if (type.Kind === 'union') {
     const current = RuntimeTypeOf(value);
@@ -2364,6 +2367,16 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // is entered by converting to the primitive and then checking the refinement
   // (round 5 follow-up, Q17): `(5 := P)` for `type P = uint8 where this > 2`
   // used to fail, because the number was checked against P unconverted.
+  if (t.Kind === 'parameterized' && Object.hasOwn(t.Metadata, 'where')
+      && t.Base.Kind === 'primitive' && !(value instanceof ObjectValue) && !refinedConversionsInProgress.has(t)) {
+    refinedConversionsInProgress.add(t);
+    try {
+      const converted = Q(yield* convertChecked(value, t.Base));
+      return Q(yield* RequireType(converted, t, sequenceObservation, choices, observations));
+    } finally {
+      refinedConversionsInProgress.delete(t);
+    }
+  }
   if (t.Kind === 'nominal') {
     const refined = t as unknown as { Declaration?: { type?: string, WhereClauses?: readonly unknown[] | null }, Structure?: TypeRecord };
     if (refined.Declaration?.type === 'TypeAliasDeclaration' && (refined.Declaration.WhereClauses?.length ?? 0) > 0
@@ -2988,8 +3001,9 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // identity goes through nominal admission; interfaces retain this shape path.
   const isClassType = t.Kind === 'nominal'
     && (t.Declaration.type === 'ClassDeclaration' || t.Declaration.type === 'ClassExpression');
-  const resolvedShape = t.Kind === 'nominal' && t.Structure && !isClassType
+  let resolvedShape = t.Kind === 'nominal' && t.Structure && !isClassType
     ? SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments) : t;
+  while (resolvedShape.Kind === 'parameterized' && Object.hasOwn(resolvedShape.Metadata, 'where')) resolvedShape = resolvedShape.Base;
   const objectShape = resolvedShape.Kind === 'object' ? resolvedShape : null;
   if (objectShape !== null && value instanceof ObjectValue && Q(IsArray(value)) === Value.false) {
     // proposal-runtime-types #table-check-sites: "a boundary is where a value
@@ -3675,6 +3689,10 @@ export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordD
           const desc = Q(yield* task.value.GetOwnProperty(key));
           if (!(desc instanceof Descriptor) || desc.Enumerable !== Value.true) continue;
           const child = Q(yield* Get(task.value, key));
+          if (recordRoot && task.value === value && key instanceof JSStringValue && key.stringValue() === 'where') {
+            task.out.where = Q(yield* AdmitWherePredicate(child));
+            continue;
+          }
           tasks.push({ kind: 'value', value: child, store: (snapshot) => {
             task.out[MetadataStorageKey(key instanceof JSStringValue ? key.stringValue() : key)] = snapshot;
           } });
@@ -4631,7 +4649,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
  * nothing of that meta type and a cast supplies what it lacks". Membership is
  * not among them, which is what makes `let w: T;` and `let w: T = 0;` agree.
  */
-export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord & { Kind: 'parameterized' }): ValueEvaluator {
+export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord & { Kind: 'parameterized' }, whereOutcome?: { abrupt: globalThis.Set<Value> }): ValueEvaluator {
   // The second way through, tried first because it is the one that can supply
   // what the value lacks; RequireTypeAfterCast then runs `validate` over the
   // result, which is what the cast costs.
@@ -4651,6 +4669,18 @@ export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord 
     // because the parameter was `Value` and the body tests
     // `typeof metadata !== 'object'`; both mean absence, and this one says so
     // in the slot's own language.
+    if (IsWhereMetaType(metaType)) {
+      const predicate = (t.Metadata as { where?: ObjectValue }).where;
+      if (predicate) {
+        const verdict = EnsureCompletion(yield* EvaluateWherePredicate(predicate, value));
+        if (verdict.Type !== 'normal') {
+          if (whereOutcome) whereOutcome.abrupt.add(verdict.Value);
+          return verdict;
+        }
+        if (!verdict.Value) return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+      }
+      continue;
+    }
     const fp = MetadataPortion(EMPTY_METADATA, metaType);
     const tp = MetadataPortion(t.Metadata, metaType);
     const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp], t.Base));
