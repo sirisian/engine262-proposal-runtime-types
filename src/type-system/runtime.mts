@@ -4099,6 +4099,9 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
  * machinery a class field initializer uses to evaluate an expression with `this`
  * bound to the instance.
  */
+/** The `match` expressions written as a refinement predicate, which answer `false` where no clause matches. */
+export const implicitFalseDefaultMatches = new WeakSet<object>();
+
 function* EvaluatePredicateExpression(expression: ParseNode.AssignmentExpressionOrHigher, value: Value): PlainEvaluator<Value> {
   const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   const privateScope = surroundingAgent.runningExecutionContext.PrivateEnvironment;
@@ -4115,6 +4118,10 @@ function* EvaluatePredicateExpression(expression: ParseNode.AssignmentExpression
   // present. A dummy satisfies it; it is read only when the body is an anonymous
   // function definition, which a boolean predicate is not.
   (fn as { ClassFieldInitializerName: Value }).ClassFieldInitializerName = Value('');
+  // #sec-where-clauses: the predicate reads the tested value itself as
+  // `this`, never a boxed copy, whatever the strictness of the code around it.
+  (fn as unknown as { ThisMode: string }).ThisMode = 'strict';
+  (fn as unknown as { Strict: boolean }).Strict = true;
   return Q(yield* EvaluateWithTypeBudget('a refinement predicate', Call(fn, value, [])));
 }
 
@@ -4136,6 +4143,11 @@ export function* EvaluateRefinementPredicate(predicate: ParseNode.RefinementPred
     }
     return true;
   }
+  // #sec-where-clauses: a `match` in this position carries an implicit
+  // `default: false;`, so a value no clause matches is not of the type.
+  let core = predicate as ParseNode;
+  while (core.type === 'ParenthesizedExpression') core = (core as unknown as { Expression: ParseNode }).Expression;
+  if (core.type === 'MatchExpression') implicitFalseDefaultMatches.add(core);
   const result = Q(yield* EvaluatePredicateExpression(predicate, value));
   return ToBoolean(result) === Value.true;
 }

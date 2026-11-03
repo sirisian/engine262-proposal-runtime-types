@@ -20542,6 +20542,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return undefined;
     }
     const choice = step.value;
+    // #sec-callable-overload-contracts: an owner's clauses hold every
+    // application of its family, whichever declaration it selects, so a
+    // constant application they reject is refused where it is written. A
+    // bodyless owner method is found beside the selected method.
+    if (choice.Kind !== 'error') {
+      const besideOwner = (declaration: ParseNode): ParseNode | undefined => {
+        const d = declaration as { type?: string, parent?: object, static?: boolean, ClassElementName?: { name?: string } | null };
+        const ownerName = d.ClassElementName?.name;
+        if (d.type !== 'MethodDefinition' || !d.parent || ownerName === undefined) return undefined;
+        const siblings = Object.values(d.parent).find((v) => Array.isArray(v) && v.includes(declaration)) as readonly ParseNode[] | undefined;
+        return siblings?.find((s) => s.type === 'AbstractMethodDefinition' && !!(s as { BodylessOwner?: boolean }).BodylessOwner
+          && (s as { ClassElementName?: { name?: string } | null }).ClassElementName?.name === ownerName && !!(s as { static?: boolean }).static === !!d.static);
+      };
+      const ownerNode = choice.Kind === 'owner' ? choice.Declaration as ParseNode
+        : (analysis.Attached.find((a) => a.Case.Node === choice.Declaration)?.Owner.Node as ParseNode | undefined) ?? besideOwner(choice.Declaration as ParseNode);
+      const ownerClauses = (ownerNode as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
+      const ownerParams = (ownerNode as D | undefined)?.TypeParameters?.TypeParameterList ?? [];
+      const ownerBound = ownerNode ? boundOwners.get(ownerNode) ?? (args.length === ownerParams.length ? args : undefined) : undefined;
+      if (ownerNode && ownerClauses.length > 0 && ownerBound && ownerBound.every((b) => !!b && !mentionsTypeParameter(b as TypeRecord))) {
+        recordWhereCheck(node, ownerNode as unknown as GenericWhereCheck['declaration'],
+          new Map(ownerParams.map((p, i) => [p.BindingIdentifier.name, ownerBound[i] as TypeRecord] as const)));
+      }
+    }
     if (choice.Kind === 'owner') {
       const bound = boundOwners.get(choice.Declaration)!;
       const params = (choice.Declaration as D).TypeParameters?.TypeParameterList ?? [];
@@ -28376,7 +28399,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const family = declaration.type === 'ClassDeclaration' ? /^ClassDeclaration$/ : /^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration)$/;
       return (list ?? []).map(unwrap).filter((item) => family.test(item.type) && nameOf(item) === name).length > 1;
     }
-    if (/Method/.test(declaration.type) || declaration.type === 'MethodDefinition') {
+    if (/Method|OperatorDefinition/.test(declaration.type) || declaration.type === 'MethodDefinition') {
       let owner = declaration.parent as ParseNode | undefined;
       while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression' && owner.type !== 'ObjectLiteral') owner = owner.parent as ParseNode | undefined;
       if (!owner) return false;
@@ -28407,7 +28430,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const receiverTypesInProgress = new Set<ParseNode>();
   const declaredReceiverOf = (owner: ParseNode): Known | undefined => {
-    if (!/Method/.test(owner.type)) return undefined;
+    if (!/Method|OperatorDefinition/.test(owner.type)) return undefined;
     if (typeof (owner as { static?: unknown }).static === 'boolean') return (thisTypeFrames.at(-1) ?? undefined) as Known | undefined;
     for (let p = (owner as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
       if (p.type === 'ObjectLiteral') {
@@ -35029,7 +35052,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const clauses = (owner as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
         if (owner && clauses.length > 0) {
           let classNode: ParseNode | undefined;
-          if (/Method/.test(owner.type)) {
+          if (/Method|OperatorDefinition/.test(owner.type)) {
             classNode = owner.parent as ParseNode | undefined;
             while (classNode && classNode.type !== 'ClassDeclaration' && classNode.type !== 'ClassExpression' && classNode.type !== 'ObjectLiteral') classNode = classNode.parent as ParseNode | undefined;
             if (classNode?.type === 'ObjectLiteral') classNode = undefined;

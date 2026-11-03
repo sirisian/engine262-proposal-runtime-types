@@ -1476,6 +1476,9 @@ export abstract class TypeParser extends ExpressionParser {
       if (this.test(Token.COLON)) {
         node.TypeAnnotation = this.parseTypeAnnotation(true);
       }
+      if (this.test('where')) {
+        (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
+      }
       if (this.test(Token.LBRACE)) {
         this.scope.with({
           lexical: true, variable: true, variableFunctions: true, await: false, yield: true, newTarget: false,
@@ -1533,6 +1536,11 @@ export abstract class TypeParser extends ExpressionParser {
         if (this.test(Token.COLON)) {
           node.TypeAnnotation = this.parseTypeAnnotation(true);
         }
+        // #sec-generic-where: an operator definition takes clauses as a method
+        // does, over its operands, its receiver and its result.
+        if (this.test('where')) {
+          (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
+        }
         if (this.test(Token.LBRACE)) {
           node.FunctionBody = this.parseFunctionBody(false, false, false) as ParseNode.FunctionBody;
         } else {
@@ -1589,6 +1597,11 @@ export abstract class TypeParser extends ExpressionParser {
           if (this.test(Token.COLON)) {
             node.TypeAnnotation = this.parseTypeAnnotation(true);
           }
+          // #sec-generic-where: an operator definition takes clauses as a method
+          // does, over its operands, its receiver and its result.
+          if (this.test('where')) {
+            (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
+          }
           if (this.test(Token.LBRACE)) {
             node.FunctionBody = this.parseFunctionBody(false, false, false) as ParseNode.FunctionBody;
           } else {
@@ -1629,6 +1642,9 @@ export abstract class TypeParser extends ExpressionParser {
         }
         if (this.test(Token.COLON)) {
           node.TypeAnnotation = this.parseTypeAnnotation(true);
+        }
+        if (this.test('where')) {
+          (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
         }
         this.scope.with({
           lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,

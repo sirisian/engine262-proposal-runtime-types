@@ -14,11 +14,7 @@ test('a value whose clause answers true is of the type', () => {
   expect(evaluated(`${ORDER} var v: any = { status: "open", total: (1 := uint32) }; String(v is Order);`)).toBe('true');
 });
 
-// Pinned as `test.fails`: the engine does not apply the implicit `default: false;`, so the
-// `match` throws "matched no clause of this match" out of the predicate and `is` throws
-// instead of answering false. (A value that is structurally invalid answers false only
-// because the predicate is never reached.) Flips to `test` when the implicit default applies.
-test.fails('a value no clause matches is not of the type: is answers false', () => {
+test('a value no clause matches is not of the type: is answers false', () => {
   expect(evaluated(`${ORDER} var v: any = { status: "done", total: (1 := uint32) }; String(v is Order);`)).toBe('false');
 });
 

@@ -647,6 +647,18 @@ export function* WithSelectedInvocation(fn: Value, body: () => ValueEvaluator): 
  * The choice for `f.<typeArguments>(...)` over the group _members_, or a throw
  * completion when no overload applies or the applicable cases are ambiguous.
  */
+/** The bodyless owner method declared beside _declaration_ in its class body, if any. */
+function bodylessOwnerMethodOf(declaration: unknown): Declaration | undefined {
+  const d = declaration as { type?: string, parent?: object, static?: boolean, ClassElementName?: { name?: string } | null };
+  const name = d.ClassElementName?.name;
+  if (d.type !== 'MethodDefinition' || !d.parent || name === undefined) return undefined;
+  const siblings = Object.values(d.parent).find((v) => Array.isArray(v) && v.includes(declaration)) as readonly unknown[] | undefined;
+  return siblings?.find((s) => {
+    const o = s as { type?: string, BodylessOwner?: boolean, static?: boolean, ClassElementName?: { name?: string } | null };
+    return o.type === 'AbstractMethodDefinition' && !!o.BodylessOwner && o.ClassElementName?.name === name && !!o.static === !!d.static;
+  }) as Declaration | undefined;
+}
+
 export function* SelectExplicitCase(
   members: readonly { fn: Value, declaration: Declaration }[],
   typeArguments: readonly ParseNode[],
@@ -739,6 +751,31 @@ export function* SelectExplicitCase(
     const ownerFrame = Q(yield* TypedFrameOfBindings(ownerNode, ownerParameters.map((p, i) => ({ Capture: { Name: p.BindingIdentifier.name }, Value: ownerBound[i]! }))));
     if (!Q(yield* CaseFilterHolds(fnOf(ownerNode), ownerFrame, classFrame))) {
       return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+    }
+  }
+  // A bodyless owner METHOD has no body to make a function of, so it is never
+  // a run-time member of its family's group; it is found beside the selected
+  // declaration in its class body, and the application held to it there.
+  if (!ownerNode && choice.Kind !== 'owner') {
+    const owner = bodylessOwnerMethodOf(choice.Declaration);
+    const ownerClauses = (owner as { WhereClauses?: readonly unknown[] | null } | undefined)?.WhereClauses ?? [];
+    if (owner && ownerClauses.length > 0) {
+      const caseFn = fnOf(choice.Declaration) as unknown as Record<string, unknown>;
+      const ownerParameters = owner.TypeParameters?.TypeParameterList ?? [];
+      const bound = EnsureCompletion(yield* InCallableDeclarationContext(caseFn as unknown as Value, new Map(), classFrame, function* bindOwner() {
+        return yield* BindTypeArgumentRecordsInto(ownerParameters, args as TypeRecord[], names, new Map(), name);
+      }));
+      if (bound.Type === 'normal') {
+        const values = bound.Value as readonly TypeRecord[];
+        const ownerFrame = Q(yield* TypedFrameOfBindings(owner, ownerParameters.map((p, i) => ({ Capture: { Name: p.BindingIdentifier.name }, Value: values[i]! }))));
+        const ownerContext = {
+          ECMAScriptCode: { parent: owner }, Environment: caseFn.Environment, PrivateEnvironment: caseFn.PrivateEnvironment,
+          Realm: caseFn.Realm, ScriptOrModule: caseFn.ScriptOrModule,
+        };
+        if (!Q(yield* CaseFilterHolds(ownerContext as unknown as Value, ownerFrame, classFrame))) {
+          return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+        }
+      }
     }
   }
   if (choice.Kind === 'owner') {

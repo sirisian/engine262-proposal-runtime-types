@@ -1,4 +1,4 @@
-import { RegisterFunctionTypeParameterScope, copyTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
+import { RegisterFunctionTypeParameterScope, copyTypeParameterFrame, bindTypeParameter, implicitFalseDefaultMatches } from '../type-system/runtime.mts';
 import { DeclaredMemberImplements } from '../type-system/implements-member.mts';
 import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import { CreateGenericAliasRecord } from '../type-system/generic-alias-context.mts';
@@ -1131,6 +1131,7 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
     // "none of these hold" looks like.
     return X(CreateArrayFromList(collected));
   }
+  if (implicitFalseDefaultMatches.has(node)) return Value.false;
   return Throw.TypeError('$1 matched no clause of this match', subject);
 }
 
