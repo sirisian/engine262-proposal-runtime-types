@@ -3682,6 +3682,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** An assignment or update whose target is rooted at `this` or `return`: a predicate that changes what it tests. */
+  /** Whether _t_ is `never`, the empty union: a function declared with it returns no result. */
+  const isNeverType = (t: TypeRecord | null | undefined): boolean => t?.Kind === 'union' && ((t as { Members?: readonly unknown[] }).Members?.length ?? 0) === 0;
+
   const whereClauseStoreThroughSubject = (predicate: ParseNode): string | undefined => {
     const rooted = (target: unknown): boolean => {
       let node = target as ParseNode | null | undefined;
@@ -13946,7 +13949,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const ownerKey = (n as { ClassElementName?: ParseNode.ClassElementName | null }).ClassElementName;
         const resultless = (n as { PropertySetParameterList?: unknown }).PropertySetParameterList != null
           || ((n as { static?: unknown }).static === false && classElementKey(ownerKey) === 'constructor');
-        if (whereClauseNamesReturn(predicate) && (resultless || (returnAnnotation && resolveType(returnAnnotation.Type)?.Kind === 'void'))) {
+        if (whereClauseNamesReturn(predicate) && (resultless || (returnAnnotation && (resolveType(returnAnnotation.Type)?.Kind === 'void' || isNeverType(resolveType(returnAnnotation.Type)))))) {
           reportType('rt-return-contract', clause, 'a result contract constrains a result this function declares it has none of');
           continue;
         }
@@ -15003,6 +15006,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const resolved = written && (parameter.Arity ?? 0) === 0 ? resolveType(written) : null;
               if (resolved && !mentionsTypeParameter(resolved)) classBindings.set(parameter.BindingIdentifier.name, resolved);
             });
+            appliedGenericDeclarations.add(classDeclaration as object);
             if (classParameters.length > 0 && classBindings.size === classParameters.length) {
               recordWhereCheck(node, classDeclaration as unknown as GenericWhereCheck['declaration'], classBindings);
             }
@@ -21248,6 +21252,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-generic-specialization: application binds explicit arguments and
       // defaults before a specialization publishes its instantiated signature.
       case 'TypeArgumentsExpression': {
+        {
+          // An application of a class in an expression applies the class.
+          const applied = unparenthesized(node.Expression as ParseNode);
+          const appliedClass = applied.type === 'IdentifierReference' ? classNodes.get((applied as { name: string }).name) : undefined;
+          if (appliedClass) appliedGenericDeclarations.add(appliedClass as object);
+        }
         // #sec-span-type: the explicit extent changes the window's result
         // contract; it does not turn the borrowed storage into an owned array.
         const member = patternExpression(node.Expression);
@@ -28736,7 +28746,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const resultAnnotation = (signature as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
       const result = resultAnnotation ? resolveType(resultAnnotation.Type) as Known | null : null;
-      walkDeclarationClauses(signature, clauses, { formals, valueParameters: valueTypeParameterNames(signature), returnType: result && result.Kind !== 'void' ? result : null, thisType: declaredReceiverOf(signature) });
+      walkDeclarationClauses(signature, clauses, { formals, valueParameters: valueTypeParameterNames(signature), returnType: result && result.Kind !== 'void' && !isNeverType(result) ? result : null, thisType: declaredReceiverOf(signature) });
       if (signature.type === 'MethodSignature') recordDefaultWhereChecks(signature, clauses, parameters);
     } finally {
       frames.pop();
@@ -28758,7 +28768,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (formal.type === 'FunctionTypeParameter' && (formal as { IsThis?: boolean }).IsThis) continue;
       const signatureParameter = formal.type === 'FunctionTypeParameter'
         && !!(formal as { BindingIdentifier?: unknown }).BindingIdentifier && !(formal as { Rest?: boolean }).Rest;
-      if (formal.type !== 'SingleNameBinding' && !signatureParameter) return;
+      if (formal.type !== 'SingleNameBinding' && !signatureParameter) {
+        // A binding inside a parameter's destructuring pattern takes its own
+        // default where the argument lacks it (#sec-generic-where).
+        const nested: ParseNode.SingleNameBinding[] = [];
+        const collect = (value: unknown): void => {
+          if (!value || typeof value !== 'object') return;
+          if (Array.isArray(value)) {
+            value.forEach(collect);
+            return;
+          }
+          const node = value as ParseNode;
+          if (typeof node.type !== 'string') return;
+          if (node.type === 'SingleNameBinding' && (node as { BindingIdentifier?: unknown }).BindingIdentifier) {
+            nested.push(node as ParseNode.SingleNameBinding);
+            return;
+          }
+          for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict', 'Initializer', 'TypeAnnotation'].includes(key)) collect(child);
+        };
+        collect(formal);
+        if (nested.length === 0) return;
+        for (const binding of nested) {
+          names.push(binding.BindingIdentifier.name);
+          const initializer = (binding as { Initializer?: ParseNode | null }).Initializer;
+          const literal = initializer ? staticType(initializer as never) as TypeRecord | null : null;
+          const value = initializer ? decidedArgumentValue(initializer as never, binding) ?? (literal?.Kind === 'literal' ? literal : undefined) : undefined;
+          if (value) defaulted.set(binding.BindingIdentifier.name, value);
+        }
+        continue;
+      }
       const binding = formal as ParseNode.SingleNameBinding;
       names.push(binding.BindingIdentifier.name);
       const initializer = (binding as { Initializer?: ParseNode | null }).Initializer;
@@ -35371,7 +35409,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               errors.splice(mark);
             }
-            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' ? result as Known : null, thisType: declaredReceiverOf(owner) });
+            walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' && !isNeverType(result) ? result as Known : null, thisType: declaredReceiverOf(owner) });
             recordDefaultWhereChecks(owner, clauses, params ?? []);
           } finally {
             restoreFlow(beforeClauses);
@@ -42304,11 +42342,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // over its parameters' domains, whether or not it is ever applied.
         {
           const ownClauses = (n.ClassTail as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
-          if (ownClauses.length > 0) {
+          // A method's clause that reads the class's value parameters and none
+          // of the method's own names is a clause of the class, judged with the
+          // class's parameters where nothing applies the class.
+          const classValues = valueTypeParameterNames(n);
+          const memberClauses = classValues.size === 0 ? [] : ((n.ClassTail as { ClassBody?: readonly ParseNode[] | null }).ClassBody ?? []).flatMap((element) => {
+            if (!/Method/.test(element.type)) return [];
+            const ownNames = new Set<string>();
+            const collectNames = (value: unknown): void => {
+              if (!value || typeof value !== 'object') return;
+              if (Array.isArray(value)) {
+                value.forEach(collectNames);
+                return;
+              }
+              const node = value as { type?: string, name?: string };
+              if (node.type === 'BindingIdentifier' && node.name) ownNames.add(node.name);
+              for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'FunctionBody', 'WhereClauses'].includes(key)) collectNames(child);
+            };
+            collectNames((element as { UniqueFormalParameters?: unknown }).UniqueFormalParameters);
+            collectNames((element as { PropertySetParameterList?: unknown }).PropertySetParameterList);
+            collectNames((element as { TypeParameters?: unknown }).TypeParameters);
+            return ((element as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? []).filter((clause) => {
+              const predicate = clause.RefinementPredicate as ParseNode;
+              if (whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate)) return false;
+              const references = LexicalFreeReferences(predicate);
+              return references.some((reference) => classValues.has(reference.name)) && !references.some((reference) => ownNames.has(reference.name));
+            });
+          });
+          if (ownClauses.length > 0 || memberClauses.length > 0) {
             const beforeClassClauses = captureFlow();
             const pushedClassScope = pushTypeParameterScopeOf(n);
             try {
-              walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n) });
+              if (ownClauses.length > 0) walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: classValues });
+              if (memberClauses.length > 0) walkDeclarationClauses(n, memberClauses, { formals: new Set(), valueParameters: classValues });
               recordDefaultWhereChecks(n, ownClauses, []);
             } finally {
               if (pushedClassScope) typeParameterScopes.pop();
