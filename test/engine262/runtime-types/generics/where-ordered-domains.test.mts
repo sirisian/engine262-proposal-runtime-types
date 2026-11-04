@@ -66,9 +66,17 @@ test('string clauses carry their code-unit order', () => {
   expect(evaluated("function f(s: string) where s > 'a' where s < 'b' { return s; } f('ab');")).toBe('ab');
 });
 
-test('an enum over string compares with a String in code-unit order and with an enumerator by position', () => {
+test('an enum over string compares with a String constant in code-unit order', () => {
   impossible("enum U: string { b = 'b', a = 'a' }; function f(u: U) where u > 'b' where u < 'a' { return u; }");
-  expect(evaluated("enum U: string { b = 'b', a = 'a' }; function f(u: U) where u >= U.b where u < U.a { return u; } f(U.b); 'ok';")).toBe('ok');
+  expect(evaluated("enum U: string { b = 'b', a = 'a', c = 'c' }; function f(u: U) where u > 'a' where u < 'c' { return u; } f(U.b); 'ok';")).toBe('ok');
+});
+
+test('an enum over string compared with an enumerator is judged by declaration position', () => {
+  const U = "enum U: string { b = 'b', a = 'a', c = 'c' };";
+  impossible(`${U} function f(u: U) where u < U.b { return u; }`);
+  impossible(`${U} function f(u: U) where u > U.a where u < U.c { return u; }`);
+  impossible(`${U} function f(u: U) { if (u < U.b) { return 1; } return 0; }`);
+  expect(evaluated(`${U} function f(u: U) where u > U.b where u < U.c { return u; } String(f(U.a) === U.a);`)).toBe('true');
 });
 
 test('satisfiable floating sequences are accepted and run', () => {

@@ -26654,6 +26654,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * a greatest member in code-unit order, so a comparison with a String
    * constant can be settled as a numeric one is.
    */
+  /**
+   * The relational judgment of #sec-narrowing for an enum over `string`
+   * compared with one of its enumerators: its limits are its first and last
+   * enumerators in declaration position (#sec-ordered-element-types).
+   */
+  const enumPositionFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
+    const judge = (operand: ParseNode, constant: ParseNode, op: string): NarrowingFact | undefined | null => {
+      const written = staticType(operand);
+      const s = written && written.Kind !== 'any' ? judgedType(written) as TypeRecord | null : null;
+      const span = s ? enumPositionSpan(s, constant) : null;
+      if (!s || !span) return null;
+      const { index: k, lo, hi } = span;
+      const never = op === '<' ? lo >= k : op === '<=' ? lo > k : op === '>' ? hi <= k : hi < k;
+      const always = op === '<' ? hi < k : op === '<=' ? hi <= k : op === '>' ? lo > k : lo >= k;
+      const verdict = never ? 'never-succeeds' as const : always ? 'never-fails' as const : null;
+      return verdict ? { name: narrowableName(operand) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: operator } as NarrowingFact : undefined;
+    };
+    const direct = judge(left, right, operator);
+    return direct !== null ? direct : judge(right, left, mirroredOperator[operator]!) ?? undefined;
+  };
   const stringOrderFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
     let operand = left;
     let op = operator;
@@ -26796,7 +26816,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let c = constantNumber(right, staticType(left));
     if (c === null) {
       c = constantNumber(left, staticType(right));
-      if (c === null) return stringOrderFact(left, operator, right);
+      if (c === null) return enumPositionFact(left, operator, right) ?? stringOrderFact(left, operator, right);
       operand = right;
       op = mirroredOperator[operator];
     }
@@ -29150,12 +29170,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const orderDomainOf = (declared: TypeRecord): { readonly min: bigint | null, readonly max: bigint | null, readonly width: 32 | 64 | null, readonly closed: boolean } | null => {
     // A refinement or other parameterization orders as its base does; what
     // its own clauses establish arrives as facts.
-    let base = declared;
-    for (const seen = new Set<TypeRecord>(); !seen.has(base);) {
-      seen.add(base);
-      if (base.Kind === 'parameterized') base = base.Base as TypeRecord;
-      else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
-    }
+    const base = orderedBaseOf(declared);
     // A closed set is read by its members (#sec-narrowing), so a sparse one is
     // judged no more finely than the span of its values.
     const closedSet = expandClosed(base);
@@ -29184,6 +29199,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const value = width === 32 ? Math.fround(end) : end;
     if (side === 'low') return open ? floatOrderKey(value === 0 ? 0 : value, width) + 1n : floatOrderKey(value === 0 ? -0 : value, width);
     return open ? floatOrderKey(value === 0 ? -0 : value, width) - 1n : floatOrderKey(value === 0 ? 0 : value, width);
+  };
+  /** A refinement's or other parameterization's base, which orders as the refined type does. */
+  const orderedBaseOf = (declared: TypeRecord): TypeRecord => {
+    let base = declared;
+    for (const seen = new Set<TypeRecord>(); !seen.has(base);) {
+      seen.add(base);
+      if (base.Kind === 'parameterized') base = base.Base as TypeRecord;
+      else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
+    }
+    return base;
+  };
+  /**
+   * #sec-ordered-element-types: an enum over `string` orders its enumerators by
+   * declaration position, so a comparison of one of its values with one of
+   * its enumerators is decided by positions: the enumerator's, the span of
+   * the positions the subject may hold, and the enum's count. `null` for any
+   * other comparison, a numeric enum's included, which orders by value.
+   */
+  const enumPositionSpan = (subject: TypeRecord, constant: ParseNode): { index: number, lo: number, hi: number, count: number } | null => {
+    const base = orderedBaseOf(subject);
+    const members = (base.Kind === 'union' ? base.Members : [base]) as TypeRecord[];
+    const first = members[0] as { Base?: TypeRecord } | undefined;
+    const owner = isEnumType(base) ? base : first?.Base && isEnumType(first.Base)
+      && members.every((member) => member.Kind === 'literal' && (member as { Base?: TypeRecord }).Base && SameType((member as { Base: TypeRecord }).Base, first.Base!)) ? first.Base : null;
+    const enumerators = owner ? enumeratorLiterals(owner) : null;
+    if (!owner || !enumerators || !enumerators.every((member) => literalString((member as { Value?: unknown }).Value) !== undefined)) return null;
+    // Only a member of this enum's own binding is an enumerator; a String
+    // constant of the same text compares by code units. The member folds to
+    // its value against an enum-valued peer.
+    const core = unparenthesized(constant);
+    const object = core.type === 'MemberExpression' ? unparenthesized((core as ParseNode.MemberExpression).MemberExpression as ParseNode) : null;
+    const declaration = (owner as { Declaration?: ParseNode }).Declaration;
+    if (object?.type !== 'IdentifierReference' || !declaration
+      || ResolveBindingDeclaration(object, (object as ParseNode.IdentifierReference).name)?.node !== declaration) return null;
+    const positionOf = (value: unknown): number => enumerators.findIndex((member) => sameLiteralValue((member as { Value?: unknown }).Value, value));
+    const index = positionOf(literalValueOf(singleValueOperandType(constant, owner)));
+    const held = isEnumType(base) ? enumerators.map((_, i) => i) : members.map((member) => positionOf((member as { Value?: unknown }).Value));
+    if (index < 0 || held.some((i) => i < 0)) return null;
+    return { index, lo: Math.min(...held), hi: Math.max(...held), count: enumerators.length };
   };
   /** An integral value as an order key, or `null` for one that is not integral. */
   const integralKey = (value: number | bigint): bigint | null => (typeof value === 'bigint' ? value : Number.isInteger(value) ? BigInt(value) : null);
@@ -29279,6 +29333,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   /** The ordered test of a place at its declared type, keyed in its domain's order. */
   const orderedFromParts = (place: string, declared: TypeRecord, op: string, constant: ParseNode, rangeTest: ParseNode.IsExpression | null): OrderedComparison | null => {
+    // An enum over `string` compared with one of its enumerators orders by
+    // declaration position (#sec-ordered-element-types).
+    const position = rangeTest ? null : enumPositionSpan(declared, constant);
+    if (position) {
+      const key = BigInt(position.index);
+      return { place, op, label: `${op} ${(constant as { sourceText?: string }).sourceText ?? position.index}`, eqLo: key, eqHi: key, min: 0n, max: BigInt(position.count - 1), nan: false };
+    }
     const domain = orderDomainOf(declared);
     if (!domain) return null;
     const { min, max } = domain;
@@ -29377,12 +29438,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     : raw && typeof (raw as { stringValue?: unknown }).stringValue === 'function' ? (raw as { stringValue(): string }).stringValue() : undefined);
   /** Whether a place of this type is ordered as Strings are: `string`, or a closed set of String values. */
   const orderedAsString = (declared: TypeRecord): boolean => {
-    let base = declared;
-    for (const seen = new Set<TypeRecord>(); !seen.has(base);) {
-      seen.add(base);
-      if (base.Kind === 'parameterized') base = base.Base as TypeRecord;
-      else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
-    }
+    const base = orderedBaseOf(declared);
     if (base.Kind === 'primitive' && base.Name === 'string') return true;
     const closedSet = expandClosed(base);
     const members = (closedSet.Kind === 'union' ? closedSet.Members : [closedSet]) as TypeRecord[];
