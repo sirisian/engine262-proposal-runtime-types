@@ -27863,8 +27863,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * open object shape, readonly spelling or const binding proves no descriptor.
    * The resulting ordinary place facts still expire on rebinding and effects. */
   const projectRefinementFacts = (names: readonly string[]): void => {
-    // Checking a predicate must not assume that very predicate succeeded.
-    if (projectingRefinements || whereClauseWalkDepth > 0) return;
+    // Checking a predicate must not assume that very predicate succeeded, so a
+    // clause being judged projects nothing of itself (#sec-generic-where).
+    if (projectingRefinements) return;
     projectingRefinements = true;
     try {
       const roots = new Set<string>();
@@ -27896,7 +27897,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           seen.add(type);
           if (type.Kind === 'parameterized') {
             const origin = SourceWhereOrigin(type.Metadata.where);
-            if (origin) {
+            if (origin && !judgedClauses.has(origin.clause)) {
               let declaration: ParseNode | undefined = origin.clause;
               while (declaration && declaration.type !== 'TypeAliasDeclaration') declaration = declaration.parent;
               clauses.push({ predicate: origin.clause.RefinementPredicate, bindings: origin.bindings,
@@ -27912,12 +27913,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (argument && typeof argument !== 'number') bindings.set(parameter.BindingIdentifier.name, argument);
             });
             for (const capture of type.CapturedBindings ?? []) bindings.set(capture.Declaration.BindingIdentifier.name, capture.Type);
-            for (const clause of declaration.WhereClauses ?? []) clauses.push({ predicate: clause.RefinementPredicate, bindings,
+            for (const clause of (declaration.WhereClauses ?? []).filter((entry) => !judgedClauses.has(entry))) clauses.push({ predicate: clause.RefinementPredicate, bindings,
               declarations: [...parameters, ...(type.CapturedBindings ?? []).map((capture) => capture.Declaration)] });
             type = structureOf(type);
           } else break;
         }
-        if (!clauses.length || !compositeObjectShape(baseOf(written))) continue;
+        // Within a clause sequence a primitive value is itself a stable
+        // observation, since nothing can change it between clauses.
+        const primitiveSubject = whereClauseWalkDepth > 0 && baseOf(written).Kind === 'primitive';
+        if (!clauses.length || (!compositeObjectShape(baseOf(written)) && !primitiveSubject)) continue;
         const pathName = (path: readonly string[]): string => path.length ? `${name}.${path.map(pathPropertyKey).join('.')}` : name;
         const read = (path: readonly string[]): Known => {
           let current: Known = written;
@@ -28016,6 +28020,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         };
         const assert = (node: ParseNode): void => {
+          // Within a clause sequence an ordered assertion over a path bounds
+          // the place it names for the clauses judged after it
+          // (#sec-narrowing-flow); elsewhere it adds nothing.
+          if (whereClauseWalkDepth > 0) {
+            const ordered = orderedAssertion(node, name, read);
+            if (ordered) {
+              recordOrderedEdge(ordered, true);
+              return;
+            }
+          }
           if (node.type === 'IsExpression' && node.Type) {
             const path = RefinementPath(node.Expression);
             const type = path ? assertedType(node.Type) : null;
@@ -28578,6 +28592,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   /** Above zero while `where` clauses are walked in sequence, the one place interval facts apply. */
   let whereClauseWalkDepth = 0;
+  /** The clauses whose judgment is in progress, which no refinement projection may assume. */
+  const judgedClauses = new Set<object>();
   const walkWhereClause = (predicate: ParseNode) => {
     whereClauseWalkDepth += 1;
     try {
@@ -28960,10 +28976,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (subjects.thisType) thisTypeFrames.push(subjects.thisType);
       if (readsReturn) contractReturnFrames.push(subjects.returnType!);
       const mark = errors.length;
+      judgedClauses.add(clause);
+      // A contract's `return` is a place its clauses narrow in sequence.
+      if (readsReturn && !lookup(CONTRACT_RETURN_PATH)) declareNarrowed(CONTRACT_RETURN_PATH, subjects.returnType!);
       try {
         const outcome = walkRefinementPredicate(predicate);
         if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
       } finally {
+        judgedClauses.delete(clause);
         if (readsReturn) contractReturnFrames.pop();
         if (subjects.thisType) thisTypeFrames.pop();
       }
@@ -29018,16 +29038,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * exact rounding here, and an inexact one could refuse a satisfiable sequence.
    */
   const orderDomainOf = (declared: TypeRecord): { readonly min: bigint | null, readonly max: bigint | null, readonly width: 32 | 64 | null, readonly closed: boolean } | null => {
+    // A refinement or other parameterization orders as its base does; what
+    // its own clauses establish arrives as facts.
+    let base = declared;
+    for (const seen = new Set<TypeRecord>(); !seen.has(base);) {
+      seen.add(base);
+      if (base.Kind === 'parameterized') base = base.Base as TypeRecord;
+      else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
+    }
     // A closed set is read by its members (#sec-narrowing), so a sparse one is
     // judged no more finely than the span of its values.
-    const closedSet = expandClosed(declared);
+    const closedSet = expandClosed(base);
     const members = (closedSet.Kind === 'union' ? closedSet.Members : [closedSet]) as TypeRecord[];
     const memberLimits = members.every((member) => member.Kind === 'literal') ? members.map(valueLimits) : [];
     if (memberLimits.length > 0 && memberLimits.every((l) => l !== null && l.lo === l.hi && integralKey(l.lo) !== null)) {
       const keys = memberLimits.map((l) => integralKey(l!.lo)!);
       return { min: keys.reduce((a, b) => (a < b ? a : b)), max: keys.reduce((a, b) => (a > b ? a : b)), width: null, closed: true };
     }
-    const type = operationalType(declared as Known) as TypeRecord | null;
+    const type = operationalType(base as Known) as TypeRecord | null;
     if (!type) return null;
     const limits = integerLimits(type);
     if (limits) return { min: limits.lo, max: limits.hi, width: null, closed: false };
@@ -29095,8 +29123,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const place = placeOf(subject);
     if (place === null || changesPlace(t, place)) return null;
     const declared = (lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
-    const domain = declared ? orderDomainOf(declared) : null;
-    if (!declared || !domain) return null;
+    if (!declared) return null;
+    // A place declared at a source refinement carries what that refinement's
+    // clauses establish, as if a narrowing transfer had just established it
+    // (#sec-refinement-narrowing).
+    if (!lookup(`${place}.\u0000refined`)) {
+      declareNarrowed(`${place}.\u0000refined`, anyTypeRecord);
+      projectRefinementFacts([place]);
+    }
+    return orderedFromParts(place, declared, op, constant, rangeTest);
+  };
+  /**
+   * An ordered assertion of a refinement's clause over a path from its
+   * subject, as an ordered test of the place that path names, or `null` for
+   * any other assertion (#sec-refinement-narrowing).
+   */
+  const orderedAssertion = (node: ParseNode, root: string, typeAt: (path: readonly string[]) => Known): OrderedComparison | null => {
+    const t = unparenthesized(node);
+    let target: ParseNode | undefined;
+    let constant: ParseNode | undefined;
+    let op = 'is';
+    let rangeTest: ParseNode.IsExpression | null = null;
+    if (t.type === 'IsExpression' && (t as unknown as ParseNode.IsExpression).Pattern?.type === 'MatchRangePattern') {
+      rangeTest = t as unknown as ParseNode.IsExpression;
+      target = rangeTest.Expression as unknown as ParseNode;
+      constant = target;
+    } else if (t.type === 'RelationalExpression' && ['<', '<=', '>', '>='].includes((t as ParseNode.RelationalExpression).operator as string)) {
+      const rel = t as ParseNode.RelationalExpression;
+      const left = rel.RelationalExpression as ParseNode;
+      const right = rel.ShiftExpression as ParseNode;
+      op = rel.operator as string;
+      if (RefinementPath(left)) {
+        target = left;
+        constant = right;
+      } else if (RefinementPath(right)) {
+        target = right;
+        constant = left;
+        op = mirroredOperator[op]!;
+      }
+    }
+    const path = target ? RefinementPath(target) : undefined;
+    const declared = path ? typeAt(path) : null;
+    if (!path || !constant || !declared) return null;
+    return orderedFromParts(path.length ? `${root}.${path.map(pathPropertyKey).join('.')}` : root, declared as TypeRecord, op, unparenthesized(constant), rangeTest);
+  };
+  /** The ordered test of a place at its declared type, keyed in its domain's order. */
+  const orderedFromParts = (place: string, declared: TypeRecord, op: string, constant: ParseNode, rangeTest: ParseNode.IsExpression | null): OrderedComparison | null => {
+    const domain = orderDomainOf(declared);
+    if (!domain) return null;
     const { min, max } = domain;
     const nan = domain.width !== null;
     if (rangeTest) {
@@ -29170,6 +29244,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (coversHigh) return [lo, lowerHigh(rlo! - 1n, hi)];
     return null;
   };
+  /** Install the keys an edge of an ordered test leaves its place, and the NaN its success excludes. */
+  const recordOrderedEdge = (ordered: OrderedComparison, outcome: boolean): void => {
+    const [lo, hi] = currentInterval(ordered);
+    const [narrowedLo, narrowedHi] = edgeInterval(ordered, outcome, lo, hi) ?? [null, null];
+    const bigintBase = makePrimitive('bigint');
+    if (narrowedLo !== null) declareNarrowed(`${ordered.place}.\u0000lo`, { Kind: 'literal', Value: narrowedLo, Base: bigintBase } as unknown as TypeRecord);
+    if (narrowedHi !== null) declareNarrowed(`${ordered.place}.\u0000hi`, { Kind: 'literal', Value: narrowedHi, Base: bigintBase } as unknown as TypeRecord);
+    // The edge on which a test succeeds holds no NaN.
+    if (outcome && ordered.nan) recordCategories(ordered.place, allCategories & ~4);
+  };
   const currentInterval = (c: OrderedComparison): [bigint | null, bigint | null, boolean] => {
     const lo = intervalFact(c.place, 'lo');
     const hi = intervalFact(c.place, 'hi');
@@ -29210,15 +29294,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!facts) return facts;
       restoreFlow(facts);
       for (const place of canon?.places ?? []) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon!.key}`, anyTypeRecord);
-      if (ordered) {
-        const [lo, hi] = currentInterval(ordered);
-        const [narrowedLo, narrowedHi] = edgeInterval(ordered, outcome, lo, hi) ?? [null, null];
-        const bigintBase = makePrimitive('bigint');
-        if (narrowedLo !== null) declareNarrowed(`${ordered.place}.\u0000lo`, { Kind: 'literal', Value: narrowedLo, Base: bigintBase } as unknown as TypeRecord);
-        if (narrowedHi !== null) declareNarrowed(`${ordered.place}.\u0000hi`, { Kind: 'literal', Value: narrowedHi, Base: bigintBase } as unknown as TypeRecord);
-        // The edge on which a comparison succeeds holds no NaN.
-        if (outcome && ordered.nan) recordCategories(ordered.place, allCategories & ~4);
-      }
+      if (ordered) recordOrderedEdge(ordered, outcome);
       return captureFlow();
     };
     const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };
