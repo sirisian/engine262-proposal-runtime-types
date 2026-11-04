@@ -1,5 +1,6 @@
 import { contextualParameters } from './contextual-parameters.mts';
 import { DeclaredMemberImplements } from './implements-member.mts';
+import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -26688,7 +26689,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const never = op === '<' ? lo >= k : op === '<=' ? lo > k : op === '>' ? hi <= k : hi < k;
       const always = op === '<' ? hi < k : op === '<=' ? hi <= k : op === '>' ? lo > k : lo >= k;
       const verdict = never ? 'never-succeeds' as const : always ? 'never-fails' as const : null;
-      return verdict ? { name: narrowableName(operand) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: operator } as NarrowingFact : undefined;
+      if (verdict) return { name: narrowableName(operand) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: operator } as NarrowingFact;
+      // Each enumerator answers by its own position (#sec-narrowing).
+      const closed = expandClosed(s);
+      if (!orderedMembers(closed, operator)) return undefined;
+      return decidedMembersFact(dataValuePlace(operand) ? narrowableName(operand) : null, closed, (member) => {
+        const at = enumPositionSpan(member, constant);
+        if (!at) return undefined;
+        return op === '<' ? at.lo < k : op === '<=' ? at.lo <= k : op === '>' ? at.lo > k : at.lo >= k;
+      }, `${operator} ${(constant as { sourceText?: string }).sourceText ?? k}`, false, true);
     };
     const direct = judge(left, right, operator);
     return direct !== null ? direct : judge(right, left, mirroredOperator[operator]!) ?? undefined;
@@ -26707,21 +26716,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const subject = written && written.Kind !== 'any' ? judgedType(written) : null;
     if (!subject) return undefined;
     const closed = expandClosed(subject);
-    const limits = (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map((m): { lo: string, hi: string | null } | null => {
+    const limits = (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map((m): { lo: string, hi: string | null, forced?: boolean } | null => {
       if (m.Kind === 'primitive' && m.Name === 'string') return { lo: '', hi: null };
+      // #sec-narrowing: a nullish member is compared as ToNumeric reads it,
+      // undefined as NaN and null as 0, against the String's Number value.
+      if (m.Kind === 'primitive' && (m.Name === 'undefined' || m.Name === 'null')) {
+        const n = m.Name === 'null' ? Number(c) : NaN;
+        return { lo: '', hi: '', forced: op === '<' ? 0 < n : op === '<=' ? 0 <= n : op === '>' ? 0 > n : 0 >= n };
+      }
       const text = m.Kind === 'literal' ? jsString(m.Value) : null;
       return text === null ? null : { lo: text, hi: text };
     });
     if (limits.length === 0 || limits.some((l) => l === null)) return undefined;
     const k = c;
-    const known = limits as { lo: string, hi: string | null }[];
-    const succeedsNever = (l: { lo: string, hi: string | null }) => (op === '<' ? l.lo >= k : op === '<=' ? l.lo > k
+    const known = limits as { lo: string, hi: string | null, forced?: boolean }[];
+    const succeedsNever = (l: { lo: string, hi: string | null, forced?: boolean }) => (l.forced !== undefined ? !l.forced : op === '<' ? l.lo >= k : op === '<=' ? l.lo > k
       : op === '>' ? l.hi !== null && l.hi <= k : l.hi !== null && l.hi < k);
-    const failsNever = (l: { lo: string, hi: string | null }) => (op === '<' ? l.hi !== null && l.hi < k
+    const failsNever = (l: { lo: string, hi: string | null, forced?: boolean }) => (l.forced !== undefined ? l.forced : op === '<' ? l.hi !== null && l.hi < k
       : op === '<=' ? l.hi !== null && l.hi <= k : op === '>' ? l.lo > k : l.lo >= k);
     const verdict = known.every(succeedsNever) ? 'never-succeeds' as const : known.every(failsNever) ? 'never-fails' as const : null;
     if (!verdict) {
-      if (!strictDomainMembers(closed, operator)) return undefined;
+      if (!orderedMembers(closed, operator)) return undefined;
       const members = closed.Kind === 'union' ? closed.Members : [closed];
       return decidedMembersFact(dataValuePlace(operand) ? narrowableName(operand) : null, closed, (member) => {
         const limit = known[members.indexOf(member)];
@@ -26848,19 +26863,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A closed set is read by its members, so an enum's limits are its
     // least and greatest enumerator values.
     const closed = expandClosed(s);
+    // #sec-narrowing: an undefined member fails every ordered comparison, as
+    // NaN does, and a null member compares as the value 0, as ToNumeric reads
+    // them at run time.
+    const nullishLimits = (m: TypeRecord): { lo: number, hi: number, nan: boolean, forced?: false } | null => (m.Kind !== 'primitive' ? null
+      : m.Name === 'undefined' ? { lo: 0, hi: 0, nan: true, forced: false } : m.Name === 'null' ? { lo: 0, hi: 0, nan: false } : null);
     const limits = lengths ? lengths.map((length) => ({ lo: length, hi: length, nan: false }))
-      : (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map(valueLimits);
+      : (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map((m) => valueLimits(m) ?? nullishLimits(m));
     if (limits.length === 0 || limits.some((l) => l === null)) return undefined;
     const k = c;
-    const succeedsNever = (l: { lo: number | bigint, hi: number | bigint }) => (op === '<' ? compareLimit(l.lo, k) >= 0
+    const succeedsNever = (l: { lo: number | bigint, hi: number | bigint, forced?: false }) => l.forced === false || (op === '<' ? compareLimit(l.lo, k) >= 0
       : op === '<=' ? compareLimit(l.lo, k) > 0 : op === '>' ? compareLimit(l.hi, k) <= 0 : compareLimit(l.hi, k) < 0);
-    const failsNever = (l: { lo: number | bigint, hi: number | bigint, nan: boolean }) => !l.nan && (op === '<' ? compareLimit(l.hi, k) < 0
+    const failsNever = (l: { lo: number | bigint, hi: number | bigint, nan: boolean, forced?: false }) => l.forced === undefined && !l.nan && (op === '<' ? compareLimit(l.hi, k) < 0
       : op === '<=' ? compareLimit(l.hi, k) <= 0 : op === '>' ? compareLimit(l.lo, k) > 0 : compareLimit(l.lo, k) >= 0);
-    const known = limits as { lo: number | bigint, hi: number | bigint, nan: boolean }[];
+    const known = limits as { lo: number | bigint, hi: number | bigint, nan: boolean, forced?: false }[];
     const verdict = Number.isNaN(k) || known.every(succeedsNever) ? 'never-succeeds' as const
       : known.every(failsNever) ? 'never-fails' as const : null;
     if (!verdict) {
-      if (lengths || !strictDomainMembers(closed, operator)) return undefined;
+      if (lengths || !orderedMembers(closed, operator)) return undefined;
       const members = closed.Kind === 'union' ? closed.Members : [closed];
       return decidedMembersFact(dataValuePlace(operand) ? narrowableName(operand) : null, closed, (member) => {
         const limit = known[members.indexOf(member)];
@@ -28436,6 +28456,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && !declaredOperator(base, operator) && !primitiveBlockDeclares(operator, base);
     }) ? members as TypeRecord[] : null;
   };
+  /**
+   * #sec-narrowing: a relational comparison narrows a closed set read by its
+   * members. An enum's enumerators are such members, read at the primitive
+   * their values belong to, so a sparse enum, a String constant against an
+   * enum over `string`, and a constant that is no enumerator all narrow by
+   * member, as a union of literals does.
+   */
+  const orderedMembers = (closed: Known, operator: string): TypeRecord[] | null => {
+    const strict = strictDomainMembers(closed, operator);
+    if (strict || !closed) return strict;
+    const members = closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed];
+    const owner = (members[0] as { Base?: TypeRecord } | undefined)?.Base;
+    if (!owner || !isEnumType(owner) || members.some((m) => m.Kind !== 'literal' || !(m as { Base?: TypeRecord }).Base || !SameType((m as { Base: TypeRecord }).Base, owner))) return null;
+    const values = members.map((m) => (m as { Value?: unknown }).Value);
+    const kind = values.every((v) => typeof v === 'string' || literalString(v) !== undefined) ? 'string' : values.every((v) => typeof v === 'bigint') ? 'bigint' : 'number';
+    const underlying = makePrimitive(kind);
+    // The comparison is the built-in one at the enumerators' primitive; the
+    // enum itself, a nominal type, declares no operator block.
+    return declaredOperator(owner, operator) || declaredOperator(underlying, operator) || primitiveBlockDeclares(operator, underlying) ? null : members;
+  };
   const equalityCompatible = (left: TypeRecord, right: TypeRecord): boolean => {
     const a = left.Kind === 'literal' ? left.Base : left;
     const b = right.Kind === 'literal' ? right.Base : right;
@@ -29215,6 +29255,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * a floating zero.
    */
   interface OrderedComparison {
+    /** Whether the place has no Static Type, its domain alone deciding its first test. */
+    readonly domainOnly?: boolean;
     readonly place: string;
     readonly op: string;
     readonly label: string;
@@ -29233,7 +29275,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * Number through `floatOrderKey`. float16 is left out: its constants have no
    * exact rounding here, and an inexact one could refuse a satisfiable sequence.
    */
-  const orderDomainOf = (declared: TypeRecord): { readonly min: bigint | null, readonly max: bigint | null, readonly width: 32 | 64 | null, readonly closed: boolean } | null => {
+  const orderDomainOf = (declared: TypeRecord): { readonly min: bigint | null, readonly max: bigint | null, readonly width: 16 | 32 | 64 | null, readonly closed: boolean } | null => {
     // A refinement or other parameterization orders as its base does; what
     // its own clauses establish arrives as facts.
     const base = orderedBaseOf(declared);
@@ -29251,7 +29293,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const limits = integerLimits(type);
     if (limits) return { min: limits.lo, max: limits.hi, width: null, closed: false };
     if (type.Kind === 'primitive' && type.Name === 'bigint') return { min: null, max: null, width: null, closed: false };
-    const width = type.Kind === 'primitive' ? ({ number: 64, float64: 64, float32: 32 } as Record<string, 32 | 64 | undefined>)[type.Name] : undefined;
+    const width = type.Kind === 'primitive' ? ({ number: 64, float64: 64, float32: 32, float16: 16 } as Record<string, 16 | 32 | 64 | undefined>)[type.Name] : undefined;
     return width ? { min: floatOrderKey(-Infinity, width), max: floatOrderKey(Infinity, width), width, closed: false } : null;
   };
   /** A range pattern's end as an integral key, `null` for an end it lacks. */
@@ -29260,9 +29302,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (side === 'low') return open ? BigInt(Math.floor(end)) + 1n : BigInt(Math.ceil(end));
     return open ? BigInt(Math.ceil(end)) - 1n : BigInt(Math.floor(end));
   };
+  /** A range pattern's ends read exactly where each present end is a BigInt literal, which a double would lose past 2^53; `null` for any other. */
+  const bigintRangeEnds = (pattern: ParseNode.MatchRangePattern): [bigint | null, bigint | null] | null => {
+    const range = pattern.Range as unknown as { RangeStart?: ParseNode | null, RangeEnd?: ParseNode | null, RangeStartBound?: string | null, RangeEndBound?: string | null };
+    const read = (node: ParseNode | null | undefined): bigint | null | undefined => {
+      if (!node) return null;
+      let sign = 1n;
+      let core = unparenthesized(node);
+      if (core.type === 'UnaryExpression' && (core as unknown as { operator?: string }).operator === '-') {
+        sign = -1n;
+        core = unparenthesized((core as unknown as { UnaryExpression: ParseNode }).UnaryExpression);
+      }
+      const written = (core as unknown as { value?: unknown }).value;
+      return typeof written === 'bigint' ? sign * written : undefined;
+    };
+    const lo = read(range.RangeStart);
+    const hi = read(range.RangeEnd);
+    if (lo === undefined || hi === undefined || (lo === null && hi === null)) return null;
+    return [lo === null ? null : range.RangeStartBound === 'open' ? lo + 1n : lo, hi === null ? null : range.RangeEndBound === 'open' ? hi - 1n : hi];
+  };
   /** A range pattern's end as a floating key: an open end steps past every value equal to it. */
-  const floatRangeEnd = (end: number, open: boolean, side: 'low' | 'high', width: 32 | 64): bigint => {
-    const value = width === 32 ? Math.fround(end) : end;
+  const floatRangeEnd = (end: number, open: boolean, side: 'low' | 'high', width: 16 | 32 | 64): bigint => {
+    const value = width === 32 ? Math.fround(end) : width === 16 ? f16round(end) : end;
     if (side === 'low') return open ? floatOrderKey(value === 0 ? 0 : value, width) + 1n : floatOrderKey(value === 0 ? -0 : value, width);
     return open ? floatOrderKey(value === 0 ? -0 : value, width) - 1n : floatOrderKey(value === 0 ? 0 : value, width);
   };
@@ -29308,7 +29369,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** An integral value as an order key, or `null` for one that is not integral. */
   const integralKey = (value: number | bigint): bigint | null => (typeof value === 'bigint' ? value : Number.isInteger(value) ? BigInt(value) : null);
   /** A binary floating value's key in its type's order, the sign folded so that -0 sits just below +0. */
-  const floatOrderKey = (value: number, width: 32 | 64): bigint => {
+  /** A Number rounded to the nearest float16, as a literal in a float16 position rounds (#sec-literalvalueintype). */
+  const f16round = (value: number): number => decodeFloat16(encodeFloat16(value));
+  const floatOrderKey = (value: number, width: 16 | 32 | 64): bigint => {
+    if (width === 16) {
+      const [low, high] = encodeFloat16(value);
+      const bits = (low! | (high! << 8)) & 0xffff;
+      const magnitude = BigInt(bits & 0x7fff);
+      return bits >>> 15 ? -magnitude - 1n : magnitude;
+    }
     if (width === 32) {
       const bits = new Uint32Array(new Float32Array([value]).buffer)[0]!;
       const magnitude = BigInt(bits & 0x7fffffff);
@@ -29343,6 +29412,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     const placeOf = (node: ParseNode): string | null => narrowableName(node)
       ?? (valueParameterConstraint(node) ? (node as ParseNode.IdentifierReference).name : null);
+    // A String's `length` and a value pack's are places as an array's is, at
+    // an array's length type (#sec-narrowing, the path rule).
+    const lengthType = (node: ParseNode): TypeRecord | null => {
+      if (node.type !== 'MemberExpression') return null;
+      const m = node as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+      if (m.IdentifierName?.name !== 'length' || !m.MemberExpression) return null;
+      const receiver = unparenthesized(m.MemberExpression);
+      const received = staticType(receiver) as TypeRecord | null;
+      const base = received ? orderedBaseOf(received) : null;
+      if (base?.Kind === 'primitive' && base.Name === 'string') return makePrimitive('uint', [64]);
+      if (receiver.type !== 'IdentifierReference') return null;
+      const binding = ResolveBindingDeclaration(receiver, (receiver as ParseNode.IdentifierReference).name);
+      if (binding?.kind !== 'type-parameter') return null;
+      const list = (binding.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+      const parameter = list.find((candidate) => candidate.BindingIdentifier.name === (receiver as ParseNode.IdentifierReference).name) as { IsValueParameter?: boolean, IsVariadic?: boolean, IsRest?: boolean } | undefined;
+      return parameter?.IsValueParameter && (parameter.IsVariadic || parameter.IsRest || (parameter as { Ellipsis?: boolean }).Ellipsis) ? makePrimitive('uint', [64]) : null;
+    };
     let subject = unparenthesized((rangeTest ? rangeTest.Expression : rel.RelationalExpression) as ParseNode);
     let constant = rangeTest ? subject : unparenthesized(rel.ShiftExpression as ParseNode);
     let op = rangeTest ? 'is' : rel.operator as string;
@@ -29352,7 +29438,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const place = placeOf(subject);
     if (place === null || changesPlace(t, place)) return null;
-    const declared = (lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
+    const typed = (lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
+    const declared = typed ?? lengthType(subject);
     if (!declared) return null;
     // A place declared at a source refinement carries what that refinement's
     // clauses establish, as if a narrowing transfer had just established it
@@ -29361,7 +29448,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       declareNarrowed(`${place}.\u0000refined`, anyTypeRecord);
       projectRefinementFacts([place]);
     }
-    return orderedFromParts(place, declared, op, constant, rangeTest);
+    const ordered = orderedFromParts(place, declared, op, constant, rangeTest);
+    // A length place has no Static Type for the relational judgment to read,
+    // so its domain alone decides its first test.
+    return ordered && !typed ? { ...ordered, domainOnly: true } : ordered;
   };
   /**
    * An ordered assertion of a refinement's clause over a path from its
@@ -29425,11 +29515,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const { min, max } = domain;
     const nan = domain.width !== null;
     if (rangeTest) {
-      const interval = rangePatternInterval(rangeTest.Pattern as ParseNode.MatchRangePattern);
-      if (!interval) return null;
-      const range: [bigint | null, bigint | null] = domain.width === null
-        ? [integralRangeEnd(interval.lo, interval.loOpen, 'low'), integralRangeEnd(interval.hi, interval.hiOpen, 'high')]
-        : [floatRangeEnd(interval.lo, interval.loOpen, 'low', domain.width), floatRangeEnd(interval.hi, interval.hiOpen, 'high', domain.width)];
+      const pattern = rangeTest.Pattern as ParseNode.MatchRangePattern;
+      const exact = domain.width === null ? bigintRangeEnds(pattern) : null;
+      const interval = exact ? null : rangePatternInterval(pattern);
+      if (!exact && !interval) return null;
+      const range: [bigint | null, bigint | null] = exact ?? (domain.width === null
+        ? [integralRangeEnd(interval!.lo, interval!.loOpen, 'low'), integralRangeEnd(interval!.hi, interval!.hiOpen, 'high')]
+        : [floatRangeEnd(interval!.lo, interval!.loOpen, 'low', domain.width), floatRangeEnd(interval!.hi, interval!.hiOpen, 'high', domain.width)]);
       return { place, op, label: `is ${(rangeTest.Pattern as { sourceText?: string }).sourceText ?? 'range'}`, eqLo: 0n, eqHi: 0n, min, max, nan, range };
     }
     if (domain.width === null) {
@@ -29448,8 +29540,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const written = folded !== null ? Number(folded)
       : constantType?.Kind === 'literal' ? numericValueOf((constantType as { Value?: unknown }).Value) : undefined;
     if (written === undefined || Number.isNaN(written)) return null;
-    // A literal compared with a float32 takes its float32 value.
-    const value = domain.width === 32 ? Math.fround(written) : written;
+    // A literal compared with a float32 or a float16 takes that type's value.
+    const value = domain.width === 32 ? Math.fround(written) : domain.width === 16 ? f16round(written) : written;
     return {
       place, op, label: `${op} ${written}`,
       eqLo: floatOrderKey(value === 0 ? -0 : value, domain.width), eqHi: floatOrderKey(value === 0 ? 0 : value, domain.width),
@@ -29507,6 +29599,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     readonly op: string;
     readonly label: string;
     readonly constant: string;
+    /** A range pattern's Strings, as an inclusive lower and exclusive upper end, `null` for an absent end. */
+    readonly range?: [string | null, string | null];
+    /** Whether the place may still hold null or undefined, which fail the comparison but keep its failure possible. */
+    readonly nullish?: boolean;
   }
   /** A String constant's value, or `undefined` for anything else, an enumerator included. */
   const stringConstantOf = (node: ParseNode): string | undefined => {
@@ -29526,6 +29622,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const stringComparison = (test: ParseNode): StringComparison | null => {
     const t = unparenthesized(test);
+    if (t.type === 'IsExpression' && (t as unknown as ParseNode.IsExpression).Pattern?.type === 'MatchRangePattern') {
+      const is = t as unknown as ParseNode.IsExpression;
+      const subject = unparenthesized(is.Expression as ParseNode);
+      const place = narrowableName(subject);
+      if (place === null || changesPlace(t, place)) return null;
+      const declared = (lookup(place) ?? staticType(subject)) as TypeRecord | null;
+      if (!declared || !orderedAsString(declared)) return null;
+      const range = (is.Pattern as ParseNode.MatchRangePattern).Range as unknown as { RangeStart?: ParseNode | null, RangeEnd?: ParseNode | null, RangeStartBound?: string | null, RangeEndBound?: string | null };
+      const start = range.RangeStart ? stringConstantOf(unparenthesized(range.RangeStart)) : null;
+      const end = range.RangeEnd ? stringConstantOf(unparenthesized(range.RangeEnd)) : null;
+      if (start === undefined || end === undefined) return null;
+      const from = start === null ? null : range.RangeStartBound === 'open' ? `${start}\u0000` : start;
+      const below = end === null ? null : range.RangeEndBound === 'open' ? end : `${end}\u0000`;
+      return { place, op: 'is', label: `is ${(is.Pattern as { sourceText?: string }).sourceText ?? 'range'}`, constant: start ?? end ?? '', range: [from, below] };
+    }
     if (t.type !== 'RelationalExpression') return null;
     const rel = t as ParseNode.RelationalExpression;
     if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
@@ -29540,16 +29651,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (place === null || changesPlace(t, place)) return null;
     const text = stringConstantOf(constant);
     const declared = text === undefined ? null : (lookup(place) ?? staticType(subject)) as TypeRecord | null;
-    if (text === undefined || !declared || !orderedAsString(declared)) return null;
-    return { place, op, label: `${op} ${JSON.stringify(text)}`, constant: text };
+    // A nullish member compares as 0 against the String's Number value, so
+    // against a String that is not numeric it only fails, and the Strings
+    // alone are bounded (#sec-narrowing).
+    const strings = declared ? unionOf((declared.Kind === 'union' ? declared.Members as TypeRecord[] : [declared])
+      .filter((m) => !(m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')))) : empty;
+    if (text === undefined || !declared || strings === empty || !orderedAsString(strings as TypeRecord)) return null;
+    const nullish = strings !== declared;
+    if (nullish && !Number.isNaN(Number(text))) return null;
+    return { place, op, label: `${op} ${JSON.stringify(text)}`, constant: text, nullish };
   };
   /** The Strings an edge of a String comparison leaves its place, as an inclusive lower and exclusive upper end, `null` for none. */
   const stringEdge = (c: StringComparison, outcome: boolean): [string | null, string | null] => {
     const from = lookupStringEnd(c.place, 'from');
     const below = lookupStringEnd(c.place, 'below');
+    if (c.range && !outcome) {
+      // The Strings outside a range are two intervals; the edge is recorded
+      // only where it is empty, the place lying within the range.
+      const within = (c.range[0] === null || (from !== null && from >= c.range[0])) && (c.range[1] === null || (below !== null && below <= c.range[1]));
+      return within ? ['', ''] : [from, below];
+    }
     const split = c.op === '<' || c.op === '>=' ? c.constant : `${c.constant}\u0000`;
     const satisfiedBelow = c.op === '<' || c.op === '<=';
-    const [rfrom, rbelow] = satisfiedBelow === outcome ? [null, split] : [split, null];
+    const [rfrom, rbelow] = c.range ? c.range : satisfiedBelow === outcome ? [null, split] : [split, null];
     const edgeFrom = from === null ? rfrom : rfrom === null ? from : (from > rfrom ? from : rfrom);
     const edgeBelow = below === null ? rbelow : rbelow === null ? below : (below < rbelow ? below : rbelow);
     return [edgeFrom, edgeBelow];
@@ -29587,6 +29711,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     readonly op: string;
     readonly label: string;
     readonly constant: ExactDecimal;
+    /** A range pattern's bounds, `null` for an absent end. */
+    readonly range?: [DecimalBound, DecimalBound];
   }
   type DecimalBound = { readonly value: ExactDecimal, readonly offset: -1 | 0 | 1 } | null;
   const decimalPrecision: Record<string, number> = { decimal32: 7, decimal64: 16, decimal128: 34 };
@@ -29618,6 +29744,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const compareBound = (a: NonNullable<DecimalBound>, b: NonNullable<DecimalBound>): number => compareDecimal(a.value, b.value) || a.offset - b.offset;
   const decimalComparison = (test: ParseNode): DecimalComparison | null => {
     const t = unparenthesized(test);
+    if (t.type === 'IsExpression' && (t as unknown as ParseNode.IsExpression).Pattern?.type === 'MatchRangePattern') {
+      const is = t as unknown as ParseNode.IsExpression;
+      const subject = unparenthesized(is.Expression as ParseNode);
+      const place = narrowableName(subject);
+      if (place === null || changesPlace(t, place)) return null;
+      const declared = (lookup(place) ?? staticType(subject)) as TypeRecord | null;
+      const base = declared ? orderedBaseOf(declared) : null;
+      const precision = base?.Kind === 'primitive' ? decimalPrecision[base.Name] : undefined;
+      if (!precision) return null;
+      const range = (is.Pattern as ParseNode.MatchRangePattern).Range as unknown as { RangeStart?: ParseNode | null, RangeEnd?: ParseNode | null, RangeStartBound?: string | null, RangeEndBound?: string | null };
+      const fits = (v: ExactDecimal | null): boolean => !!v && (v.coef < 0n ? -v.coef : v.coef).toString().length <= precision && v.exp >= -95 && v.exp <= 90;
+      const start = range.RangeStart ? exactDecimalOf(unparenthesized(range.RangeStart)) : null;
+      const end = range.RangeEnd ? exactDecimalOf(unparenthesized(range.RangeEnd)) : null;
+      if ((range.RangeStart && !fits(start)) || (range.RangeEnd && !fits(end)) || (!start && !end)) return null;
+      const lo: DecimalBound = start ? { value: start, offset: range.RangeStartBound === 'open' ? 1 : 0 } : null;
+      const hi: DecimalBound = end ? { value: end, offset: range.RangeEndBound === 'open' ? -1 : 0 } : null;
+      return { place, op: 'is', label: `is ${(is.Pattern as { sourceText?: string }).sourceText ?? 'range'}`, constant: (start ?? end)!, range: [lo, hi] };
+    }
     if (t.type !== 'RelationalExpression') return null;
     const rel = t as ParseNode.RelationalExpression;
     if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
@@ -29655,9 +29799,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `x op c` splits the line between `c` with offset atBelow and the next point.
     const upper: DecimalBound = { value: c.constant, offset: atBelow };
     const lower: DecimalBound = { value: c.constant, offset: atBelow === -1 ? 0 : 1 };
-    const [rlo, rhi] = below === outcome ? [null, upper] : [lower, null];
     const lo = readDecimalBound(c.place, 'dlo');
     const hi = readDecimalBound(c.place, 'dhi');
+    if (c.range && !outcome) {
+      // The values outside a range are two intervals; the edge is recorded
+      // only where it is empty, the place lying within the range.
+      const within = (c.range[0] === null || (lo !== null && compareBound(lo, c.range[0]) >= 0)) && (c.range[1] === null || (hi !== null && compareBound(hi, c.range[1]) <= 0));
+      return within ? [{ value: c.constant, offset: 1 }, { value: c.constant, offset: 0 }] : [lo, hi];
+    }
+    const [rlo, rhi] = c.range ? c.range : below === outcome ? [null, upper] : [lower, null];
     return [lo === null ? rlo : rlo === null ? lo : (compareBound(lo, rlo) >= 0 ? lo : rlo), hi === null ? rhi : rhi === null ? hi : (compareBound(hi, rhi) <= 0 ? hi : rhi)];
   };
   const emptyDecimalEdge = ([lo, hi]: [DecimalBound, DecimalBound]): boolean => lo !== null && hi !== null && compareBound(lo, hi) > 0;
@@ -29799,7 +29949,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
     if (repeated === undefined && deciding && ordered) {
       const [pieces, narrowed] = currentPieces(ordered);
-      if (narrowed) {
+      if (narrowed || ordered.domainOnly) {
         // NaN satisfies no comparison, so a floating test can never fail only
         // where the numeric partition already excludes NaN.
         const nanPossible = ordered.nan && !lookup(categoryKey(ordered.place, 4));
@@ -29826,7 +29976,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (repeated === undefined && deciding && textual && (lookup(`${textual.place}.\u0000from`) || lookup(`${textual.place}.\u0000below`))) {
       if (emptyStringEdge(stringEdge(textual, true))) repeated = false;
-      else if (emptyStringEdge(stringEdge(textual, false))) repeated = true;
+      else if (!textual.nullish && emptyStringEdge(stringEdge(textual, false))) repeated = true;
     }
     const errorsBefore = errors.length;
     const result = walkTestResult(test, deciding, truthiness, visit);
