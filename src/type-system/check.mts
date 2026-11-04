@@ -4055,6 +4055,104 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     recordMethodArgumentWhereCheck(call, declaration);
   };
 
+  /** The domain of the value parameter `name` that the nearest enclosing declaration of `from` declares, with that declaration. */
+  const enclosingValueParameter = (from: ParseNode, name: string): { owner: ParseNode, domain: TypeRecord } | null => {
+    for (let p = from.parent as ParseNode | undefined; p; p = p.parent as ParseNode | undefined) {
+      const list = (p as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+      const parameter = list.find((candidate) => candidate.BindingIdentifier?.name === name);
+      if (!parameter) continue;
+      const constraint = (parameter as { IsValueParameter?: boolean }).IsValueParameter ? (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint : null;
+      const domain = constraint ? resolveType(constraint as ParseNode.Type) : null;
+      return domain ? { owner: p, domain: domain as TypeRecord } : null;
+    }
+    return null;
+  };
+  /**
+   * The ordered tests a callee's clause makes of parameters bound to
+   * enclosing value parameters, as tests of those enclosing places in clause
+   * order; a conjunction contributes the conjuncts that are such tests.
+   */
+  const retainedOrderedTests = (predicate: ParseNode, retained: ReadonlyMap<string, { place: string, domain: TypeRecord }>): OrderedComparison[] => {
+    const t = unparenthesized(predicate);
+    if (t.type === 'LogicalANDExpression') {
+      return [...retainedOrderedTests(t.LogicalANDExpression as ParseNode, retained), ...retainedOrderedTests(t.BitwiseORExpression as ParseNode, retained)];
+    }
+    const named = (node: ParseNode) => {
+      const n = unparenthesized(node);
+      return n.type === 'IdentifierReference' ? retained.get((n as ParseNode.IdentifierReference).name) : undefined;
+    };
+    if (t.type === 'IsExpression' && (t as unknown as ParseNode.IsExpression).Pattern?.type === 'MatchRangePattern') {
+      const range = t as unknown as ParseNode.IsExpression;
+      const target = named(range.Expression as unknown as ParseNode);
+      const ordered = target ? orderedFromParts(target.place, target.domain, 'is', range.Expression as unknown as ParseNode, range) : null;
+      return ordered ? [ordered] : [];
+    }
+    if (t.type !== 'RelationalExpression' || !['<', '<=', '>', '>='].includes((t as ParseNode.RelationalExpression).operator as string)) return [];
+    const rel = t as ParseNode.RelationalExpression;
+    const left = named(rel.RelationalExpression as ParseNode);
+    const right = named(rel.ShiftExpression as ParseNode);
+    const ordered = left && !right ? orderedFromParts(left.place, left.domain, rel.operator as string, unparenthesized(rel.ShiftExpression as ParseNode), null)
+      : right && !left ? orderedFromParts(right.place, right.domain, mirroredOperator[rel.operator as string]!, unparenthesized(rel.RelationalExpression as ParseNode), null)
+        : null;
+    return ordered ? [ordered] : [];
+  };
+  let judgingRetainedObligations = false;
+  /**
+   * #sec-generic-where: an application whose arguments still name enclosing
+   * value parameters retains its callee's clauses as obligations on them. One
+   * that the enclosing declarations' domains and clauses rule out can never
+   * hold, whichever specialization reaches it, so it is refused at the
+   * application. Its ordered tests are judged by the interval rule of
+   * #sec-narrowing-flow under the enclosing clauses, whose own judgments are
+   * reported at their declarations; anything else stays deferred.
+   */
+  const judgeRetainedObligations = (application: object, declaration: GenericWhereCheck['declaration'], clauses: readonly ParseNode.WhereClause[], bindings: ReadonlyMap<string, TypeRecord>): void => {
+    if (judgingRetainedObligations || !(application as { parent?: unknown }).parent) return;
+    const node = application as ParseNode;
+    const calleeValues = valueTypeParameterNames(declaration as ParseNode);
+    const retained = new Map<string, { place: string, domain: TypeRecord }>();
+    const owners = new Set<ParseNode>();
+    for (const [name, bound] of bindings) {
+      if (!calleeValues.has(name) || bound.Kind !== 'parameter') continue;
+      const enclosing = enclosingValueParameter(node, (bound as { Name: string }).Name);
+      if (!enclosing) continue;
+      retained.set(name, { place: (bound as { Name: string }).Name, domain: enclosing.domain });
+      owners.add(enclosing.owner);
+    }
+    if (retained.size === 0) return;
+    const enclosingClauses: ParseNode.WhereClause[] = [];
+    for (let p = node.parent as ParseNode | undefined; p; p = p.parent as ParseNode | undefined) {
+      const own = (p as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
+        ?? (p as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses ?? [];
+      enclosingClauses.unshift(...own);
+    }
+    judgingRetainedObligations = true;
+    const before = captureFlow();
+    try {
+      const mark = errors.length;
+      for (const clause of enclosingClauses) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (predicate.type === 'ConditionalRefinement' || whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+        const outcome = walkWhereClause(predicate);
+        if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+      errors.splice(mark);
+      for (const clause of clauses) {
+        for (const test of retainedOrderedTests(clause.RefinementPredicate as ParseNode, retained)) {
+          const [lo, hi] = currentInterval(test);
+          const whenTrue = edgeInterval(test, true, lo, hi);
+          if (whenTrue && emptyInterval(...whenTrue)) {
+            reportType('rt-where-unsatisfied', node, 'a $1 clause is not satisfied by this application', Value('where'));
+            return;
+          }
+          recordOrderedEdge(test, true);
+        }
+      }
+    } finally {
+      restoreFlow(before);
+      judgingRetainedObligations = false;
+    }
+  };
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
     outer?: { declaration: ParseNode, parameters: readonly ParseNode.TypeParameter[], bindings: ReadonlyMap<string, TypeRecord> } | null): void => {
     appliedGenericDeclarations.add(declaration as object);
@@ -4078,6 +4176,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!resolved || mentionsTypeParameter(resolved)) return;
       bindings.set(name, resolved);
     }
+    judgeRetainedObligations(application, declaration, clauses, bindings);
     const checks = whereChecks.get(application) ?? [];
     for (const [name, bound] of outer?.bindings ?? []) if (!bindings.has(name)) bindings.set(name, bound);
     if (checks.some((check) => check.declaration === declaration && check.bindings.size === bindings.size
@@ -15046,14 +15145,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (classDeclaration && ((classDeclaration as { ClassTail?: { WhereClauses?: readonly unknown[] | null } }).ClassTail?.WhereClauses?.length ?? 0) > 0) {
             const classParameters = (classDeclaration as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
             const classBindings = new Map<string, TypeRecord>();
+            const openBindings = new Map<string, TypeRecord>();
             classParameters.forEach((parameter, index) => {
               const written = orderedArgList[index];
               const resolved = written && (parameter.Arity ?? 0) === 0 ? resolveType(written) : null;
               if (resolved && !mentionsTypeParameter(resolved)) classBindings.set(parameter.BindingIdentifier.name, resolved);
+              if (resolved) openBindings.set(parameter.BindingIdentifier.name, resolved);
             });
             appliedGenericDeclarations.add(classDeclaration as object);
             if (classParameters.length > 0 && classBindings.size === classParameters.length) {
               recordWhereCheck(node, classDeclaration as unknown as GenericWhereCheck['declaration'], classBindings);
+            } else if (openBindings.size > classBindings.size) {
+              // Arguments that still name enclosing parameters retain the
+              // class's clauses as obligations on them (#sec-generic-where).
+              judgeRetainedObligations(node, classDeclaration as unknown as GenericWhereCheck['declaration'],
+                (classDeclaration as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses ?? [], openBindings);
             }
           }
           // #sec-parameterized-types: a primitive whose one type argument is an
@@ -21544,6 +21650,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const member = declaration?.type !== 'FunctionDeclaration' ? patternExpression(specialization.Expression) : null;
             const outer = member?.type === 'MemberExpression' ? receiverClassBindings((member as ParseNode.MemberExpression).MemberExpression as ParseNode) : null;
             recordWhereCheck(node, declaration as ParseNode.FunctionDeclaration, bindings, outer);
+          } else if (base.Signatures.length === 1 && whereDeclaration && clauses?.length) {
+            // Arguments that still name enclosing parameters retain the
+            // callee's clauses as obligations on them (#sec-generic-where).
+            judgeRetainedObligations(node, declaration as ParseNode.FunctionDeclaration, clauses, bindings);
           }
           // Complete the declaration-owned dependency before copying its
           // signature. The private approximation is instantiated separately;
