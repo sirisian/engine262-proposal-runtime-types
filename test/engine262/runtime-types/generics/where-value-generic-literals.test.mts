@@ -12,6 +12,7 @@ test('a value generic compares with a typed value as its literal would', () => {
   expect(evaluated("type Positive<N: uint32> = uint8 where this > N; let x: Positive.<1> = 2; 'ok';")).toBe('ok');
   expect(evaluated("type Positive<N: uint32> = uint8 where this > N; let m = 'none'; try { let x: Positive.<1> = 0; m = 'ran'; } catch (e) { m = 'threw'; } m;")).toBe('threw');
   expect(evaluated('type Below<N: uint32> = uint32 where this < N; String((5 := uint32) is Below.<10>) + String((15 := uint32) is Below.<10>);')).toBe('truefalse');
+  expect(evaluated('function f<N: uint32>(x: uint8): uint8 where x > N { return x; } String(f.<1>(2));')).toBe('2');
 });
 
 test('a value generic compares with a plain number as a number', () => {

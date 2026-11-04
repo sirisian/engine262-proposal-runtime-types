@@ -18111,7 +18111,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       else return result;
     }
   };
-  const numericResultCanAdapt = (expr: ParseNode): boolean => isNumericConstantExpression(contextualResultOperand(expr));
+  /**
+   * #sec-generic-where: a value generic reads in a clause as the literal its
+   * value is, so it adapts to a typed operand there as a numeric literal does,
+   * whether or not an application has bound it yet.
+   */
+  const isClauseValueGeneric = (expr: ParseNode | undefined): boolean => {
+    if (whereClauseWalkDepth === 0 || expr?.type !== 'IdentifierReference') return false;
+    const name = (expr as ParseNode.IdentifierReference).name;
+    const binding = ResolveBindingDeclaration(expr, name);
+    if (binding?.kind !== 'type-parameter') return false;
+    const list = (binding.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+    return list.some((parameter) => parameter.BindingIdentifier?.name === name && (parameter as { IsValueParameter?: boolean }).IsValueParameter);
+  };
+  const numericResultCanAdapt = (expr: ParseNode): boolean => isNumericConstantExpression(contextualResultOperand(expr))
+    || isClauseValueGeneric(contextualResultOperand(expr));
 
   /**
    * The types of a conditional expression's two arms, each typed UNDER THE TEST
@@ -28686,13 +28700,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return walkWhereClause(predicate);
   };
   /**
-   * #sec-callable-overload-contracts: whether a declaration shares its group
-   * with another, so that a failing clause makes it inapplicable while
+   * #sec-callable-overload-contracts: a declaration's group, and whether it
+   * shares it with another, so that a failing clause makes it inapplicable while
    * selection proceeds among the rest instead of refusing every use. A
    * function's or class's group is its same-named declarations in one scope; a
    * method's is the same-named methods of one class body or object literal.
    */
-  const sharesDeclarationGroup = (declaration: ParseNode): boolean => {
+  const declarationGroup = (declaration: ParseNode): ParseNode[] => {
     const unwrap = (item: ParseNode): ParseNode => (item.type === 'ExportDeclaration'
       ? ((item as { HoistableDeclaration?: ParseNode, ClassDeclaration?: ParseNode, Declaration?: ParseNode }).HoistableDeclaration
         ?? (item as { ClassDeclaration?: ParseNode }).ClassDeclaration ?? (item as { Declaration?: ParseNode }).Declaration ?? item)
@@ -28700,19 +28714,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const nameOf = (node: ParseNode | undefined): string | undefined => (node as { BindingIdentifier?: { name?: string } | null } | undefined)?.BindingIdentifier?.name;
     if (/^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration|ClassDeclaration)$/.test(declaration.type)) {
       const name = nameOf(declaration);
-      if (!name) return false;
+      if (!name) return [];
       let holder = declaration.parent as unknown;
       if ((holder as ParseNode | undefined)?.type === 'ExportDeclaration') holder = (holder as ParseNode).parent;
       const shape = holder as { StatementList?: readonly ParseNode[], FunctionStatementList?: readonly ParseNode[], ScriptBody?: { StatementList?: readonly ParseNode[] }, ModuleBody?: { ModuleItemList?: readonly ParseNode[] }, ModuleItemList?: readonly ParseNode[] } | undefined;
       const list = shape?.StatementList ?? shape?.FunctionStatementList ?? shape?.ScriptBody?.StatementList ?? shape?.ModuleBody?.ModuleItemList ?? shape?.ModuleItemList
         ?? (Array.isArray(holder) ? holder as readonly ParseNode[] : undefined);
       const family = declaration.type === 'ClassDeclaration' ? /^ClassDeclaration$/ : /^(FunctionDeclaration|GeneratorDeclaration|AsyncFunctionDeclaration|AsyncGeneratorDeclaration)$/;
-      return (list ?? []).map(unwrap).filter((item) => family.test(item.type) && nameOf(item) === name).length > 1;
+      return (list ?? []).map(unwrap).filter((item) => family.test(item.type) && nameOf(item) === name);
     }
     if (/Method|OperatorDefinition/.test(declaration.type) || declaration.type === 'MethodDefinition') {
       let owner = declaration.parent as ParseNode | undefined;
       while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression' && owner.type !== 'ObjectLiteral') owner = owner.parent as ParseNode | undefined;
-      if (!owner) return false;
+      if (!owner) return [];
       const elements = (owner.type === 'ObjectLiteral'
         ? (owner as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList
         : (owner as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } }).ClassTail?.ClassBody) ?? [];
@@ -28724,9 +28738,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return key === undefined ? undefined : `${(node as { static?: boolean }).static || (element as { static?: boolean }).static ? 'static ' : ''}${key}`;
       };
       const own = keyOf(declaration);
-      return own !== undefined && elements.filter((element) => keyOf(element) === own).length > 1;
+      return own === undefined ? [] : elements.filter((element) => keyOf(element) === own)
+        .map((element) => (element as { MethodDefinition?: ParseNode }).MethodDefinition ?? element);
     }
-    return false;
+    return [];
+  };
+  const sharesDeclarationGroup = (declaration: ParseNode): boolean => declarationGroup(declaration).length > 1;
+  /**
+   * #sec-specialization-lists: a capture's domain is its position's, the
+   * primary declaration's parameter at the top level. A top-level value
+   * capture of a specialization case is therefore a subject of the case's
+   * clauses at that domain (#sec-generic-where), as a value parameter is at
+   * its own.
+   */
+  const captureDomainsOf = (declaration: ParseNode | undefined): Map<string, Known> => {
+    const domains = new Map<string, Known>();
+    const listOf = (node: ParseNode | undefined) => (node as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters ?? null;
+    const list = listOf(declaration);
+    if (!declaration || !list || (list.ListKind !== 'specialization' && list.ListKind !== 'mixed')) return domains;
+    const primary = declarationGroup(declaration).map(listOf)
+      .find((candidate) => candidate && candidate.ListKind !== 'specialization' && candidate.ListKind !== 'mixed');
+    // A list's arguments align with the primary's parameters by position; a
+    // mixed list interleaves its own parameters with them in source order.
+    const kinds = (list as { EntryKinds?: readonly ('parameter' | 'argument')[] }).EntryKinds;
+    const entries = (list as { SpecializationEntryList?: readonly ParseNode[] }).SpecializationEntryList ?? [];
+    entries.forEach((entry, ordinal) => {
+      const pattern = (entry as { Pattern?: ParseNode }).Pattern;
+      if (pattern?.type !== 'CaptureBinding') return;
+      const capture = pattern as unknown as ParseNode.CaptureBinding;
+      if (capture.IsVariadic || capture.Arity > 0) return;
+      let seen = -1;
+      const position = kinds ? kinds.findIndex((kind) => kind === 'argument' && (seen += 1) === ordinal) : ordinal;
+      const parameter = position < 0 ? undefined : primary?.TypeParameterList[position];
+      if (!parameter?.IsValueParameter) return;
+      const domainNode = capture.TypeParameterDomain ?? (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint;
+      const domain = domainNode ? resolveType(domainNode as ParseNode.Type) : null;
+      if (domain) domains.set(capture.BindingIdentifier.name, domain as Known);
+    });
+    return domains;
   };
   /**
    * #sec-generic-where: a method signature's clauses, in an interface, an
@@ -28940,11 +28989,86 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
   };
-  const orderedComparison = (test: ParseNode): { place: string, op: string, bound: bigint, min: bigint, max: bigint } | null => {
+  /**
+   * #sec-narrowing-flow: an ordered comparison of a place against a constant,
+   * in the order of the place's domain. Values are keyed so that consecutive
+   * keys are adjacent values: an integer type's keys are its values, a
+   * `bigint`'s have no limits, and a binary floating type's step through its
+   * representable values with NaN kept beside the order. `eqLo` and `eqHi` key
+   * the least and greatest values equal to the constant, which differ only for
+   * a floating zero.
+   */
+  interface OrderedComparison {
+    readonly place: string;
+    readonly op: string;
+    readonly label: string;
+    readonly eqLo: bigint;
+    readonly eqHi: bigint;
+    readonly min: bigint | null;
+    readonly max: bigint | null;
+    readonly nan: boolean;
+    /** A range pattern's keys, where the test is one rather than a comparison. */
+    readonly range?: readonly [bigint | null, bigint | null];
+  }
+  /**
+   * The order a place's values take for clause-sequence intervals, or `null`
+   * where none is kept: a closed set of integral literals by value, an integer
+   * type within its limits, `bigint` without limits, and float32, float64 or
+   * Number through `floatOrderKey`. float16 is left out: its constants have no
+   * exact rounding here, and an inexact one could refuse a satisfiable sequence.
+   */
+  const orderDomainOf = (declared: TypeRecord): { readonly min: bigint | null, readonly max: bigint | null, readonly width: 32 | 64 | null, readonly closed: boolean } | null => {
+    // A closed set is read by its members (#sec-narrowing), so a sparse one is
+    // judged no more finely than the span of its values.
+    const closedSet = expandClosed(declared);
+    const members = (closedSet.Kind === 'union' ? closedSet.Members : [closedSet]) as TypeRecord[];
+    const memberLimits = members.every((member) => member.Kind === 'literal') ? members.map(valueLimits) : [];
+    if (memberLimits.length > 0 && memberLimits.every((l) => l !== null && l.lo === l.hi && integralKey(l.lo) !== null)) {
+      const keys = memberLimits.map((l) => integralKey(l!.lo)!);
+      return { min: keys.reduce((a, b) => (a < b ? a : b)), max: keys.reduce((a, b) => (a > b ? a : b)), width: null, closed: true };
+    }
+    const type = operationalType(declared as Known) as TypeRecord | null;
+    if (!type) return null;
+    const limits = integerLimits(type);
+    if (limits) return { min: limits.lo, max: limits.hi, width: null, closed: false };
+    if (type.Kind === 'primitive' && type.Name === 'bigint') return { min: null, max: null, width: null, closed: false };
+    const width = type.Kind === 'primitive' ? ({ number: 64, float64: 64, float32: 32 } as Record<string, 32 | 64 | undefined>)[type.Name] : undefined;
+    return width ? { min: floatOrderKey(-Infinity, width), max: floatOrderKey(Infinity, width), width, closed: false } : null;
+  };
+  /** A range pattern's end as an integral key, `null` for an end it lacks. */
+  const integralRangeEnd = (end: number, open: boolean, side: 'low' | 'high'): bigint | null => {
+    if (!Number.isFinite(end)) return null;
+    if (side === 'low') return open ? BigInt(Math.floor(end)) + 1n : BigInt(Math.ceil(end));
+    return open ? BigInt(Math.ceil(end)) - 1n : BigInt(Math.floor(end));
+  };
+  /** A range pattern's end as a floating key: an open end steps past every value equal to it. */
+  const floatRangeEnd = (end: number, open: boolean, side: 'low' | 'high', width: 32 | 64): bigint => {
+    const value = width === 32 ? Math.fround(end) : end;
+    if (side === 'low') return open ? floatOrderKey(value === 0 ? 0 : value, width) + 1n : floatOrderKey(value === 0 ? -0 : value, width);
+    return open ? floatOrderKey(value === 0 ? -0 : value, width) - 1n : floatOrderKey(value === 0 ? 0 : value, width);
+  };
+  /** An integral value as an order key, or `null` for one that is not integral. */
+  const integralKey = (value: number | bigint): bigint | null => (typeof value === 'bigint' ? value : Number.isInteger(value) ? BigInt(value) : null);
+  /** A binary floating value's key in its type's order, the sign folded so that -0 sits just below +0. */
+  const floatOrderKey = (value: number, width: 32 | 64): bigint => {
+    if (width === 32) {
+      const bits = new Uint32Array(new Float32Array([value]).buffer)[0]!;
+      const magnitude = BigInt(bits & 0x7fffffff);
+      return bits >>> 31 ? -magnitude - 1n : magnitude;
+    }
+    const bits = new BigUint64Array(new Float64Array([value]).buffer)[0]!;
+    const magnitude = bits & 0x7fffffffffffffffn;
+    return bits >> 63n ? -magnitude - 1n : magnitude;
+  };
+  const orderedComparison = (test: ParseNode): OrderedComparison | null => {
     const t = unparenthesized(test);
-    if (t.type !== 'RelationalExpression') return null;
+    // A range pattern with constant endpoints bounds its place as the
+    // comparisons its endpoints spell would (#sec-pattern-static-semantics).
+    const rangeTest = t.type === 'IsExpression' && (t as unknown as ParseNode.IsExpression).Pattern?.type === 'MatchRangePattern'
+      ? t as unknown as ParseNode.IsExpression : null;
+    if (!rangeTest && t.type !== 'RelationalExpression') return null;
     const rel = t as ParseNode.RelationalExpression;
-    if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
+    if (!rangeTest && (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression)) return null;
     const mirrored: Record<string, string> = { '<': '>', '>': '<', '<=': '>=', '>=': '<=' };
     // A value type parameter (`N` of `<N: uint32>`) is a place too, typed by
     // its constraint: the clauses a class and its methods state over it are
@@ -28961,24 +29085,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     const placeOf = (node: ParseNode): string | null => narrowableName(node)
       ?? (valueParameterConstraint(node) ? (node as ParseNode.IdentifierReference).name : null);
-    let subject = unparenthesized(rel.RelationalExpression as ParseNode);
-    let constant = unparenthesized(rel.ShiftExpression as ParseNode);
-    let op = rel.operator as string;
+    let subject = unparenthesized((rangeTest ? rangeTest.Expression : rel.RelationalExpression) as ParseNode);
+    let constant = rangeTest ? subject : unparenthesized(rel.ShiftExpression as ParseNode);
+    let op = rangeTest ? 'is' : rel.operator as string;
     if (placeOf(subject) === null && placeOf(constant) !== null) {
       [subject, constant] = [constant, subject];
       op = mirrored[op]!;
     }
     const place = placeOf(subject);
     if (place === null || changesPlace(t, place)) return null;
-    const bound = foldConstant(constant);
-    if (bound === null) return null;
-    const type = operationalType(lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
-    if (!type || !isIntegerValueType(type)) return null;
-    const prim = type as unknown as { Name?: string, Arguments?: readonly (TypeRecord | number)[] };
-    const bits = prim.Arguments?.[0];
-    if (typeof bits !== 'number') return null;
-    const [min, max] = prim.Name === 'int' ? [-(1n << BigInt(bits - 1)), (1n << BigInt(bits - 1)) - 1n] : [0n, (1n << BigInt(bits)) - 1n];
-    return { place, op, bound, min, max };
+    const declared = (lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
+    const domain = declared ? orderDomainOf(declared) : null;
+    if (!declared || !domain) return null;
+    const { min, max } = domain;
+    const nan = domain.width !== null;
+    if (rangeTest) {
+      const interval = rangePatternInterval(rangeTest.Pattern as ParseNode.MatchRangePattern);
+      if (!interval) return null;
+      const range: [bigint | null, bigint | null] = domain.width === null
+        ? [integralRangeEnd(interval.lo, interval.loOpen, 'low'), integralRangeEnd(interval.hi, interval.hiOpen, 'high')]
+        : [floatRangeEnd(interval.lo, interval.loOpen, 'low', domain.width), floatRangeEnd(interval.hi, interval.hiOpen, 'high', domain.width)];
+      return { place, op, label: `is ${(rangeTest.Pattern as { sourceText?: string }).sourceText ?? 'range'}`, eqLo: 0n, eqHi: 0n, min, max, nan, range };
+    }
+    if (domain.width === null) {
+      // A closed set's constant is read as the relational judgment reads it;
+      // an integer type's and a bigint's fold exactly.
+      const c = domain.closed ? constantNumber(constant, declared) : foldConstant(constant);
+      if (c === null || (typeof c === 'number' && !Number.isFinite(c))) return null;
+      return {
+        place, op, label: `${op} ${c}`,
+        eqLo: typeof c === 'bigint' ? c : BigInt(Math.ceil(c)), eqHi: typeof c === 'bigint' ? c : BigInt(Math.floor(c)),
+        min, max, nan,
+      };
+    }
+    const folded = foldConstant(constant);
+    const constantType = folded === null ? staticType(constant) as TypeRecord | null : null;
+    const written = folded !== null ? Number(folded)
+      : constantType?.Kind === 'literal' ? numericValueOf((constantType as { Value?: unknown }).Value) : undefined;
+    if (written === undefined || Number.isNaN(written)) return null;
+    // A literal compared with a float32 takes its float32 value.
+    const value = domain.width === 32 ? Math.fround(written) : written;
+    return {
+      place, op, label: `${op} ${written}`,
+      eqLo: floatOrderKey(value === 0 ? -0 : value, domain.width), eqHi: floatOrderKey(value === 0 ? 0 : value, domain.width),
+      min, max, nan,
+    };
   };
   const intervalFact = (place: string, which: 'lo' | 'hi'): bigint | undefined => {
     const t = lookup(`${place}.\u0000${which}`);
@@ -28991,17 +29142,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const known = values as bigint[];
     return known.reduce((a, b) => (which === 'lo' ? (a < b ? a : b) : (a > b ? a : b)));
   };
-  /** The values of the place satisfying `place op bound` (`outcome` true) or its negation, as an inclusive interval. */
-  const comparisonRegion = (c: { op: string, bound: bigint, min: bigint, max: bigint }, outcome: boolean): [bigint, bigint] => {
-    const below: [bigint, bigint] = [c.min, c.op === '<' || c.op === '>=' ? c.bound - 1n : c.bound];
-    const above: [bigint, bigint] = [c.op === '<' || c.op === '>=' ? c.bound : c.bound + 1n, c.max];
+  /** The greater of two lower ends and the lesser of two upper ends, `null` being an end a `bigint` lacks. */
+  const higherLow = (a: bigint | null, b: bigint | null): bigint | null => (a === null ? b : b === null ? a : a > b ? a : b);
+  const lowerHigh = (a: bigint | null, b: bigint | null): bigint | null => (a === null ? b : b === null ? a : a < b ? a : b);
+  const emptyInterval = (lo: bigint | null, hi: bigint | null): boolean => lo !== null && hi !== null && lo > hi;
+  /** The keys of the place satisfying `place op constant` (`outcome` true) or its negation, as an inclusive interval. */
+  const comparisonRegion = (c: OrderedComparison, outcome: boolean): [bigint | null, bigint | null] => {
+    const split = c.op === '<' || c.op === '>=' ? c.eqLo - 1n : c.eqHi;
+    const below: [bigint | null, bigint | null] = [c.min, split];
+    const above: [bigint | null, bigint | null] = [split + 1n, c.max];
     const satisfied = c.op === '<' || c.op === '<=' ? below : above;
     return outcome ? satisfied : (satisfied === below ? above : below);
   };
-  const currentInterval = (c: { place: string, min: bigint, max: bigint }): [bigint, bigint, boolean] => {
+  /**
+   * The keys an edge of an ordered test leaves its place, within the current
+   * keys: a comparison's edge is one interval, and a range pattern's false
+   * edge is one only where the range covers an end of the current keys; it is
+   * `null` where it would be two.
+   */
+  const edgeInterval = (c: OrderedComparison, outcome: boolean, lo: bigint | null, hi: bigint | null): [bigint | null, bigint | null] | null => {
+    const [rlo, rhi] = c.range ?? comparisonRegion(c, outcome);
+    if (!c.range || outcome) return [higherLow(rlo, lo), lowerHigh(rhi, hi)];
+    const coversLow = rlo === null || (lo !== null && rlo <= lo);
+    const coversHigh = rhi === null || (hi !== null && rhi >= hi);
+    if (coversLow && coversHigh) return [1n, 0n];
+    if (coversLow) return [higherLow(rhi! + 1n, lo), hi];
+    if (coversHigh) return [lo, lowerHigh(rlo! - 1n, hi)];
+    return null;
+  };
+  const currentInterval = (c: OrderedComparison): [bigint | null, bigint | null, boolean] => {
     const lo = intervalFact(c.place, 'lo');
     const hi = intervalFact(c.place, 'hi');
-    return [lo !== undefined && lo > c.min ? lo : c.min, hi !== undefined && hi < c.max ? hi : c.max, lo !== undefined || hi !== undefined];
+    return [higherLow(lo ?? null, c.min), lowerHigh(hi ?? null, c.max), lo !== undefined || hi !== undefined];
   };
   const walkTestOutcomes = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     const live = flowLive;
@@ -29015,10 +29187,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (repeated === undefined && deciding && ordered) {
       const [lo, hi, narrowed] = currentInterval(ordered);
       if (narrowed) {
-        const [tlo, thi] = comparisonRegion(ordered, true);
-        const [flo, fhi] = comparisonRegion(ordered, false);
-        if ((tlo > lo ? tlo : lo) > (thi < hi ? thi : hi)) repeated = false;
-        else if ((flo > lo ? flo : lo) > (fhi < hi ? fhi : hi)) repeated = true;
+        // NaN satisfies no comparison, so a floating test can never fail only
+        // where the numeric partition already excludes NaN.
+        const nanPossible = ordered.nan && !lookup(categoryKey(ordered.place, 4));
+        const whenTrue = edgeInterval(ordered, true, lo, hi);
+        const whenFalse = edgeInterval(ordered, false, lo, hi);
+        if (whenTrue && emptyInterval(...whenTrue)) repeated = false;
+        else if (!nanPossible && whenFalse && emptyInterval(...whenFalse)) repeated = true;
       }
     }
     const errorsBefore = errors.length;
@@ -29028,7 +29203,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // interval is as exact as any other's.
     if (!canon && !ordered) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? `${ordered!.op} ${ordered!.bound}`, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered!.label, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
@@ -29037,10 +29212,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const place of canon?.places ?? []) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon!.key}`, anyTypeRecord);
       if (ordered) {
         const [lo, hi] = currentInterval(ordered);
-        const [rlo, rhi] = comparisonRegion(ordered, outcome);
+        const [narrowedLo, narrowedHi] = edgeInterval(ordered, outcome, lo, hi) ?? [null, null];
         const bigintBase = makePrimitive('bigint');
-        declareNarrowed(`${ordered.place}.\u0000lo`, { Kind: 'literal', Value: rlo > lo ? rlo : lo, Base: bigintBase } as unknown as TypeRecord);
-        declareNarrowed(`${ordered.place}.\u0000hi`, { Kind: 'literal', Value: rhi < hi ? rhi : hi, Base: bigintBase } as unknown as TypeRecord);
+        if (narrowedLo !== null) declareNarrowed(`${ordered.place}.\u0000lo`, { Kind: 'literal', Value: narrowedLo, Base: bigintBase } as unknown as TypeRecord);
+        if (narrowedHi !== null) declareNarrowed(`${ordered.place}.\u0000hi`, { Kind: 'literal', Value: narrowedHi, Base: bigintBase } as unknown as TypeRecord);
+        // The edge on which a comparison succeeds holds no NaN.
+        if (outcome && ordered.nan) recordCategories(ordered.place, allCategories & ~4);
       }
       return captureFlow();
     };
@@ -35426,7 +35603,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const classClauses = (classNode as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } } | undefined)?.ClassTail?.WhereClauses ?? [];
           const formals = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
-          const valueParameters = new Set([...valueTypeParameterNames(owner), ...valueTypeParameterNames(classNode)]);
+          const captures = new Map([...captureDomainsOf(classNode), ...captureDomainsOf(owner)]);
+          const valueParameters = new Set([...valueTypeParameterNames(owner), ...valueTypeParameterNames(classNode), ...captures.keys()]);
           // #sec-checked-contracts: `return` is read at the effective result,
           // which a `void` function does not have.
           let result = hasDeclaredReturn ? returnTypes[returnTypes.length - 1] as Known | null : null;
@@ -35441,7 +35619,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             result = inferred && inferred.Kind !== 'any' ? inferred : null;
           }
           const beforeClauses = captureFlow();
+          if (captures.size > 0) frames.push(emptyFrame());
           try {
+            for (const [name, domain] of captures) declare(name, domain);
             // The class's clauses establish the facts a method clause is
             // judged under; their own judgments are reported at the class.
             if (classClauses.length > 0) {
@@ -35457,6 +35637,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' && !isNeverType(result) ? result as Known : null, thisType: declaredReceiverOf(owner) });
             recordDefaultWhereChecks(owner, clauses, params ?? []);
           } finally {
+            if (captures.size > 0) frames.pop();
             restoreFlow(beforeClauses);
           }
         }
@@ -40112,7 +40293,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const beforeClauses = captureFlow();
           const pushedAliasScope = pushTypeParameterScopeOf(n);
           try {
-            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n) });
+            // #sec-where-clauses: a clause that reads `this` declares a generic
+            // dependent record type, judged once here with `this` read at the
+            // base and each type parameter through its bound.
+            const genericBase = resolved && resolved.Kind === 'parameterized' ? ((resolved as { Base?: TypeRecord }).Base ?? resolved) : resolved;
+            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n), thisType: (genericBase ?? undefined) as Known | undefined });
             recordDefaultWhereChecks(n, aliasClauses, []);
           } finally {
             if (pushedAliasScope) typeParameterScopes.pop();
@@ -42391,6 +42576,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // of the method's own names is a clause of the class, judged with the
           // class's parameters where nothing applies the class.
           const classValues = valueTypeParameterNames(n);
+          const classCaptures = captureDomainsOf(n);
           const memberClauses = classValues.size === 0 ? [] : ((n.ClassTail as { ClassBody?: readonly ParseNode[] | null }).ClassBody ?? []).flatMap((element) => {
             if (!/Method/.test(element.type)) return [];
             const ownNames = new Set<string>();
@@ -42417,11 +42603,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (ownClauses.length > 0 || memberClauses.length > 0) {
             const beforeClassClauses = captureFlow();
             const pushedClassScope = pushTypeParameterScopeOf(n);
+            if (classCaptures.size > 0) frames.push(emptyFrame());
             try {
-              if (ownClauses.length > 0) walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: classValues });
+              for (const [name, domain] of classCaptures) declare(name, domain);
+              if (ownClauses.length > 0) walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: new Set([...classValues, ...classCaptures.keys()]) });
               if (memberClauses.length > 0) walkDeclarationClauses(n, memberClauses, { formals: new Set(), valueParameters: classValues });
               recordDefaultWhereChecks(n, ownClauses, []);
             } finally {
+              if (classCaptures.size > 0) frames.pop();
               if (pushedClassScope) typeParameterScopes.pop();
               restoreFlow(beforeClassClauses);
             }

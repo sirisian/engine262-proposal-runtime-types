@@ -43,3 +43,27 @@ test('checking a generic constraint cannot write a runtime binding: the write is
   const result = observeScript('let N = 7; function f<N: uint32>(): void where (N = 0) === 0 {} function unused() { f.<1>(); } String(N);');
   expect(result).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-readonly-store' } });
 });
+
+/**
+ * #sec-generic-where: a selection filter of a specialization case is judged
+ * at the declaration, and #sec-specialization-lists gives a capture its
+ * position's domain, so a filter no binding of the capture can satisfy, or
+ * one every binding satisfies, is refused where it is written.
+ */
+const BOX = 'class Box<T: type, N: uint8> {}';
+const refusedFilter = (source: string, rule: string): void => {
+  expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule } });
+};
+
+test('a specialization case\'s filter is judged over its captures\' domains', () => {
+  refusedFilter(`${BOX} class Box<uint32, const N> where N > 300 {}`, 'rt-numeric-range');
+  refusedFilter(`${BOX} class Box<uint32, const N: uint8> where N > 300 {}`, 'rt-numeric-range');
+  refusedFilter(`${BOX} class Box<uint32, const N> where N > 10 where N < 5 {}`, 'rt-impossible-test');
+  refusedFilter(`${BOX} class Box<uint32, const N> where N >= 0 {}`, 'rt-impossible-test');
+  refusedFilter("function p<A: type, N: uint8>(): string { return 'o'; } function p<uint32, const N>(): string where N > 300 { return 's'; }", 'rt-numeric-range');
+});
+
+test('a satisfiable specialization filter is accepted and still selects its case', () => {
+  expect(evaluated(`${BOX} class Box<uint32, const N> where N > 10 {} 'ok';`)).toBe('ok');
+  expect(evaluated("function p<A: type, N: uint8>(): string { return 'owner'; } function p<uint32, const N>(): string where N > 10 { return 'case'; } p.<uint32, 20>() + ':' + p.<uint32, 5>();")).toBe('case:owner');
+});

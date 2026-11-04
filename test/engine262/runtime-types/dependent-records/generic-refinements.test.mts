@@ -32,3 +32,28 @@ test('a clause that reads a value parameter is evaluated under the application\'
 test('a generic alias whose clauses do not read this is unchanged', () => {
   expect(evaluated("type A<N: uint32> = [N].<uint8> where N > 2; let a: A.<3>; 'ok';")).toBe('ok');
 });
+
+/**
+ * #sec-where-clauses: a generic alias's clause that reads `this` is judged
+ * once, at the declaration, with `this` read at the base and each type
+ * parameter through its bound, so a clause no value of the base can satisfy,
+ * or one every value satisfies, is refused there (#sec-generic-where).
+ */
+const refusedAtDeclaration = (source: string, rule: string): void => {
+  expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule } });
+};
+
+test('a generic refinement is judged at its declaration through its parameter\'s bound', () => {
+  refusedAtDeclaration('type R<T: type extends uint8> = T where this > 300;', 'rt-impossible-test');
+  refusedAtDeclaration('type R<T: type extends uint8> = T where this === null;', 'rt-impossible-test');
+  refusedAtDeclaration('type R<T: type extends uint8> = T where this >= 0;', 'rt-impossible-test');
+  refusedAtDeclaration('type R<T: type extends uint8> = { a: T } where this.a > 300;', 'rt-impossible-test');
+});
+
+test('a generic refinement whose base names no parameter is judged at that base', () => {
+  refusedAtDeclaration('type R<N: uint8> = uint8 where this > 300;', 'rt-numeric-range');
+});
+
+test('a satisfiable generic refinement is accepted at its declaration', () => {
+  expect(evaluated(`${NE} type B<N: uint32> = uint32 where this < N; type S<T: type extends uint8> = T where this > 3; 'ok';`)).toBe('ok');
+});
