@@ -79,6 +79,14 @@ test('an enum over string compared with an enumerator is judged by declaration p
   expect(evaluated(`${U} function f(u: U) where u > U.b where u < U.c { return u; } String(f(U.a) === U.a);`)).toBe('true');
 });
 
+test('decimal clauses carry their order exactly, a cohort being one value', () => {
+  impossible('function f(x: decimal128) where x > 0.3 where x < 0.1 { return x; }');
+  impossible('function f(x: decimal128) where x > 0.1 where x <= 0.10 { return x; }');
+  impossible('function f(x: decimal128) where x > 0.5 where x > 0.2 { return x; }');
+  expect(evaluated("function f(x: decimal128) where x > 0.1 where x < 0.10000000000000000555 { return x; } 'ok';")).toBe('ok');
+  expect(evaluated("function f(x: decimal128) where x >= 0.1 where x <= 0.10 { return x; } 'ok';")).toBe('ok');
+});
+
 test('satisfiable floating sequences are accepted and run', () => {
   expect(evaluated('function f(x: float64) where x > 3 where x < 5 { return x; } String(f(4.5));')).toBe('4.5');
   expect(evaluated('function f(x: float32) where x >= 1 where x <= 1 { return x; } String(f(1));')).toBe('1');

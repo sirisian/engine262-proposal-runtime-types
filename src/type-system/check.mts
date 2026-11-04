@@ -4097,6 +4097,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return ordered ? [ordered] : [];
   };
   let judgingRetainedObligations = false;
+  /** Applications already judged: the judgment reads only declarations, so it has one answer. */
+  const judgedApplications = new WeakSet<object>();
   /**
    * #sec-generic-where: an application whose arguments still name enclosing
    * value parameters retains its callee's clauses as obligations on them. One
@@ -4107,7 +4109,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * reported at their declarations; anything else stays deferred.
    */
   const judgeRetainedObligations = (application: object, declaration: GenericWhereCheck['declaration'], clauses: readonly ParseNode.WhereClause[], bindings: ReadonlyMap<string, TypeRecord>): void => {
-    if (judgingRetainedObligations || !(application as { parent?: unknown }).parent) return;
+    if (judgingRetainedObligations || !(application as { parent?: unknown }).parent || judgedApplications.has(application)) return;
     const node = application as ParseNode;
     const calleeValues = valueTypeParameterNames(declaration as ParseNode);
     const retained = new Map<string, { place: string, domain: TypeRecord }>();
@@ -4120,6 +4122,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       owners.add(enclosing.owner);
     }
     if (retained.size === 0) return;
+    judgedApplications.add(application);
     const enclosingClauses: ParseNode.WhereClause[] = [];
     for (let p = node.parent as ParseNode | undefined; p; p = p.parent as ParseNode | undefined) {
       const own = (p as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
@@ -15009,7 +15012,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (genericDeclaration.type === 'TypeAliasDeclaration') {
               recordTypeArgumentApplication(node, parameters, bindings, pendingArguments, genericDeclaration);
             }
-            if (bindings.size !== parameters.length) return null;
+            if (bindings.size !== parameters.length) {
+              // An argument naming an enclosing value parameter binds nothing
+              // yet, so its clause obligations are retained on that parameter
+              // (#sec-generic-where).
+              const open = new Map<string, TypeRecord>();
+              (genericParameters as readonly ParseNode.TypeParameter[]).forEach((parameter, index) => {
+                const argument = rawArgList[index] as { type?: string, TypeName?: ParseNode.TypeName, TypeArguments?: unknown } | undefined;
+                const name = argument?.type === 'TypeReference' && !argument.TypeArguments && !argument.TypeName?.MemberNames?.length
+                  ? argument.TypeName?.IdentifierReference?.name : undefined;
+                if (name && enclosingValueParameter(node, name)) open.set(parameter.BindingIdentifier.name, { Kind: 'parameter', Name: name } as unknown as TypeRecord);
+              });
+              const aliasClauses = (genericDeclaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+              if (genericDeclaration.type === 'TypeAliasDeclaration' && open.size > 0 && aliasClauses.length > 0) {
+                judgeRetainedObligations(node, genericDeclaration, aliasClauses, open);
+              }
+              return null;
+            }
             // #sec-generic-where: retain the resolved declaration and bound
             // arguments, including named, defaulted and spread arguments.
             if (genericDeclaration.type === 'TypeAliasDeclaration') recordWhereCheck(node, genericDeclaration, bindings);
@@ -29488,6 +29507,107 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (from !== null) declareNarrowed(`${c.place}.\u0000from`, { Kind: 'literal', Value: from, Base: stringBase } as unknown as TypeRecord);
     if (below !== null) declareNarrowed(`${c.place}.\u0000below`, { Kind: 'literal', Value: below, Base: stringBase } as unknown as TypeRecord);
   };
+  /**
+   * #sec-narrowing-flow: a comparison of a decimal place with a decimal
+   * constant, by magnitude, so that the members of a cohort are one value. No
+   * next value is computed, so a bound is an exact value and an infinitesimal
+   * offset, -1 just below it, 0 at it and +1 just above it, and the interval
+   * is read over the reals: it can miss an impossibility but never refuses a
+   * satisfiable sequence. A constant is read exactly from its source text, and
+   * one with more digits than the type holds is not judged, since the type
+   * would round it.
+   */
+  interface ExactDecimal {
+    readonly coef: bigint;
+    readonly exp: number;
+  }
+  interface DecimalComparison {
+    readonly place: string;
+    readonly op: string;
+    readonly label: string;
+    readonly constant: ExactDecimal;
+  }
+  type DecimalBound = { readonly value: ExactDecimal, readonly offset: -1 | 0 | 1 } | null;
+  const decimalPrecision: Record<string, number> = { decimal32: 7, decimal64: 16, decimal128: 34 };
+  const exactDecimalOf = (node: ParseNode): ExactDecimal | null => {
+    let core = unparenthesized(node);
+    let negative = false;
+    if (core.type === 'UnaryExpression' && (core as ParseNode.UnaryExpression).operator === '-') {
+      negative = true;
+      core = unparenthesized((core as ParseNode.UnaryExpression).UnaryExpression as ParseNode);
+    }
+    if (core.type !== 'NumericLiteral') return null;
+    const text = String((core as { sourceText?: string }).sourceText ?? '').replace(/_/g, '');
+    const match = /^(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(text);
+    if (!match || !(match[1] || match[2])) return null;
+    let coef = BigInt((match[1] ?? '') + (match[2] ?? '')) * (negative ? -1n : 1n);
+    let exp = Number(match[3] ?? '0') - (match[2]?.length ?? 0);
+    while (coef !== 0n && coef % 10n === 0n) {
+      coef /= 10n;
+      exp += 1;
+    }
+    return { coef, exp: coef === 0n ? 0 : exp };
+  };
+  const compareDecimal = (a: ExactDecimal, b: ExactDecimal): number => {
+    const low = Math.min(a.exp, b.exp);
+    const x = a.coef * 10n ** BigInt(a.exp - low);
+    const y = b.coef * 10n ** BigInt(b.exp - low);
+    return x < y ? -1 : x > y ? 1 : 0;
+  };
+  const compareBound = (a: NonNullable<DecimalBound>, b: NonNullable<DecimalBound>): number => compareDecimal(a.value, b.value) || a.offset - b.offset;
+  const decimalComparison = (test: ParseNode): DecimalComparison | null => {
+    const t = unparenthesized(test);
+    if (t.type !== 'RelationalExpression') return null;
+    const rel = t as ParseNode.RelationalExpression;
+    if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
+    let subject = unparenthesized(rel.RelationalExpression as ParseNode);
+    let constant = unparenthesized(rel.ShiftExpression as ParseNode);
+    let op = rel.operator as string;
+    if (narrowableName(subject) === null && narrowableName(constant) !== null) {
+      [subject, constant] = [constant, subject];
+      op = mirroredOperator[op]!;
+    }
+    const place = narrowableName(subject);
+    if (place === null || changesPlace(t, place)) return null;
+    const declared = (lookup(place) ?? staticType(subject)) as TypeRecord | null;
+    const base = declared ? orderedBaseOf(declared) : null;
+    const precision = base?.Kind === 'primitive' ? decimalPrecision[base.Name] : undefined;
+    const value = precision ? exactDecimalOf(constant) : null;
+    if (!value || (value.coef < 0n ? -value.coef : value.coef).toString().length > precision! || value.exp < -95 || value.exp > 90) return null;
+    return { place, op, label: `${op} ${(constant as { sourceText?: string }).sourceText ?? ''}`, constant: value };
+  };
+  const readDecimalBound = (place: string, which: 'dlo' | 'dhi'): DecimalBound => {
+    const t = lookup(`${place}.\u0000${which}`);
+    if (!t) return null;
+    const bounds = (t.Kind === 'union' ? t.Members : [t]).map((m): DecimalBound => {
+      const encoded = literalString((m as { Value?: unknown }).Value);
+      const parts = encoded?.split(':');
+      return parts && parts.length === 3 ? { value: { coef: BigInt(parts[0]!), exp: Number(parts[1]) }, offset: Number(parts[2]) as -1 | 0 | 1 } : null;
+    });
+    if (bounds.some((b) => b === null)) return null;
+    return (bounds as NonNullable<DecimalBound>[]).reduce((a, b) => (which === 'dlo' ? (compareBound(a, b) <= 0 ? a : b) : (compareBound(a, b) >= 0 ? a : b)));
+  };
+  /** The interval an edge of a decimal comparison leaves its place, `null` ends being unbounded. */
+  const decimalEdge = (c: DecimalComparison, outcome: boolean): [DecimalBound, DecimalBound] => {
+    const below = c.op === '<' || c.op === '<=';
+    const atBelow: -1 | 0 = c.op === '<' || c.op === '>=' ? -1 : 0;
+    // `x op c` splits the line between `c` with offset atBelow and the next point.
+    const upper: DecimalBound = { value: c.constant, offset: atBelow };
+    const lower: DecimalBound = { value: c.constant, offset: atBelow === -1 ? 0 : 1 };
+    const [rlo, rhi] = below === outcome ? [null, upper] : [lower, null];
+    const lo = readDecimalBound(c.place, 'dlo');
+    const hi = readDecimalBound(c.place, 'dhi');
+    return [lo === null ? rlo : rlo === null ? lo : (compareBound(lo, rlo) >= 0 ? lo : rlo), hi === null ? rhi : rhi === null ? hi : (compareBound(hi, rhi) <= 0 ? hi : rhi)];
+  };
+  const emptyDecimalEdge = ([lo, hi]: [DecimalBound, DecimalBound]): boolean => lo !== null && hi !== null && compareBound(lo, hi) > 0;
+  const recordDecimalEdge = (c: DecimalComparison, outcome: boolean): void => {
+    const [lo, hi] = decimalEdge(c, outcome);
+    const encode = (b: NonNullable<DecimalBound>): TypeRecord => ({ Kind: 'literal', Value: `${b.value.coef}:${b.value.exp}:${b.offset}`, Base: makePrimitive('string') }) as unknown as TypeRecord;
+    if (lo !== null) declareNarrowed(`${c.place}.\u0000dlo`, encode(lo));
+    if (hi !== null) declareNarrowed(`${c.place}.\u0000dhi`, encode(hi));
+    // The edge on which a comparison succeeds holds no NaN.
+    if (outcome) recordCategories(c.place, allCategories & ~4);
+  };
   /** Install the keys an edge of an ordered test leaves its place, and the NaN its success excludes. */
   const recordOrderedEdge = (ordered: OrderedComparison, outcome: boolean): void => {
     const [lo, hi] = currentInterval(ordered);
@@ -29512,6 +29632,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `if (x < 100) { if (x >= 100) {} }` over a uint8.
     const ordered = live && visit && whereClauseWalkDepth > 0 ? orderedComparison(test) : null;
     const textual = !ordered && live && visit && whereClauseWalkDepth > 0 ? stringComparison(test) : null;
+    const decimal = !ordered && !textual && live && visit && whereClauseWalkDepth > 0 ? decimalComparison(test) : null;
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
     if (repeated === undefined && deciding && ordered) {
       const [lo, hi, narrowed] = currentInterval(ordered);
@@ -29525,6 +29646,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         else if (!nanPossible && whenFalse && emptyInterval(...whenFalse)) repeated = true;
       }
     }
+    if (repeated === undefined && deciding && decimal && (lookup(`${decimal.place}.\u0000dlo`) || lookup(`${decimal.place}.\u0000dhi`))) {
+      // NaN satisfies no comparison, so the false edge holds it until an
+      // earlier success has excluded it.
+      if (emptyDecimalEdge(decimalEdge(decimal, true))) repeated = false;
+      else if (lookup(categoryKey(decimal.place, 4)) && emptyDecimalEdge(decimalEdge(decimal, false))) repeated = true;
+    }
     if (repeated === undefined && deciding && textual && (lookup(`${textual.place}.\u0000from`) || lookup(`${textual.place}.\u0000below`))) {
       if (emptyStringEdge(stringEdge(textual, true))) repeated = false;
       else if (emptyStringEdge(stringEdge(textual, false))) repeated = true;
@@ -29534,9 +29661,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
     // A comparison against a negative literal has no canonical form, but its
     // interval is as exact as any other's.
-    if (!canon && !ordered && !textual) return result;
+    if (!canon && !ordered && !textual && !decimal) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual!.label, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal!.label, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
@@ -29545,6 +29672,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const place of canon?.places ?? []) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon!.key}`, anyTypeRecord);
       if (ordered) recordOrderedEdge(ordered, outcome);
       if (textual) recordStringEdge(textual, outcome);
+      if (decimal) recordDecimalEdge(decimal, outcome);
       return captureFlow();
     };
     const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };

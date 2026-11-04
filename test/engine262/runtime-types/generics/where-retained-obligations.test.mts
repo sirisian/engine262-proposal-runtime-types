@@ -23,6 +23,11 @@ test('an application in a body or an annotation the enclosing clauses rule out i
   unsatisfiable(`${A} function h<M: uint8>(a: A.<M>) where M < 50 { return a; }`);
 });
 
+test('an alias application inside another alias the enclosing clauses rule out is refused', () => {
+  unsatisfiable('type A<N: uint8> = [N].<uint8> where N > 100; type B<M: uint8> = A.<M> where M < 50;');
+  expect(evaluated("type A<N: uint8> = [N].<uint8> where N > 100; type B<M: uint8> = A.<M> where M > 150; 'ok';")).toBe('ok');
+});
+
 test('an application the enclosing parameter\'s domain rules out is refused', () => {
   unsatisfiable('function g<N: uint32>() where N > 1000 { return N; } function h<M: uint8>() { return g.<M>(); }');
 });
