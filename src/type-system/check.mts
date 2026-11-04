@@ -28208,6 +28208,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         };
+        /**
+         * Within a clause sequence a refinement's clause over one ordered
+         * place projects as a set of pieces, its disjunctions as unions, its
+         * conditionals as the union of each branch under its test, its
+         * negations as complements; a part the pieces cannot read widens the
+         * set rather than narrowing it (#sec-refinement-narrowing).
+         */
+        const piecesOf = (node: ParseNode): { place: string, domain: OrderedComparison, pieces: Piece[] } | null => {
+          const t = unparenthesized(node);
+          if (t.type === 'UnaryExpression' && t.operator === '!') {
+            const inner = piecesOf(t.UnaryExpression);
+            return inner ? { ...inner, pieces: complementPieces(inner.domain, inner.pieces) } : null;
+          }
+          if (t.type === 'LogicalANDExpression' || t.type === 'LogicalORExpression') {
+            const left = piecesOf(t.type === 'LogicalANDExpression' ? t.LogicalANDExpression : t.LogicalORExpression);
+            const right = piecesOf(t.type === 'LogicalANDExpression' ? t.BitwiseORExpression : t.LogicalANDExpression);
+            if (t.type === 'LogicalANDExpression') {
+              if (!left || !right) return left ?? right;
+              return left.place === right.place ? { ...left, pieces: intersectPieces(left.pieces, right.pieces) } : null;
+            }
+            return left && right && left.place === right.place ? { ...left, pieces: normalizePieces([...left.pieces, ...right.pieces]) } : null;
+          }
+          if (t.type === 'ConditionalRefinement') {
+            const test = piecesOf(t.Test);
+            if (!test) return null;
+            const consequent = piecesOf(t.Consequent);
+            const alternate = t.Alternate ? piecesOf(t.Alternate) : null;
+            if ((consequent && consequent.place !== test.place) || (alternate && alternate.place !== test.place)) return null;
+            const taken = consequent ? intersectPieces(test.pieces, consequent.pieces) : test.pieces;
+            const rest = complementPieces(test.domain, test.pieces);
+            return { ...test, pieces: normalizePieces([...taken, ...(alternate ? intersectPieces(rest, alternate.pieces) : rest)]) };
+          }
+          const asserted = orderedAssertion(t, name, read) ?? pointAssertion(t, name, read);
+          if (!asserted) return null;
+          const whole: Piece[] = [[asserted.min, asserted.max]];
+          const pieces = asserted.op === '===' ? intersectPieces(whole, [[asserted.eqLo, asserted.eqHi]])
+            : asserted.op === '!==' ? subtractPieces(whole, [asserted.eqLo, asserted.eqHi])
+              : intersectPieces(whole, edgeRegions(asserted, true));
+          return { place: asserted.place, domain: asserted, pieces };
+        };
         // Each pass only installs stricter existing types. A syntax-sized
         // bound also keeps recursive aliases and contradictory clauses finite.
         const limit = clauses.reduce((total, clause) => total + RefinementProjectionSize(clause.predicate), 0);
@@ -28219,6 +28259,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             retainTypeArgumentDeclarations(scope, clause.declarations, clause.bindings);
             typeParameterScopes.push(scope);
             try {
+              if (whereClauseWalkDepth > 0 && pass === 0) {
+                const projected = piecesOf(clause.predicate);
+                if (projected) {
+                  const [current] = currentPieces(projected.domain);
+                  declarePieces(projected.place, intersectPieces(current, projected.pieces));
+                }
+              }
               ProjectRefinement(clause.predicate, { decide, assert, decidePattern(subject, pattern) {
                 const path = RefinementPath(subject);
                 const source = path ? read(path) : null;
@@ -29350,6 +29397,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!path || !constant || !declared) return null;
     return orderedFromParts(path.length ? `${root}.${path.map(pathPropertyKey).join('.')}` : root, declared as TypeRecord, op, unparenthesized(constant), rangeTest);
   };
+  /** An equality assertion of a refinement's clause over a path from its subject, keyed in the place's order. */
+  const pointAssertion = (node: ParseNode, root: string, typeAt: (path: readonly string[]) => Known): OrderedComparison | null => {
+    const t = unparenthesized(node);
+    if (t.type !== 'EqualityExpression' || !['===', '!=='].includes((t as ParseNode.EqualityExpression).operator as string)) return null;
+    const eq = t as ParseNode.EqualityExpression;
+    const left = eq.EqualityExpression as ParseNode;
+    const right = eq.RelationalExpression as ParseNode;
+    const [target, constant] = RefinementPath(left) ? [left, right] : RefinementPath(right) ? [right, left] : [undefined, undefined];
+    const path = target ? RefinementPath(target) : undefined;
+    const declared = path ? typeAt(path) : null;
+    if (!path || !constant || !declared) return null;
+    const point = orderedFromParts(path.length ? `${root}.${path.map(pathPropertyKey).join('.')}` : root, declared as TypeRecord, '>=', unparenthesized(constant), null);
+    return point && !point.range ? { ...point, op: eq.operator as string, label: `${eq.operator} ${(constant as { sourceText?: string }).sourceText ?? point.eqLo}` } : null;
+  };
   /** The ordered test of a place at its declared type, keyed in its domain's order. */
   const orderedFromParts = (place: string, declared: TypeRecord, op: string, constant: ParseNode, rangeTest: ParseNode.IsExpression | null): OrderedComparison | null => {
     // An enum over `string` compared with one of its enumerators orders by
@@ -29609,12 +29670,113 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (outcome) recordCategories(c.place, allCategories & ~4);
   };
   /** Install the keys an edge of an ordered test leaves its place, and the NaN its success excludes. */
-  const recordOrderedEdge = (ordered: OrderedComparison, outcome: boolean): void => {
-    const [lo, hi] = currentInterval(ordered);
-    const [narrowedLo, narrowedHi] = edgeInterval(ordered, outcome, lo, hi) ?? [null, null];
+  /**
+   * #sec-narrowing-flow: within a clause sequence a place holds a set of
+   * intervals. The set is one fact whose members are its pieces, so a join
+   * unions pieces as it unions any other fact; the hull is kept beside it in
+   * the `lo` and `hi` facts the other judgments read. A `null` end is an end a
+   * `bigint` lacks.
+   */
+  type Piece = [bigint | null, bigint | null];
+  const piecesKey = (place: string): string => `${place}.\u0000pieces`;
+  const normalizePieces = (pieces: readonly Piece[]): Piece[] => {
+    const sorted = pieces.filter((p) => !emptyInterval(p[0], p[1]))
+      .sort((a, b) => (a[0] === null ? (b[0] === null ? 0 : -1) : b[0] === null ? 1 : a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    const merged: Piece[] = [];
+    for (const [lo, hi] of sorted) {
+      const last = merged[merged.length - 1];
+      if (last && (last[1] === null || lo === null || lo <= last[1] + 1n)) {
+        last[1] = last[1] === null || hi === null ? null : (hi > last[1] ? hi : last[1]);
+      } else {
+        merged.push([lo, hi]);
+      }
+    }
+    return merged;
+  };
+  const piecesFact = (place: string): Piece[] | undefined => {
+    const t = lookup(piecesKey(place));
+    if (!t) return undefined;
+    const pieces: Piece[] = [];
+    for (const m of (t.Kind === 'union' ? t.Members : [t]) as TypeRecord[]) {
+      const raw = m.Kind === 'literal' ? literalString((m as { Value?: unknown }).Value) : undefined;
+      if (raw === undefined) return undefined;
+      const [lo, hi] = raw.split('|');
+      pieces.push([lo === '' ? null : BigInt(lo!), hi === '' ? null : BigInt(hi!)]);
+    }
+    return normalizePieces(pieces);
+  };
+  const declarePieces = (place: string, pieces: readonly Piece[]): void => {
+    if (pieces.length === 0) return;
+    const stringBase = makePrimitive('string');
+    const type = unionOf(pieces.map(([lo, hi]) => ({ Kind: 'literal', Value: `${lo ?? ''}|${hi ?? ''}`, Base: stringBase }) as unknown as TypeRecord));
+    if (type !== empty) declareNarrowed(piecesKey(place), type as TypeRecord);
     const bigintBase = makePrimitive('bigint');
-    if (narrowedLo !== null) declareNarrowed(`${ordered.place}.\u0000lo`, { Kind: 'literal', Value: narrowedLo, Base: bigintBase } as unknown as TypeRecord);
-    if (narrowedHi !== null) declareNarrowed(`${ordered.place}.\u0000hi`, { Kind: 'literal', Value: narrowedHi, Base: bigintBase } as unknown as TypeRecord);
+    const lo = pieces[0]![0];
+    const hi = pieces[pieces.length - 1]![1];
+    if (lo !== null) declareNarrowed(`${place}.\u0000lo`, { Kind: 'literal', Value: lo, Base: bigintBase } as unknown as TypeRecord);
+    if (hi !== null) declareNarrowed(`${place}.\u0000hi`, { Kind: 'literal', Value: hi, Base: bigintBase } as unknown as TypeRecord);
+  };
+  /** The pieces a place holds now, within its domain, and whether any fact has narrowed them. */
+  const currentPieces = (c: OrderedComparison): [Piece[], boolean] => {
+    const set = piecesFact(c.place);
+    if (set) return [normalizePieces(set.map(([lo, hi]): Piece => [higherLow(lo, c.min), lowerHigh(hi, c.max)])), true];
+    const [lo, hi, narrowed] = currentInterval(c);
+    return [emptyInterval(lo, hi) ? [] : [[lo, hi]], narrowed];
+  };
+  /** The regions an edge of an ordered test admits: one for a comparison or a range's success, up to two for a range's failure. */
+  const edgeRegions = (c: OrderedComparison, outcome: boolean): Piece[] => {
+    if (!c.range) return [comparisonRegion(c, outcome)];
+    const [rlo, rhi] = c.range;
+    if (outcome) return [[rlo, rhi]];
+    const regions: Piece[] = [];
+    if (rlo !== null) regions.push([c.min, rlo - 1n]);
+    if (rhi !== null) regions.push([rhi + 1n, c.max]);
+    return regions;
+  };
+  const intersectPieces = (pieces: readonly Piece[], regions: readonly Piece[]): Piece[] => normalizePieces(
+    pieces.flatMap(([lo, hi]) => regions.map(([rlo, rhi]): Piece => [higherLow(lo, rlo), lowerHigh(hi, rhi)])),
+  );
+  /** The pieces outside an inclusive key interval: the hole an exclusion cuts. */
+  const subtractPieces = (pieces: readonly Piece[], [a, b]: Piece): Piece[] => normalizePieces(
+    pieces.flatMap(([lo, hi]): Piece[] => (a !== null && b !== null && a > b ? [[lo, hi]]
+      : [...(a !== null ? [[lo, lowerHigh(hi, a - 1n)] as Piece] : []), ...(b !== null ? [[higherLow(lo, b + 1n), hi] as Piece] : [])])),
+  );
+  /** The pieces of a domain outside a set: the negation of the test that admitted it. */
+  const complementPieces = (c: OrderedComparison, pieces: readonly Piece[]): Piece[] => pieces.reduce<Piece[]>((rest, piece) => subtractPieces(rest, piece), [[c.min, c.max]]);
+  /**
+   * Within a clause sequence an equality test of a place against a constant
+   * reads the place's set of intervals, and its failure cuts the constant out
+   * of the set; so an excluded value that leaves nothing is seen whichever
+   * order the exclusion and the ordered tests come in (#sec-narrowing-flow).
+   */
+  const equalityPoint = (test: ParseNode): OrderedComparison | null => {
+    const t = unparenthesized(test);
+    if (t.type !== 'EqualityExpression') return null;
+    const eq = t as ParseNode.EqualityExpression;
+    const op = eq.operator as string;
+    if (op !== '===' && op !== '!==') return null;
+    let subject = unparenthesized(eq.EqualityExpression as ParseNode);
+    let constant = unparenthesized(eq.RelationalExpression as ParseNode);
+    if (narrowableName(subject) === null && narrowableName(constant) !== null) [subject, constant] = [constant, subject];
+    const place = narrowableName(subject);
+    if (place === null || changesPlace(t, place)) return null;
+    const declared = (lookup(place) ?? staticType(subject)) as TypeRecord | null;
+    if (!declared) return null;
+    const point = orderedFromParts(place, declared, '>=', constant, null);
+    if (!point || point.range) return null;
+    return { ...point, op, label: `${op} ${(constant as { sourceText?: string }).sourceText ?? point.eqLo}` };
+  };
+  const equalityPieces = (point: OrderedComparison, outcome: boolean): Piece[] => {
+    const [pieces] = currentPieces(point);
+    const inside = intersectPieces(pieces, [[point.eqLo, point.eqHi]]);
+    return (point.op === '===') === outcome ? inside : subtractPieces(pieces, [point.eqLo, point.eqHi]);
+  };
+  const recordEqualityEdge = (point: OrderedComparison, outcome: boolean): void => {
+    declarePieces(point.place, equalityPieces(point, outcome));
+  };
+  const recordOrderedEdge = (ordered: OrderedComparison, outcome: boolean): void => {
+    const [pieces] = currentPieces(ordered);
+    declarePieces(ordered.place, intersectPieces(pieces, edgeRegions(ordered, outcome)));
     // The edge on which a test succeeds holds no NaN.
     if (outcome && ordered.nan) recordCategories(ordered.place, allCategories & ~4);
   };
@@ -29633,17 +29795,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const ordered = live && visit && whereClauseWalkDepth > 0 ? orderedComparison(test) : null;
     const textual = !ordered && live && visit && whereClauseWalkDepth > 0 ? stringComparison(test) : null;
     const decimal = !ordered && !textual && live && visit && whereClauseWalkDepth > 0 ? decimalComparison(test) : null;
+    const pointed = !ordered && !textual && !decimal && live && visit && whereClauseWalkDepth > 0 ? equalityPoint(test) : null;
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
     if (repeated === undefined && deciding && ordered) {
-      const [lo, hi, narrowed] = currentInterval(ordered);
+      const [pieces, narrowed] = currentPieces(ordered);
       if (narrowed) {
         // NaN satisfies no comparison, so a floating test can never fail only
         // where the numeric partition already excludes NaN.
         const nanPossible = ordered.nan && !lookup(categoryKey(ordered.place, 4));
-        const whenTrue = edgeInterval(ordered, true, lo, hi);
-        const whenFalse = edgeInterval(ordered, false, lo, hi);
-        if (whenTrue && emptyInterval(...whenTrue)) repeated = false;
-        else if (!nanPossible && whenFalse && emptyInterval(...whenFalse)) repeated = true;
+        if (intersectPieces(pieces, edgeRegions(ordered, true)).length === 0) repeated = false;
+        else if (!nanPossible && intersectPieces(pieces, edgeRegions(ordered, false)).length === 0) repeated = true;
+      }
+    }
+    if (repeated === undefined && deciding && pointed) {
+      const [, narrowed] = currentPieces(pointed);
+      if (narrowed) {
+        // NaN is equal to nothing, so it sits on the edge where `!==` succeeds
+        // and on the edge where `===` fails.
+        const nanPossible = pointed.nan && !lookup(categoryKey(pointed.place, 4));
+        const nanOnTrue = pointed.op === '!==';
+        if (equalityPieces(pointed, true).length === 0 && !(nanOnTrue && nanPossible)) repeated = false;
+        else if (equalityPieces(pointed, false).length === 0 && !(!nanOnTrue && nanPossible)) repeated = true;
       }
     }
     if (repeated === undefined && deciding && decimal && (lookup(`${decimal.place}.\u0000dlo`) || lookup(`${decimal.place}.\u0000dhi`))) {
@@ -29661,9 +29833,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
     // A comparison against a negative literal has no canonical form, but its
     // interval is as exact as any other's.
-    if (!canon && !ordered && !textual && !decimal) return result;
+    if (!canon && !ordered && !textual && !decimal && !pointed) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal!.label, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal?.label ?? pointed!.label, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
@@ -29673,6 +29845,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (ordered) recordOrderedEdge(ordered, outcome);
       if (textual) recordStringEdge(textual, outcome);
       if (decimal) recordDecimalEdge(decimal, outcome);
+      if (pointed) recordEqualityEdge(pointed, outcome);
       return captureFlow();
     };
     const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };
