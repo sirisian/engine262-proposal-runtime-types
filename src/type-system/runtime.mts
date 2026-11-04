@@ -4167,6 +4167,14 @@ export function* EvaluateRefinementPredicate(predicate: ParseNode.RefinementPred
 const sourceWhereCache = new WeakMap<EnvironmentRecord, Map<ParseNode.WhereClause, {
   frame: ReadonlyMap<string, TypeRecord>, predicate: ObjectValue,
 }[]>>();
+const sourceWhereOrigins = new WeakMap<ObjectValue, {
+  clause: ParseNode.WhereClause, bindings: ReadonlyMap<string, TypeRecord>,
+}>();
+/** Private source provenance for static projection. Ordinary builder callbacks
+ * remain opaque, and this evidence never participates in type identity. */
+export function SourceWhereOrigin(predicate: unknown) {
+  return predicate instanceof ObjectValue ? sourceWhereOrigins.get(predicate) : undefined;
+}
 export function* SourceWhereType(base: TypeRecord, clauses: readonly ParseNode.WhereClause[],
   identityEnvironment: EnvironmentRecord = surroundingAgent.runningExecutionContext.LexicalEnvironment): PlainEvaluator<TypeRecord> {
   const context = surroundingAgent.runningExecutionContext;
@@ -4199,6 +4207,7 @@ export function* SourceWhereType(base: TypeRecord, clauses: readonly ParseNode.W
       }, 1, Value('where'), [], context.Realm));
       const invalid = RegisterSourceWherePredicate(predicate, clause, environment, context.Realm);
       if (invalid) return invalid;
+      sourceWhereOrigins.set(predicate, { clause, bindings: frame });
       entries.push({ frame, predicate });
       cache.set(clause, entries);
     } else {

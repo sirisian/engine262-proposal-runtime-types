@@ -75,6 +75,8 @@ import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
 import { DiscriminatingChainOf } from './DiscriminatingChain.mts';
+import { ProjectRefinement, RefinementPath, RefinementProjectionSize } from './refinement-narrowing.mts';
+import { SourceWhereOrigin } from './runtime.mts';
 import { GlobalBindingMutations } from './global-binding-mutations.mts';
 import { NondeterministicMember } from './evaluable-fragment.mts';
 import { ExcludedGlobalReach } from './fragment-library.mts';
@@ -4787,6 +4789,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (frames[i].declaredNames.has(name)) {
         return preparedBindingType(frames[i], name);
       }
+      // A place fact belongs to its root binding. An inner declaration of c
+      // also shadows outer facts named c.email, even before c is initialized.
+      if (name.includes('.') && frames[i].declaredNames.has(name.split('.')[0])) return null;
     }
     return null;
   };
@@ -4932,6 +4937,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (f.declaredNames.has(name)) {
         return preparedBindingType(f, name);
       }
+      if (name.includes('.') && f.declaredNames.has(name.split('.')[0])) return null;
     }
     return null;
   };
@@ -7448,6 +7454,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const requireAssignable = (source: Known, target: Known, at: ParseNode = root) => {
     if (!source || !target) {
+      return;
+    }
+    // The nominal source view retains a clause for checking; the runtime type
+    // is a parameterization. Entering its composite base still performs the
+    // predicate at the receiving boundary, as an object refinement does.
+    const refinedTargetBase = target.Kind === 'nominal' ? refinementBaseOf(target) : null;
+    if (refinedTargetBase?.Kind === 'primitive' && refinedTargetBase.Name === 'Composite') {
+      requireAssignable(source, refinedTargetBase, at);
       return;
     }
     // A literal-derived loop binding, at a numeric value type: accepted, as a numeric
@@ -22347,12 +22361,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `Composite.<{ p: { x: uint8 } }>` is `Composite.<{ x: uint8 }>` and a
           // store through it is refused as a composite store. The read had no
           // Static Type, which left the nested store to the run time.
-          if (receiver?.Kind === 'primitive' && receiver.Name === 'Composite' && receiver.Arguments.length === 1) {
-            const shape = receiver.Arguments[0] as { Kind?: string, Properties?: readonly { key: string | SymbolValue, type: TypeRecord }[] } | undefined;
-            if (shape?.Kind === 'object') {
-              const property = shape.Properties?.find((candidate) => candidate.key === m.IdentifierName!.name);
-              if (property) return property.type;
-            }
+          const compositeShape = compositeObjectShape(receiver);
+          if (compositeShape?.Kind === 'object') {
+            const property = compositeShape.Properties.find((candidate) => candidate.key === m.IdentifierName!.name);
+            if (property?.type) return property.optional ? joinTypes(property.type, undefinedType) : property.type;
           }
           const generatorMember = generatorPropertyType(receiver, m.IdentifierName.name);
           if (generatorMember) return generatorMember;
@@ -25615,7 +25627,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const t = staticType(p.Literal);
             if (t?.Kind === 'literal') return exact(t);
           }
-          if (admitsNumericLiteral(s)) {
+          if (admitsNumericLiteral(s.Kind === 'literal' ? s.Base : s)) {
             const base = singleNumericDomain(s);
             const literal = literalExpressionType(p.Literal);
             const digits = foldDecimal(p.Literal);
@@ -25633,8 +25645,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const value = EnsureCompletion(NumericValue(at));
             errors.length = before;
             if (value.Type !== 'normal') return null;
-            const selected = { ...literal, Base: base, Value: value.Value } as TypeRecord;
             const numeric = eraseMetadata(base);
+            // NumericValue preserves exact wide/decimal representations, but
+            // narrow integer and binary float literals still return Number.
+            // Their pattern singleton must carry the contextual value type.
+            const contextualValue = value.Value as Value;
+            const selectedValue = contextualValue instanceof NumberValue && numeric.Kind === 'primitive'
+              && ['uint', 'int', 'float16', 'float32', 'float64'].includes(numeric.Name)
+              ? new TypedNumberValue(R(contextualValue), numeric as never) : contextualValue;
+            const selected = { ...literal, Base: base, Value: selectedValue } as TypeRecord;
             if (p.Literal.type === 'NumericLiteral' && p.Literal.value === 0 && numeric.Kind === 'primitive'
               && ['number', 'float16', 'float32', 'float64'].includes(numeric.Name)) {
               // Bare zero patterns match both signs; explicit +0 and -0 do not.
@@ -26415,6 +26434,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   // #sec-composite-types: the ~object~ shape of a composite type over one.
   const compositeObjectShape = (t: Known): Known => {
+    const seen = new Set<TypeRecord>();
+    while (t && !seen.has(t)) {
+      seen.add(t);
+      if (t.Kind === 'parameterized') t = t.Base;
+      else if (t.Kind === 'nominal' && refinementBaseOf(t)) t = structureOf(t);
+      else break;
+    }
     if (!t || t.Kind !== 'primitive' || t.Name !== 'Composite') return null;
     const shape = (t as { Arguments?: readonly unknown[] }).Arguments?.[0] as Known;
     return shape && shape.Kind === 'object' ? shape : null;
@@ -27762,6 +27788,228 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  let projectingRefinements = false;
+  /** A boundary predicate is not a permanent invariant of mutable storage.
+   * Project only observations through composite data slots. In particular an
+   * open object shape, readonly spelling or const binding proves no descriptor.
+   * The resulting ordinary place facts still expire on rebinding and effects. */
+  const projectRefinementFacts = (names: readonly string[]): void => {
+    // Checking a predicate must not assume that very predicate succeeded.
+    if (projectingRefinements || whereClauseWalkDepth > 0) return;
+    projectingRefinements = true;
+    try {
+      const roots = new Set<string>();
+      for (const name of names) {
+        const parts = name.split('.\u0000')[0].split('.');
+        for (let i = 1; i <= parts.length; i += 1) roots.add(parts.slice(0, i).join('.'));
+      }
+      for (const name of roots) {
+        if (name === NON_PATH || referenceNameMayInvoke(name.split('.')[0])) continue;
+        const parts = name.split('.');
+        let receiver: ParseNode = parts[0] === THIS_PATH ? { type: 'ThisExpression' } as ParseNode
+          : { type: 'IdentifierReference', name: parts[0] } as ParseNode;
+        for (const key of parts.slice(1)) receiver = patternMember(receiver, key);
+        const written = lookup(name) ?? staticType(receiver);
+        if (!written) continue;
+        const clauses: { predicate: ParseNode, bindings: ReadonlyMap<string, TypeRecord>, declarations: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] }[] = [];
+        const baseOf = (type: TypeRecord): TypeRecord => {
+          const seen = new Set<TypeRecord>();
+          while (!seen.has(type)) {
+            seen.add(type);
+            if (type.Kind === 'parameterized') type = type.Base;
+            else if (type.Kind === 'nominal' && refinementBaseOf(type)) type = structureOf(type)!;
+            else break;
+          }
+          return type;
+        };
+        const seen = new Set<TypeRecord>();
+        for (let type: Known = written; type && !seen.has(type);) {
+          seen.add(type);
+          if (type.Kind === 'parameterized') {
+            const origin = SourceWhereOrigin(type.Metadata.where);
+            if (origin) {
+              let declaration: ParseNode | undefined = origin.clause;
+              while (declaration && declaration.type !== 'TypeAliasDeclaration') declaration = declaration.parent;
+              clauses.push({ predicate: origin.clause.RefinementPredicate, bindings: origin.bindings,
+                declarations: declaration?.type === 'TypeAliasDeclaration' ? declaration.TypeParameters?.TypeParameterList ?? [] : [] });
+            }
+            type = type.Base;
+          } else if (type.Kind === 'nominal' && type.Declaration?.type === 'TypeAliasDeclaration') {
+            const declaration = type.Declaration;
+            const parameters = declaration.TypeParameters?.TypeParameterList ?? [];
+            const bindings = new Map<string, TypeRecord>();
+            parameters.forEach((parameter, i) => {
+              const argument = type!.Kind === 'nominal' ? type!.Arguments[i] : undefined;
+              if (argument && typeof argument !== 'number') bindings.set(parameter.BindingIdentifier.name, argument);
+            });
+            for (const capture of type.CapturedBindings ?? []) bindings.set(capture.Declaration.BindingIdentifier.name, capture.Type);
+            for (const clause of declaration.WhereClauses ?? []) clauses.push({ predicate: clause.RefinementPredicate, bindings,
+              declarations: [...parameters, ...(type.CapturedBindings ?? []).map((capture) => capture.Declaration)] });
+            type = structureOf(type);
+          } else break;
+        }
+        if (!clauses.length || !compositeObjectShape(baseOf(written))) continue;
+        const pathName = (path: readonly string[]): string => path.length ? `${name}.${path.map(pathPropertyKey).join('.')}` : name;
+        const read = (path: readonly string[]): Known => {
+          let current: Known = written;
+          for (let i = 0; i < path.length; i += 1) {
+            if (!current) return null;
+            const shape = compositeObjectShape(baseOf(current));
+            if (shape?.Kind !== 'object') return null;
+            const property = shape.Properties.find((entry) => entry.key === path[i]);
+            if (!property?.type) return null;
+            current = lookup(pathName(path.slice(0, i + 1)))
+              ?? (property.optional ? joinTypes(property.type, undefinedType) : property.type);
+          }
+          return current;
+        };
+        const place = (path: readonly string[]): ParseNode => path.reduce<ParseNode>((node, key) => patternMember(node, key), receiver);
+        let activeClause = clauses[0];
+        const assertedType = (node: ParseNode.Type): Known => {
+          const type = resolveType(node);
+          return type ? substituteFreeTypeParameters(type, activeClause.bindings, activeClause.declarations) : null;
+        };
+        const operand = (node: ParseNode): ParseNode | undefined => {
+          const path = RefinementPath(node);
+          if (path) return read(path) ? place(path) : undefined;
+          if (['StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral'].includes(node.type)) return node;
+          if (node.type === 'IdentifierReference' && node.name === 'undefined' && !ResolveBindingDeclaration(node, node.name)) return node;
+          return undefined;
+        };
+        const factOf = (node: ParseNode): NarrowingFact | undefined => {
+          if (node.type === 'ParenthesizedExpression') return factOf(node.Expression);
+          if (node.type === 'UnaryExpression' && node.operator === '!') {
+            const fact = factOf(node.UnaryExpression);
+            return fact ? { ...fact, negated: !fact.negated } : undefined;
+          }
+          if (node.type === 'EqualityExpression' && ['===', '!==', '==', '!='].includes(node.operator)) {
+            const left = operand(node.EqualityExpression);
+            const right = operand(node.RelationalExpression);
+            if (left && right) return narrowingFactOf({ ...node, EqualityExpression: left, RelationalExpression: right } as ParseNode);
+          }
+          if (node.type === 'IsExpression') {
+            const path = RefinementPath(node.Expression);
+            const source = path ? read(path) : null;
+            if (!path || !source) return undefined;
+            if (node.Type) {
+              const type = assertedType(node.Type);
+              return type ? { name: pathName(path), type, subjectType: source, negated: false } : undefined;
+            }
+            let pattern = node.Pattern;
+            while (pattern?.type === 'MatchNotPattern') {
+              pattern = pattern.Operand;
+            }
+            if (pattern?.type !== 'MatchLiteralPattern') return undefined;
+            const branches = patternBranches(source, node.Pattern!);
+            // Use the ordinary pattern judgment, including contextual numeric
+            // literal adaptation; an untyped Number literal is not a uint8.
+            if (branches) return { name: pathName(path), type: source, subjectType: source, negated: false,
+              branches: { whenTrue: branches.match, whenFalse: branches.miss } };
+          }
+          return undefined;
+        };
+        const decide = (node: ParseNode): boolean | undefined => {
+          if (node.type === 'ParenthesizedExpression') return decide(node.Expression);
+          if (node.type === 'BooleanLiteral') return node.value;
+          if (node.type === 'UnaryExpression' && node.operator === '!') {
+            const decision = decide(node.UnaryExpression);
+            return decision === undefined ? undefined : !decision;
+          }
+          if (node.type === 'LogicalANDExpression' || node.type === 'LogicalORExpression') {
+            const left = decide(node.type === 'LogicalANDExpression' ? node.LogicalANDExpression : node.LogicalORExpression);
+            const right = decide(node.type === 'LogicalANDExpression' ? node.BitwiseORExpression : node.LogicalANDExpression);
+            return node.type === 'LogicalANDExpression'
+              ? left === false || right === false ? false : left === true && right === true ? true : undefined
+              : left === true || right === true ? true : left === false && right === false ? false : undefined;
+          }
+          const fact = factOf(node);
+          if (!fact) return undefined;
+          const branches = branchTypes(fact);
+          return branches.whenFalse === empty ? true : branches.whenTrue === empty ? false : undefined;
+        };
+        let changed = false;
+        const publish = (path: readonly string[], type: TypeRecord, exclude = false): void => {
+          const source = read(path);
+          if (!path.length || !source) return;
+          if (type.Kind === 'object' && !exclude) {
+            for (const property of type.Properties) if (typeof property.key === 'string' && !property.optional && property.type) {
+              publish([...path, property.key], property.type);
+            }
+            return;
+          }
+          // An object-valued slot is immutable, but the referred object's
+          // structural membership is not. Do not turn it into a shape proof.
+          if (!primitiveBased(type) && !membershipStable(type)) return;
+          const narrowed = exclude ? narrowFromTested(source, type) : narrowToTested(source, type);
+          if (narrowed !== empty && !SameType(source, narrowed)) {
+            declareNarrowed(pathName(path), narrowed);
+            changed = true;
+          }
+        };
+        const assert = (node: ParseNode): void => {
+          if (node.type === 'IsExpression' && node.Type) {
+            const path = RefinementPath(node.Expression);
+            const type = path ? assertedType(node.Type) : null;
+            if (!path || !type) return;
+            if (!path.length && type.Kind === 'object') {
+              for (const property of type.Properties) if (typeof property.key === 'string' && !property.optional && property.type) {
+                publish([property.key], property.type);
+              }
+            } else publish(path, type);
+            return;
+          }
+          const fact = factOf(node);
+          if (fact?.name.startsWith(`${name}.`)) {
+            let expression = node;
+            while (expression.type === 'ParenthesizedExpression' || expression.type === 'UnaryExpression' && expression.operator === '!') {
+              expression = expression.type === 'ParenthesizedExpression' ? expression.Expression : expression.UnaryExpression;
+            }
+            if (expression.type === 'EqualityExpression') {
+              const path = RefinementPath(expression.EqualityExpression) ?? RefinementPath(expression.RelationalExpression);
+              if (path) publish(path, fact.type, fact.negated);
+            } else if (expression.type === 'IsExpression') {
+              const path = RefinementPath(expression.Expression);
+              if (path && fact.branches) {
+                const narrowed = branchTypes(fact).whenTrue;
+                if (narrowed !== empty) publish(path, narrowed);
+              } else if (path) publish(path, fact.type, fact.negated);
+            }
+          }
+        };
+        // Each pass only installs stricter existing types. A syntax-sized
+        // bound also keeps recursive aliases and contradictory clauses finite.
+        const limit = clauses.reduce((total, clause) => total + RefinementProjectionSize(clause.predicate), 0);
+        for (let pass = 0; pass <= limit; pass += 1) {
+          changed = false;
+          for (const clause of clauses) {
+            activeClause = clause;
+            const scope = new Map<string, Known>(clause.bindings);
+            retainTypeArgumentDeclarations(scope, clause.declarations, clause.bindings);
+            typeParameterScopes.push(scope);
+            try {
+              ProjectRefinement(clause.predicate, { decide, assert, decidePattern(subject, pattern) {
+                const path = RefinementPath(subject);
+                const source = path ? read(path) : null;
+                // Literals and their Boolean combinations cannot call an extractor.
+                const simple = (p: ParseNode.MatchPattern): boolean => p.type === 'MatchLiteralPattern' || p.type === 'MatchWildcardPattern'
+                  || p.type === 'MatchNotPattern' && simple(p.Operand)
+                  || (p.type === 'MatchAndPattern' || p.type === 'MatchOrPattern') && simple(p.Left) && simple(p.Right);
+                if (!source || !simple(pattern)) return undefined;
+                const branches = patternBranches(source, pattern);
+                return branches?.miss === empty ? true : branches?.match === empty ? false : undefined;
+              } });
+            } finally {
+              typeParameterScopes.pop();
+            }
+          }
+          if (!changed) break;
+        }
+      }
+    } finally {
+      projectingRefinements = false;
+    }
+  };
+
   const factFlow = (fact: NarrowingFact, sense: boolean): FlowFacts => {
     for (const entry of [fact, ...(fact.additional ?? [])]) {
       const rootName = entry.name.split('.')[0];
@@ -27790,6 +28038,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     propagateCopies([fact, ...(fact.additional ?? [])].map((entry) => entry.name));
+    projectRefinementFacts([fact, ...(fact.additional ?? [])].map((entry) => entry.name));
     return captureFlow();
   };
 
@@ -28349,8 +28598,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // spares that test. Any other chain's certain last test is refused.
       const discriminating = chain ?? DiscriminatingChainOf({ RefinementPredicate: node } as unknown as ParseNode) !== undefined;
       if (chain !== undefined && discriminating && !conditional.Alternate) spareCertainTest(conditional.Test as ParseNode);
-      const outcome = walkWhereClause(conditional.Test as ParseNode);
+      // Neither selected arm is an unconditional premise of a later clause.
       const before = captureFlow();
+      const outcome = walkWhereClause(conditional.Test as ParseNode);
       try {
         if (outcome.whenTrue) {
           restoreFlow(outcome.whenTrue);
