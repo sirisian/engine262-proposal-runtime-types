@@ -29354,6 +29354,84 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (coversHigh) return [lo, lowerHigh(rlo! - 1n, hi)];
     return null;
   };
+  /**
+   * #sec-narrowing-flow: a comparison of a String place with a String constant,
+   * in code-unit order, the order a String comparison gives at run time. Every
+   * String has an immediate successor, itself with U+0000 appended, so an
+   * interval is kept exactly as an inclusive lower end and an exclusive upper
+   * end. An enumerator constant is left to the enum's own order.
+   */
+  interface StringComparison {
+    readonly place: string;
+    readonly op: string;
+    readonly label: string;
+    readonly constant: string;
+  }
+  /** A String constant's value, or `undefined` for anything else, an enumerator included. */
+  const stringConstantOf = (node: ParseNode): string | undefined => {
+    const type = staticType(node) as TypeRecord | null;
+    if (type?.Kind !== 'literal' || (type.Base && isEnumType(type.Base as TypeRecord))) return undefined;
+    return literalString((type as { Value?: unknown }).Value);
+  };
+  const literalString = (raw: unknown): string | undefined => (typeof raw === 'string' ? raw
+    : raw && typeof (raw as { stringValue?: unknown }).stringValue === 'function' ? (raw as { stringValue(): string }).stringValue() : undefined);
+  /** Whether a place of this type is ordered as Strings are: `string`, or a closed set of String values. */
+  const orderedAsString = (declared: TypeRecord): boolean => {
+    let base = declared;
+    for (const seen = new Set<TypeRecord>(); !seen.has(base);) {
+      seen.add(base);
+      if (base.Kind === 'parameterized') base = base.Base as TypeRecord;
+      else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
+    }
+    if (base.Kind === 'primitive' && base.Name === 'string') return true;
+    const closedSet = expandClosed(base);
+    const members = (closedSet.Kind === 'union' ? closedSet.Members : [closedSet]) as TypeRecord[];
+    return members.every((member) => member.Kind === 'literal' && literalString((member as { Value?: unknown }).Value) !== undefined);
+  };
+  const stringComparison = (test: ParseNode): StringComparison | null => {
+    const t = unparenthesized(test);
+    if (t.type !== 'RelationalExpression') return null;
+    const rel = t as ParseNode.RelationalExpression;
+    if (!['<', '<=', '>', '>='].includes(rel.operator as string) || !rel.RelationalExpression) return null;
+    let subject = unparenthesized(rel.RelationalExpression as ParseNode);
+    let constant = unparenthesized(rel.ShiftExpression as ParseNode);
+    let op = rel.operator as string;
+    if (narrowableName(subject) === null && narrowableName(constant) !== null) {
+      [subject, constant] = [constant, subject];
+      op = mirroredOperator[op]!;
+    }
+    const place = narrowableName(subject);
+    if (place === null || changesPlace(t, place)) return null;
+    const text = stringConstantOf(constant);
+    const declared = text === undefined ? null : (lookup(place) ?? staticType(subject)) as TypeRecord | null;
+    if (text === undefined || !declared || !orderedAsString(declared)) return null;
+    return { place, op, label: `${op} ${JSON.stringify(text)}`, constant: text };
+  };
+  /** The Strings an edge of a String comparison leaves its place, as an inclusive lower and exclusive upper end, `null` for none. */
+  const stringEdge = (c: StringComparison, outcome: boolean): [string | null, string | null] => {
+    const from = lookupStringEnd(c.place, 'from');
+    const below = lookupStringEnd(c.place, 'below');
+    const split = c.op === '<' || c.op === '>=' ? c.constant : `${c.constant}\u0000`;
+    const satisfiedBelow = c.op === '<' || c.op === '<=';
+    const [rfrom, rbelow] = satisfiedBelow === outcome ? [null, split] : [split, null];
+    const edgeFrom = from === null ? rfrom : rfrom === null ? from : (from > rfrom ? from : rfrom);
+    const edgeBelow = below === null ? rbelow : rbelow === null ? below : (below < rbelow ? below : rbelow);
+    return [edgeFrom, edgeBelow];
+  };
+  const lookupStringEnd = (place: string, which: 'from' | 'below'): string | null => {
+    const t = lookup(`${place}.\u0000${which}`);
+    if (!t) return null;
+    const values = (t.Kind === 'union' ? t.Members : [t]).map((m) => literalString((m as { Value?: unknown }).Value));
+    if (values.some((v) => v === undefined)) return null;
+    return (values as string[]).reduce((a, b) => (which === 'from' ? (a < b ? a : b) : (a > b ? a : b)));
+  };
+  const emptyStringEdge = ([from, below]: [string | null, string | null]): boolean => below !== null && (from ?? '') >= below;
+  const recordStringEdge = (c: StringComparison, outcome: boolean): void => {
+    const [from, below] = stringEdge(c, outcome);
+    const stringBase = makePrimitive('string');
+    if (from !== null) declareNarrowed(`${c.place}.\u0000from`, { Kind: 'literal', Value: from, Base: stringBase } as unknown as TypeRecord);
+    if (below !== null) declareNarrowed(`${c.place}.\u0000below`, { Kind: 'literal', Value: below, Base: stringBase } as unknown as TypeRecord);
+  };
   /** Install the keys an edge of an ordered test leaves its place, and the NaN its success excludes. */
   const recordOrderedEdge = (ordered: OrderedComparison, outcome: boolean): void => {
     const [lo, hi] = currentInterval(ordered);
@@ -29377,6 +29455,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // as value-origins' 'ordered-members: broad-domain' requires of
     // `if (x < 100) { if (x >= 100) {} }` over a uint8.
     const ordered = live && visit && whereClauseWalkDepth > 0 ? orderedComparison(test) : null;
+    const textual = !ordered && live && visit && whereClauseWalkDepth > 0 ? stringComparison(test) : null;
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
     if (repeated === undefined && deciding && ordered) {
       const [lo, hi, narrowed] = currentInterval(ordered);
@@ -29390,14 +29469,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         else if (!nanPossible && whenFalse && emptyInterval(...whenFalse)) repeated = true;
       }
     }
+    if (repeated === undefined && deciding && textual && (lookup(`${textual.place}.\u0000from`) || lookup(`${textual.place}.\u0000below`))) {
+      if (emptyStringEdge(stringEdge(textual, true))) repeated = false;
+      else if (emptyStringEdge(stringEdge(textual, false))) repeated = true;
+    }
     const errorsBefore = errors.length;
     const result = walkTestResult(test, deciding, truthiness, visit);
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
     // A comparison against a negative literal has no canonical form, but its
     // interval is as exact as any other's.
-    if (!canon && !ordered) return result;
+    if (!canon && !ordered && !textual) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered!.label, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual!.label, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
@@ -29405,6 +29488,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       restoreFlow(facts);
       for (const place of canon?.places ?? []) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon!.key}`, anyTypeRecord);
       if (ordered) recordOrderedEdge(ordered, outcome);
+      if (textual) recordStringEdge(textual, outcome);
       return captureFlow();
     };
     const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };

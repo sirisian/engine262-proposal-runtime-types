@@ -58,6 +58,19 @@ test('a range-pattern clause bounds its place for the clauses after it', () => {
   expect(evaluated('function f(x: uint8) where x is 5..=10 where x > 7 { return x; } String(f(8));')).toBe('8');
 });
 
+test('string clauses carry their code-unit order', () => {
+  impossible("function f(s: string) where s > 'b' where s < 'a' { return s; }");
+  impossible("function f(s: string) where s >= 'b' where s < 'b' { return s; }");
+  impossible("function f(s: string) where s > 'b' where s > 'a' { return s; }");
+  impossible("function f(s: string) where s <= 'b' && s > 'b' { return s; }");
+  expect(evaluated("function f(s: string) where s > 'a' where s < 'b' { return s; } f('ab');")).toBe('ab');
+});
+
+test('an enum over string compares with a String in code-unit order and with an enumerator by position', () => {
+  impossible("enum U: string { b = 'b', a = 'a' }; function f(u: U) where u > 'b' where u < 'a' { return u; }");
+  expect(evaluated("enum U: string { b = 'b', a = 'a' }; function f(u: U) where u >= U.b where u < U.a { return u; } f(U.b); 'ok';")).toBe('ok');
+});
+
 test('satisfiable floating sequences are accepted and run', () => {
   expect(evaluated('function f(x: float64) where x > 3 where x < 5 { return x; } String(f(4.5));')).toBe('4.5');
   expect(evaluated('function f(x: float32) where x >= 1 where x <= 1 { return x; } String(f(1));')).toBe('1');
