@@ -3685,6 +3685,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Whether _t_ is `never`, the empty union: a function declared with it returns no result. */
   const isNeverType = (t: TypeRecord | null | undefined): boolean => t?.Kind === 'union' && ((t as { Members?: readonly unknown[] }).Members?.length ?? 0) === 0;
 
+  /** A write in a clause to a generic parameter, an immutable binding (#sec-type-parameters). */
+  const whereClauseGenericWrite = (predicate: ParseNode): { node: ParseNode, name: string } | undefined => {
+    let found: { node: ParseNode, name: string } | undefined;
+    const check = (write: ParseNode, target: unknown): void => {
+      if (found || !target || typeof target !== 'object') return;
+      if (Array.isArray(target)) {
+        target.forEach((element) => check(write, element));
+        return;
+      }
+      const node = target as ParseNode;
+      if (typeof node.type !== 'string' || node.type === 'MemberExpression') return;
+      if (node.type === 'IdentifierReference') {
+        const name = (node as { name: string }).name;
+        if (ResolveBindingDeclaration(node, name)?.kind === 'type-parameter') found = { node: write, name };
+        return;
+      }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict', 'Initializer'].includes(key)) check(write, child);
+    };
+    const visit = (value: unknown): void => {
+      if (found || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'AssignmentExpression') check(node, (node as { LeftHandSideExpression?: ParseNode }).LeftHandSideExpression);
+      else if (node.type === 'UpdateExpression') check(node, (node as { LeftHandSideExpression?: ParseNode }).LeftHandSideExpression ?? (node as { UnaryExpression?: ParseNode }).UnaryExpression);
+      if (found) return;
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+    };
+    visit(predicate);
+    return found;
+  };
+
   const whereClauseStoreThroughSubject = (predicate: ParseNode): string | undefined => {
     const rooted = (target: unknown): boolean => {
       let node = target as ParseNode | null | undefined;
@@ -8060,6 +8095,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const requireWritableMember = (expression: ParseNode | null | undefined, operator = '=') => {
     const lhs = patternExpression(expression ?? undefined);
     if (lhs?.type === 'IdentifierReference') {
+      // A generic parameter is an immutable binding: a write to one is an
+      // error where it is written, in a clause or a body (#sec-type-parameters).
+      if (ResolveBindingDeclaration(lhs, lhs.name)?.kind === 'type-parameter') {
+        reportType('rt-readonly-store', expression, '$1 is an immutable generic parameter', Value(lhs.name));
+      }
       const slot = referenceSlotForName(lhs.name);
       if (slot) referenceOperations.set(lhs, { kind: 'write', slot });
       for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -13929,6 +13969,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const unresolved = whereClauseUnresolvedName(predicate, n);
         if (unresolved !== undefined) {
           reportType('rt-compile-time-evaluability', clause, 'a where clause must be compile-time evaluable: $1', Value(`a reference to ${unresolved}, which is declared nowhere`));
+          continue;
+        }
+        const genericWrite = whereClauseGenericWrite(predicate);
+        if (genericWrite !== undefined) {
+          reportType('rt-readonly-store', genericWrite.node, '$1 is an immutable generic parameter', Value(genericWrite.name));
           continue;
         }
         const store = whereClauseStoreThroughSubject(predicate);

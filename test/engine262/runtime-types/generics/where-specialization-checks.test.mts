@@ -39,6 +39,7 @@ test('bound generic parameters shadow unrelated runtime bindings during checking
   expect(evaluated(`let N = 9; ${LIMITED} function unused() { limited.<2>(1); } "ok";`)).toBe('ok');
 });
 
-test('checking a generic constraint cannot write a runtime binding', () => {
-  expect(evaluated('let N = 7; function f<N: uint32>(): void where (N = 0) === 0 {} function unused() { f.<1>(); } String(N);')).toBe('7');
+test('checking a generic constraint cannot write a runtime binding: the write is refused where it is written', () => {
+  const result = observeScript('let N = 7; function f<N: uint32>(): void where (N = 0) === 0 {} function unused() { f.<1>(); } String(N);');
+  expect(result).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-readonly-store' } });
 });
