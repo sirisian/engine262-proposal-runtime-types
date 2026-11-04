@@ -4098,6 +4098,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return ordered ? [ordered] : [];
   };
   let judgingRetainedObligations = false;
+  /** While a retained obligation is judged: the callee's value parameters by declaration, each read as an enclosing place or as the constant it is bound to. */
+  let retainedParameterPlaces: Map<ParseNode.TypeParameter, string> | null = null;
+  let retainedParameterConstants: Map<ParseNode.TypeParameter, TypeRecord> | null = null;
+  const typeParameterDeclarationOf = (reference: ParseNode): ParseNode.TypeParameter => {
+    const name = (reference as unknown as { name: string }).name;
+    const binding = ResolveBindingDeclaration(reference, name);
+    if (binding?.kind !== 'type-parameter') return reference as unknown as ParseNode.TypeParameter;
+    const list = (binding.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+    return list.find((candidate) => candidate.BindingIdentifier.name === name) ?? (reference as unknown as ParseNode.TypeParameter);
+  };
   /** Applications already judged: the judgment reads only declarations, so it has one answer. */
   const judgedApplications = new WeakSet<object>();
   /**
@@ -4134,27 +4144,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const before = captureFlow();
     try {
       const mark = errors.length;
+      for (const { place, domain } of retained.values()) if (!lookup(place)) declareNarrowed(place, domain);
       for (const clause of enclosingClauses) {
         const predicate = clause.RefinementPredicate as ParseNode;
-        if (predicate.type === 'ConditionalRefinement' || whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+        if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+        if (predicate.type === 'ConditionalRefinement') {
+          // A conditional clause holds the union of its branches under their test.
+          const projected = predicatePieces(predicate, (n) => orderedComparison(n) ?? equalityPoint(n));
+          if (projected) declarePieces(projected.place, intersectPieces(currentPieces(projected.domain)[0], projected.pieces));
+          continue;
+        }
         const outcome = walkWhereClause(predicate);
         if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
       }
       errors.splice(mark);
-      for (const clause of clauses) {
-        for (const test of retainedOrderedTests(clause.RefinementPredicate as ParseNode, retained)) {
-          const [lo, hi] = currentInterval(test);
-          const whenTrue = edgeInterval(test, true, lo, hi);
-          if (whenTrue && emptyInterval(...whenTrue)) {
-            reportType('rt-where-unsatisfied', node, 'a $1 clause is not satisfied by this application', Value('where'));
-            return;
-          }
-          recordOrderedEdge(test, true);
+      // The callee's clauses are walked as tests under the enclosing facts,
+      // each callee parameter reading as the place or constant it is bound
+      // to; an obligation that leaves a retained place no value can never
+      // hold (#sec-generic-where). Whatever the walk reports belongs to the
+      // callee's own declaration, where it is judged on its own domain.
+      const parameters = ((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? []);
+      retainedParameterPlaces = new Map();
+      retainedParameterConstants = new Map();
+      for (const parameter of parameters) {
+        const name = parameter.BindingIdentifier.name;
+        const bound = bindings.get(name);
+        const kept = retained.get(name);
+        if (kept) retainedParameterPlaces.set(parameter, kept.place);
+        else if (bound?.Kind === 'literal') retainedParameterConstants.set(parameter, bound);
+      }
+      try {
+        for (const clause of clauses) {
+          const outcome = walkWhereClause(clause.RefinementPredicate as ParseNode);
+          if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
         }
+      } finally {
+        retainedParameterPlaces = null;
+        retainedParameterConstants = null;
+        errors.splice(mark);
+      }
+      if ([...retained.values()].some(({ place }) => piecesFact(place)?.length === 0)) {
+        reportType('rt-where-unsatisfied', node, 'a $1 clause is not satisfied by this application', Value('where'));
       }
     } finally {
       restoreFlow(before);
       judgingRetainedObligations = false;
+    }
+  };
+  /**
+   * #sec-generic-where: a class applied in an expression, `new V.<M>()` or
+   * `V.<M>.m()`, retains the class's clauses as obligations on the enclosing
+   * parameters its arguments name, as an application in a type position does.
+   */
+  const judgeClassApplication = (application: ParseNode.TypeArgumentsExpression, classDeclaration: ParseNode): void => {
+    const clauses = (classDeclaration as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses ?? [];
+    const parameters = (classDeclaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+    const written = application.TypeArguments?.TypeArgumentList ?? [];
+    if (!clauses.length || parameters.length === 0 || written.length !== parameters.length) return;
+    const bindings = new Map<string, TypeRecord>();
+    parameters.forEach((parameter, index) => {
+      const resolved = (parameter.Arity ?? 0) === 0 ? resolveType(written[index] as ParseNode.Type) : null;
+      if (resolved) bindings.set(parameter.BindingIdentifier.name, resolved);
+    });
+    if ([...bindings.values()].some((type) => mentionsTypeParameter(type))) {
+      judgeRetainedObligations(application, classDeclaration as unknown as GenericWhereCheck['declaration'], clauses, bindings);
     }
   };
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], given: ReadonlyMap<string, TypeRecord>,
@@ -21441,7 +21494,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // An application of a class in an expression applies the class.
           const applied = unparenthesized(node.Expression as ParseNode);
           const appliedClass = applied.type === 'IdentifierReference' ? classNodes.get((applied as { name: string }).name) : undefined;
-          if (appliedClass) appliedGenericDeclarations.add(appliedClass as object);
+          if (appliedClass) {
+            appliedGenericDeclarations.add(appliedClass as object);
+            judgeClassApplication(node as ParseNode.TypeArgumentsExpression, appliedClass as ParseNode);
+          }
         }
         // #sec-span-type: the explicit extent changes the window's result
         // contract; it does not turn the borrowed storage into an owned array.
@@ -25306,7 +25362,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const narrowableName = (e: ParseNode): string | null => {
     if (e.type === 'IdentifierReference') {
-      return (e as unknown as { name: string }).name;
+      // While a retained obligation is judged, a callee's value parameter
+      // reads as the enclosing place it is bound to (#sec-generic-where).
+      return (retainedParameterPlaces && retainedParameterPlaces.get(typeParameterDeclarationOf(e))) ?? (e as unknown as { name: string }).name;
     }
     if (e.type === 'TopicReference') {
       return TOPIC_NAME;
@@ -26789,7 +26847,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (core.type === 'IdentifierReference') {
-      const n = numericValueOf(literalValueOf(singleValueOperandType(core)));
+      // A callee's value parameter bound to a constant in the application
+      // under judgment reads as that constant.
+      const bound = retainedParameterConstants?.get(typeParameterDeclarationOf(core));
+      const n = numericValueOf(bound ? literalValueOf(bound) : literalValueOf(singleValueOperandType(core)));
       return n === undefined ? null : sign * n;
     }
     return null;
@@ -28235,39 +28296,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
          * negations as complements; a part the pieces cannot read widens the
          * set rather than narrowing it (#sec-refinement-narrowing).
          */
-        const piecesOf = (node: ParseNode): { place: string, domain: OrderedComparison, pieces: Piece[] } | null => {
-          const t = unparenthesized(node);
-          if (t.type === 'UnaryExpression' && t.operator === '!') {
-            const inner = piecesOf(t.UnaryExpression);
-            return inner ? { ...inner, pieces: complementPieces(inner.domain, inner.pieces) } : null;
-          }
-          if (t.type === 'LogicalANDExpression' || t.type === 'LogicalORExpression') {
-            const left = piecesOf(t.type === 'LogicalANDExpression' ? t.LogicalANDExpression : t.LogicalORExpression);
-            const right = piecesOf(t.type === 'LogicalANDExpression' ? t.BitwiseORExpression : t.LogicalANDExpression);
-            if (t.type === 'LogicalANDExpression') {
-              if (!left || !right) return left ?? right;
-              return left.place === right.place ? { ...left, pieces: intersectPieces(left.pieces, right.pieces) } : null;
-            }
-            return left && right && left.place === right.place ? { ...left, pieces: normalizePieces([...left.pieces, ...right.pieces]) } : null;
-          }
-          if (t.type === 'ConditionalRefinement') {
-            const test = piecesOf(t.Test);
-            if (!test) return null;
-            const consequent = piecesOf(t.Consequent);
-            const alternate = t.Alternate ? piecesOf(t.Alternate) : null;
-            if ((consequent && consequent.place !== test.place) || (alternate && alternate.place !== test.place)) return null;
-            const taken = consequent ? intersectPieces(test.pieces, consequent.pieces) : test.pieces;
-            const rest = complementPieces(test.domain, test.pieces);
-            return { ...test, pieces: normalizePieces([...taken, ...(alternate ? intersectPieces(rest, alternate.pieces) : rest)]) };
-          }
-          const asserted = orderedAssertion(t, name, read) ?? pointAssertion(t, name, read);
-          if (!asserted) return null;
-          const whole: Piece[] = [[asserted.min, asserted.max]];
-          const pieces = asserted.op === '===' ? intersectPieces(whole, [[asserted.eqLo, asserted.eqHi]])
-            : asserted.op === '!==' ? subtractPieces(whole, [asserted.eqLo, asserted.eqHi])
-              : intersectPieces(whole, edgeRegions(asserted, true));
-          return { place: asserted.place, domain: asserted, pieces };
-        };
+        const piecesOf = (node: ParseNode) => predicatePieces(node, (n) => orderedAssertion(n, name, read) ?? pointAssertion(n, name, read));
         // Each pass only installs stricter existing types. A syntax-sized
         // bound also keeps recursive aliases and contradictory clauses finite.
         const limit = clauses.reduce((total, clause) => total + RefinementProjectionSize(clause.predicate), 0);
@@ -29527,7 +29556,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (domain.width === null) {
       // A closed set's constant is read as the relational judgment reads it;
       // an integer type's and a bigint's fold exactly.
-      const c = domain.closed ? constantNumber(constant, declared) : foldConstant(constant);
+      const c = domain.closed ? constantNumber(constant, declared) : (foldConstant(constant) ?? constantNumber(constant, declared));
       if (c === null || (typeof c === 'number' && !Number.isFinite(c))) return null;
       return {
         place, op, label: `${op} ${c}`,
@@ -29850,13 +29879,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const m of (t.Kind === 'union' ? t.Members : [t]) as TypeRecord[]) {
       const raw = m.Kind === 'literal' ? literalString((m as { Value?: unknown }).Value) : undefined;
       if (raw === undefined) return undefined;
+      if (raw === '') continue;
       const [lo, hi] = raw.split('|');
       pieces.push([lo === '' ? null : BigInt(lo!), hi === '' ? null : BigInt(hi!)]);
     }
     return normalizePieces(pieces);
   };
   const declarePieces = (place: string, pieces: readonly Piece[]): void => {
-    if (pieces.length === 0) return;
+    if (pieces.length === 0) {
+      // A retained obligation is read from the pieces its clauses leave, so
+      // an edge that leaves none is marked while one is judged; elsewhere the
+      // impossible test is the error and the edge is dead.
+      if (judgingRetainedObligations) declareNarrowed(piecesKey(place), { Kind: 'literal', Value: '', Base: makePrimitive('string') } as unknown as TypeRecord);
+      return;
+    }
     const stringBase = makePrimitive('string');
     const type = unionOf(pieces.map(([lo, hi]) => ({ Kind: 'literal', Value: `${lo ?? ''}|${hi ?? ''}`, Base: stringBase }) as unknown as TypeRecord));
     if (type !== empty) declareNarrowed(piecesKey(place), type as TypeRecord);
@@ -29893,6 +29929,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   );
   /** The pieces of a domain outside a set: the negation of the test that admitted it. */
   const complementPieces = (c: OrderedComparison, pieces: readonly Piece[]): Piece[] => pieces.reduce<Piece[]>((rest, piece) => subtractPieces(rest, piece), [[c.min, c.max]]);
+  /**
+   * The set of pieces a predicate over one ordered place admits: a disjunction
+   * the union of its sides, a conjunction their intersection, a conditional
+   * the union of each branch under its test, a negation the complement, and a
+   * part the leaf reader cannot read widening the set rather than narrowing
+   * it (#sec-refinement-narrowing, #sec-generic-where).
+   */
+  const predicatePieces = (node: ParseNode, leaf: (n: ParseNode) => OrderedComparison | null): { place: string, domain: OrderedComparison, pieces: Piece[] } | null => {
+    const t = unparenthesized(node);
+    if (t.type === 'UnaryExpression' && t.operator === '!') {
+      const inner = predicatePieces(t.UnaryExpression, leaf);
+      return inner ? { ...inner, pieces: complementPieces(inner.domain, inner.pieces) } : null;
+    }
+    if (t.type === 'LogicalANDExpression' || t.type === 'LogicalORExpression') {
+      const left = predicatePieces(t.type === 'LogicalANDExpression' ? t.LogicalANDExpression : t.LogicalORExpression, leaf);
+      const right = predicatePieces(t.type === 'LogicalANDExpression' ? t.BitwiseORExpression : t.LogicalANDExpression, leaf);
+      if (t.type === 'LogicalANDExpression') {
+        if (!left || !right) return left ?? right;
+        return left.place === right.place ? { ...left, pieces: intersectPieces(left.pieces, right.pieces) } : null;
+      }
+      return left && right && left.place === right.place ? { ...left, pieces: normalizePieces([...left.pieces, ...right.pieces]) } : null;
+    }
+    if (t.type === 'ConditionalRefinement') {
+      const test = predicatePieces(t.Test, leaf);
+      if (!test) return null;
+      const consequent = predicatePieces(t.Consequent, leaf);
+      const alternate = t.Alternate ? predicatePieces(t.Alternate, leaf) : null;
+      if ((consequent && consequent.place !== test.place) || (alternate && alternate.place !== test.place)) return null;
+      const taken = consequent ? intersectPieces(test.pieces, consequent.pieces) : test.pieces;
+      const rest = complementPieces(test.domain, test.pieces);
+      return { ...test, pieces: normalizePieces([...taken, ...(alternate ? intersectPieces(rest, alternate.pieces) : rest)]) };
+    }
+    const asserted = leaf(t);
+    if (!asserted) return null;
+    const whole: Piece[] = [[asserted.min, asserted.max]];
+    const pieces = asserted.op === '===' ? intersectPieces(whole, [[asserted.eqLo, asserted.eqHi]])
+      : asserted.op === '!==' ? subtractPieces(whole, [asserted.eqLo, asserted.eqHi])
+        : intersectPieces(whole, edgeRegions(asserted, true));
+    return { place: asserted.place, domain: asserted, pieces };
+  };
   /**
    * Within a clause sequence an equality test of a place against a constant
    * reads the place's set of intervals, and its failure cuts the constant out
