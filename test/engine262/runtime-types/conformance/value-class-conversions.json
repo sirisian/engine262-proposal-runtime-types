@@ -970,6 +970,20 @@
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
+            "value": "/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic arithmetic comma stored number",
+      "steps": [
+        {
+          "source": "let effects=0;const n:any=2:=uint8;let x:number=1;let result=\"\";try{n + (effects++,x);}catch(e){result=e.name;}result+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
             "value": "TypeError/1"
           }
         }

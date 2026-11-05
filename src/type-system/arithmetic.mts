@@ -4,7 +4,10 @@ import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
-import { AbruptCompletion, Throw, MetadataMismatchDescription, type ThrowCompletion } from '#self';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { exactOfLiteralText } from './exact-real.mts';
+import { CreateDecimalValue, DecimalPartsInRange, isDecimalObject } from '../intrinsics/Decimal.mts';
+import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, type ThrowCompletion } from '#self';
 
 /**
  * proposal-runtime-types #sec-numeric-types-of-this-proposal: arithmetic over numeric value
@@ -254,8 +257,13 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
   // result has the LEFT operand's type (Rust's `Shl<u32> for u64`; C, Java and
   // Go type the count independently). Forcing it into the left type could
   // change it: `uint8 << 256` would shift by 0.
-  const shiftTarget = (op === '<<' || op === '>>' || op === '>>>') && x instanceof TypedNumberValue && y instanceof TypedNumberValue
-    ? ShiftDistanceExemptTarget(x as TypedNumberValue, y as TypedNumberValue) : undefined;
+  // #sec-arithmetic-never-promotes: "Integer exponent and shift-count rules
+  // retain their own contexts", so a plain Number or BigInt that holds an
+  // integer is a distance or an exponent as written, not a literal to adopt.
+  const countOperator = op === '<<' || op === '>>' || op === '>>>' || op === '**';
+  const shiftTarget = countOperator && x instanceof TypedNumberValue
+    ? (y instanceof TypedNumberValue ? ShiftDistanceExemptTarget(x as TypedNumberValue, y as TypedNumberValue) : CountOperandTarget(x as TypedNumberValue, y))
+    : undefined;
   const target = shiftTarget ?? TypedOperandType(x, y, literals);
   if (target instanceof AbruptCompletion) {
     return target as ThrowCompletion;
@@ -423,7 +431,22 @@ export function DecayEnumOperands(x: Value, y: Value): { left: Value, right: Val
  * *false* rather than a type error. Returns the operand pair to use, or
  * undefined where neither side needs adopting.
  */
-export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean }): { left: Value, right: Value } | undefined {
+export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { left: Value, right: Value } | undefined {
+  // A decimal peer takes the literal at the exact value its source text
+  // denotes, its exponent included (#sec-literalvalueintype): `0.2` beside a
+  // `decimal128` is the decimal 0.2, not the double nearest it. A literal the
+  // decimal cannot represent is not equal to any value of it, so adoption
+  // declines, as it does for the other numeric types.
+  for (const [peer, literalOnRight] of [[x, true], [y, false]] as const) {
+    const node = literalOnRight ? literals.rightNode : literals.leftNode;
+    if (!isDecimalObject(peer) || !(literalOnRight ? literals.right : literals.left) || !node) continue;
+    const other = literalOnRight ? y : x;
+    if (!(other instanceof NumberValue)) return undefined;
+    const exact = exactOfLiteralText(node);
+    if (!exact || exact.special !== undefined || !DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, peer.DecimalWidth)) return undefined;
+    const adopted = CreateDecimalValue(exact.significand, exact.exponent, peer.DecimalWidth, surroundingAgent.currentRealmRecord, (peer as { TypeRecord?: unknown }).TypeRecord);
+    return literalOnRight ? { left: x, right: adopted } : { left: adopted, right: y };
+  }
   const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
   const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
   if ((xt && yt) || (!xt && !yt)) {
@@ -571,6 +594,15 @@ export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue
  * The left operand's type, where a shift's two operands are both of integer
  * types that differ; *undefined* otherwise, leaving the ordinary rule.
  */
+/** The left operand's integer type, where the right operand is a plain Number holding an integer or a BigInt: a count in its own context. */
+function CountOperandTarget(x: TypedNumberValue, y: Value): TypeRecord | undefined {
+  const xt = arithmeticUnderlyingOf(x.TypeRecord as TypeRecord);
+  if (!(xt.Kind === 'primitive' && (xt.Name === 'int' || xt.Name === 'uint'))) return undefined;
+  if (y instanceof BigIntValue) return xt;
+  if (y instanceof NumberValue && !(y instanceof TypedNumberValue) && Number.isInteger(payload(y))) return xt;
+  return undefined;
+}
+
 function ShiftDistanceExemptTarget(x: TypedNumberValue, y: TypedNumberValue): TypeRecord | undefined {
   const xt = arithmeticUnderlyingOf(x.TypeRecord as TypeRecord);
   const yt = arithmeticUnderlyingOf(y.TypeRecord as TypeRecord);

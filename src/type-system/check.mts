@@ -15,7 +15,8 @@ import { setNodeParent } from '../parse.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { type PrimitiveOperatorEntry, ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
 import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
-import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { DecimalPartsInRange, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { exactOfLiteralText } from './exact-real.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { NumericValue } from '../static-semantics/NumericValue.mts';
 import { LexicallyDeclaredNames } from '../static-semantics/LexicallyDeclaredNames.mts';
@@ -26251,6 +26252,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     libraryPredicateOrigins.set(call, proved);
     return proved;
   };
+  /** Whether a node is a numeric literal, possibly signed or parenthesized. */
+  const isNumericLiteralNode = (node: ParseNode): boolean => {
+    const t = unparenthesized(node);
+    if (t.type === 'UnaryExpression' && (t.operator === '-' || t.operator === '+')) return isNumericLiteralNode(t.UnaryExpression);
+    return t.type === 'NumericLiteral';
+  };
+  /** A Number literal's value at a float type it is adopted into: rounded as a float literal rounds (#sec-literalvalueintype). */
+  const roundedInto = (n: number, base: TypeRecord & { Kind: 'primitive' }): number => (base.Name === 'float32' ? Math.fround(n) : base.Name === 'float16' ? f16round(n) : n);
   const sameValueOrigins = new WeakMap<ParseNode, boolean>();
   const originalSameValueCall = (call: ParseNode): call is ParseNode.CallExpression => {
     if (call.type !== 'CallExpression' || globalStaticName(call.CallExpression, 'Object') !== 'is'
@@ -26292,9 +26301,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         continue;
       }
-      const literal = singleValueOperandType(constant) ?? staticType(constant);
-      if (literal?.Kind !== 'literal' || !strictDomainMembers(literal, '===') || !strictDomainMembers(source, '===')) continue;
-      // SameValue does not contextually convert a Number argument to a sized value.
+      const written = singleValueOperandType(constant) ?? staticType(constant);
+      if (written?.Kind !== 'literal' || !strictDomainMembers(written, '===') || !strictDomainMembers(source, '===')) continue;
+      // #sec-arithmetic-never-promotes: the literal rule reaches the original
+      // `Object.is`, so a numeric literal argument takes the numeric type of
+      // the other, rounded as a float literal rounds; one that type cannot
+      // represent is the same value as nothing of it.
+      const sourceBase = source.Kind === 'literal' ? source.Base : source;
+      const peerNumeric = sourceBase?.Kind === 'primitive' && sourceBase.Name !== 'number' && (integerLimits(sourceBase) !== null || isFloatTypeName(sourceBase.Name as string))
+        && isNumericLiteralNode(constant) && written.Base?.Kind === 'primitive' && written.Base.Name === 'number' && written.Value instanceof NumberValue;
+      if (peerNumeric && !literalFitsNumericType(written, sourceBase)) {
+        return { name, type: source, subjectType: source, negated, branches: { whenTrue: empty, whenFalse: source }, display: 'Object.is' };
+      }
+      const literal = peerNumeric ? { ...written, Value: Value(roundedInto(R(written.Value as NumberValue), sourceBase as TypeRecord & { Kind: 'primitive' })), Base: sourceBase } as TypeRecord : written;
       if (!equalityCompatible(literal, source.Kind === 'union' ? source.Members.find((m) => equalityCompatible(literal, m)) ?? source : source)) continue;
       return { name, type: literal, subjectType: source, negated, sameValueExclusion: literal, display: 'Object.is' };
     }
@@ -41773,7 +41792,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const numericLiteral = labelType?.Kind === 'literal'
               && ((labelType as { Base?: TypeRecord }).Base as { Kind?: string, Name?: string } | undefined)?.Kind === 'primitive'
               && ((labelType as { Base?: TypeRecord }).Base as { Name?: string }).Name === 'number';
-            if (labelType && numericLiteral
+            // A decimal discriminant holds the label at the exact value its
+            // source text denotes, its exponent included (#sec-literalvalueintype),
+            // so `case 1.0` over a `decimal128` is judged by that value.
+            const decimalWidth = subject && (subject as TypeRecord).Kind === 'primitive'
+              ? ({ decimal32: 32, decimal64: 64, decimal128: 128 } as Record<string, 32 | 64 | 128 | undefined>)[(subject as { Name?: string }).Name ?? ''] : undefined;
+            const exactLabel = decimalWidth !== undefined && label ? exactOfLiteralText(label) : undefined;
+            const decimalHolds = !!exactLabel && exactLabel.special === undefined
+              && DecimalPartsInRange({ significand: exactLabel.significand, exponent: exactLabel.exponent }, decimalWidth!);
+            if (labelType && numericLiteral && !decimalHolds
                 && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration'
                 && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
               reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord)));

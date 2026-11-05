@@ -13,13 +13,21 @@ import { Evaluate } from '../evaluator.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { AbruptCompletion } from '../completion.mts';
-import { JSStringValue, TypedNumberValue } from '../value.mts';
-import { AdoptLiteralOperand, TypedOperandType } from '../type-system/arithmetic.mts';
+import {
+  BooleanValue, JSStringValue, NullValue, TypedNumberValue, UndefinedValue,
+} from '../value.mts';
+import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
+import { isDecimalObject } from '../intrinsics/Decimal.mts';
+import { compareExact, exactOfLiteralText, exactOfValue } from '../type-system/exact-real.mts';
+import { MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
+import { SameType } from '../type-system/relations.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLessThan,
   SameValue,
+  ToNumeric,
   Call,
   GetMethod,
   GetValue,
@@ -213,24 +221,34 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // the rule separately and, for a while, did not get it: `(1 := uint8) <
   // (2 := uint16)` answered true. Literalness is syntactic, as it is for
   // arithmetic, so the operand nodes decide it.
+  // #sec-equality-and-comparison: a comparison asks a question and produces a
+  // Boolean, so where its operands are of two numeric types, or a literal
+  // cannot take the other operand's type, it answers by mathematical value, as
+  // equality answers, after the base language's ToNumeric for a String,
+  // Boolean, null or undefined operand. A literal is read from its source
+  // text, exactly. Two typed operands whose metadata disagree, such as two
+  // units, are still a type error; operands of one type keep their own order.
   if (surroundingAgent.feature('runtime-types')
       && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
-      && (lval instanceof TypedNumberValue || rval instanceof TypedNumberValue)
-      // A String operand is not a numeric type, so the clause does not reach
-      // it and the existing coercion governs, exactly as the string behaviour
-      // of `+` is left alone.
-      && !(lval instanceof JSStringValue)
-      && !(rval instanceof JSStringValue)) {
-    const leftLiteral = isNumericLiteralOperand(RelationalExpression as ParseNode);
-    const rightLiteral = isNumericLiteralOperand(ShiftExpression as ParseNode);
-    // A value generic reads as the literal its value is: held as a typed
-    // value, against an untyped number it compares as that number does.
-    const typedLiteralMeetsNumber = (lval instanceof TypedNumberValue && leftLiteral && !(rval instanceof TypedNumberValue))
-      || (rval instanceof TypedNumberValue && rightLiteral && !(lval instanceof TypedNumberValue));
-    if (!typedLiteralMeetsNumber) {
-      const decided = TypedOperandType(lval, rval, { left: leftLiteral, right: rightLiteral });
-      if (decided instanceof AbruptCompletion) {
-        return decided;
+      && (lval instanceof TypedNumberValue || rval instanceof TypedNumberValue || isDecimalObject(lval) || isDecimalObject(rval))) {
+    const xt = lval instanceof TypedNumberValue ? (lval as TypedNumberValue).TypeRecord as TypeRecord : null;
+    const yt = rval instanceof TypedNumberValue ? (rval as TypedNumberValue).TypeRecord as TypeRecord : null;
+    if (xt && yt && !SameType(xt, yt)) {
+      const metadata = MetadataMismatchDescription(xt, yt);
+      if (metadata !== undefined) return Throw.TypeError('$1', metadata);
+    }
+    const oneType = (xt && yt && SameType(xt, yt)) || (isDecimalObject(lval) && isDecimalObject(rval));
+    const convertible = (v: Value) => v instanceof JSStringValue || v instanceof BooleanValue || v instanceof NullValue || v instanceof UndefinedValue;
+    if (!oneType && !(lval instanceof ObjectValue && !isDecimalObject(lval)) && !(rval instanceof ObjectValue && !isDecimalObject(rval))) {
+      const l = convertible(lval) ? Q(yield* ToNumeric(lval)) : lval;
+      const r = convertible(rval) ? Q(yield* ToNumeric(rval)) : rval;
+      const a = (isNumericLiteralOperand(RelationalExpression as ParseNode) ? exactOfLiteralText(RelationalExpression as ParseNode) : undefined) ?? exactOfValue(l);
+      const b = (isNumericLiteralOperand(ShiftExpression as ParseNode) ? exactOfLiteralText(ShiftExpression as ParseNode) : undefined) ?? exactOfValue(r);
+      if (a && b) {
+        const order = compareExact(a, b);
+        if (order === undefined) return Value.false;
+        const holds = operator === '<' ? order < 0 : operator === '>' ? order > 0 : operator === '<=' ? order <= 0 : order >= 0;
+        return holds ? Value.true : Value.false;
       }
     }
   }

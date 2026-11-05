@@ -58,8 +58,11 @@ test('plain Number equality is unchanged', () => {
   expect(evaluated('0 === -0 ? "eq" : "neq";')).toBe('eq');
 });
 
-test('SameValue (Object.is) distinguishes typed numbers', () => {
-  expect(evaluated('Object.is((5 := uint8), 5) ? "same" : "diff";')).toBe('diff');
+test('SameValue (Object.is) distinguishes typed numbers, a literal argument taking its peer\'s type', () => {
+  // #sec-arithmetic-never-promotes: the literal rule reaches the original
+  // Object.is as it reaches ===, while a binding adopts nothing.
+  expect(evaluated('Object.is((5 := uint8), 5) ? "same" : "diff";')).toBe('same');
+  expect(evaluated('let n = 5; Object.is((5 := uint8), n) ? "same" : "diff";')).toBe('diff');
   expect(evaluated('Object.is((5 := uint8), (5 := uint16)) ? "same" : "diff";')).toBe('diff');
   expect(evaluated('Object.is((5 := uint8), (5 := uint8)) ? "same" : "diff";')).toBe('same');
 });
@@ -237,13 +240,17 @@ for (const [ty, min, max, bits, signed] of WIDE) {
   });
 }
 
-test('a relational between two different numeric types is a type error, as the clause says', () => {
-  // "It is a type error if the Static Types of the operands of an arithmetic,
-  // bitwise, shift, or relational operator are numeric types that are not the
-  // same type." Equality is the deliberate exception; ordering is not.
-  expect(run('let a = uint64.parse("5"); let b = uint128.parse("6"); a < b;')).toMatchObject({ Type: 'throw' });
-  expect(run('let a = int64.parse("-1"); let b = uint64.parse("0"); a < b;')).toMatchObject({ Type: 'throw' });
-  expect(run('let a = uint64.parse("5"); a < 6n;')).toMatchObject({ Type: 'throw' });
+test('a relational between two numeric types is a type error where the checker sees them, and answers where it cannot', () => {
+  // #sec-arithmetic-never-promotes: "It is a type error if the Static Types of
+  // the operands of an arithmetic, bitwise, shift, or relational operator are
+  // numeric types that are not the same type." Where the checker cannot see
+  // them, #sec-equality-and-comparison: the comparison answers by mathematical
+  // value, as equality does and as `1n < 2` does.
+  expectStaticTypeError('const a = uint64.parse("5"); const b = uint128.parse("6"); a < b;');
+  expectStaticTypeError('let a: uint64 = uint64.parse("5"); a < 6n;');
+  expect(evaluated('function g(p, q) { return p < q; } String(g(uint64.parse("5"), uint128.parse("6")));')).toBe('true');
+  expect(evaluated('function g(p, q) { return p < q; } String(g(int64.parse("-1"), uint64.parse("0")));')).toBe('true');
+  expect(evaluated('function g(p, q) { return p < q; } String(g(uint64.parse("5"), 6n));')).toBe('true');
   expect(evaluated('let a = uint64.parse("5"); let b = uint128.parse("5"); String(a == b);')).toBe('true');
 });
 

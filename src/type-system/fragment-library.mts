@@ -224,3 +224,9 @@ export function ReplacedFragmentReach(base: Value, key: Value, found: Value): st
   }
   return undefined;
 }
+
+/** The original built-in captured for _realm_ under a holder intrinsic and a member name, whatever the program installs there later. */
+export function OriginalFragmentFunction(realm: Realm, holderKey: string, name: string): Value | undefined {
+  const holder = (realm.Intrinsics as unknown as Record<string, ObjectValue | undefined>)[holderKey];
+  return holder ? originalsByRealm.get(realm as unknown as object)?.get(holder)?.get(name) : undefined;
+}

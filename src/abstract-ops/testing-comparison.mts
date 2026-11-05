@@ -916,8 +916,22 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
   // decimal or rational was not `==` to an equal integer, and against a plain
   // Number or BigInt it reached ToPrimitive, whose refusing valueOf threw.
   if (surroundingAgent.feature('runtime-types') && (isProposalNumeric(x) || isProposalNumeric(y))) {
-    const xm = exactNumericValue(x);
-    const ym = exactNumericValue(y);
+    // A String or Boolean beside one is converted as it is beside a Number,
+    // or, beside a wide integer, read as a BigInt is: exactly, an unparsable
+    // String being equal to nothing.
+    const converted = (peer: Value, v: Value): Value | undefined => {
+      if (!(v instanceof BooleanValue) && !(v instanceof JSStringValue)) return v;
+      if (v instanceof JSStringValue && peer instanceof TypedNumberValue && typeof (peer as TypedNumberValue).value === 'bigint') {
+        return StringToBigInt(v);
+      }
+      const number = X(ToNumber(v));
+      return number;
+    };
+    const xc = isProposalNumeric(y) ? converted(y, x) : x;
+    const yc = isProposalNumeric(x) ? converted(x, y) : y;
+    if (xc === undefined || yc === undefined) return false;
+    const xm = exactNumericValue(xc);
+    const ym = exactNumericValue(yc);
     if (xm !== undefined && ym !== undefined) {
       return exactNumericEquals(xm, ym);
     }

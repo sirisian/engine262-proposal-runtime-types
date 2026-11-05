@@ -41,6 +41,8 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
     const adopted = AdoptLiteralOperand(lval, rval, {
       left: isNumericLiteralOperand(EqualityExpression as ParseNode),
       right: isNumericLiteralOperand(RelationalExpression as ParseNode),
+      leftNode: EqualityExpression as ParseNode,
+      rightNode: RelationalExpression as ParseNode,
     });
     if (adopted) {
       lval = adopted.left; rval = adopted.right;
@@ -117,6 +119,8 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
     const adopted = AdoptLiteralOperand(lval, rval, {
       left: isNumericLiteralOperand(EqualityExpression as ParseNode),
       right: isNumericLiteralOperand(RelationalExpression as ParseNode),
+      leftNode: EqualityExpression as ParseNode,
+      rightNode: RelationalExpression as ParseNode,
     });
     if (adopted) {
       lval = adopted.left;

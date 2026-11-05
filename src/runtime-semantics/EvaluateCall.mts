@@ -1,5 +1,7 @@
 import { CheckWhereCall } from '../type-system/where-predicates.mts';
-import { ReplacedFragmentReach } from '../type-system/fragment-library.mts';
+import { OriginalFragmentFunction, ReplacedFragmentReach } from '../type-system/fragment-library.mts';
+import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { SameType } from '../type-system/relations.mts';
 import {
   NumberValue, ObjectValue, ReferenceRecord, ReferenceValue, TypedNumberValue, Value, isTypedNumber,
@@ -32,6 +34,15 @@ import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
+/** The two arguments of an `Object.is` call with a numeric literal adopted into its peer's type, or undefined where neither adopts. */
+function AdoptSameValueLiteral(a: Value, b: Value, nodes: ParseNode.Arguments): Value[] | undefined {
+  const adopted = AdoptLiteralOperand(a, b, {
+    left: isNumericLiteralOperand(nodes[0] as ParseNode), right: isNumericLiteralOperand(nodes[1] as ParseNode),
+    leftNode: nodes[0] as ParseNode, rightNode: nodes[1] as ParseNode,
+  });
+  return adopted ? [adopted.left, adopted.right] : undefined;
+}
+
 export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression, evaluatedArguments?: readonly Value[]) {
   // The call expression's own position, read before its arguments push theirs.
   const callContext = surroundingAgent.feature('runtime-types') ? contextualTypeFor(callExpression) : undefined;
@@ -142,6 +153,15 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
       }
     }
     return Throw.TypeError('$1 is not a function', func);
+  }
+  // #sec-arithmetic-never-promotes: the literal rule reaches the original
+  // `Object.is`, so a numeric literal argument takes the other argument's
+  // numeric type, as a literal operand of `===` does; a binding adopts
+  // nothing, and a literal the type cannot represent stays a Number.
+  if (surroundingAgent.feature('runtime-types') && Array.isArray(args) && args.length === 2 && argList && argList.length === 2
+      && func === OriginalFragmentFunction(surroundingAgent.currentRealmRecord, '%Object%', 'is')) {
+    const adopted = AdoptSameValueLiteral(argList[0] as Value, argList[1] as Value, args as ParseNode.Arguments);
+    if (adopted) argList = CopyArgumentResults(argList, adopted) as typeof argList;
   }
   if (signature && argList) {
     const items = NamedCallItemsOf(argList);

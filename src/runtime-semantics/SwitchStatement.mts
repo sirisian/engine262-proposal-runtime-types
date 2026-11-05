@@ -74,6 +74,7 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
     const adopted = AdoptLiteralOperand(subject, selector, {
       left: false,
       right: isNumericLiteralOperand(constructor.Expression as ParseNode),
+      rightNode: constructor.Expression as ParseNode,
     });
     if (adopted) {
       return IsStrictlyEqual(adopted.left, adopted.right);
