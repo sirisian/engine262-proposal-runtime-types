@@ -1,3 +1,4 @@
+import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
 import { specializedVectorMethod } from '../type-system/vector-specialization.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
@@ -1249,7 +1250,15 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
               if (!predicate || readsCallValues(predicate)) {
                 continue;
               }
-              const result = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+              // #sec-generic-where: a specialization predicate is a compile-time
+              // bound, evaluated within the fragment (#sec-fragment-library).
+              BeginFragmentEvaluation();
+              let result;
+              try {
+                result = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+              } finally {
+                EndFragmentEvaluation();
+              }
               if (result === Value.false || result === Value.undefined || result === Value.null) {
                 return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
               }

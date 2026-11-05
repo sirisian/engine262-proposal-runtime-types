@@ -1,5 +1,6 @@
 import { bootstrapWhere } from '../intrinsics/Where.mts';
 import { RememberWhereLibrary } from '../type-system/where-predicates.mts';
+import { RememberFragmentBuiltIns } from '../type-system/fragment-library.mts';
 import { RememberLibraryOperations } from '../type-system/library-operation-origin.mts';
 import { AddRestrictedFunctionProperties, type Intrinsics } from '../abstract-ops/realms.mts';
 import { RegisterGenericBuiltin } from '../type-system/generic-builtins.mts';
@@ -343,6 +344,7 @@ export function CreateIntrinsics(realmRec: Realm) {
 
   RememberLibraryOperations(realmRec);
   RememberWhereLibrary(realmRec);
+  RememberFragmentBuiltIns(realmRec);
   return intrinsics;
 }
 

@@ -3004,7 +3004,14 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration,
       context.LexicalEnvironment = scope;
       try {
         for (const clause of clauses) {
-          const verdict = Q(yield* GetValue(Q(yield* Evaluate(clause.RefinementPredicate as never))));
+          // #sec-generic-where: evaluated within the fragment (#sec-fragment-library).
+          BeginFragmentEvaluation();
+          let verdict;
+          try {
+            verdict = Q(yield* GetValue(Q(yield* Evaluate(clause.RefinementPredicate as never))));
+          } finally {
+            EndFragmentEvaluation();
+          }
           if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
             return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
           }
@@ -3119,7 +3126,14 @@ export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: 
           if (!predicate) {
             continue;
           }
-          const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+          // #sec-generic-where: evaluated within the fragment (#sec-fragment-library).
+          BeginFragmentEvaluation();
+          let verdict;
+          try {
+            verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+          } finally {
+            EndFragmentEvaluation();
+          }
           if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
             return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
           }

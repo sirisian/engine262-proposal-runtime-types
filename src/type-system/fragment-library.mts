@@ -1,4 +1,4 @@
-import { surroundingAgent, ObjectValue, Value } from '#self';
+import { surroundingAgent, BigIntValue, JSStringValue, NumberValue, ObjectValue, Value } from '#self';
 import type { PropertyKeyValue, Realm } from '#self';
 
 /**
@@ -163,4 +163,64 @@ export function IsExcludedFromFragment(F: ObjectValue): boolean {
     return false;
   }
   return excludedSetFor(realm).has(F);
+}
+
+/**
+ * #sec-fragment-library: the fragment's built-ins are the originals, "the pure
+ * methods and functions of String, Number, BigInt, Math, Array, Object, and
+ * JSON", captured here before program code can replace one. A call that
+ * reaches a built-in's name and finds a replacement reaches outside the
+ * fragment, which is the TypeError the fragment's evaluation raises
+ * (#sec-enums), so a `where` clause's outcome never depends on the
+ * replacement (#sec-generic-where).
+ */
+const FRAGMENT_HOLDERS = ['%String%', '%String.prototype%', '%Number%', '%Number.prototype%', '%BigInt%', '%BigInt.prototype%',
+  '%Math%', '%Array%', '%Array.prototype%', '%Object%', '%Object.prototype%', '%JSON%'];
+const originalsByRealm = new WeakMap<object, WeakMap<ObjectValue, Map<string, Value>>>();
+
+export function RememberFragmentBuiltIns(realm: Realm): void {
+  const originals = new WeakMap<ObjectValue, Map<string, Value>>();
+  for (const key of FRAGMENT_HOLDERS) {
+    const holder = (realm.Intrinsics as unknown as Record<string, ObjectValue | undefined>)[key];
+    if (!(holder instanceof ObjectValue)) {
+      continue;
+    }
+    const members = new Map<string, Value>();
+    for (const [name, descriptor] of holder.properties) {
+      if (name instanceof JSStringValue && descriptor.Value instanceof ObjectValue) {
+        members.set(name.stringValue(), descriptor.Value);
+      }
+    }
+    originals.set(holder, members);
+  }
+  originalsByRealm.set(realm as unknown as object, originals);
+}
+
+/**
+ * The name of the fragment built-in that `base`'s `key` reaches a replacement
+ * of, or undefined: the property is found on one of the fragment's holders,
+ * and the function found there is not the one captured for the realm.
+ */
+export function ReplacedFragmentReach(base: Value, key: Value, found: Value): string | undefined {
+  if (!InFragmentEvaluation() || !(key instanceof JSStringValue)) {
+    return undefined;
+  }
+  const realm = surroundingAgent.currentRealmRecord;
+  const originals = realm && originalsByRealm.get(realm as unknown as object);
+  if (!originals) {
+    return undefined;
+  }
+  const intrinsics = realm.Intrinsics as unknown as Record<string, ObjectValue | undefined>;
+  let holder: Value | undefined = base instanceof ObjectValue ? base
+    : base instanceof JSStringValue ? intrinsics['%String.prototype%']
+      : base instanceof NumberValue ? intrinsics['%Number.prototype%']
+        : base instanceof BigIntValue ? intrinsics['%BigInt.prototype%'] : undefined;
+  for (let depth = 0; holder instanceof ObjectValue && depth < 64; depth += 1) {
+    if (holder.properties.has(key)) {
+      const original = originals.get(holder)?.get(key.stringValue());
+      return original !== undefined && original !== found ? key.stringValue() : undefined;
+    }
+    holder = (holder as unknown as { Prototype?: Value }).Prototype;
+  }
+  return undefined;
 }

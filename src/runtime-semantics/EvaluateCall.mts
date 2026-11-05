@@ -1,4 +1,5 @@
 import { CheckWhereCall } from '../type-system/where-predicates.mts';
+import { ReplacedFragmentReach } from '../type-system/fragment-library.mts';
 import { SameType } from '../type-system/relations.mts';
 import {
   NumberValue, ObjectValue, ReferenceRecord, ReferenceValue, TypedNumberValue, Value, isTypedNumber,
@@ -41,6 +42,10 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     if (IsPropertyReference(ref) === Value.true) {
       // i. Let thisValue be GetThisValue(ref).
       thisValue = GetThisValue(ref);
+      // #sec-fragment-library: within the fragment a built-in's name reaches
+      // the original; a replacement is a reach outside the fragment.
+      const replaced = ReplacedFragmentReach(ref.Base as Value, ref.ReferencedName as Value, func);
+      if (replaced !== undefined) return Throw.TypeError('the fragment reaches $1, a built-in the program replaced', Value(replaced));
     } else {
       // i. Let refEnv be ref.[[Base]].
       const refEnv = ref.Base;

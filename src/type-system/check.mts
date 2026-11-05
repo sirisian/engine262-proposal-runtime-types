@@ -30000,6 +30000,68 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const recordEqualityEdge = (point: OrderedComparison, outcome: boolean): void => {
     declarePieces(point.place, equalityPieces(point, outcome));
   };
+  /**
+   * #sec-generic-where: a clause over a value pack, `I.some(i => i > 300)` or
+   * `I.every(i => i > 300)`, reads the fragment's `some` and `every`
+   * (#sec-fragment-library), the callback an arrow returning one ordered
+   * test of its parameter against a constant. `some` can never succeed where
+   * no value of the pack's element domain passes the test, and `every`
+   * likewise once a non-empty pack is established; `every` can never fail
+   * where every value passes it, and `some` where that holds of a non-empty
+   * pack. Nothing is recorded on an edge: the pack's elements are not places.
+   */
+  const packCallback = (test: ParseNode): { label: string, verdict: boolean | undefined } | null => {
+    const t = unparenthesized(test);
+    if (t.type !== 'CallExpression') return null;
+    const call = t as ParseNode.CallExpression;
+    const callee = unparenthesized(call.CallExpression as ParseNode);
+    if (callee.type !== 'MemberExpression') return null;
+    const member = callee as unknown as { MemberExpression: ParseNode, IdentifierName?: { name?: string } | null };
+    const method = member.IdentifierName?.name;
+    if (method !== 'some' && method !== 'every') return null;
+    const receiver = unparenthesized(member.MemberExpression);
+    if (receiver.type !== 'IdentifierReference') return null;
+    const parameter = typeParameterDeclarationOf(receiver) as { IsValueParameter?: boolean, IsVariadic?: boolean, BindingIdentifier?: { name?: string } };
+    if (!parameter.IsValueParameter || !parameter.IsVariadic) return null;
+    const constraintNode = (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint;
+    const constraint = constraintNode ? resolveType(constraintNode as ParseNode.Type) : null;
+    const element = constraint?.Kind === 'array' ? constraint.Element as TypeRecord : null;
+    if (!element || call.Arguments.length !== 1) return null;
+    const arrow = unparenthesized(call.Arguments[0] as ParseNode);
+    if (arrow.type !== 'ArrowFunction') return null;
+    const formals = ((arrow as ParseNode.ArrowFunction).ArrowParameters as unknown as { FormalParameterList?: readonly ParseNode[] }).FormalParameterList
+      ?? ((arrow as ParseNode.ArrowFunction).ArrowParameters as unknown as readonly ParseNode[]);
+    const formal = Array.isArray(formals) && formals.length === 1 ? formals[0] as { type?: string, BindingIdentifier?: { name?: string }, name?: string } : null;
+    const bound = formal?.BindingIdentifier?.name ?? (formal?.type === 'BindingIdentifier' ? formal.name : undefined);
+    const body = (arrow as ParseNode.ArrowFunction).ConciseBody as { type?: string, ExpressionBody?: { AssignmentExpression?: ParseNode } };
+    const expression = body.type === 'ConciseBody' ? body.ExpressionBody?.AssignmentExpression : undefined;
+    if (bound === undefined || !expression) return null;
+    const comparison = unparenthesized(expression);
+    if (comparison.type !== 'RelationalExpression') return null;
+    const rel = comparison as ParseNode.RelationalExpression;
+    let op = rel.operator as string;
+    if (!['<', '<=', '>', '>='].includes(op)) return null;
+    let subject = unparenthesized(rel.RelationalExpression as ParseNode);
+    let constant = unparenthesized(rel.ShiftExpression as ParseNode);
+    if (!(subject.type === 'IdentifierReference' && (subject as { name: string }).name === bound)) {
+      [subject, constant] = [constant, subject];
+      op = op === '<' ? '>' : op === '<=' ? '>=' : op === '>' ? '<' : '<=';
+    }
+    if (!(subject.type === 'IdentifierReference' && (subject as { name: string }).name === bound)) return null;
+    const elementPlace = `${(receiver as { name: string }).name}\u0000element`;
+    const ordered = orderedFromParts(elementPlace, element, op, constant, null);
+    if (!ordered || orderDomainOf(element)?.closed) return null;
+    const domain: Piece[] = [[ordered.min, ordered.max]];
+    const passes = intersectPieces(domain, edgeRegions(ordered, true)).length > 0;
+    const fails = ordered.nan || intersectPieces(domain, edgeRegions(ordered, false)).length > 0;
+    const lengthPieces = piecesFact(`${(receiver as { name: string }).name}.length`);
+    const nonEmpty = !!lengthPieces && lengthPieces.length > 0 && lengthPieces.every(([lo]) => lo !== null && lo >= 1n);
+    const label = `${(receiver as { name: string }).name}.${method}(${bound} => ${bound} ${op} ${(constant as { sourceText?: string }).sourceText ?? ''})`;
+    const verdict = method === 'some'
+      ? (!passes ? false : !fails && nonEmpty ? true : undefined)
+      : (!fails ? true : !passes && nonEmpty ? false : undefined);
+    return { label, verdict };
+  };
   const recordOrderedEdge = (ordered: OrderedComparison, outcome: boolean): void => {
     const [pieces] = currentPieces(ordered);
     declarePieces(ordered.place, intersectPieces(pieces, edgeRegions(ordered, outcome)));
@@ -30022,7 +30084,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const textual = !ordered && live && visit && whereClauseWalkDepth > 0 ? stringComparison(test) : null;
     const decimal = !ordered && !textual && live && visit && whereClauseWalkDepth > 0 ? decimalComparison(test) : null;
     const pointed = !ordered && !textual && !decimal && live && visit && whereClauseWalkDepth > 0 ? equalityPoint(test) : null;
+    const packed = !ordered && !textual && !decimal && !pointed && live && visit && whereClauseWalkDepth > 0 ? packCallback(test) : null;
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
+    if (repeated === undefined && deciding && packed) repeated = packed.verdict;
     if (repeated === undefined && deciding && ordered) {
       const [pieces, narrowed] = currentPieces(ordered);
       if (narrowed || ordered.domainOnly) {
@@ -30059,9 +30123,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
     // A comparison against a negative literal has no canonical form, but its
     // interval is as exact as any other's.
-    if (!canon && !ordered && !textual && !decimal && !pointed) return result;
+    if (!canon && !ordered && !textual && !decimal && !pointed && !packed) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal?.label ?? pointed!.label, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal?.label ?? pointed?.label ?? packed!.label, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {

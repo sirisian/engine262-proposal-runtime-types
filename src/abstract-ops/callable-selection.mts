@@ -15,6 +15,7 @@
  * naming both and the arguments.
  */
 
+import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { NewTypeParameterEnvironment, bindTypeParameter, TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped, BindTypeArgumentRecordsInto, RuntimeTypeOf, valueArguments as argumentTypeOracle } from '../type-system/runtime.mts';
@@ -352,7 +353,14 @@ export function* CaseFilterHolds(fn: Value, frame: Map<string, TypeRecord>, clas
       if (GenericWhereVerified(clause, key)) continue;
       const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
       if (!predicate) continue;
-      const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+      // #sec-generic-where: evaluated within the fragment (#sec-fragment-library).
+      BeginFragmentEvaluation();
+      let verdict;
+      try {
+        verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+      } finally {
+        EndFragmentEvaluation();
+      }
       if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) return false;
       MarkGenericWhereVerified(clause, key);
     }
