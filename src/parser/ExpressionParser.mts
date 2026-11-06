@@ -2869,7 +2869,7 @@ export abstract class ExpressionParser extends FunctionParser {
       return this.finishNode(node, 'MatchWildcardPattern');
     }
     const t = this.peek();
-    if (t.type === Token.NUMBER || t.type === Token.STRING
+    if (t.type === Token.NUMBER || t.type === Token.BIGINT || t.type === Token.STRING
         || t.type === Token.TRUE || t.type === Token.FALSE || t.type === Token.NULL
         || t.type === Token.ADD || t.type === Token.SUB) {
       const node = this.startNode<ParseNode.MatchLiteralPattern>();
@@ -2957,6 +2957,10 @@ export abstract class ExpressionParser extends FunctionParser {
     // `P` - and the clause's overlap rule does not settle it, since there the
     // two readings do NOT agree. Left unclaimed rather than half-decided.
     if (this.test(Token.IDENTIFIER)) {
+      const named = this.tryParseNamedRangePattern();
+      if (named) {
+        return named;
+      }
       const juxtaposition = this.tryParseMatchJuxtapositionPattern();
       if (juxtaposition) {
         return juxtaposition;
@@ -3209,6 +3213,49 @@ export abstract class ExpressionParser extends FunctionParser {
    * The shape is parsed by the same routine a standalone object pattern uses,
    * so the two cannot drift.
    */
+  // #sec-narrowing-flow: a range pattern whose lower endpoint is a NAME, as
+  // `E.b..=E.d` over an enum's ordered enumerators. The endpoint rule already
+  // admits a name; only a pattern beginning with a literal reached the range
+  // parse. Speculative: anything that is not a range restores the lexer.
+  tryParseNamedRangePattern(): ParseNode.MatchRangePattern | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    // Look past the name path with the lexer alone, building no node: only a
+    // range operator after it makes this a range pattern.
+    this.next();
+    while (this.test(Token.PERIOD)) {
+      this.next();
+      this.next();
+    }
+    const range = this.test(Token.DOT_DOT) || this.test(Token.DOT_DOT_LT) || this.test(Token.DOT_DOT_EQ);
+    this.restoreLexerCheckpoint(checkpoint);
+    if (!range) {
+      return null;
+    }
+    let literal: ParseNode;
+    try {
+      literal = this.parseRangeExpression();
+    } catch {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    if ((literal as { type?: string }).type !== 'RangeExpression') {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    const bounds = literal as ParseNode.RangeExpression;
+    for (const bound of [bounds.RangeStart, bounds.RangeEnd]) {
+      if (bound && !this.validMatchLiteral(bound, true)) {
+        this.addEarlyError(() => Throw.SyntaxError('a range pattern endpoint must be a literal or a name'), bound);
+      }
+    }
+    const pattern = this.startNode<ParseNode.MatchRangePattern>(literal);
+    pattern.Range = literal;
+    return this.finishNode(pattern, 'MatchRangePattern');
+  }
+
   tryParseMatchJuxtapositionPattern(): ParseNode.MatchJuxtapositionPattern | null {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();

@@ -32,6 +32,30 @@ export function* NormalizeInferredClassArguments(target: TypeRecord): PlainEvalu
   return target;
 }
 
+/**
+ * #sec-inferred-return-types: excluding a fresh accessor from eager inferred
+ * object admission, by its literal name or its established computed key. The
+ * declaration on a fresh accessor checks its result when called, so inferring
+ * the object's type must not call that accessor now.
+ */
+export function WithoutFreshAccessors(target: TypeRecord, literal: ParseNode | null | undefined): TypeRecord {
+  let written = literal;
+  while (written?.type === 'ParenthesizedExpression') written = written.Expression;
+  if (target.Kind !== 'object' || written?.type !== 'ObjectLiteral') return target;
+  const accessors = new Set<ReturnType<typeof CheckedPropertyKeyOf>>();
+  for (const member of written.PropertyDefinitionList) {
+    const keyNode = member.type === 'PropertyDefinition' ? member.PropertyName
+      : 'ClassElementName' in member ? member.ClassElementName : member;
+    if (!keyNode) continue;
+    const key = CheckedPropertyKeyOf(keyNode)
+      ?? ('name' in keyNode ? keyNode.name : 'value' in keyNode ? String(keyNode.value) : undefined);
+    if (key === undefined) continue;
+    if (member.type === 'MethodDefinition' && !member.UniqueFormalParameters) accessors.add(key);
+    else accessors.delete(key); // A later data property or method replaces it.
+  }
+  return { ...target, Properties: target.Properties.filter((property) => !accessors.has(property.keyDependency ?? property.key)) };
+}
+
 /** The inferred initialization boundary, shared by plain and extracted bindings. */
 export function* EnforceInferredBinding(node: object, value: Value, initializer?: ParseNode | null, completion?: object): PlainEvaluator<{ value: Value, type?: TypeRecord }> {
   const inferred = InferredConstTypeOf(node);
@@ -52,22 +76,7 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   let writtenInitializer = initializer;
   while (writtenInitializer?.type === 'ParenthesizedExpression') writtenInitializer = writtenInitializer.Expression;
   target = CompleteCreatedFunctionResult(target, value, writtenInitializer ?? undefined);
-  if (target.Kind === 'object' && writtenInitializer?.type === 'ObjectLiteral') {
-    // The declaration on a fresh accessor checks its result when called.
-    // Inferring the object's type must not call that accessor now.
-    const accessors = new Set<ReturnType<typeof CheckedPropertyKeyOf>>();
-    for (const member of writtenInitializer.PropertyDefinitionList) {
-      const keyNode = member.type === 'PropertyDefinition' ? member.PropertyName
-        : 'ClassElementName' in member ? member.ClassElementName : member;
-      if (!keyNode) continue;
-      const key = CheckedPropertyKeyOf(keyNode)
-        ?? ('name' in keyNode ? keyNode.name : 'value' in keyNode ? String(keyNode.value) : undefined);
-      if (key === undefined) continue;
-      if (member.type === 'MethodDefinition' && !member.UniqueFormalParameters) accessors.add(key);
-      else accessors.delete(key); // A later data property or method replaces it.
-    }
-    target = { ...target, Properties: target.Properties.filter((property) => !accessors.has(property.keyDependency ?? property.key)) };
-  }
+  target = WithoutFreshAccessors(target, writtenInitializer);
   // Inference preserves an existing value. Do not promote an already
   // conforming plain aggregate into typed storage merely to check it.
   if (!Q(yield* IsOfType(value, target))) {

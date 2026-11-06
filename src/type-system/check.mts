@@ -21873,8 +21873,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
             }
             const contribution = StaticIterationContribution(spread, structureOf);
-            t = contribution.element;
-            positions = contribution.positions;
+            // #sec-range-default-iterator-types: only a fresh range literal's
+            // produced elements carry into a spread; a stored range retains
+            // that uncertainty, so an ordinary array of it keeps gradual storage.
+            const storedRange = !!rangePropertyType(spread, wellKnownSymbols.iterator)
+              && unparenthesized(el.AssignmentExpression).type !== 'RangeExpression';
+            t = storedRange ? null : contribution.element;
+            positions = storedRange ? undefined : contribution.positions;
             if (!positions) tail ??= [];
             // Storage alone does not constrain a replaceable iterator. Retain
             // provenance only when that protocol supplies a known contribution.
@@ -36057,12 +36062,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const protocol = StaticIterationContribution(source.type, structureOf);
       const literal = patternExpression(source.expression);
+      // #sec-type-annotations: each name's type follows from the annotated
+      // type's members, which for a tuple are its declared positions. An
+      // array's indexed storage has no such members, and does not constrain
+      // its replaceable iterator.
+      const declared = source.annotated && source.type?.Kind === 'tuple' && source.type.Elements.every((position) => !position.Rest)
+        ? source.type.Elements.map((position) => position.Type) : undefined;
       elements.forEach((el, index) => {
         if (el.type !== 'Elision') {
           const contribution = literal?.type === 'ArrayLiteral'
               && !literal.ElementList.slice(0, index + 1).some((element) => element.type === 'SpreadElement')
             ? patternElement(source, index)
-            : { type: protocol.positions ? protocol.positions[index] ?? undefinedType : protocol.element };
+            : declared ? { type: declared[index] ?? undefinedType }
+              : { type: protocol.positions ? protocol.positions[index] ?? undefinedType : protocol.element };
           checkPattern(el, { ...contribution, typed: source.typed, annotated: source.annotated }, declaring, infer, frame, selected);
         }
       });

@@ -1,5 +1,6 @@
 import { AdmitWherePredicate, EvaluateWherePredicate } from '../type-system/where-predicates.mts';
 import { IsWhereMetaType } from '../intrinsics/Where.mts';
+import { WithoutFreshAccessors } from '../type-system/inferred-binding.mts';
 import { FunctionTypeParameterDeclarations, bindTypeParameter, markValueParameterBinding } from '../type-system/runtime.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
@@ -5951,6 +5952,15 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   }
   return Value.undefined;
 }
+/** The object literal a function returns, where its body is that one expression or one top-level return. */
+function returnedLiteralOf(fn: AnnotatedFunction): ParseNode | undefined {
+  const code = fn.ECMAScriptCode as ParseNode | undefined;
+  if (code?.type === 'ConciseBody' || code?.type === 'AsyncConciseBody') return code.ExpressionBody.AssignmentExpression;
+  const statements = (code as { FunctionStatementList?: readonly ParseNode[] } | undefined)?.FunctionStatementList;
+  const returns = statements?.filter((statement) => statement.type === 'ReturnStatement') ?? [];
+  return returns.length === 1 && statements!.length === 1 ? (returns[0] as ParseNode.ReturnStatement).Expression ?? undefined : undefined;
+}
+
 export function* EnforceReturnType(fn: AnnotatedFunction, value: Value, completion?: object): ValueEvaluator {
   // Primitive dispatch admits the raw result at the resolved base type while
   // its selected capture frame is active. It then composes result metadata.
@@ -5995,7 +6005,9 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value, completi
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
       // declared one: it constrains the consumer, not the value leaving.
-      const result = Q(yield* RequireType(value, published, undefined, ConstructionSelectionsOf(completion)));
+      // A fresh object literal's own accessors are not called to admit it.
+      const target = WithoutFreshAccessors(published, returnedLiteralOf(fn));
+      const result = Q(yield* RequireType(value, target, undefined, ConstructionSelectionsOf(completion)));
       RetainCheckedResult(completion, published);
       return result;
     }
