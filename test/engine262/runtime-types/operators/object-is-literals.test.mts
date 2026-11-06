@@ -41,7 +41,9 @@ test('a binding adopts nothing, and values of two numeric types stay distinct', 
 });
 
 test('collections are unchanged: an argument to a collection method has no peer operand', () => {
-  expect(evaluated('let v: uint8 = 5; String([v].includes(5)) + " " + String(new Set([v]).has(5));')).toBe('false false');
+  // An array literal searches at its element type (#sec-array-literal-static-type),
+  // while an untyped Set's argument has no peer.
+  expect(evaluated('let v: uint8 = 5; String([v].includes(5)) + " " + String(new Set([v]).has(5));')).toBe('true false');
   expect(evaluated('let a: [].<uint8> = [5]; String(a.includes(5));')).toBe('true');
 });
 

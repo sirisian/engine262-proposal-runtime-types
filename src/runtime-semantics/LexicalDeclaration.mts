@@ -155,6 +155,15 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
         // being defended.
         contextual = (resolved && typeof resolved === 'object' && 'Kind' in resolved) ? resolved : null;
       }
+      // #sec-static-type-of-an-expression: a literal-initialized counter whose
+      // type the checker inferred from its tests builds its literal at that
+      // type, as an annotation would, rather than converting a Number.
+      if (!TypeAnnotation && !contextual && surroundingAgent.feature('runtime-types')) {
+        const counter = InferredConstTypeOf(node);
+        let literal = Initializer as ParseNode | null;
+        while (literal?.type === 'ParenthesizedExpression') literal = (literal as unknown as { Expression: ParseNode }).Expression;
+        if (counter?.Kind === 'primitive' && (literal?.type === 'NumericLiteral' || literal?.type === 'UnaryExpression')) contextual = counter;
+      }
       // Tagged with the initializer: the position is the initializer's, and
       // nothing nested under it inherits it (contextualTypeFor).
       pushContextualType(contextual, Initializer as object);

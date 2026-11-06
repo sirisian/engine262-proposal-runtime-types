@@ -11,7 +11,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
-import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
+import { TakeStaticCallResolution, SearchLiteralTypeOf, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
+import { fitsNumericType } from '../type-system/runtime.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { CallArgumentItems, NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
@@ -153,6 +154,17 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
       }
     }
     return Throw.TypeError('$1 is not a function', func);
+  }
+  // #sec-array-defaults-and-stores: a literal search element of `includes`,
+  // `indexOf` or `lastIndexOf` takes the receiver's element type, which the
+  // checker read from its Static Type (#sec-array-literal-static-type).
+  if (surroundingAgent.feature('runtime-types') && Array.isArray(args) && args.length >= 1 && argList && argList.length >= 1) {
+    const searchType = SearchLiteralTypeOf(args[0] as object);
+    const first = argList[0] as Value;
+    if (searchType && first instanceof NumberValue && !isTypedNumber(first)
+        && fitsNumericType(R(first) as number, searchType.Name as string, searchType.Arguments ?? [])) {
+      argList = CopyArgumentResults(argList, [new TypedNumberValue(wrapToType(R(first) as number, searchType), searchType), ...argList.slice(1)]) as typeof argList;
+    }
   }
   // #sec-arithmetic-never-promotes: the literal rule reaches the original
   // `Object.is`, so a numeric literal argument takes the other argument's

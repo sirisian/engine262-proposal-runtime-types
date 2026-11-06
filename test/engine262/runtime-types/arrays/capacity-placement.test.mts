@@ -149,18 +149,22 @@ test('the value a capacity reports is unchanged', () => {
 
 test('a capacity carries the same comparison rules a length does', () => {
   // #sec-arithmetic-never-promotes: a literal adopts the other operand's type,
-  // so the comparison against a literal is true; a binding adopts nothing, so
-  // the comparison against one is false. This is the pinned behaviour of
-  // `length`, now true of `capacity` as well rather than only of one of them.
+  // so the comparison against a literal is true; a binding initialized with an
+  // untyped value adopts nothing, so the comparison against one is false, and
+  // a literal-initialized binding takes the type its test decides
+  // (#sec-static-type-of-an-expression). These are the rules of `length`, true
+  // of `capacity` as well.
   expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a.capacity === 4);')).toBe(true);
-  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let n = 4; String(a.capacity === n);')).toBe(false);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let n = Number("4"); String(a.capacity === n);')).toBe(false);
+  expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; let n = 4; String(a.capacity === n);')).toBe(true);
 });
 
-test('a loop over a capacity needs a typed counter, as one over a length does', () => {
-  // The price of a typed count, applied consistently. This is STRICTER than
-  // before - the same loop over `a.capacity` used to run - and it is the pinned
-  // decision reaching a place it had not reached.
-  expectThrownKind('let a: [].<uint32> = [1, 2, 3]; for (let i = 0; i < a.capacity; i++) { }', 'TypeError');
+test('a loop over a capacity takes a typed counter, as one over a length does', () => {
+  // A literal-initialized counter takes the capacity's type from its test
+  // (#sec-static-type-of-an-expression), as one over a length does; a Number
+  // counter still does not mix with either.
+  expect(evaluated('let a: [].<uint32> = [1, 2, 3]; let n = 0; for (let i = 0; i < a.capacity; i++) { n += 1; if (n > 99) break; } String(n > 0);')).toBe('true');
+  expectThrownKind('let a: [].<uint32> = [1, 2, 3]; let i = Number("0"); i < a.capacity;', 'TypeError');
   expect(evaluated('let a: [].<uint32> = [1, 2, 3]; let n = 0;'
     + ' for (let i = (0 := uint64); i < a.capacity; i++) { n += 1; } String(n);')).toBe('3');
 });

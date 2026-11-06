@@ -1,4 +1,6 @@
 import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
+import { InferredConstTypeOf } from '../type-system/check.mts';
+import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { surroundingAgent, LookupTypeDefault } from '#self';
 import { recordDeclaredType , copiesOnBinding } from './LexicalDeclaration.mts';
@@ -24,7 +26,8 @@ import {
 //     BindingIdentifier
 //     BindingIdentifier Initializer
 //     BindingPattern Initializer
-function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedInitializer, BindingPattern, TypeAnnotation }: ParseNode.VariableDeclaration): PlainEvaluator {
+function* Evaluate_VariableDeclaration(node: ParseNode.VariableDeclaration): PlainEvaluator {
+  const { BindingIdentifier, Initializer, TypedInitializer, BindingPattern, TypeAnnotation } = node;
   if (BindingIdentifier) {
     if (TypedInitializer) {
       // proposal-runtime-types: the typed-assignment declaration `var b := X`
@@ -90,6 +93,11 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
     if (TypeAnnotation && surroundingAgent.feature('runtime-types')) {
       context = Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
     }
+    // #sec-static-type-of-an-expression: a literal-initialized counter the
+    // checker typed by its tests builds its literal at that type, and the
+    // binding keeps it, as an annotation would.
+    const counter = !TypeAnnotation && surroundingAgent.feature('runtime-types') ? InferredConstTypeOf(node) : undefined;
+    if (counter?.Kind === 'primitive') context = counter;
     pushContextualType(context, Initializer);
     let valueResult;
     try {
@@ -110,6 +118,7 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
     // stored the value, which is the invariant break a `let` no longer has.
     // proposal-runtime-types: the annotation check at the binding boundary.
     value = Q(yield* EnforceAnnotation(TypeAnnotation, value, valueResult));
+    if (counter?.Kind === 'primitive') value = Q(yield* EnforceInferredBinding(node, value, Initializer, valueResult)).value;
     // #sec-value-type-copying, as at a lexical binding: a `var` initialized from
     // a NAME or a READ copies, and one initialized from a construction does not.
     // A separate evaluation from `let` and `const`, so it needs the rule said
@@ -123,6 +132,8 @@ function* Evaluate_VariableDeclaration({ BindingIdentifier, Initializer, TypedIn
     const put = Q(yield* PutValue(lhs, value));
     if (TypeAnnotation && surroundingAgent.feature('runtime-types')) {
       recordDeclaredType(lhs, Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type)));
+    } else if (counter?.Kind === 'primitive') {
+      recordDeclaredType(lhs, counter);
     }
     return put;
   }

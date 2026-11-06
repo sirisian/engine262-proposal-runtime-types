@@ -53,9 +53,11 @@ test('identity across the sibling boundary (behavioural, via the engine)', () =>
   // A LITERAL adopts the typed operand's type, so this is "eq"; the sibling
   // distinction is asserted with a variable below, which adopts nothing.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
-  // A `let`: a `const` of a numeric constant now adopts its context type, so it
-  // is no longer the way to write a plain `number`.
-  expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
+  // A binding initialized with an untyped value: a `const` of a numeric
+  // constant adopts its context type, and a literal-initialized `let` takes the
+  // type its tests decide (#sec-static-type-of-an-expression), so neither is
+  // the way to write a plain `number`.
+  expect(evaluated('let n = Number("5"); (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('(5 := uint8) === (5 := uint8) ? "eq" : "neq";')).toBe('eq');
   expect(evaluated('(5 := uint8) === (5 := uint16) ? "eq" : "neq";')).toBe('neq');
 });

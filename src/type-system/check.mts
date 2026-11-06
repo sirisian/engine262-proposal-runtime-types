@@ -1307,6 +1307,20 @@ export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'p
   return staticCallResolutions.get(node);
 }
 
+/**
+ * #sec-array-defaults-and-stores: `includes`, `indexOf` and `lastIndexOf`
+ * take their search element at the element type, and a literal argument
+ * takes that type. The checker reads the element type from the receiver's
+ * Static Type (#sec-array-literal-static-type), which an array literal has
+ * though its storage is untyped, so the type is recorded per argument and
+ * EvaluateCall builds the literal at it.
+ */
+const searchLiteralTypes = new WeakMap<object, TypeRecord & { Kind: 'primitive' }>();
+
+export function SearchLiteralTypeOf(node: object): (TypeRecord & { Kind: 'primitive' }) | undefined {
+  return searchLiteralTypes.get(node);
+}
+
 // ---- published declaration types, read by the runtime records -------
 
 /**
@@ -2985,6 +2999,8 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
 }
 
 const inferredConstTypes = new WeakMap<object, TypeRecord>();
+/** Counters typed by their tests (#sec-static-type-of-an-expression), kept apart from the initializer publications that clear the map above. */
+const inferredCounterTypes = new WeakMap<object, TypeRecord>();
 const literalConstantTypes = new WeakMap<object, StringConstantEvidence>();
 const checkingEnvironments = new WeakMap<object, EnvironmentRecord>();
 const pendingAliasContexts = new WeakSet<object>();
@@ -2998,7 +3014,7 @@ export function StringConstantEvidenceOf(binding: object): StringConstantEvidenc
 }
 
 export function InferredConstTypeOf(binding: object): TypeRecord | undefined {
-  return inferredConstTypes.get(binding);
+  return inferredConstTypes.get(binding) ?? inferredCounterTypes.get(binding);
 }
 
 export function HasDeferredGuardChecks(root: object): boolean {
@@ -3163,6 +3179,7 @@ function checkCompletedDeclarationPasses(statementList: readonly ParseNode[] | n
       else if (typeof (node as ParseNode).type === 'string') {
         publishedReturnTypes.delete(node);
         inferredConstTypes.delete(node);
+        inferredCounterTypes.delete(node);
         literalConstantTypes.delete(node);
         for (const [key, child] of Object.entries(node)) {
           if (key !== 'parent' && key !== 'location') pending.push(child);
@@ -22740,6 +22757,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               return literalArrayLengthType(receiver, indexTypeRecord());
             }
+            if (name === 'includes' || name === 'indexOf' || name === 'lastIndexOf') markSearchLiteral(m as unknown as ParseNode, receiver.Element as TypeRecord);
             const sig = ArrayMethodSignature(name, receiver.Element, receiver);
             if (sig) {
               return sig;
@@ -26257,6 +26275,132 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const t = unparenthesized(node);
     if (t.type === 'UnaryExpression' && (t.operator === '-' || t.operator === '+')) return isNumericLiteralNode(t.UnaryExpression);
     return t.type === 'NumericLiteral';
+  };
+  /**
+   * #sec-static-type-of-an-expression: in checked code a `let` or `var`
+   * initialized with a numeric literal takes the one numeric type that its
+   * relational and equality tests meet, as though it were annotated with it.
+   * A test against `number`, `bigint`, a union, a type parameter, a value
+   * generic or a literal decides nothing; tests meeting two types are a type
+   * error at the declaration; a scope where a direct `eval` or a `with`
+   * statement could write the binding infers nothing. Only tests decide:
+   * arithmetic and stores do not, so an accumulator keeps needing its width.
+   */
+  const COUNTER_CONFLICT = Symbol('counter conflict');
+  const counterTypeOf = (n: ParseNode): TypeRecord | typeof COUNTER_CONFLICT | undefined => {
+    const binding = n as unknown as { BindingIdentifier?: { name: string } | null, Initializer?: ParseNode | null, TypeAnnotation?: unknown, Ref?: boolean };
+    if (!binding.BindingIdentifier || !binding.Initializer || binding.TypeAnnotation || binding.Ref || !isNumericLiteralNode(binding.Initializer)) return undefined;
+    if (!IsCheckedCode(n)) return undefined;
+    const name = binding.BindingIdentifier.name;
+    let scope: ParseNode = n;
+    const functionLike = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunction', 'AsyncArrowFunction', 'MethodDefinition', 'GeneratorDeclaration',
+      'GeneratorExpression', 'AsyncFunctionDeclaration', 'AsyncFunctionExpression', 'AsyncGeneratorDeclaration', 'AsyncGeneratorExpression', 'ClassStaticBlock']);
+    while ((scope as { parent?: ParseNode }).parent && !functionLike.has(scope.type)) scope = (scope as { parent: ParseNode }).parent;
+    // A `for` statement's head declares its counter for the statement; a
+    // reference inside it that resolves to no nearer declaration is that one.
+    const forHead = (n as { parent?: { parent?: ParseNode } }).parent?.parent;
+    const insideFor = (reference: ParseNode): boolean => {
+      for (let at: ParseNode | undefined = reference; at; at = (at as { parent?: ParseNode }).parent) if (at === forHead) return true;
+      return false;
+    };
+    // References are matched by name already, so resolving to the binding,
+    // to the declaration listing it, or to the statement holding a `var` is
+    // resolving to this binding.
+    const declares = (resolved: ReturnType<typeof ResolveBindingDeclaration>, reference: ParseNode): boolean => (resolved
+      ? resolved.node === n || resolved.node === (n as { parent?: ParseNode }).parent || (resolved.kind === 'var' && forHead === resolved.node)
+      : forHead?.type === 'ForStatement' && insideFor(reference));
+    const operands: ParseNode[] = [];
+    let excluded = false;
+    const visit = (node: unknown): void => {
+      if (excluded || !node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      const syntax = node as ParseNode & Record<string, unknown>;
+      if (typeof syntax.type !== 'string') return;
+      if (syntax.type === 'WithStatement') { excluded = true; return; }
+      if (syntax.type === 'CallExpression' && unparenthesized((syntax as unknown as ParseNode.CallExpression).CallExpression as ParseNode).type === 'IdentifierReference'
+          && (unparenthesized((syntax as unknown as ParseNode.CallExpression).CallExpression as ParseNode) as ParseNode.IdentifierReference).name === 'eval') { excluded = true; return; }
+      if (syntax.type === 'IdentifierReference' && (syntax as unknown as ParseNode.IdentifierReference).name === name && declares(ResolveBindingDeclaration(syntax, name), syntax)) {
+        let use: ParseNode = syntax;
+        let parent = (use as { parent?: ParseNode }).parent;
+        while (parent?.type === 'ParenthesizedExpression') { use = parent; parent = (use as { parent?: ParseNode }).parent; }
+        if (parent?.type === 'RelationalExpression' && ['<', '>', '<=', '>='].includes((parent as ParseNode.RelationalExpression).operator as string)) {
+          const r = parent as ParseNode.RelationalExpression;
+          operands.push((r.RelationalExpression as ParseNode) === use ? r.ShiftExpression as ParseNode : r.RelationalExpression as ParseNode);
+        } else if (parent?.type === 'EqualityExpression' && ['===', '!==', '==', '!='].includes((parent as ParseNode.EqualityExpression).operator as string)) {
+          const e = parent as ParseNode.EqualityExpression;
+          operands.push((e.EqualityExpression as ParseNode) === use ? e.RelationalExpression as ParseNode : e.EqualityExpression as ParseNode);
+        }
+      }
+      for (const key of Object.keys(syntax)) {
+        if (key !== 'parent' && key !== 'location' && key !== 'strict' && key !== 'sourceText') visit(syntax[key]);
+      }
+    };
+    visit(scope);
+    if (excluded || operands.length === 0) return undefined;
+    const decided: TypeRecord[] = [];
+    // A call's type needs its site walked; until then a call of a function
+    // declaration reads the return type that declaration states.
+    const declaredCallResult = (operand: ParseNode): Known => {
+      const read = unparenthesized(operand);
+      if (read.type !== 'CallExpression') return null;
+      const callee = unparenthesized((read as ParseNode.CallExpression).CallExpression as ParseNode);
+      if (callee.type !== 'IdentifierReference') return null;
+      const declaration = ResolveBindingDeclaration(callee, (callee as ParseNode.IdentifierReference).name);
+      const annotation = declaration?.kind === 'function' ? (declaration.node as { TypeAnnotation?: { Type: ParseNode.Type } | null }).TypeAnnotation : undefined;
+      return annotation ? resolveType(annotation.Type) : null;
+    };
+    // A binding the walk has not declared yet, such as `len` in
+    // `let i = 0, len := a.length`, reads the type its declaration states.
+    const declaredBindingType = (operand: ParseNode): Known => {
+      const read = unparenthesized(operand);
+      if (read.type !== 'IdentifierReference') return null;
+      const target = (read as ParseNode.IdentifierReference).name;
+      const declaration = ResolveBindingDeclaration(read, target);
+      if (!declaration || (declaration.kind !== 'let' && declaration.kind !== 'var' && declaration.kind !== 'const')) return null;
+      const list = (declaration.node as { BindingList?: readonly ParseNode[], VariableDeclarationList?: readonly ParseNode[] });
+      const candidates = list.BindingList ?? list.VariableDeclarationList ?? [declaration.node];
+      const found = candidates.find((b) => (b as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name === target) as
+        { TypeAnnotation?: { Type: ParseNode.Type } | null, TypedInitializer?: { AssignmentExpression: ParseNode } | null } | undefined;
+      if (found?.TypeAnnotation) return resolveType(found.TypeAnnotation.Type);
+      if (found?.TypedInitializer) return staticType(found.TypedInitializer.AssignmentExpression);
+      return null;
+    };
+    const deciding = (operand: ParseNode, type: Known): TypeRecord | null => {
+      const read = unparenthesized(operand);
+      if (isNumericLiteralNode(read)) return null;
+      if (read.type === 'IdentifierReference' && ResolveBindingDeclaration(read, (read as ParseNode.IdentifierReference).name)?.kind === 'type-parameter') return null;
+      if (!type) return null;
+      let base: TypeRecord = type.Kind === 'literal' ? (type as { Base: TypeRecord }).Base : type as TypeRecord;
+      if (base.Kind === 'union') {
+        const members = (base.Members as TypeRecord[]).filter((m) => !(m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')));
+        if (members.length !== 1) return null;
+        base = members[0].Kind === 'literal' ? (members[0] as { Base: TypeRecord }).Base : members[0];
+      }
+      if (base.Kind !== 'primitive' || base.Name === 'number' || base.Name === 'bigint') return null;
+      return integerLimits(base) !== null || isFloatTypeName(base.Name as string) ? base : null;
+    };
+    const errorMark = errors.length;
+    speculate(() => {
+      for (const operand of operands) {
+        const known = staticType(operand);
+        const type = deciding(operand, (known && known.Kind !== 'any' ? known : null) ?? declaredCallResult(operand) ?? declaredBindingType(operand));
+        if (type && !decided.some((d) => SameType(d, type))) decided.push(type);
+      }
+      return false;
+    });
+    errors.splice(errorMark);
+    if (decided.length === 0) return undefined;
+    return decided.length === 1 ? decided[0] : COUNTER_CONFLICT;
+  };
+  /** Records the element type for a numeric literal first argument of an element-typed search call on `member`. */
+  const markSearchLiteral = (member: ParseNode, element: TypeRecord): void => {
+    const call = (member as { parent?: ParseNode }).parent;
+    if (call?.type !== 'CallExpression' || (call as ParseNode.CallExpression).CallExpression !== member) return;
+    const first = ((call as ParseNode.CallExpression).Arguments as readonly ParseNode[] | undefined)?.[0];
+    if (!first || !isNumericLiteralNode(first)) return;
+    const base = element.Kind === 'literal' ? element.Base as TypeRecord : element;
+    if (base?.Kind !== 'primitive' || base.Name === 'number' || !(integerLimits(base) !== null || isFloatTypeName(base.Name as string))) return;
+    journalSet(searchLiteralTypes, first, base as TypeRecord & { Kind: 'primitive' });
   };
   /** A Number literal's value at a float type it is adopted into: rounded as a float literal rounds (#sec-literalvalueintype). */
   const roundedInto = (n: number, base: TypeRecord & { Kind: 'primitive' }): number => (base.Name === 'float32' ? Math.fround(n) : base.Name === 'float16' ? f16round(n) : n);
@@ -42028,7 +42172,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (isConstDeclaration) rememberValueOrigin(bindingFrame, n.BindingIdentifier.name, n.TypedInitializer.AssignmentExpression, inferred);
             return;
           }
-          const declared = n.TypeAnnotation ? captureLexicalTypeParameters(resolveType(n.TypeAnnotation.Type), n) : null;
+          const counter = !n.TypeAnnotation && !isConstDeclaration ? counterTypeOf(n as ParseNode) : undefined;
+          if (counter === COUNTER_CONFLICT) {
+            reportType('rt-numeric-operator', n as ParseNode, '$1 is tested against values of more than one numeric type; annotate its type', Value(n.BindingIdentifier.name));
+          }
+          const counterType = counter && counter !== COUNTER_CONFLICT ? counter : null;
+          if (counterType) journalSet(inferredCounterTypes, n, counterType);
+          else journalDelete(inferredCounterTypes, n);
+          const declared = n.TypeAnnotation ? captureLexicalTypeParameters(resolveType(n.TypeAnnotation.Type), n) : counterType;
           requireBindingType(declared);
           if (n.TypeAnnotation && !declared) {
             frames[frames.length - 1].unresolvedAnnotations.set(n.BindingIdentifier.name, n.TypeAnnotation.Type);
@@ -42124,7 +42275,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               journalSet(literalConstantTypes, n, { type: stringValue, namesLiteral: !!literal });
             } else journalDelete(literalConstantTypes, n);
           }
-          if (!n.TypeAnnotation && n.Initializer && isNumericConstantExpression(n.Initializer)) {
+          if (!n.TypeAnnotation && !counterType && n.Initializer && isNumericConstantExpression(n.Initializer)) {
             const frame = frames[frames.length - 1];
             (isConstDeclaration ? frame.constLiterals : frame.letConstants)
               .add(n.BindingIdentifier.name);

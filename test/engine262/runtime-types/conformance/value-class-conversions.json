@@ -970,7 +970,7 @@
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "/1"
+            "value": "TypeError/1"
           }
         }
       ]

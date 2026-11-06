@@ -247,7 +247,10 @@ test('a function with no numeric parameter is NOT overloaded, and untyped code i
   // functions stay untyped for the variable-facing reasons, not for the
   // literal-facing one.
   expect(evaluated('String((65 := uint16) === 65);')).toBe('true');
-  expect(evaluated('let n = 65; String((65 := uint16) === n);')).toBe('false');
+  // A binding initialized with an untyped value adopts nothing; a
+  // literal-initialized one takes the type its tests decide
+  // (#sec-static-type-of-an-expression), so it is not the variable meant here.
+  expect(evaluated('let n = Number("65"); String((65 := uint16) === n);')).toBe('false');
   // parseInt and parseFloat are excluded by the same rule, and by name.
   expect(evaluated('String(parseInt("42px") === 42) + "/" + String(parseFloat("1.5x") === 1.5);')).toBe('true/true');
   // What IS overloaded dispatches on an argument: Math's rows, and an array's

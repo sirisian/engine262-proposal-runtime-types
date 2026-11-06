@@ -67,6 +67,9 @@ test('value-type identity is unaffected by the arithmetic rules', () => {
   // The literal adopts; the variable does not, and that is where identity
   // lives.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
+  // A binding initialized with a literal takes the type its tests decide
+  // (#sec-static-type-of-an-expression), so the identity question is asked
+  // through one initialized with an untyped value, which stays a Number.
+  expect(evaluated('let n = Number("5"); (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('String((5 := uint8) is uint8);')).toBe('true');
 });

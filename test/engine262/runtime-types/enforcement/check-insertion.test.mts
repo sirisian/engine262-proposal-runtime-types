@@ -1027,7 +1027,11 @@ test('the literal rule reaches equality and case labels', () => {
   // IDENTITY IS UNTOUCHED, and this is where it lives: a VARIABLE adopts
   // nothing, so
   // it still asks whether a typed value and a Number are the same value.
-  expect(evaluated('let n = 65; String((65 := uint16) === n);')).toBe('false');
+  // A binding initialized with a literal takes the type its tests decide
+  // (#sec-static-type-of-an-expression), so the identity question is asked
+  // through one initialized with an untyped value, which stays a Number.
+  expect(evaluated('let n = Number("65"); String((65 := uint16) === n);')).toBe('false');
+  expect(evaluated('let n = 65; String((65 := uint16) === n);')).toBe('true');
   expect(evaluated('function anyv() { return 65; } String((65 := uint16) === anyv());')).toBe('false');
   expectStaticTypeError('String((65 := uint16) === (65 := uint8));');
   expect(evaluated('function equal(a: any, b: any) { return a === b; } String(equal((65 := uint16), (65 := uint8)));')).toBe('false');
@@ -1185,7 +1189,11 @@ test('the price of a typed length, pinned so it is a decision and not a surprise
   // (#sec-arithmetic-never-promotes). Every statically typed language asks for
   // this - it is size_t in C - but it is the most common loop in JavaScript,
   // so it is pinned here rather than left to be discovered.
-  expect(thrownKind('let a: [].<uint8> = [1,2,3]; for (let i = 0; i < a.length; ++i) { }')).toBe('TypeError');
+  // A literal-initialized counter takes the type of the bound it is tested
+  // against (#sec-static-type-of-an-expression), so the canonical loop needs
+  // no annotation; a Number counter still does not mix with the length.
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (let i = 0; i < a.length; ++i) { n += 1; } String(n);')).toBe('3');
+  expect(thrownKind('let a: [].<uint8> = [1,2,3]; let i = Number("0"); i < a.length;')).toBe('TypeError');
   expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 0; for (let i = (0 := uint64); i < a.length; ++i) { n += 1; } String(n);')).toBe('3');
   // And strict equality against a plain literal is false, because a typed value
   // and a Number are different types - the same reason (3 := uint8) === 3
@@ -1193,7 +1201,8 @@ test('the price of a typed length, pinned so it is a decision and not a surprise
   // A literal adopts, so `a.length === 3` is *true*. The
   // remaining cost is the comparison against a variable.
   expect(evaluated('let a: [].<uint8> = [1,2,3]; String(a.length === 3) + "/" + String(a.length == 3);')).toBe('true/true');
-  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 3; String(a.length === n);')).toBe('false');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = Number("3"); String(a.length === n);')).toBe('false');
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let n = 3; String(a.length === n);')).toBe('true');
 });
 
 // -- The deletion rule of the same clause ----------------------------------
