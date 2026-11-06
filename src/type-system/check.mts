@@ -871,6 +871,8 @@ export interface GenericWhereCheck {
    * to the boundary only "a where clause that cannot be decided statically".
    */
   readonly values?: ReadonlyMap<string, TypeRecord>;
+  /** A value's written literal argument, which pre-evaluation builds as the call binds it. */
+  readonly sources?: ReadonlyMap<string, ParseNode>;
   /** Round 5, Gap 8: a result contract decided at a `return` whose operand is a literal; `return` is bound to it. */
   readonly returnValue?: TypeRecord;
   /**
@@ -4444,6 +4446,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (annotation && argument) recordRefinementCheck(call, annotation, argument);
     });
     const values = new Map<string, TypeRecord>();
+    const sources = new Map<string, ParseNode>();
     const decided: ParseNode.WhereClause[] = [];
     for (const clause of clauses) {
       const predicate = clause.RefinementPredicate;
@@ -4455,13 +4458,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const value = decidedArgumentValue(written[index], formals[index] as ParseNode.SingleNameBinding);
         if (!value) { complete = false; break; }
         values.set(name, value);
+        // #sec-generic-where: the clause reads the parameter as the call binds
+        // it, so a written numeric literal is built at the parameter's type.
+        const argument = written[index] ? unparenthesized(written[index]!) : undefined;
+        if (argument && (argument.type === 'NumericLiteral' || argument.type === 'UnaryExpression' && argument.operator === '-'
+          && unparenthesized(argument.UnaryExpression).type === 'NumericLiteral')) sources.set(name, written[index]!);
       }
       if (complete) decided.push(clause);
     }
     if (decided.length === 0) return;
     const checks = whereChecks.get(call) ?? [];
     if (checks.some((check) => check.declaration === declaration && check.values)) return;
-    checks.push({ declaration: declaration as ParseNode.FunctionDeclaration, clauses: decided, bindings: new Map(), values, sourceModule: importedDeclarationSourceModule(declaration) });
+    checks.push({ declaration: declaration as ParseNode.FunctionDeclaration, clauses: decided, bindings: new Map(), values, sources, sourceModule: importedDeclarationSourceModule(declaration) });
     whereChecks.set(call, checks);
   };
   const signatureDeclarations = new WeakMap<object, ParseNode>();
@@ -9802,7 +9810,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A class a decorator may replace is not established; with _bounded_, it is a
   // bounded origin instead - the declared class or an unknown subclass of it -
   // which the rules that hold for every subclass may read.
-  const stableClassOrigin = (expression: ParseNode, seen = new Set<ParseNode>(), bounded = false): ClassOrigin | undefined => {
+  const stableClassOrigin = (expression: ParseNode, seen = new Set<ParseNode>(), bounded = false, narrowing = false): ClassOrigin | undefined => {
     const node = patternExpression(expression)!;
     if (seen.has(node) || seen.size >= 256) return undefined;
     seen.add(node);
@@ -9814,13 +9822,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (node.type === 'IdentifierReference' && ResolveBindingDeclaration(node, node.name)?.kind === 'type-parameter') return undefined;
       const captured = classValueOrigins.get(node);
       if (!captured) return undefined;
+      // Evidence a footprint alone kept may remove an error, as a narrowing
+      // does, but must not establish one (#sec-class-value-origin-order).
+      if ((captured as { deeper?: boolean }).deeper && !narrowing) return undefined;
       if (captured.source !== node) {
-        const origin = stableClassOrigin(captured.source, seen, bounded);
+        const origin = stableClassOrigin(captured.source, seen, bounded, narrowing);
         return origin && (captured.arguments ? { ...origin, arguments: captured.arguments, selection: undefined } : origin);
       }
     }
     if (node.type === 'TypeArgumentsExpression') {
-      const origin = stableClassOrigin(node.Expression, seen, bounded);
+      const origin = stableClassOrigin(node.Expression, seen, bounded, narrowing);
       return origin ? { ...origin, arguments: node.TypeArguments, selection: undefined } : undefined;
     }
     const publishedOrigin = (declaration: ParseNode | undefined): ClassOrigin | undefined => {
@@ -9848,10 +9859,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (binding?.kind === 'class' && source !== root) return publishedOrigin(binding.node);
     if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
         && !(binding.node as { Ref?: boolean }).Ref) {
-      return stableClassOrigin(binding.initializer, seen, bounded);
+      return stableClassOrigin(binding.initializer, seen, bounded, narrowing);
     }
     if (binding?.kind === 'class' && !assignedNames.has(node.name) && !assignedGlobalProperties.has(node.name)) {
-      return stableClassOrigin(binding.node, seen, bounded);
+      return stableClassOrigin(binding.node, seen, bounded, narrowing);
     }
     return undefined;
   };
@@ -13210,7 +13221,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     const constructed = new Map<ParseNode, boolean>();
     const constructorBodyIsTransparent = (node: ParseNode): boolean => {
-      const origin = stableClassOrigin(node);
+      const origin = stableClassOrigin(node, new Set(), false, true);
       if (!origin || origin.arguments || origin.declaration.TypeParameters || origin.declaration.ClassTail.ClassHeritage
         || origin.declaration.Decorators?.length || origin.declaration.ClassTail.ClassBody?.some((element) =>
           element.type === 'MethodDefinition' && !element.static && element.ClassElementName.type === 'IdentifierName'
@@ -13235,7 +13246,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && !(from.type === 'TypeReference' && ['any', 'void'].includes(from.TypeName.IdentifierReference.name))) return true;
       if (from.type !== 'TypeReference' || from.TypeArguments || from.TypeName.MemberNames.length
         || to.type !== 'TypeReference' || to.TypeArguments || to.TypeName.MemberNames.length) return false;
-      const source = stableClassOrigin(from.TypeName.IdentifierReference), target = stableClassOrigin(to.TypeName.IdentifierReference);
+      const source = stableClassOrigin(from.TypeName.IdentifierReference, new Set(), false, true), target = stableClassOrigin(to.TypeName.IdentifierReference, new Set(), false, true);
       if (!source || !target || source.arguments || target.arguments || source.declaration.TypeParameters
         || source.declaration !== target.declaration) return false;
       // A completed value can come from an earlier activation. Equal source
@@ -13250,9 +13261,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (admitted) return completedMembership(admitted, type);
       if (!source) return false;
       const value = unparenthesized(source);
+      // A null admitted where the target admits null converts nothing.
+      const admitsNull = (target: ParseNode.Type): boolean => (target.type === 'PredefinedType' && target.keyword === 'null')
+        || (target.type === 'UnionType' && target.Types.some(admitsNull));
+      if (value.type === 'NullLiteral' && admitsNull(type)) return true;
       if (['StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(value.type) || value.type === 'NumericLiteral' && !value.Imaginary) return scalarTarget(type);
       if (value.type !== 'NewExpression') return false;
-      const origin = stableClassOrigin(value.MemberExpression);
+      const origin = stableClassOrigin(value.MemberExpression, new Set(), false, true);
       if (!origin || origin.arguments || origin.declaration.TypeParameters || origin.declaration.ClassTail.ClassHeritage
         || origin.declaration.Decorators?.length || origin.declaration.ClassTail.ClassBody?.some((element) =>
           element.type === 'MethodDefinition' && element.ClassElementName.type === 'IdentifierName' && element.ClassElementName.name === 'constructor')) return false;
@@ -13261,7 +13276,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (--remaining < 0) return false;
         if (target.type === 'UnionType') return target.Types.some(matches);
         if (target.type !== 'TypeReference' || target.TypeArguments || target.TypeName.MemberNames.length) return false;
-        const receiving = stableClassOrigin(target.TypeName.IdentifierReference);
+        const receiving = stableClassOrigin(target.TypeName.IdentifierReference, new Set(), false, true);
         return !!receiving && !receiving.arguments && receiving.declaration === origin.declaration;
       };
       return matches(type);
@@ -13276,7 +13291,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let unsupportedInvocation = false;
       const safe = (candidate: ParseNode): boolean => {
         if (!mutations.mayPrecede(candidate, endpoint)) return true;
-        if (candidate.type === 'NewExpression' && stableClassOrigin(candidate.MemberExpression)
+        if (candidate.type === 'NewExpression' && stableClassOrigin(candidate.MemberExpression, new Set(), false, true)
           && !constructorBodyIsTransparent(candidate.MemberExpression)) unsupportedInvocation = true;
         if (candidate.type === 'CallExpression') {
           const callee = unparenthesized(candidate.CallExpression);
@@ -13300,7 +13315,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const nominalInstanceTarget = (expression: ParseNode): Known => {
     const node = unparenthesized(expression);
-    const origin = stableClassOrigin(node);
+    const origin = stableClassOrigin(node, new Set(), false, true);
     if (origin) {
       if (origin.arguments) return null;
       // A prior evaluated activation may have been changed by a different
@@ -13329,7 +13344,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           visited.add(declaration);
           const heritage = unparenthesized(declaration.ClassTail.ClassHeritage);
           if (heritage.type === 'NullLiteral') break;
-          const base = stableClassOrigin(heritage);
+          const base = stableClassOrigin(heritage, new Set(), false, true);
           if (!base || base.arguments) return null;
           declaration = base.declaration;
         }
@@ -14652,6 +14667,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Source re-entry suspends description only. The nested binder retains its
   // unresolved obligation; the completed outer description is not an admission.
   const describingGenericConstraints = new Set<ParseNode.Type>();
+  // #sec-type-references: a computed argument for a value parameter is a
+  // builder call whose result is the argument itself, not a type, so it is
+  // no closed type annotation; the application binds it.
+  const computedValueArgument = (node: ParseNode): boolean => {
+    if (node.type !== 'ComputedType') return false;
+    const list = node.parent;
+    const application = list?.parent;
+    if (list?.type !== 'TypeArguments' || application?.type !== 'TypeArgumentsExpression') return false;
+    const callee = unparenthesized(application.Expression);
+    if (callee.type !== 'IdentifierReference') return false;
+    const declaration = ResolveBindingDeclaration(callee, callee.name)?.node as { TypeParameters?: ParseNode.TypeParameters | null } | undefined;
+    const parameter = declaration?.TypeParameters?.TypeParameterList?.[list.TypeArgumentList.indexOf(node as ParseNode.Type)];
+    return !!(parameter as { IsValueParameter?: boolean } | undefined)?.IsValueParameter;
+  };
   const deferredTypeCheck = (node: ParseNode.Type): DeferredTypeCheck => {
     const aliases = new Map<string, TypeRecord>();
     for (const frame of frames) {
@@ -14870,7 +14899,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The application's GenericDefaultCheck retains the imported environment.
     if (importedInterfaceAdmission && constraintSource) return result;
     if (open) unresolvedTypes.delete(node);
-    if (!open && !defaultSource && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)) {
+    if (!open && !defaultSource && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)
+      && !computedValueArgument(node)) {
       const obligation = deferredTypeCheck(node);
       if (importedInterfaceAdmission) obligation.requiredInterface = importedInterface;
       unresolvedTypes.set(node, obligation);
@@ -18585,8 +18615,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && (node.type === 'RelationalExpression' || node.type === 'EqualityExpression')) {
       comparisonContextual.add(node);
     }
+    // #sec-contextual-types: a comma expression passes its contextual type to
+    // its final operand, so an index view recorded without one does not hide a
+    // final numeric literal, as in `m[(effect(), 2)]`; a literal has no effect
+    // to replay.
     if (node && expressionViewTypes.has(node)
-        && !(contextual && isTemplateArgumentType(expressionViewTypes.get(node)!))) return expressionViewTypes.get(node)!;
+        && !(contextual && isTemplateArgumentType(expressionViewTypes.get(node)!))
+        && !(contextual && isNumericLiteralNode(commaFinalOperand(node)))) return expressionViewTypes.get(node)!;
     // Round 5 follow-up, Q17: a literal where a refined primitive type is
     // expected is a value of that type when it fits the refined type's base,
     // as a fresh object literal is of a refined record; the refinement itself
@@ -20189,7 +20224,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // return, without declaring the still-unsolved result as a body obligation.
   const genericCallbackArgumentType = (argument: ParseNode, formal: Known,
     names: ReadonlySet<string>, bindings: ReadonlyMap<string, TypeRecord>): Known => {
-    const node = patternExpression(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument)!;
+    // #sec-contextual-types: the comma's final operand receives the context.
+    const node = commaFinalOperand(patternExpression(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument)!);
     const contextual = formal && substituteTypeParameters(formal, bindings);
     if (isFunctionLiteral(node) && contextual?.Kind === 'function' && contextual.Signatures.length === 1) {
       const signature = contextual.Signatures[0];
@@ -26269,6 +26305,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const proved = original && intrinsicSourceIsStable(root, realm, safe, call);
     libraryPredicateOrigins.set(call, proved);
     return proved;
+  };
+  /** The operand a comma expression's context reaches: its final operand, through parentheses (#sec-contextual-types). */
+  const commaFinalOperand = (node: ParseNode): ParseNode => {
+    let at = node;
+    for (;;) {
+      if (at.type === 'ParenthesizedExpression') at = (at as ParseNode.ParenthesizedExpression).Expression as ParseNode;
+      else if (at.type === 'CommaOperator') at = (at as ParseNode.CommaOperator).ExpressionList.at(-1) as ParseNode;
+      else return at;
+    }
   };
   /** Whether a node is a numeric literal, possibly signed or parenthesized. */
   const isNumericLiteralNode = (node: ParseNode): boolean => {

@@ -1014,8 +1014,21 @@ export function* BindTypeArgumentsInto(
       const named = typeArgumentNameOf(a);
       const p = named === undefined ? params[entries.length] : params.find((q) => q.BindingIdentifier.name === named);
       const declaration = Q(yield* TypeArgumentAsDeclaration(a, p?.Arity ?? 0));
+      const computed = (a as ParseNode).type === 'ComputedType' ? a as ParseNode.ComputedType
+        : (a as { Type?: ParseNode }).Type?.type === 'ComputedType' ? (a as { Type: ParseNode.ComputedType }).Type : undefined;
       if (declaration) t = declaration;
-      else {
+      else if (computed && (p as { IsValueParameter?: boolean } | undefined)?.IsValueParameter) {
+        // #sec-type-references: a computed value argument is spelled as a
+        // builder call, and for a value parameter its result is the argument.
+        const value = Q(yield* evaluateComputedType(computed));
+        if (isTypeObject(value)) t = value.TypeRecord;
+        else {
+          const kind = value instanceof JSStringValue || value instanceof TypedStringValue ? 'string'
+            : value instanceof BooleanValue || value instanceof TypedBooleanValue ? 'boolean'
+            : value instanceof BigIntValue || value instanceof TypedBigIntValue ? 'bigint' : 'number';
+          t = { Kind: 'literal', Value: value, Base: literalBase(kind as ParseNode.LiteralType['kind']) } as unknown as TypeRecord;
+        }
+      } else {
         t = Q(yield* TypeNodeToTypeRecord(a));
       }
     } finally {
@@ -6091,7 +6104,13 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
     // Built from the declaration, not the class's binding, which is still
     // uninitialized while the class is defined (a field's `next: N`).
     if (bound.every((b) => b !== null)) {
-      return CanonicalizeType({ Kind: 'nominal', Declaration: injected.classNode, Arguments: bound as TypeRecord[] } as unknown as TypeRecord);
+      // The record names this activation's family, as an application written
+      // `W.<T>` does, so the two are one type.
+      const family = LexicalClassFamily(injected.classNode as ParseNode, surroundingAgent.runningExecutionContext.LexicalEnvironment);
+      const identity = family instanceof ObjectValue ? ClassFamilyIdentityOf(family) : undefined;
+      return CanonicalizeType({
+        Kind: 'nominal', Declaration: injected.classNode, Arguments: bound as TypeRecord[], ...(identity ? { DeclarationIdentity: identity } : {}),
+      } as unknown as TypeRecord);
     }
   }
   switch (node.type) {

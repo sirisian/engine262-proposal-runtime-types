@@ -200,10 +200,13 @@ test('a DEPENDENT RECORD TYPE takes the atoms of the union its chain denotes', (
     const found = AtomsOfType((t?.TypeRecord ?? t?.Record) as never);
     return found.length > 0 ? found.map((a) => a.key).join(' | ') : 'none';
   };
+  // A refined record is a parameterization of its object base, which lists
+  // its members in canonical order, so a key names `c` before `s`; the order
+  // in a key carries no meaning, only its distinctness does.
   expect(of("type A = { s: string, c: 'US'|'CA' } where if (this.c == 'US') { this is { p: string } } else { this is { p: string } }; (type A);"))
-    .toBe('{s:primitive,c:"US"} | {s:primitive,c:"CA"}');
+    .toBe('{c:"US",s:primitive} | {c:"CA",s:primitive}');
   expect(of("type B = { s: string, c: 'US'|'CA' } where match (this.c) { when 'US': this is { p: string }; when 'CA': this is { p: string }; }; (type B);"))
-    .toBe('{s:primitive,c:"US"} | {s:primitive,c:"CA"}');
+    .toBe('{c:"US",s:primitive} | {c:"CA",s:primitive}');
   // A terminal `else` covers the constants the earlier branches did not.
   expect(of("type C = { c: 'A'|'B'|'D' } where if (this.c == 'A') { this is { p: string } } else { this is { p: string } }; (type C);"))
     .toBe('{c:"A"} | {c:"B"} | {c:"D"}');

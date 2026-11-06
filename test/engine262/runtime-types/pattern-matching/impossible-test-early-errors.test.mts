@@ -54,10 +54,14 @@ test('a member literal a union member admits still narrows', () => {
 // -- the nullish operators -------------------------------------------------------
 // #sec-narrowing groups `?.` and `??=` with `??` and `== null`.
 test.each([
-  'const o: { a: uint8 } = { a: 1 }; const r = o?.a;',
-  'const f: (x: uint8) => uint8 = (x: uint8): uint8 => x; f?.(1);',
   'let x: uint8 = 1; x ??= 2;',
 ])('a nullish operator on a value that cannot be nullish is refused: %s', expectStaticTypeError);
+// #sec-narrowing: "A redundant `?.` on an established non-nullish receiver is
+// permitted: its written continuation remains reachable."
+test.each([
+  'const o: { a: uint8 } = { a: 1 }; const r = o?.a; String(r);',
+  'const f: (x: uint8) => uint8 = (x: uint8): uint8 => x; String(f?.(1));',
+])('a redundant ?. on a value that cannot be nullish is permitted: %s', (source) => expect(ok(source)).toBe(true));
 
 test.each([
   'function readO(): { a: uint8 } | null { return null; } const o: { a: uint8 } | null = readO(); const r = o?.a; String(r);',

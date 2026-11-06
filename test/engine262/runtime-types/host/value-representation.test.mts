@@ -59,7 +59,10 @@ test('identity across the sibling boundary (behavioural, via the engine)', () =>
   // the way to write a plain `number`.
   expect(evaluated('let n = Number("5"); (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
   expect(evaluated('(5 := uint8) === (5 := uint8) ? "eq" : "neq";')).toBe('eq');
-  expect(evaluated('(5 := uint8) === (5 := uint16) ? "eq" : "neq";')).toBe('neq');
+  // Two known types make the comparison a type error where it decides a branch
+  // (the disjoint strict-comparison judgment), so the run-time answer is asked
+  // through untyped code.
+  expect(evaluated('function same(a, b) { return a === b ? "eq" : "neq"; } same((5 := uint8), (5 := uint16));')).toBe('neq');
 });
 
 test('unwrapping a typed number round-trips to a plain Number', () => {
@@ -110,8 +113,11 @@ test('Number.isInteger/isFinite answer for a numeric type, not for a representat
   // the clause judges it the wrong answer HERE: a predicate whose name promises
   // a question about a value should not quietly answer about a representation,
   // and `Number.isInteger` of an int32 saying false is the hazard it names.
-  expect(evaluated('Number.isInteger(5 := uint8) ? "yes" : "no";')).toBe('yes');
-  expect(evaluated('Number.isFinite(5 := uint8) ? "yes" : "no";')).toBe('yes');
+  // Asked as value queries: #sec-narrowing makes a test whose value's type
+  // settles it a type error where it decides a branch, and an integer's
+  // finiteness is settled.
+  expect(evaluated('String(Number.isInteger(5 := uint8));')).toBe('true');
+  expect(evaluated('String(Number.isFinite(5 := uint8));')).toBe('true');
   // A BigInt does NOT go the same way, and the difference is compatibility rather
   // than principle. A typed number needs syntax this proposal adds, so no
   // deployed program can produce one and defining it breaks nothing. `5n` needs

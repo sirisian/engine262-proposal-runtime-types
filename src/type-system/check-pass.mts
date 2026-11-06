@@ -873,7 +873,14 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         }
         for (const [name, literal] of check.values ?? []) {
           const raw = (literal as { Value: unknown }).Value;
-          const value = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+          let value = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+          // #sec-generic-where: a written literal argument is the value the call
+          // binds, built at its parameter's type as the call builds it.
+          const source = check.sources?.get(name);
+          if (source) {
+            const built = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(source as never))));
+            if (built.Type === 'normal') value = built.Value;
+          }
           X(scope.CreateImmutableBinding(Value(name), Value.true));
           X(scope.InitializeBinding(Value(name), value));
         }

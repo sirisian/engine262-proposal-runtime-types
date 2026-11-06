@@ -486,7 +486,7 @@
             "bodyEntered": false,
             "errorClass": "StaticTypeError",
             "diagnostic": {
-              "code": "RT_IMPOSSIBLE_TEST",
+              "code": "RT_BUILTIN_ARGUMENT",
               "phase": "static"
             }
           }
@@ -503,7 +503,7 @@
             "bodyEntered": false,
             "errorClass": "StaticTypeError",
             "diagnostic": {
-              "code": "RT_IMPOSSIBLE_TEST",
+              "code": "RT_BUILTIN_ARGUMENT",
               "phase": "static"
             }
           }

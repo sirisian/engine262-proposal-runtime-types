@@ -6,6 +6,8 @@ interface Origin {
   source: ParseNode;
   arguments?: ParseNode.TypeArguments;
   deferredGlobal?: boolean;
+  /** Kept across an operation only by its footprint: optional deeper analysis (#sec-class-value-origin-order), so it may remove an error but not establish one. */
+  deeper?: boolean;
 }
 interface Binding {
   declaration: BindingDeclaration;
@@ -33,12 +35,21 @@ const unwrap = (value: unknown): Node | undefined => {
 const children = (node: Node): Node[] => Object.entries(node).flatMap(([key, value]) =>
   ignored.has(key) ? [] : (Array.isArray(value) ? value : [value]).filter(isNode));
 const same = (a: Origin | undefined, b: Origin | undefined): boolean => a?.source === b?.source
-  && a?.arguments === b?.arguments && a?.deferredGlobal === b?.deferredGlobal;
+  && a?.arguments === b?.arguments && a?.deferredGlobal === b?.deferredGlobal && a?.deeper === b?.deeper;
 const copy = (state: State): State => ({ values: new Map(state.values), live: state.live });
+/** Two origins that differ only in how they were kept merge to the weaker, footprint-kept one. */
+const merged = (a: Origin | undefined, b: Origin | undefined): Origin | undefined => {
+  if (same(a, b)) return a;
+  if (a && b && same({ ...a, deeper: undefined }, { ...b, deeper: undefined })) return { ...a, deeper: true };
+  return undefined;
+};
 const join = (into: State, a: State, b: State): void => {
   into.live = a.live || b.live;
   into.values = !a.live ? new Map(b.values) : !b.live ? new Map(a.values)
-    : new Map([...a.values].filter(([key, value]) => same(value, b.values.get(key))));
+    : new Map([...a.values].flatMap(([key, value]) => {
+      const kept = merged(value, b.values.get(key));
+      return kept ? [[key, kept] as const] : [];
+    }));
 };
 
 /**
@@ -150,13 +161,124 @@ export function ClassValueOrigins(root: ParseNode,
     }
   }
   const observe = (node: Node, value: Origin | undefined): Origin | undefined => {
-    if (observations.has(node) && !same(observations.get(node), value)) observations.set(node, undefined);
+    if (observations.has(node) && !same(observations.get(node), value)) observations.set(node, merged(observations.get(node), value));
     else if (!observations.has(node)) observations.set(node, value);
     return value;
   };
+  // #sec-class-value-origin-order: a potential call withdraws only the mutable
+  // evidence it may affect, judged by its footprint as sec-elision-stability's
+  // global mutation footprints are. A call of a function declaration the
+  // source never reassigns may write what its body, transitively, writes; a
+  // construction of a class whose constructor and field initializers run no
+  // user code writes nothing. Every other operation may reach every global.
+  const literalOnly = (value: unknown): boolean => {
+    const node = unwrap(value);
+    if (!node) return false;
+    if (['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(node.type)) return true;
+    return node.type === 'UnaryExpression' && node.operator === '-' && unwrap(node.UnaryExpression)?.type === 'NumericLiteral';
+  };
+  const declarationOf = (callee: unknown, kind: string, type: string): { node: Node, binding: Binding } | undefined => {
+    const reference = unwrap(callee);
+    if (reference?.type !== 'IdentifierReference') return undefined;
+    const binding = bindingAt(reference, reference.name as string);
+    const node = binding?.declaration.node as Node | undefined;
+    if (!binding || binding.declaration.kind !== kind || node?.type !== type || written.has(binding)) return undefined;
+    return { node: node!, binding };
+  };
+  const transparentClass = (callee: unknown): boolean => {
+    const found = declarationOf(callee, 'class', 'ClassDeclaration');
+    if (!found) return false;
+    const tail = found.node.ClassTail as Node;
+    if (tail.ClassHeritage || (found.node.Decorators as unknown[] | null | undefined)?.length) return false;
+    for (const element of (tail.ClassBody as Node[] | null | undefined) ?? []) {
+      if ((element.Decorators as unknown[] | null | undefined)?.length) return false;
+      if (element.type === 'MethodDefinition') {
+        const name = element.ClassElementName as Node | undefined;
+        if (!element.static && name?.type === 'IdentifierName' && name.name === 'constructor') return false;
+      } else if (element.type === 'FieldDefinition') {
+        if (!element.static && element.Initializer && !literalOnly(element.Initializer)) return false;
+      } else return false;
+    }
+    return true;
+  };
+  const footprints = new Map<Node, Set<string> | null>();
+  const footprintOf = (fn: Node): Set<string> | null => {
+    if (footprints.has(fn)) return footprints.get(fn)!;
+    const writes = new Set<string>();
+    footprints.set(fn, writes);
+    const numericLocals = new Set<string>();
+    let unknown = false;
+    const operand = (value: unknown): boolean => {
+      const node = unwrap(value);
+      return literalOnly(node) || (node?.type === 'IdentifierReference' && numericLocals.has(node.name as string));
+    };
+    const scan = (value: unknown): void => {
+      if (unknown || !value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(scan); return; }
+      const node = value as Node;
+      if (typeof node.type !== 'string') return;
+      if (node !== fn && callable(node)) return;
+      switch (node.type) {
+        case 'WithStatement': case 'YieldExpression': case 'AwaitExpression': case 'MemberExpression': case 'OptionalExpression':
+        case 'TaggedTemplateExpression': case 'SuperCall': case 'ImportCall': case 'SpreadElement':
+          unknown = true; return;
+        case 'LexicalBinding': case 'VariableDeclaration':
+          if (node.BindingIdentifier && literalOnly(node.Initializer) && unwrap(node.Initializer)?.type === 'NumericLiteral') numericLocals.add((node.BindingIdentifier as Node).name as string);
+          break;
+        case 'AssignmentExpression': case 'UpdateExpression': {
+          const target = unwrap(node.type === 'AssignmentExpression' ? node.LeftHandSideExpression : node.LeftHandSideExpression ?? node.UnaryExpression);
+          if (target?.type !== 'IdentifierReference') { unknown = true; return; }
+          const binding = bindingAt(target, target.name as string);
+          if (!binding || binding.global) writes.add(target.name as string);
+          if (node.type === 'AssignmentExpression' && !(node.AssignmentOperator === '=' ? true : literalOnly(node.AssignmentExpression))) numericLocals.delete(target.name as string);
+          break;
+        }
+        case 'CallExpression': {
+          if (directEval(node)) { unknown = true; return; }
+          const found = declarationOf(node.CallExpression, 'function', 'FunctionDeclaration');
+          const inner = found && footprintOf(found.node);
+          if (!inner) { unknown = true; return; }
+          inner.forEach((name) => writes.add(name));
+          scan(node.Arguments);
+          return;
+        }
+        case 'NewExpression':
+          if (!transparentClass(node.MemberExpression)) { unknown = true; return; }
+          scan(node.Arguments);
+          return;
+        case 'AdditiveExpression': case 'MultiplicativeExpression': case 'RelationalExpression': case 'EqualityExpression':
+        case 'ShiftExpression': case 'ExponentiationExpression': case 'BitwiseANDExpression': case 'BitwiseORExpression': case 'BitwiseXORExpression': {
+          const operands = Object.keys(node).filter((key) => !ignored.has(key) && key !== 'operator' && isNode(node[key])).map((key) => node[key]);
+          if ((node.operator === 'instanceof' || node.operator === 'in') || !operands.every(operand)) { unknown = true; return; }
+          break;
+        }
+        default:
+          break;
+      }
+      for (const key of Object.keys(node)) if (!ignored.has(key)) scan(node[key]);
+    };
+    for (const key of bodyKeys) if (key in fn) scan(fn[key]);
+    const result = unknown ? null : writes;
+    footprints.set(fn, result);
+    return result;
+  };
+  const operationFootprint = (at: Node): Set<string> | null => {
+    if (at.type === 'CallExpression' && !directEval(at)) {
+      const found = declarationOf(at.CallExpression, 'function', 'FunctionDeclaration');
+      return found ? footprintOf(found.node) : null;
+    }
+    if (at.type === 'NewExpression') return transparentClass(at.MemberExpression) ? new Set() : null;
+    return null;
+  };
   const effect = (state: State, at: Node, dynamic = false, all = false): void => {
+    const footprint = dynamic || all ? null : operationFootprint(at);
     for (const binding of state.values.keys()) {
       const shadowable = dynamic && !at.strict && binding.owner !== ownerOf(at);
+      if (!shadowable && footprint && binding.global && !captured.has(binding) && !footprint.has(binding.name)) {
+        const kept = state.values.get(binding)!;
+        if (!kept.deeper) state.values.set(binding, { ...kept, deeper: true });
+        continue;
+      }
       if (shadowable || !binding.immutable && (all || dynamic || binding.global || captured.has(binding))) state.values.delete(binding);
     }
   };
@@ -188,7 +310,7 @@ export function ClassValueOrigins(root: ParseNode,
     if (!globalBindingIsStable(node as ParseNode.IdentifierReference)) return undefined;
     // This expression has now captured the value. A later alias is not a
     // promise to reread the original global cell.
-    return { source: value.source, arguments: value.arguments };
+    return { source: value.source, arguments: value.arguments, ...(value.deeper ? { deeper: true } : {}) };
   };
   const store = (target: unknown, value: Origin | undefined, state: State): void => {
     targets(target, (node, name) => {
@@ -267,6 +389,21 @@ export function ClassValueOrigins(root: ParseNode,
       'ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(node.type)) effect(state, node, directEval(node));
     typeEffects(node.TypeAnnotation ?? node.TypeArguments, state);
     children(node).forEach((child) => widen(child, state));
+  };
+  const visitPattern = (pattern: Node, state: State): void => {
+    if (pattern.type === 'MatchExtractorPattern' || pattern.type === 'MatchJuxtapositionPattern') {
+      visit(pattern.Head, state);
+      effect(state, pattern);
+      for (const part of [pattern.Elements, pattern.Shape]) {
+        for (const child of Array.isArray(part) ? part : [part]) if (isNode(child)) visitPattern(child, state);
+      }
+      return;
+    }
+    for (const child of children(pattern)) {
+      if (child.type.startsWith('Match')) visitPattern(child, state);
+      else visit(child, state);
+    }
+    effect(state, pattern);
   };
   const visit = (value: unknown, state: State): Origin | undefined => {
     if (Array.isArray(value)) {
@@ -463,6 +600,21 @@ export function ClassValueOrigins(root: ParseNode,
         visit(node.VariableStatement ?? node.Declaration ?? node.HoistableDeclaration ?? node.ClassDeclaration ?? node.AssignmentExpression, state);
         if (node.Decorators) {
           visit(node.Decorators, state); effect(state, node);
+        }
+        return undefined;
+      // #sec-class-value-origin-order: a pattern's head is read at its own
+      // evaluation position; its matcher call, its property reads and its
+      // iteration are potential calls, which withdraw only what they may affect.
+      case 'IsExpression':
+        visit(node.Expression, state);
+        if (isNode(node.Pattern)) visitPattern(node.Pattern, state);
+        return undefined;
+      case 'MatchExpression':
+        visit(node.Expression, state);
+        for (const clause of (node.Clauses as Node[] | undefined) ?? []) {
+          if (isNode(clause.Pattern)) visitPattern(clause.Pattern, state);
+          visit(clause.Guard, state);
+          visit(clause.Body, state);
         }
         return undefined;
       default: {

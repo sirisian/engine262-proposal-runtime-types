@@ -28,6 +28,8 @@ interface Admission {
 }
 const predicates = new WeakMap<ObjectValue, Admission>();
 const sourcePredicates = new WeakSet<ObjectValue>();
+/** The `where` clause each source predicate lowers, for judgments that read its chain. */
+const sourceClauses = new WeakMap<ObjectValue, ParseNode.WhereClause>();
 const active = new WeakMap<object, Admission[]>();
 const libraries = new WeakMap<Realm, Set<Value>>();
 const namespaces = new WeakMap<Realm, Set<Value>>();
@@ -304,8 +306,14 @@ export function RegisterSourceWherePredicate(fn: ObjectValue, clause: ParseNode.
   const violation = inspectBody(clause, { Environment: environment, Realm: realm }, admission, new Set(), true);
   if (violation) return Throw.TypeError('a where predicate is not compile-time evaluable: $1', Value(violation));
   sourcePredicates.add(fn);
+  sourceClauses.set(fn, clause);
   predicates.set(fn, admission);
   return undefined;
+}
+
+/** The `where` clause a source predicate was lowered from, where it was. */
+export function SourceWhereClauseOf(fn: unknown): ParseNode.WhereClause | undefined {
+  return fn instanceof ObjectValue ? sourceClauses.get(fn) : undefined;
 }
 
 /** Checked at the call site AFTER argument effects. An input getter may replace

@@ -30,9 +30,15 @@ test('a negated test narrows the other way', () => {
 });
 
 test('it narrows a parameter and the right operand of &&', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+  // #sec-class-value-origin-order: a Script-global class read in a Script-level
+  // function's body has no origin to rely on, since a later Script may replace
+  // the class before a future call; declared in a block, the class is a local
+  // cell no later Script can reach, and the parameter narrows.
+  expect(evaluated(`{ class A { x: uint8 = 1; } class B { y: uint8 = 2; }
     function f(v: A | B): uint8 { if (v instanceof A) { return v.x; } return v.y; }
-    String(f(new A()));`)).toBe('1');
+    String(f(new A())); }`)).toBe('1');
+  expectStaticTypeError(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+    function f(v: A | B): uint8 { if (v instanceof A) { return v.x; } return v.y; }`);
   expect(evaluated(`class A { x: uint8 = 1; }
     function readV(): A | null { return new A(); } let v: A | null = readV();
     ((v instanceof A) && v.x === 1) ? 'yes' : 'no';`)).toBe('yes');

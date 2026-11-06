@@ -1,4 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { SourceWhereClauseOf } from './where-predicates.mts';
 import { JSStringValue, NumberValue, type Value } from '../value.mts';
 import { R } from '../abstract-ops/all.mts';
 import type { TypeRecord } from './records.mts';
@@ -275,7 +276,17 @@ function describe(t: TypeRecord): string {
  */
 export function AtomsOfType(t: TypeRecord | undefined): readonly Atom[] {
   const direct = Atoms(t);
-  if (direct.length > 0 || !t || t.Kind !== 'nominal') {
+  if (direct.length > 0 || !t) {
+    return direct;
+  }
+  // A refined record declared in source is a parameterization of its object
+  // base whose `where` metadata is the predicate lowered from its clause.
+  if (t.Kind === 'parameterized') {
+    const rec = t as { Base?: TypeRecord, Metadata?: { where?: unknown } };
+    const clause = SourceWhereClauseOf(rec.Metadata?.where);
+    return clause && rec.Base?.Kind === 'object' ? atomsOfChains([clause], rec.Base) : NO_ATOMS;
+  }
+  if (t.Kind !== 'nominal') {
     return direct;
   }
   const rec = t as {
@@ -287,6 +298,11 @@ export function AtomsOfType(t: TypeRecord | undefined): readonly Atom[] {
   if (clauses.length === 0 || !base || base.Kind !== 'object') {
     return NO_ATOMS;
   }
+  return atomsOfChains(clauses, base);
+}
+
+/** The atoms of the union the first discriminating chain among _clauses_ denotes over _base_. */
+function atomsOfChains(clauses: readonly ParseNode[], base: TypeRecord & { Kind: 'object' }): readonly Atom[] {
   for (const clause of clauses) {
     const chain = DiscriminatingChainOf(clause);
     if (!chain) {
