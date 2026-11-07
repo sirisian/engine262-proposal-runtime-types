@@ -8005,14 +8005,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
-  // OQ1: a String's `length` and a function's `length` are Numbers, typed
-  // `number`, so a sized counter against one is refused statically and is
-  // written as a conversion; the run-time value is unchanged.
+  // #sec-typed-string-properties: a member whose value is always a Number at
+  // run time is typed `number`, so a sized counter against one is refused
+  // statically and is written as a conversion; the run-time value is
+  // unchanged. That is a String's or function's `length`, the `size` of a Map
+  // or Set without type arguments, and the byte length and offset members of
+  // an ArrayBuffer, SharedArrayBuffer or DataView. A Map or Set with type
+  // arguments keeps the index type for its `size`.
   const stringTyped = (t: Known): boolean => t?.Kind === 'primitive' ? t.Name === 'string'
     : t?.Kind === 'literal' ? (t as { Value?: unknown }).Value instanceof JSStringValue
       : t?.Kind === 'union' ? t.Members.length > 0 && t.Members.every(stringTyped) : false;
+  const numberMembers = new Map<string, readonly string[]>([
+    ['Map', ['size']], ['Set', ['size']],
+    ['ArrayBuffer', ['byteLength', 'maxByteLength']], ['SharedArrayBuffer', ['byteLength', 'maxByteLength']],
+    ['DataView', ['byteLength', 'byteOffset']],
+  ]);
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
     if (key === 'length' && (stringTyped(receiver) || receiver?.Kind === 'function')) return makePrimitive('number');
+    if (typeof key === 'string' && receiver?.Kind === 'nominal' && receiver.Arguments.length === 0
+      && numberMembers.get(receiver.LibraryName ?? '')?.includes(key)) return makePrimitive('number');
     const range = rangePropertyType(receiver, key);
     if (range) return range;
     // Checked before the String-key and type-argument gates: the absence is a
@@ -9655,7 +9666,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
   }).ClassTail?.ClassBody ?? [];
   type ClassOrigin = ImportedConstructorOrigin;
-  const classValueOrigins = ClassValueOrigins(root, (read) => globalBindingMutations.bindingIsStableAtKnownInvocations(read));
+  const classValueOrigins = ClassValueOrigins(root, (read) => globalBindingMutations.bindingIsStableAtKnownInvocations(read),
+    (node) => globalBindingMutations.transparentlyConstructed(node));
   const constructorSelections = new WeakMap<ParseNode, ConstructorSelection>();
   // Contribution queries can reach a const before its ordinary source walk.
   // Re-enter that declaration's prepared scope, never the querying function's.

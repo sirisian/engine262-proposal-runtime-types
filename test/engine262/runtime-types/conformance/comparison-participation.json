@@ -601,6 +601,70 @@
       ]
     },
     {
+      "name": "=== type-object calls compare as their conversions do in checked code",
+      "steps": [
+        {
+          "source": "let z:uint8=0;String(uint8(1)===uint16(1));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== type-object calls outside checked code stay an ordinary comparison",
+      "steps": [
+        {
+          "source": "String(uint8(1)===uint16(1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== type-object calls outside checked code stay an ordinary comparison",
+      "steps": [
+        {
+          "source": "String(uint8(1)!==uint16(1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "+ on type-object calls of different numeric types is refused everywhere",
+      "steps": [
+        {
+          "source": "String(uint8(1)+uint16(1));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "pure membership value query",
       "steps": [
         {

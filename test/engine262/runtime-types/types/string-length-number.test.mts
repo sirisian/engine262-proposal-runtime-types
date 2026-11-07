@@ -1,9 +1,10 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectStaticTypeError, ok } from '../harness.mts';
 
-// OQ1: a String's `length` is a Number, typed `number`. The run-time value is
-// unchanged; a sized integer against it, or stored from it, is refused
-// statically and written as a conversion, instead of throwing at run time.
+// #sec-typed-string-properties: a String's `length` is a Number, typed
+// `number`. The run-time value is unchanged; a sized integer against it, or
+// stored from it, is refused statically and written as a conversion, instead
+// of throwing at run time.
 
 test('a String\'s length is a number', () => {
   expect(ok("const s: string = 'abc'; const n: number = s.length;")).toBe(true);

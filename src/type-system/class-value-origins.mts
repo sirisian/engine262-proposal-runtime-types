@@ -59,7 +59,8 @@ const join = (into: State, a: State, b: State): void => {
         * Unsupported effects withdraw evidence; declaration contracts remain separate.
           */
 export function ClassValueOrigins(root: ParseNode,
-  globalBindingIsStable: (read: ParseNode.IdentifierReference) => boolean): WeakMap<ParseNode, Origin | undefined> {
+  globalBindingIsStable: (read: ParseNode.IdentifierReference) => boolean,
+  transparentlyConstructed: (node: ParseNode.ClassDeclaration) => boolean): WeakMap<ParseNode, Origin | undefined> {
   const observations = new WeakMap<ParseNode, Origin | undefined>();
   const bindings = new Map<ParseNode, Map<string, Binding>>();
   const written = new Set<Binding>();
@@ -169,8 +170,9 @@ export function ClassValueOrigins(root: ParseNode,
   // evidence it may affect, judged by its footprint as sec-elision-stability's
   // global mutation footprints are. A call of a function declaration the
   // source never reassigns may write what its body, transitively, writes; a
-  // construction of a class whose constructor and field initializers run no
-  // user code writes nothing. Every other operation may reach every global.
+  // construction of a class the source never reassigns writes nothing when the
+  // class is transparently constructed (#sec-elision-stability). Every other
+  // operation may reach every global.
   const literalOnly = (value: unknown): boolean => {
     const node = unwrap(value);
     if (!node) return false;
@@ -187,19 +189,7 @@ export function ClassValueOrigins(root: ParseNode,
   };
   const transparentClass = (callee: unknown): boolean => {
     const found = declarationOf(callee, 'class', 'ClassDeclaration');
-    if (!found) return false;
-    const tail = found.node.ClassTail as Node;
-    if (tail.ClassHeritage || (found.node.Decorators as unknown[] | null | undefined)?.length) return false;
-    for (const element of (tail.ClassBody as Node[] | null | undefined) ?? []) {
-      if ((element.Decorators as unknown[] | null | undefined)?.length) return false;
-      if (element.type === 'MethodDefinition') {
-        const name = element.ClassElementName as Node | undefined;
-        if (!element.static && name?.type === 'IdentifierName' && name.name === 'constructor') return false;
-      } else if (element.type === 'FieldDefinition') {
-        if (!element.static && element.Initializer && !literalOnly(element.Initializer)) return false;
-      } else return false;
-    }
-    return true;
+    return !!found && transparentlyConstructed(found.node as unknown as ParseNode.ClassDeclaration);
   };
   const footprints = new Map<Node, Set<string> | null>();
   const footprintOf = (fn: Node): Set<string> | null => {

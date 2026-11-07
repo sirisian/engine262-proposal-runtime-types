@@ -5,7 +5,7 @@ import { ObjectValue, Value, wellKnownSymbols } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { intrinsicEffectOrigin } from './intrinsic-effect-origin.mts';
-import { GlobalEffectValues } from './global-effect-values.mts';
+import { GlobalEffectValues, TransparentlyConstructedClass } from './global-effect-values.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 
 type Node = ParseNode & Record<string, unknown>;
@@ -58,6 +58,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   bindingIsStableAtKnownInvocations: (read: ParseNode.IdentifierReference) => boolean,
   mayPrecede: (operation: ParseNode, observation?: ParseNode) => boolean,
   admissionsAreTransparent: (observation: ParseNode | undefined, proof: (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type) => boolean) => boolean,
+  transparentlyConstructed: (node: ParseNode.ClassDeclaration | ParseNode.ClassExpression) => boolean,
 } {
   const nodes: Node[] = [];
   const bindings = new Map<ParseNode, Map<string, Binding>>();
@@ -623,5 +624,9 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     // preceding effect in this source does not close that invocation context.
     return !!sites?.length && !values.exhausted();
   };
-  return { affects, mayPrecede, admissionsAreTransparent, bindingIsStableAtKnownInvocations };
+  // One judgment of transparent construction, with this source's intrinsic
+  // type spellings, for every analysis that relies on it.
+  const transparentlyConstructed = (node: ParseNode.ClassDeclaration | ParseNode.ClassExpression): boolean =>
+    TransparentlyConstructedClass(node, intrinsicAdmission, (key) => propertyKey(key as Node));
+  return { affects, mayPrecede, admissionsAreTransparent, bindingIsStableAtKnownInvocations, transparentlyConstructed };
 }

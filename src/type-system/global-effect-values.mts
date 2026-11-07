@@ -13,9 +13,11 @@ type AdmissionProof = (source: ParseNode | undefined, target: ParseNode.Type, ad
 type AdmissionEffect = { site: ParseNode, transparent: (proof: AdmissionProof) => boolean };
 type Flow = { admittedType?: ParseNode.Type, absent?: boolean, primitiveContract?: string, values: Set<Candidate>, users: Set<(value: Candidate) => void>, primitiveLiteral?: boolean, knownPrimitive?: boolean, primitiveKinds?: Set<'null' | 'undefined' | 'other'>, stringLength?: number, expression?: ParseNode };
 type Hook = { key: string | undefined, get: Flow, set: Flow, site: ParseNode, enumerable?: boolean };
+type IndexHook = { arity: number, get?: Flow, set?: Flow, site: ParseNode };
+type ClassNode = ParseNode.ClassDeclaration | ParseNode.ClassExpression;
 type PropertyWrite = { key: string | undefined, source: Flow, site?: ParseNode };
 type PrototypeChange = { source: Flow, site: ParseNode };
-type Aggregate = { kind: 'aggregate', sourceClass?: ParseNode.ClassDeclaration | ParseNode.ClassExpression, typedKeys: Set<string | undefined>, writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
+type Aggregate = { kind: 'aggregate', sourceClass?: ClassNode, classPrototype?: ClassNode, classOperators?: boolean, indexHooks?: IndexHook[], typedKeys: Set<string | undefined>, writes: PropertyWrite[], writeUsers: Set<() => void>, ordinaryPrototypeMutation: boolean, initialPrototypeEffects?: boolean, ownKeys: Set<string>, prototypes: PrototypeChange[], prototypeUsers: Set<() => void>, deletions: { key?: string, site: ParseNode }[], deletionUsers: Set<() => void>, hooks: Hook[], hookUsers: Set<() => void>, enumerability: { key: string | undefined, site: ParseNode, value?: boolean }[], slots: Map<string | undefined, Flow>, all: Flow, native?: ObjectValue, prototype?: ObjectValue, prototypeFlow?: Flow, mutations: Set<string | undefined>, array?: boolean,
   slotUsers: Set<(key: string | undefined, flow: Flow) => void> };
 type Callable = { kind: 'callable', definition: ParseNode, sites: Set<ParseNode>, parameters: readonly Node[], result: Flow, receiver: Flow, properties: Aggregate };
 type Bound = { kind: 'bound', callee: Flow, arguments: readonly Flow[], packed?: Flow, receiver: Flow, properties: Aggregate };
@@ -23,6 +25,50 @@ type Candidate = string | Aggregate | Callable | Bound;
 const isNode = (value: unknown): value is Node => !!value && typeof value === 'object' && typeof (value as Node).type === 'string';
 const parameterKeys = ['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'];
 const newFlow = (): Flow => ({ values: new Set(), users: new Set() });
+
+const literalInitializer = (value: unknown): boolean => {
+  if (!isNode(value)) return false;
+  if (value.type === 'UnaryExpression' && value.operator === '-') {
+    const operand = value.UnaryExpression as Node | undefined;
+    return operand?.type === 'NumericLiteral' && !operand.Imaginary;
+  }
+  if (value.type === 'NumericLiteral') return !value.Imaginary;
+  return ['StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(value.type);
+};
+
+/**
+ * #sec-class-value-origin-order, #sec-elision-stability: whether constructing a
+ * source class runs no user code. Heritage, a decorator, an explicit
+ * constructor or an instance field computed by an expression could. Methods,
+ * accessors and operators run only when invoked, and static elements when the
+ * class is defined, so none of them belongs to construction. A literal stored
+ * in an untyped or intrinsic field converts nothing. A generic, partial or
+ * otherwise modified class is not judged from this one body.
+ */
+export function TransparentlyConstructedClass(node: ClassNode, intrinsicAdmission: (type: ParseNode.Type) => string | undefined,
+  propertyKey: (node: ParseNode) => string | undefined): boolean {
+  const tail = node.ClassTail;
+  if (tail.ClassHeritage || node.Decorators?.length || node.TypeParameters || node.ClassModifiers?.length || tail.WhereClauses?.length) return false;
+  for (const element of tail.ClassBody ?? []) {
+    if ((element as { Decorators?: readonly unknown[] | null }).Decorators?.length) return false;
+    switch (element.type) {
+      case 'MethodDefinition': case 'GeneratorMethod': case 'AsyncMethod': case 'AsyncGeneratorMethod':
+        if (!element.static && element.ClassElementName.type !== 'PrivateIdentifier'
+          && propertyKey(element.ClassElementName) === 'constructor') return false;
+        break;
+      case 'FieldDefinition':
+        if (element.static) break;
+        if (element.accessor || element.Initializer && !literalInitializer(element.Initializer)
+          || element.TypeAnnotation && !intrinsicAdmission(element.TypeAnnotation.Type)) return false;
+        break;
+      case 'OperatorDefinition': case 'ClassStaticBlock':
+        break;
+      default:
+        return false;
+    }
+  }
+  return true;
+}
 
 /**
  * Inclusion-based, allocation/property-sensitive may-flow for global effects.
@@ -72,6 +118,19 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   const admissionEffects: AdmissionEffect[] = [];
   const directSources = new Set<Flow>();
   const globalWrites: { site: ParseNode, key?: string }[] = [];
+  // The transparency judgment of each class, the prototype of each
+  // transparently constructed one, and its instances by construction site.
+  const transparentClasses = new Map<ClassNode, boolean>();
+  const classPrototypes = new Map<ClassNode, Aggregate>();
+  const instances = new Map<ParseNode, Map<ClassNode, Aggregate>>();
+  const transparentClass = (node: ClassNode): boolean => {
+    let answer = transparentClasses.get(node);
+    if (answer === undefined) {
+      answer = TransparentlyConstructedClass(node, options.intrinsicAdmission, options.propertyKey);
+      transparentClasses.set(node, answer);
+    }
+    return answer;
+  };
   const queue: [Candidate, (value: Candidate) => void][] = [];
   // Bound propagation work, not elapsed time. Exhaustion loses precision; it
   // must never become evidence that an effect cannot occur.
@@ -1011,7 +1070,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       // Complete-input facts above still require its accompanying object.
       if (value === 'opaque-callable') continue;
       const object = propertiesOf(value);
-      if (!object || seen.has(object) || object.sourceClass
+      if (!object || seen.has(object) || object.sourceClass || object.classOperators
         || object.native && (conversion ? HasOwnClassConversion(object.native) : HasOwnClassOperator(object.native, 'unary !'))) return false;
       const next = new Set(seen); next.add(object);
       if (!transparentPrototypeOperation(initialPrototype(object), site, conversion, next)) return false;
@@ -1095,8 +1154,10 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       }
       edge(source, destination);
       if (options.globalBinding(node as ParseNode.IdentifierReference)) recordDataWrite(globalObject, node.name, source, site ?? node);
-    } else if (node.type === 'MemberExpression') store(expression(node.MemberExpression), options.key(node), source, site);
-    else if (node.type === 'ParenthesizedExpression') target(node.Expression, source, site);
+    } else if (node.type === 'MemberExpression') {
+      store(expression(node.MemberExpression), memberKey(node), source, site);
+      if (node.Expression && site) indexAccess(expression(node.MemberExpression), indexOperands(node.Expression), undefined, site, source);
+    } else if (node.type === 'ParenthesizedExpression') target(node.Expression, source, site);
     else if (node.type === 'SingleNameBinding' || node.type === 'BindingElement') {
       // The parent and its BindingIdentifier describe one receiving boundary.
       target(node.BindingIdentifier ?? node.BindingPattern, source, site, !!node.BindingIdentifier && !!annotation);
@@ -1198,6 +1259,107 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     copyArguments(packed, tail, 1, 0, site);
     return flow;
   };
+  // #sec-elision-stability: a transparently constructed class's prototype holds
+  // its methods as data, its accessors as non-enumerable hooks and its index
+  // accessors by index count, as an object literal's would. Any other operator
+  // keeps operations that consult the prototype opaque.
+  const classPrototype = (node: ClassNode, constructor: Flow): Aggregate => {
+    const prototype = aggregate(); prototype.prototype = options.objectPrototype; prototype.classPrototype = node;
+    prototype.ownKeys.add('constructor'); edge(constructor, slot(prototype, 'constructor'));
+    classPrototypes.set(node, prototype);
+    for (const element of node.ClassTail.ClassBody ?? []) {
+      if ((element as { static?: boolean }).static) continue;
+      if (element.type === 'OperatorDefinition') {
+        if (element.OperatorName !== '[]') {
+          prototype.classOperators = true; continue;
+        }
+        const callee = newFlow();
+        if (element.OperatorGenerator || element.GeneratorBody) add(callee, 'opaque-value');
+        else edge(expression(element), callee);
+        const count = element.FormalParameters?.length ?? 0;
+        (prototype.indexHooks ??= []).push(element.AccessorKind === 'set'
+          ? { arity: Math.max(0, count - 1), set: callee, site: element } : { arity: count, get: callee, site: element });
+        continue;
+      }
+      if (!['MethodDefinition', 'GeneratorMethod', 'AsyncMethod', 'AsyncGeneratorMethod'].includes(element.type)) continue;
+      const method = element as ParseNode.MethodDefinition;
+      const name = method.ClassElementName;
+      const key = name.type === 'PrivateIdentifier' ? privateKey(name) : options.propertyKey(name);
+      if (key !== undefined) prototype.ownKeys.add(key);
+      if (method.type === 'MethodDefinition' && method.UniqueFormalParameters === null) {
+        const get = newFlow(), set = newFlow();
+        edge(expression(method), method.PropertySetParameterList === null ? get : set);
+        prototype.hooks.push({ key, get, set, site: method, enumerable: false });
+        for (const update of prototype.hookUsers) update();
+      } else recordDataWrite(prototype, key, expression(method), method);
+    }
+    return prototype;
+  };
+  // One fresh instance per construction site: its literal fields are own data,
+  // typed ones keep their storage admission, and its chain starts at the
+  // class prototype, so later accesses reach the declared members.
+  const instanceOf = (node: ClassNode, prototype: Aggregate, site: ParseNode): Aggregate => {
+    let created = instances.get(site);
+    if (!created) {
+      created = new Map(); instances.set(site, created);
+    }
+    const existing = created.get(node);
+    if (existing) return existing;
+    const instance = aggregate();
+    instance.prototypeFlow = newFlow(); instance.initialPrototypeEffects = true;
+    add(instance.prototypeFlow, prototype);
+    created.set(node, instance);
+    for (const element of node.ClassTail.ClassBody ?? []) {
+      if (element.type !== 'FieldDefinition' || element.static) continue;
+      const name = element.ClassElementName;
+      const key = name.type === 'PrivateIdentifier' ? privateKey(name) : options.propertyKey(name);
+      if (key !== undefined) instance.ownKeys.add(key);
+      if (element.TypeAnnotation) instance.typedKeys.add(key);
+      let value: Flow;
+      if (element.Initializer) value = expression(element.Initializer);
+      else {
+        value = newFlow(); value.knownPrimitive = true;
+        value.primitiveKinds = new Set(element.TypeAnnotation ? ['null', 'undefined', 'other'] : ['undefined']);
+      }
+      recordDataWrite(instance, key, value, site);
+    }
+    return instance;
+  };
+  // A private name is a key of its own, so `x.#m` reaches the element the
+  // class declared. Sharing a spelling with an ordinary key only adds candidates.
+  const privateKey = (name: ParseNode.PrivateIdentifier): string => `#${name.name.replace(/^#/, '')}`;
+  const memberKey = (node: ParseNode): string | undefined => {
+    const name = (node as { PrivateIdentifier?: ParseNode.PrivateIdentifier | null }).PrivateIdentifier;
+    return name ? privateKey(name) : options.key(node);
+  };
+  const indexOperands = (key: ParseNode): Flow[] => (key.type === 'CommaOperator' ? key.ExpressionList : [key]).map((operand) => expression(operand));
+  // proposal-runtime-types #sec-user-defined-operators: a computed access whose
+  // indices are all numeric dispatches, by index count, to an index accessor on
+  // the base's prototype chain instead of an ordinary property access. Both
+  // alternatives stay possible here; the ordinary one is the load or store. A
+  // native class prototype's operator is an unavailable summary.
+  const indexAccess = (base: Flow, operands: readonly Flow[], result: Flow | undefined, site: ParseNode, written?: Flow,
+    receiver = base, path = new Set<Aggregate>()): void => watch(base, (value) => {
+    const object = propertiesOf(value);
+    if (!object || path.has(object)) return;
+    if (path.size >= 256) {
+      if (result) add(result, 'opaque-value');
+      opaqueEffects.add(site); return;
+    }
+    const next = new Set(path); next.add(object);
+    if (object.native && HasOwnClassOperator(object.native, written ? `[]=#${operands.length}` : `[]#${operands.length}`)) {
+      if (result) add(result, 'opaque-value');
+      opaqueEffects.add(site);
+    }
+    for (const hook of object.indexHooks ?? []) {
+      const callee = written ? hook.set : hook.get;
+      if (callee && hook.arity === operands.length) {
+        invoke(callee, written ? [...operands, written] : operands, receiver, result ?? newFlow(), undefined, site, undefined, true);
+      }
+    }
+    indexAccess(initialPrototype(object), operands, result, site, written, receiver, next);
+    observePrototypes(object, site, (change) => indexAccess(change.source, operands, result, site, written, receiver, next));
+  });
   const invoke = (callee: Flow, args: readonly Flow[], receiver: Flow, result: Flow, packed?: Flow, site?: ParseNode, argumentNodes?: readonly ParseNode[], absent = false): void => {
     if (site) {
       pendingInvocations.push({ source: callee, result, site, absent });
@@ -1343,7 +1505,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       }
       if (typeof value !== 'string' && value.kind === 'aggregate' && value.sourceClass && site) {
         const cls = value.sourceClass;
-        if (cls.ClassTail.ClassHeritage || cls.ClassTail.ClassBody?.length || cls.Decorators?.length) opaque(result, site);
+        const prototype = site.type === 'NewExpression' ? classPrototypes.get(cls) : undefined;
+        if (prototype) add(result, instanceOf(cls, prototype, site));
+        else if (cls.ClassTail.ClassHeritage || cls.ClassTail.ClassBody?.length || cls.Decorators?.length) opaque(result, site);
         else add(result, 'opaque-value');
       }
       if (typeof value === 'string' || value.kind !== 'callable') return;
@@ -1517,12 +1681,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     } else if (node.type === 'MemberExpression') {
       if (node.Expression) propertyKey(expression(node.Expression), node);
       const writeOnly = isAssignmentTarget(node) || isDeleteTarget(node);
-      if (!writeOnly) load(expression(node.MemberExpression), options.key(node), result, node);
-      if (!writeOnly && ['call', 'apply', 'bind'].includes(options.key(node) ?? '')) pendingOperations.push({ source: result, result, site: node, copy: true });
+      if (!writeOnly) load(expression(node.MemberExpression), memberKey(node), result, node);
+      if (!writeOnly && node.Expression) indexAccess(expression(node.MemberExpression), indexOperands(node.Expression), result, node);
+      if (!writeOnly && ['call', 'apply', 'bind'].includes(memberKey(node) ?? '')) pendingOperations.push({ source: result, result, site: node, copy: true });
     } else if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
       const object = functionProperties();
       object.sourceClass = node; object.ordinaryPrototypeMutation = false;
-      object.ownKeys.add('prototype'); add(slot(object, 'prototype'), 'opaque-value');
+      object.ownKeys.add('prototype');
+      // The own `prototype` property is non-writable and non-configurable, so
+      // the modeled prototype is the one every construction installs.
+      if (transparentClass(node)) add(slot(object, 'prototype'), classPrototype(node, result));
+      else add(slot(object, 'prototype'), 'opaque-value');
       add(result, object);
       if (node.Decorators?.length) add(result, 'opaque-value');
       if (node.BindingIdentifier) edge(result, binding(node.BindingIdentifier as Node, node.BindingIdentifier.name));
