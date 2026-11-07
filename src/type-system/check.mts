@@ -13535,6 +13535,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // A present Symbol/nullish endpoint cannot supply the range's ordering.
   // Metadata and open types may add capabilities; do not erase that uncertainty.
+  // #sec-ranges: Boolean is ordered but is not a range element type, so that
+  // `x > 1..=x < 5` is refused where it is written.
+  const booleanRangeEndpoint = (type: Known): boolean => {
+    const at = erasedKeepingBrand(type);
+    if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(booleanRangeEndpoint);
+    if (at?.Kind === 'literal') return (at as { Value?: unknown }).Value === Value.true || (at as { Value?: unknown }).Value === Value.false;
+    return at?.Kind === 'primitive' && at.Name === 'boolean';
+  };
   const invalidRangeEndpoint = (type: Known): boolean => {
     const at = erasedKeepingBrand(type);
     if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(invalidRangeEndpoint);
@@ -17915,12 +17923,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * value read is the value the operand holds at run time; or a `const` of an
    * integer value type. Null where the operand is not one of these.
    */
+  const foldingConstants = new Set<ParseNode>();
   const exactIntegerOperand = (operand: ParseNode): bigint | null => {
     const direct = foldConstant(operand);
     if (direct !== null) return direct;
     const e = patternExpression(operand);
     if (!e) return null;
-    if (e.type === 'IdentifierReference') return constTypedValue(e.name);
+    if (e.type === 'IdentifierReference') {
+      const typed = constTypedValue(e.name);
+      if (typed !== null) return typed;
+      // #sec-integer-operations: a `const` bound to a constant expression is a
+      // known operand, a `bigint` one included.
+      const binding = ResolveBindingDeclaration(e, e.name);
+      const initializer = binding?.kind === 'const' ? (binding.node as { Initializer?: ParseNode | null }).Initializer : undefined;
+      if (!initializer || foldingConstants.has(initializer)) return null;
+      const initial = staticType(initializer);
+      const bigint = (initial?.Kind === 'primitive' && initial.Name === 'bigint')
+        || (initial?.Kind === 'literal' && (initial as { Value?: unknown }).Value instanceof BigIntValue);
+      if (!bigint) return null;
+      foldingConstants.add(initializer);
+      try {
+        return exactIntegerOperand(initializer);
+      } finally {
+        foldingConstants.delete(initializer);
+      }
+    }
     let target: Known = null;
     let inner: ParseNode | undefined;
     if (e.type === 'TypedConversionExpression') {
@@ -18026,6 +18053,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  // #sec-pipeline-static-semantics: the topic is an immutable binding of the
+  // left operand. A numeric constant there makes the topic a numeric constant,
+  // which receives literal context at each use as `const t = 3` does while
+  // the binding itself stays dynamic; any other left operand keeps its type.
+  const topicSources = new WeakMap<Frame, ParseNode>();
+  const topicFrame = (input: ParseNode, frame: Frame = emptyFrame()): Frame => {
+    if (isNumericConstantExpression(input)) {
+      recordNumericConstant(TOPIC_NAME, input, frame);
+      topicSources.set(frame, input);
+    } else {
+      const topic = pipelineInputType(input);
+      if (topic) frame.bindings.set(TOPIC_NAME, topic);
+    }
+    return frame;
+  };
+  /** The numeric constant the innermost topic stands for, typed as that literal is in each context. */
+  const topicSource = (): ParseNode | undefined => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const source = topicSources.get(frames[i]);
+      if (source) return source;
+      if (frames[i].bindings.has(TOPIC_NAME) || frames[i].declaredNames.has(TOPIC_NAME)) return undefined;
+    }
+    return undefined;
+  };
   const recordNumericConstant = (name: string, initializer: ParseNode, frame: Frame): void => {
     frame.constLiterals.add(name);
     const literal = staticType(initializer);
@@ -18607,6 +18658,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let literal = node.Expression;
       while (literal.type === 'ParenthesizedExpression') literal = literal.Expression;
       return isFunctionLiteral(literal) ? source : null;
+    }
+    // #sec-pipeline-static-semantics: a contextual type on a pipeline is the
+    // contextual type of its right operand, so a numeric literal in a step
+    // takes the expected type rather than defaulting.
+    if (node?.type === 'TopicReference' && contextual) {
+      const source = topicSource();
+      if (source) return staticTypeIn(source, contextual);
+    }
+    if (node?.type === 'PipelineExpression' && contextual) {
+      frames.push(topicFrame(node.PipelineExpression));
+      try {
+        return staticTypeIn(node.Body, contextual);
+      } finally {
+        frames.pop();
+      }
     }
     // #sec-vector-comparisons: the result form "is decided by the expected
     // type", so a comparison that reaches here with one is not ambiguous. The
@@ -19661,8 +19727,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'NumericLiteral' && contextual) {
       const width = decimalWidthOf(contextual);
-      if (width !== undefined && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
+      const text = (node as ParseNode.NumericLiteral).SourceText;
+      if (width !== undefined && typeof text === 'string') {
         journalSet(decimalLiterals, node, width);
+        // #sec-literalvalueintype: a decimal type represents a literal exactly
+        // or not at all. Its coefficient is the digits the literal writes and
+        // its exponent their position, so a literal whose coefficient or
+        // exponent the type cannot hold is unrepresentable, not rounded.
+        // An explicit conversion's operand converts rather than adopts, as
+        // `(300 := uint8)` wraps (#sec-explicit-conversion), so the conversion
+        // rounds it and checks the result's range instead.
+        let operand: ParseNode = node;
+        while (operand.parent?.type === 'ParenthesizedExpression' || (operand.parent?.type === 'UnaryExpression' && (operand.parent as { operator?: string }).operator === '-')) operand = operand.parent;
+        const host = operand.parent as ParseNode | undefined;
+        const converted = host?.type === 'TypedConversionExpression'
+          || (host?.type === 'CallExpression' && !!typeObjectTarget((host as ParseNode.CallExpression).CallExpression));
+        const digits = converted ? null : ParseDecimalDigits(text.replace(/_/g, ''));
+        const [precision, low, high] = ({ 32: [7, -101, 90], 64: [16, -398, 369], 128: [34, -6176, 6111] } as const)[width];
+        if (digits) {
+          const coefficient = digits.significand < 0n ? -digits.significand : digits.significand;
+          if (coefficient >= 10n ** BigInt(precision) || digits.exponent < low || digits.exponent > high) {
+            const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         return contextual;
       }
     }
@@ -21147,6 +21235,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return result;
       }
       case 'TopicReference':
+        {
+          const source = topicSource();
+          if (source) return staticType(source);
+        }
         return lookup(TOPIC_NAME) ?? null;
       case 'ArrowFunction':
       case 'FunctionExpression':
@@ -21256,12 +21348,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // own, so lookup, narrowing, and shadowing by an inner pipeline are the
         // ordinary rules rather than three new ones.
         const p = node as ParseNode.PipelineExpression;
-        const topic = pipelineInputType(p.PipelineExpression);
-        const bindings = new Map<string, TypeRecord>();
-        if (topic) {
-          bindings.set(TOPIC_NAME, topic);
-        }
-        frames.push({ ...emptyFrame(), bindings });
+        frames.push(topicFrame(p.PipelineExpression));
         try {
           return staticType(p.Body);
         } finally {
@@ -30517,11 +30604,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (test.type === 'PipelineExpression') {
       const input = test.PipelineExpression;
       const origin = capturePlace(input);
-      const topic = pipelineInputType(input);
       if (visit) walk(input);
       else previewFlowEffects(input);
-      const frame = emptyFrame();
-      if (topic) frame.bindings.set(TOPIC_NAME, topic);
+      const frame = topicFrame(input);
       frame.declaredNames.add(TOPIC_NAME);
       frames.push(frame);
       let result: TestFlow;
@@ -34982,8 +35067,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return declared;
     }
-    const type = target.type === 'CallExpression' ? callReturnType(target) : staticType(target);
+    let type = target.type === 'CallExpression' ? callReturnType(target) : staticType(target);
     if (target.type !== 'CallExpression') return type;
+    if (!type) {
+      // #sec-location-consuming-contexts: while the compound update that
+      // contains the call is itself being typed, the call's own type is not
+      // yet available; a single non-generic callee's declared result names the
+      // location it returns.
+      const callee = staticType(target.CallExpression);
+      const signatures = callee?.Kind === 'function' ? callee.Signatures : undefined;
+      if (signatures?.length === 1 && !signatures[0].TypeParameters?.length) type = signatures[0].Return ?? null;
+    }
     if (!type || type.Kind === 'any') return null;
     const targets = returnedLocationTypes(type);
     if (targets) return CanonicalizeType({ Kind: 'union', Members: targets });
@@ -35256,9 +35350,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       switch (node.type) {
         case 'CommaOperator': enqueue(node.ExpressionList.at(-1)); break;
-        case 'CallExpression':
+        case 'CallExpression': {
           if (callProvenance.has(node)) return true;
+          // #sec-explicit-conversion: a call of a type object is the conversion
+          // `(x := T)` spelled as a call, and participates as that does; a
+          // static method of a type object carries its library signature's
+          // declared result.
+          const callee = unparenthesized(node.CallExpression);
+          if (typeObjectTarget(node.CallExpression)
+            || (callee.type === 'MemberExpression' && typeObjectTarget(callee.MemberExpression) && staticType(node) !== null)) return true;
           enqueue(node.CallExpression); break;
+        }
         case 'MemberExpression': enqueue(node.MemberExpression); break;
         case 'NewExpression':
           if (node.MemberExpression && invocationFact(node.MemberExpression, next.scope)?.typed === true) return true;
@@ -36063,18 +36165,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const protocol = StaticIterationContribution(source.type, structureOf);
       const literal = patternExpression(source.expression);
       // #sec-type-annotations: each name's type follows from the annotated
-      // type's members, which for a tuple are its declared positions. An
-      // array's indexed storage has no such members, and does not constrain
-      // its replaceable iterator.
+      // type's members: a tuple's declared positions, an array's element type.
+      // The annotation is a contract each name is checked against where it is
+      // bound, so a replaced iterator is refused there rather than trusted.
       const declared = source.annotated && source.type?.Kind === 'tuple' && source.type.Elements.every((position) => !position.Rest)
         ? source.type.Elements.map((position) => position.Type) : undefined;
+      const declaredElement = source.annotated && source.type?.Kind === 'array' ? source.type.Element : undefined;
       elements.forEach((el, index) => {
         if (el.type !== 'Elision') {
           const contribution = literal?.type === 'ArrayLiteral'
               && !literal.ElementList.slice(0, index + 1).some((element) => element.type === 'SpreadElement')
             ? patternElement(source, index)
             : declared ? { type: declared[index] ?? undefinedType }
-              : { type: protocol.positions ? protocol.positions[index] ?? undefinedType : protocol.element };
+              : declaredElement ? { type: declaredElement }
+                : { type: protocol.positions ? protocol.positions[index] ?? undefinedType : protocol.element };
           checkPattern(el, { ...contribution, typed: source.typed, annotated: source.annotated }, declaring, infer, frame, selected);
         }
       });
@@ -41042,6 +41146,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (endpoint && knownRange(staticType(endpoint))) reportType('rt-range-value', (node as ParseNode), 'a range endpoint must be an ordered value, not a range');
           else if (endpoint && operandParticipates(endpoint) && invalidRangeEndpoint(staticType(endpoint))) {
             reportType('rt-range-value', (node as ParseNode), 'a present Symbol or nullish range endpoint has no ordering');
+          } else if (endpoint && operandParticipates(endpoint) && booleanRangeEndpoint(staticType(endpoint))) {
+            reportType('rt-range-value', (node as ParseNode), 'a Boolean is not a range element type');
           }
           walk(endpoint);
         }
@@ -43090,12 +43196,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // never reached with the frame in place.
         const pl = n as unknown as { PipelineExpression: ParseNode, Body: ParseNode };
         walk(pl.PipelineExpression);
-        const topic = pipelineInputType(pl.PipelineExpression);
-        const bindings = new Map<string, TypeRecord>();
-        if (topic) {
-          bindings.set(TOPIC_NAME, topic);
-        }
-        frames.push({ ...emptyFrame(), bindings });
+        frames.push(topicFrame(pl.PipelineExpression));
         try {
           walk(pl.Body);
         } finally {

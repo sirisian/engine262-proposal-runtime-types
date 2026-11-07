@@ -20,6 +20,23 @@ test('an enum range pattern follows the enumerators\' order', () => {
   expect(evaluated("enum E { a, b, c, d } const v: E = E.a; match (v) { when E.b..=E.d: 'in'; default: 'out'; };")).toBe('out');
 });
 
-test('Boolean endpoints are not ordered, so a range over them is refused', () => {
+// #sec-ranges: Boolean is ordered (#sec-ordered-element-types) but is not a
+// range element type, so a range over Boolean endpoints is refused, and a
+// participating Boolean endpoint statically: a range binds looser than the
+// relational operators, so `x > 1..=x < 5` would otherwise be a range of two
+// comparisons.
+test('Boolean endpoints are refused, statically where they participate', () => {
   expect(observeScript("const v: boolean = true; match (v) { when false..=true: 'in'; default: 'out'; };").completion.Type).toBe('throw');
+  expect((observeScript('function f(x: uint8) { return x > 1..=x < 5; } "ok";').diagnostic as { rule?: string } | undefined)?.rule).toBe('rt-range-value');
+});
+
+// #sec-ordered-element-types orders Strings by code unit, and #sec-ranges
+// admits them: containment and matching, but no implicit iteration.
+test('a String range pattern matches by code-unit containment', () => {
+  expect(evaluated("const s: string = 'm'; match (s) { when 'a'..='z': 'in'; default: 'out'; };")).toBe('in');
+  expect(evaluated("const s: string = 'M'; match (s) { when 'a'..='z': 'in'; default: 'out'; };")).toBe('out');
+  expect(evaluated("const s: string = 'q'; String(s is 'a'..='z');")).toBe('true');
+  expect(evaluated("String(('a'..='z').contains('m')) + String(('a'..<'m').contains('m')) + String(('a'..='z').contains(5));")).toBe('truefalsefalse');
+  expect(evaluated("let r = 'none'; try { for (const c of 'a'..='c') { r = c; } } catch (e) { r = e.constructor.name; } r;")).toBe('TypeError');
+  expect(evaluated("let r = 'none'; try { const q: any = 1; 'a'..=q; } catch (e) { r = e.constructor.name; } r;")).toBe('TypeError');
 });

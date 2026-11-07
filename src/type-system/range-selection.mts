@@ -1,4 +1,4 @@
-import { Value } from '../value.mts';
+import { Value, JSStringValue } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { Call, ToBoolean } from '../abstract-ops/all.mts';
@@ -16,6 +16,13 @@ import type { TypeRecord } from './records.mts';
  * Equivalence is the total order's equivalence, not object/value identity.
  */
 export function* RangeEndpointCompare(a: Value, b: Value): PlainEvaluator<-1 | 0 | 1> {
+  // #sec-ordered-element-types: Strings compare by code unit, as `<` does.
+  if (a instanceof JSStringValue || b instanceof JSStringValue) {
+    if (!(a instanceof JSStringValue && b instanceof JSStringValue)) return Throw.TypeError('range endpoints must be ordered with one another');
+    const left = a.stringValue();
+    const right = b.stringValue();
+    return left < right ? -1 : left > right ? 1 : 0;
+  }
   const x = exactNumericValue(a);
   const y = exactNumericValue(b);
   if (x && y && x.kind !== 'nan' && y.kind !== 'nan' && x.kind !== 'complex' && y.kind !== 'complex') {

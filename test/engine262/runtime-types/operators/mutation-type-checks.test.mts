@@ -17,7 +17,11 @@ test.each(['/=', '%='])('integer %s rejects a literal zero divisor before evalua
   expectStaticTypeError(`class C { n: uint8 = 1; } function f(c: C) { c.n ${operator} 0; }`);
   expect(ok(`function f() { let n: uint8 = 1; n ${operator} 1; } f();`)).toBe(true);
   expect(ok(`class C { operator${operator}(n: uint8): C { return this; } } const c: C = new C(); c ${operator} 0;`)).toBe(true);
-  expect(ok(`function f(n: bigint) { n ${operator} 0n; }`)).toBe(true);
+  // #sec-integer-operations: the same judgment applies to `bigint` in
+  // checked code; outside it `1n / 0n` keeps its run-time RangeError.
+  expectStaticTypeError(`function f(n: bigint) { n ${operator} 0n; }`);
+  expectStaticTypeError(`const Z = 0n; function f(n: bigint) { n ${operator} Z; }`);
+  expect(evaluated(`let r = 'none'; try { 1n ${operator.slice(0, 1)} 0n; } catch (e) { r = e.constructor.name; } r;`)).toBe('RangeError');
 });
 
 test.each(['/=', '%='])('integer %s checks the referent of a call target', (operator) => {
@@ -27,5 +31,5 @@ test.each(['/=', '%='])('integer %s checks the referent of a call target', (oper
     expect(evaluated(`let n: uint8 = 4; function loc(): ref uint8 { return ref n; } ${target} ${operator} 3; String(n);`)).toBe('1');
   }
   expect(ok(`function unused(loc: any) { loc() ${operator} 0; }`)).toBe(true);
-  expect(ok(`function unused(loc: () => ref bigint) { loc() ${operator} 0n; }`)).toBe(true);
+  expectStaticTypeError(`function unused(loc: () => ref bigint) { loc() ${operator} 0n; }`);
 });

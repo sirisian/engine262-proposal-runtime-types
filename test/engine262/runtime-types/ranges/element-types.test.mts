@@ -67,10 +67,12 @@ test('range elements: what is still not an element type', () => {
   // A type declaring no `operator<` does not satisfy `Ordered`, and the message
   // names the constraint rather than saying "must be a number".
   expectThrown('class Q { constructor(v) { this.v = v; } } new Q(1)..=new Q(5);');
-  // A string and a Date declare no `operator<` of their own, so they are refused
-  // for that reason rather than for being non-numeric.
-  expectThrown("'a'..='z';");
+  // A Date declares no `operator<` and #sec-ordered-element-types does not order
+  // it, so it is refused. A string is ordered there, by code unit, and
+  // #sec-ranges admits every ordered type but Boolean, so `'a'..='z'` is a range.
+  expect(evaluated("String(('a'..='z').contains('m'));")).toBe('true');
   expectThrown('new Date(0)..=new Date(1000);');
+  expectThrown('false..=true;');
   // Both endpoints are of ONE element type.
   expectThrown(`${P}new P(1)..=5;`);
 });

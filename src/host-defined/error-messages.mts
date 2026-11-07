@@ -111,7 +111,8 @@ export function format(arg: Formattable): string {
     case arg instanceof TypedNumberValue:
       // Read as carried, so a diagnostic about a wide value names the value the
       // program wrote rather than the nearest double to it.
-      return `${(arg as TypedNumberValue).value} (typed)`;
+      // A negative zero keeps its sign, as the Number branch above does.
+      return `${Object.is((arg as TypedNumberValue).value, -0) ? '-0' : (arg as TypedNumberValue).value} (typed)`;
     case arg instanceof BigIntValue:
       return `${String(R(arg))}n`;
     case arg instanceof SymbolValue:
@@ -502,6 +503,7 @@ export interface Throw {
   | 'a property with a declared type cannot be redefined as an accessor'
   | 'a range endpoint must be ordered, and NaN or complex values are not'
   | 'a range endpoint must be ordered: a number, a bigint, or a type declaring operator<'
+  | 'a range endpoint must be ordered: a number, a bigint, a string, or a type declaring operator<'
   | 'a range index needs the view substrate, which is not implemented'
   | 'a range is not an ordered value and cannot be compared'
   | 'a range item is not exactly representable in its numeric type'

@@ -92,6 +92,16 @@ test('a contextual type reaches through the pipe', () => {
   `)).toBe(true);
 });
 
+// #sec-pipeline-static-semantics: the topic is an immutable binding of the left
+// operand, so a literal left operand is typed at each use of the topic as a
+// constant bound to the literal is.
+test('a literal left operand adopts at each use of the topic', () => {
+  expect(evaluated('function f(v: uint8): uint8 { return v; } String(3 |> f(%) + 1);')).toBe('4');
+  expect(ok('function f(v: uint8): uint8 { return v; } const t = 3; const c: uint8 = f(t);')).toBe(true);
+  expect(ok('function f(v: uint8): uint8 { return v; } const c: uint8 = 3 |> f(%);')).toBe(true);
+  expect(ok('function f(v: uint8): uint8 { return v; } const c = 300 |> f(%);')).toBe(false);
+});
+
 test('a test on the topic narrows it', () => {
   // The topic is bound under a name no program can write, so every row of the
   // narrowing table reaches it - once the table reaches a TERNARY at all, and

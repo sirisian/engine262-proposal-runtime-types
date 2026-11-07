@@ -1,8 +1,7 @@
 import { RegisterGenericMap, CallGenericMapDelegate } from '../abstract-ops/generic-map.mts';
 import {
   Value, ObjectValue, NumberValue, BigIntValue, TypedNumberValue, isTypedNumber, wellKnownSymbols,
-  type Arguments, type FunctionCallContext,
-} from '../value.mts';
+  type Arguments, type FunctionCallContext, JSStringValue } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
@@ -29,7 +28,7 @@ import {
  * endpoint is an intrinsically ordered real numeric value (including the
  * object-backed numeric families), or a value of a type declaring `operator<`.
  */
-export type RangeEndpoint = NumberValue | BigIntValue | TypedNumberValue | ObjectValue;
+export type RangeEndpoint = NumberValue | BigIntValue | TypedNumberValue | ObjectValue | JSStringValue;
 
 /**
  * proposal-runtime-types (ranges.md "Types", #sec-ranges): the Range value and
@@ -221,8 +220,12 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   }
   // Preserve the existing refusal of nonnumeric primitive candidates. Class
   // candidates are compared by their declared ordering, without coercion.
+  // #sec-matchrange: a candidate not ordered with the range's element type is
+  // not contained; a String range orders Strings by code unit.
+  const stringRange = (self.RangeStart ?? self.RangeEnd) instanceof JSStringValue;
+  if (stringRange !== (value instanceof JSStringValue)) return Value.false;
   const numeric = exactNumericValue(value);
-  if (numeric?.kind === 'nan' || (!(value instanceof ObjectValue) && numeric === undefined)) return Value.false;
+  if (!stringRange && (numeric?.kind === 'nan' || (!(value instanceof ObjectValue) && numeric === undefined))) return Value.false;
   if (self.RangeStart !== undefined) {
     const order = Q(yield* RangeEndpointCompare(self.RangeStart, value));
     if (order > 0 || (order === 0 && self.RangeStartBound === 'open')) return Value.false;

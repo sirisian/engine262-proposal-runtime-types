@@ -43,6 +43,11 @@ test("checks rest pattern names in arrows", () => {
   expectStaticTypeError("const f=(...{0:x}:[uint8])=>{let s:string=x;};");
 });
 
-test("does not infer an array pattern from replaceable indexed storage", () => {
-  expect(ok("function f(...[x]:[].<uint8>){let s:string=x;}")).toBe(true);
+// #sec-type-annotations: an annotation on the pattern types each name taken
+// out of it, an array's names by its element type, checked where each is
+// bound. Inference from indexed storage alone still types nothing, since the
+// iterator is replaceable (#sec-static-flattening-contribution).
+test("an annotated rest pattern types its names; storage alone infers nothing", () => {
+  expectStaticTypeError("function f(...[x]:[].<uint8>){let s:string=x;}");
+  expect(ok("function f(...r:[].<uint8>){const [x] = r; let s:string=x;}")).toBe(true);
 });

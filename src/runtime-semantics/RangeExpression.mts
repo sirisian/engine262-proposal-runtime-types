@@ -1,4 +1,4 @@
-import { BigIntValue, ObjectValue } from '../value.mts';
+import { BigIntValue, ObjectValue, JSStringValue } from '../value.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { LookupClassOperator, RequireType } from '../abstract-ops/runtime-types.mts';
 import { type RangeEndpoint } from '../intrinsics/Range.mts';
@@ -62,7 +62,12 @@ export function* Evaluate_RangeExpression(node: ParseNode.RangeExpression): Valu
     if (value instanceof ObjectValue && LookupClassOperator(value, '<') !== null) {
       return value as RangeEndpoint;
     }
-    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
+    // #sec-ordered-element-types orders Strings by code unit, and #sec-ranges
+    // admits every ordered type but Boolean.
+    if (value instanceof JSStringValue) {
+      return value as RangeEndpoint;
+    }
+    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, a string, or a type declaring operator<');
   };
   let start: RangeEndpoint | undefined;
   if (RangeStart !== null) {
@@ -82,6 +87,10 @@ export function* Evaluate_RangeExpression(node: ParseNode.RangeExpression): Valu
       && (start instanceof ObjectValue) !== (end instanceof ObjectValue)
       && !(exactNumericValue(start) && exactNumericValue(end))) {
     return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
+  }
+  // A String endpoint is ordered only with another String.
+  if (start !== undefined && end !== undefined && (start instanceof JSStringValue) !== (end instanceof JSStringValue)) {
+    return Throw.TypeError('range endpoints must be ordered with one another');
   }
   // The parser's bound pair passes straight through: the node and the value model
   // carry the same shape-independent endpoint view.
