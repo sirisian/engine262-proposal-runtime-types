@@ -8005,7 +8005,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
+  // OQ1: a String's `length` and a function's `length` are Numbers, typed
+  // `number`, so a sized counter against one is refused statically and is
+  // written as a conversion; the run-time value is unchanged.
+  const stringTyped = (t: Known): boolean => t?.Kind === 'primitive' ? t.Name === 'string'
+    : t?.Kind === 'literal' ? (t as { Value?: unknown }).Value instanceof JSStringValue
+      : t?.Kind === 'union' ? t.Members.length > 0 && t.Members.every(stringTyped) : false;
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
+    if (key === 'length' && (stringTyped(receiver) || receiver?.Kind === 'function')) return makePrimitive('number');
     const range = rangePropertyType(receiver, key);
     if (range) return range;
     // Checked before the String-key and type-argument gates: the absence is a
@@ -29768,7 +29775,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const place = placeOf(subject);
     if (place === null || changesPlace(t, place)) return null;
     const typed = (lookup(place) ?? valueParameterConstraint(subject) ?? staticType(subject)) as TypeRecord | null;
-    const declared = typed ?? lengthType(subject);
+    // A length's static type is `number`, its representation, while the values
+    // it can take, the place's domain here, are an index's.
+    const length = lengthType(subject);
+    const declared = length ?? typed;
     if (!declared) return null;
     // A place declared at a source refinement carries what that refinement's
     // clauses establish, as if a narrowing transfer had just established it
@@ -29778,9 +29788,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       projectRefinementFacts([place]);
     }
     const ordered = orderedFromParts(place, declared, op, constant, rangeTest);
-    // A length place has no Static Type for the relational judgment to read,
-    // so its domain alone decides its first test.
-    return ordered && !typed ? { ...ordered, domainOnly: true } : ordered;
+    // A length place's domain alone decides its first test: its Static Type,
+    // where it has one, is the `number` that represents it.
+    return ordered && (!typed || length) ? { ...ordered, domainOnly: true } : ordered;
   };
   /**
    * An ordered assertion of a refinement's clause over a path from its

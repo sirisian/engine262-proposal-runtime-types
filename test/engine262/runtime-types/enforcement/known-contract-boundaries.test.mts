@@ -103,7 +103,9 @@ test('String index proofs use UTF-16 extent and preserve unknown or skipped stor
   expectStaticTypeError('function unused(s: "??") { delete s[1]; }');
   expect(ok('function unused(s: "abc") { s[9] = "x"; }')).toBe(true);
   expect(ok('function unused(s: any) { s.length = 0; }')).toBe(true);
-  expect(ok('function unused(s: string) { s.length ??= 0; }')).toBe(true);
+  // A String's `length` is a `number` (OQ1), never nullish, so `??=` on it is
+  // a test that can never succeed, as it is on any `number`.
+  expectStaticTypeError('function unused(s: string) { s.length ??= 0; }');
   expectStaticTypeError('function unused(s: "abc") { s.length ||= 0; }');
   expectStaticTypeError('function unused(s: "abc") { s.length &&= 0; }');
   expect(ok('function unused(n: number) { n.x = 1; }')).toBe(true);
