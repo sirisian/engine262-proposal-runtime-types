@@ -40,3 +40,13 @@ test('a String range pattern matches by code-unit containment', () => {
   expect(evaluated("let r = 'none'; try { for (const c of 'a'..='c') { r = c; } } catch (e) { r = e.constructor.name; } r;")).toBe('TypeError');
   expect(evaluated("let r = 'none'; try { const q: any = 1; 'a'..=q; } catch (e) { r = e.constructor.name; } r;")).toBe('TypeError');
 });
+
+// #sec-matchrange applies to a range written in the pattern. A bare name bound
+// to a range value is a constant compared by SameValue, since a range declares
+// no custom matcher; its spelling as a type reference is evaluated as the
+// member expression it spells.
+test('a name bound to a range value is a constant pattern', () => {
+  expect(evaluated("const r = 1..=9; const v: any = 5; match (v) { when r: 'in'; default: 'out'; };")).toBe('out');
+  expect(evaluated("const r = 1..=9; const v: any = r; match (v) { when r: 'same'; default: 'other'; };")).toBe('same');
+  expect(evaluated("const o = { r: 1..=9 }; const v: any = o.r; match (v) { when o.r: 'same'; default: 'other'; };")).toBe('same');
+});

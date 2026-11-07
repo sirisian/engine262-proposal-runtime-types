@@ -1,4 +1,4 @@
-import { SourceWhereType } from '../type-system/runtime.mts';
+import { SourceWhereType, lookupTypeParameter } from '../type-system/runtime.mts';
 import { RegisterFunctionTypeParameterScope, copyTypeParameterFrame, bindTypeParameter, implicitFalseDefaultMatches } from '../type-system/runtime.mts';
 import { DeclaredMemberImplements } from '../type-system/implements-member.mts';
 import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
@@ -20,7 +20,7 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { RequiredModuleInputFailure } from '../type-system/required-module-inputs.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols, Descriptor } from '../value.mts';
-import { DefinePropertyOrThrow } from '../abstract-ops/all.mts';
+import { DefinePropertyOrThrow, GetV } from '../abstract-ops/all.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf } from '../type-system/check.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
@@ -1511,11 +1511,18 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
       // a membership test - the form `Composite` uses - and "a matcher that
       // returns an object there is a TypeError, as parentheses on a boolean
       // matcher are, so the two protocols cannot be confused silently".
-      const nameRef = EnsureCompletion(yield* Evaluate(P.Type as never));
+      // The name is spelled as a |TypeReference|, which is not an expression:
+      // evaluate the identifier and read each member name off the value.
+      const reference = P.Type as ParseNode.Type;
+      const spelled = reference.type === 'TypeReference' && !reference.TypeArguments ? reference.TypeName : undefined;
+      const nameRef = EnsureCompletion(yield* Evaluate((spelled ? spelled.IdentifierReference : P.Type) as never));
       if (nameRef.Type !== 'normal') {
         return Q(asType);
       }
-      const named = Q(yield* GetValue(nameRef.Value as never));
+      let named = Q(yield* GetValue(nameRef.Value as never));
+      for (const member of spelled?.MemberNames ?? []) {
+        named = Q(yield* GetV(named, Value(member.name)));
+      }
       if (named instanceof ObjectValue) {
         const nameMatcher = Q(yield* GetMethod(named, wellKnownSymbols.customMatcher));
         if (nameMatcher !== Value.undefined) {
@@ -2206,12 +2213,36 @@ const specializationsInProgress = new WeakMap<Value, Map<string, { declaration: 
  * engine's rather than positional, and for a declaration already in progress.
  */
 /* eslint-disable-next-line no-unused-vars */
+/**
+ * Whether a type record still names a type parameter no application has
+ * bound, looking through tuple elements and other member records; run-time
+ * values and the declaration back-references are not type structure.
+ */
+function containsOpenParameter(record: unknown, seen = new Set<object>()): boolean {
+  if (!record || typeof record !== 'object' || record instanceof Value || seen.has(record)) return false;
+  seen.add(record);
+  if (Array.isArray(record)) return record.some((item) => containsOpenParameter(item, seen));
+  // A parameter a running frame binds is not open: a class expression in a
+  // generic function names its function's `T`, bound while the function runs.
+  if ((record as { Kind?: unknown }).Kind === 'parameter') {
+    const bound = lookupTypeParameter((record as { Name: string }).Name);
+    return bound === null || bound.Kind === 'parameter';
+  }
+  return Object.entries(record).some(([key, value]) => key !== 'Declaration' && key !== 'DeclarationIdentity'
+    && key !== 'Constructor' && key !== 'parent' && containsOpenParameter(value, seen));
+}
+
 export function* MaterializeSpecialization(
   declaration: ParseNode.ClassDeclaration,
   argRecords: readonly (TypeRecord | number)[],
   declarationConstructor?: Value,
 ): ValueEvaluator {
   if (!declarationConstructor) return undefined as never;
+  // An application whose arguments still name an unbound type parameter is
+  // open: `new C.<[...Ts, T]>(...)` inside `C` names a specialization only
+  // once `T` is bound. Materializing it formed `C.<[T]>`, whose members
+  // formed `C.<[T, T]>`, without end.
+  if (argRecords.some((record) => typeof record !== 'number' && containsOpenParameter(record))) return undefined as never;
   const family = ClassFamilyOf(declarationConstructor);
   const captured = classTypeContexts.get(family);
   if (!captured) return undefined as never;
