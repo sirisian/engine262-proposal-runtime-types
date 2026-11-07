@@ -24,3 +24,19 @@ test.each([
   "{ sealed abstract class S {} class A extends S {} class AA extends A {} class B extends S {} class C {} function f(s: S) { if (s instanceof A) {} else { let b: B = s; } } 'ok'; }",
   "enum S: string { A = 'x', B = 'y' } function f(s: S) { if (s === 'x') {} } 'ok';",
 ])("a test a closed set leaves open is accepted: %s", (source) => expect(ok(source)).toBe(true));
+
+// #sec-instanceof-operator: an earlier `instanceof` on a class's instances, and
+// a read of a typed field the class declares, have no intervening effect, so a
+// later test the sealed hierarchy settles is still judged. A member the class
+// does not declare as a typed field may be, or become, an accessor, and keeps
+// the test open.
+test.each([
+  "{ sealed abstract class S { n: uint8 = 1; } class A extends S {} class B extends S {} function f(s: S) { if (s instanceof A) {} else { s.n; if (s instanceof A) {} } } }",
+  "{ sealed abstract class S { #n = 1; m() { return this.#n; } } class A extends S {} class B extends S {} function f(s: S) { if (s instanceof A) {} else { if (s instanceof B) {} else {} if (s instanceof A) {} } } }",
+])("a settled test after an earlier test or a field read is refused: %s", expectStaticTypeError);
+
+test.each([
+  "{ sealed abstract class S { n: uint8 = 1; } class A extends S {} class B extends S {} function f(s: S) { if (s instanceof A) {} else { s.m; if (s instanceof A) {} } } } 'ok';",
+  "{ sealed abstract class S { n = 1; } class A extends S {} class B extends S {} function f(s: S) { if (s instanceof A) {} else { s.n; if (s instanceof A) {} } } } 'ok';",
+  "{ sealed abstract class S { get n() { return 1; } } class A extends S {} class B extends S {} function f(s: S) { if (s instanceof A) {} else { s.n; if (s instanceof A) {} } } } 'ok';",
+])("a member read that may run an accessor leaves the later test open: %s", (source) => expect(ok(source)).toBe(true));

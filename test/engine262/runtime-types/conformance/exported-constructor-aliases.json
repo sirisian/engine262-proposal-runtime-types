@@ -3309,11 +3309,12 @@
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -3354,11 +3355,12 @@
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {

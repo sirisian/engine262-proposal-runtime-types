@@ -13191,6 +13191,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * and the form is left alone.
    */
   const nominalProtocolScreens = new Map<ParseNode, ReturnType<typeof GlobalBindingMutations>>();
+  const settlingInstanceTests = new Set<ParseNode>();
   const nominalProtocolStable = (expression: ParseNode): boolean => {
     // A module API can be invoked by a consumer outside this dependency graph.
     // Without an escape/caller proof its deferred guards cannot assume that
@@ -13223,6 +13224,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return candidate.type === 'RelationalExpression' && candidate.operator === 'instanceof'
         && candidate.ShiftExpression === expression;
     };
+    // An earlier `instanceof` whose class passed this same proof, on a subject
+    // whose static type is a class's instances, runs no user code: the class
+    // has no `@@hasInstance` of its own, `Function.prototype`'s cannot be
+    // replaced, and a class instance is no proxy, its chain being made by
+    // class definitions that only an operation this screen refuses could
+    // relink. Each test is judged once; a test met again while it is being
+    // judged is not excused.
+    const settledInstanceTest = (candidate: ParseNode): boolean => {
+      if (candidate.type !== 'RelationalExpression' || candidate.operator !== 'instanceof'
+        || !candidate.RelationalExpression || !candidate.ShiftExpression || candidate.ShiftExpression === expression) return false;
+      if (!declaredReceiverClass(candidate.RelationalExpression)) return false;
+      if (settlingInstanceTests.has(candidate)) return false;
+      settlingInstanceTests.add(candidate);
+      try {
+        return !!nominalInstanceTarget(candidate.ShiftExpression);
+      } finally {
+        settlingInstanceTests.delete(candidate);
+      }
+    };
     const scalarTarget = (type: ParseNode.Type): boolean => {
       if (type.type === 'PredefinedType') return ['any', 'void', 'number', 'string', 'boolean', 'bigint'].includes(type.keyword);
       if (type.type !== 'TypeReference' || type.TypeArguments || type.TypeName.MemberNames.length) return false;
@@ -13238,16 +13258,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return true;
     };
+    // A field initialized by `null` whose annotation admits null converts
+    // nothing, whatever else the annotation names.
+    const admitsNull = (type: ParseNode.Type): boolean => (type.type === 'PredefinedType' && type.keyword === 'null')
+      || (type.type === 'UnionType' && type.Types.some(admitsNull));
+    const nullStoredInNullable = (annotation: ParseNode.TypeAnnotation): boolean => {
+      const field = annotation.parent;
+      return field?.type === 'FieldDefinition' && !!field.Initializer && unparenthesized(field.Initializer).type === 'NullLiteral'
+        && admitsNull(annotation.Type);
+    };
     const constructed = new Map<ParseNode, boolean>();
     const constructorBodyIsTransparent = (node: ParseNode): boolean => {
       const origin = stableClassOrigin(node, new Set(), false, true);
-      if (!origin || origin.arguments || origin.declaration.TypeParameters || origin.declaration.ClassTail.ClassHeritage
+      if (!origin || origin.arguments || origin.declaration.TypeParameters
         || origin.declaration.Decorators?.length || origin.declaration.ClassTail.ClassBody?.some((element) =>
           element.type === 'MethodDefinition' && !element.static && element.ClassElementName.type === 'IdentifierName'
           && element.ClassElementName.name === 'constructor')) return false;
       let answer = constructed.get(origin.declaration);
       if (answer === undefined) {
-        answer = intrinsicSourceIsStable(origin.declaration, realm, undefined, undefined, (annotation) => scalarTarget(annotation.Type));
+        // #sec-elision-stability: a default derived constructor runs only its
+        // parent's construction, so heritage passes where the parent does.
+        constructed.set(origin.declaration, false);
+        const heritage = origin.declaration.ClassTail.ClassHeritage;
+        answer = (!heritage || constructorBodyIsTransparent(heritage)) && intrinsicSourceIsStable(origin.declaration, realm, undefined, undefined,
+          (annotation) => scalarTarget(annotation.Type) || nullStoredInNullable(annotation));
         constructed.set(origin.declaration, answer);
       }
       return answer;
@@ -13257,6 +13291,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // membership, not the absence of effects in its constructor or fields.
     const completedMembership = (from: ParseNode.Type, to: ParseNode.Type, budget = { remaining: 1024 }): boolean => {
       if (--budget.remaining < 0) return false;
+      // A reference converts no value: its admission compares the referent types.
+      if (to.type === 'ReferenceType') return completedMembership(from, to.Type, budget);
+      if (from.type === 'ReferenceType') return completedMembership(from.Type, to, budget);
       if (from.type === 'UnionType') return from.Types.every((part) => completedMembership(part, to, budget));
       if (to.type === 'UnionType') return to.Types.some((part) => completedMembership(from, part, budget));
       if (from.type === 'PredefinedType' && from.keyword === 'null') return to.type === 'PredefinedType' && to.keyword === 'null';
@@ -13277,9 +13314,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return true;
     };
     const transparentNominalAdmission = (source: ParseNode | undefined, type: ParseNode.Type, admitted?: ParseNode.Type): boolean => {
+      // A reference converts no value: admission to `ref T` is admission to T.
+      if (type.type === 'ReferenceType') return transparentNominalAdmission(source, type.Type, admitted);
       if (admitted) return completedMembership(admitted, type);
       if (!source) return false;
       const value = unparenthesized(source);
+      const parent = value.parent;
+      const read = !(parent?.type === 'AssignmentExpression' && parent.LeftHandSideExpression === value) && parent?.type !== 'UpdateExpression';
+      const field = read ? typedFieldOf(value) : undefined;
+      if (field) return completedMembership(field.TypeAnnotation!.Type, type);
       // A null admitted where the target admits null converts nothing.
       const admitsNull = (target: ParseNode.Type): boolean => (target.type === 'PredefinedType' && target.keyword === 'null')
         || (target.type === 'UnionType' && target.Types.some(admitsNull));
@@ -13300,6 +13343,75 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       return matches(type);
     };
+    // A read or a write of a typed field a class declares, on a receiver whose
+    // static type is that class's instances, reaches the typed storage its
+    // construction defined, which can be neither deleted nor redefined, so no
+    // accessor sits in front of it. An untyped field can be; a decorated or
+    // `accessor` field may not be data. A write's value must also be admitted
+    // without conversion.
+    // The class a receiver's binding declares, never its type narrowed at the
+    // point being judged: the access may have run where narrowing differed.
+    // A `const` initialized by `new C()`, or a plain parameter or declarator
+    // annotated with a class nothing reassigns; every value of either is an
+    // instance of that class.
+    const declaredReceiverClass = (receiver: ParseNode): ParseNode | undefined => {
+      const reference = unparenthesized(receiver);
+      if (reference.type !== 'IdentifierReference') return undefined;
+      const declaration = ResolveWrittenBindingDeclaration(reference, reference.name);
+      if (!declaration) return undefined;
+      if (declaration.kind === 'const' && declaration.initializer && unparenthesized(declaration.initializer).type === 'NewExpression') {
+        const origin = stableClassOrigin((unparenthesized(declaration.initializer) as ParseNode.NewExpression).MemberExpression, new Set(), false, true);
+        return origin && !origin.arguments ? origin.declaration : undefined;
+      }
+      let annotation: ParseNode.Type | undefined;
+      const node = declaration.node as ParseNode & { [key: string]: unknown };
+      if (declaration.kind === 'parameter') {
+        for (const key of ['FormalParameters', 'UniqueFormalParameters', 'ArrowParameters', 'PropertySetParameterList']) {
+          const list = node[key];
+          for (const element of (Array.isArray(list) ? list : list ? [list] : []) as ParseNode[]) {
+            if (element?.type === 'SingleNameBinding' && element.BindingIdentifier?.name === reference.name) {
+              annotation = element.Ref || element.Optional ? undefined : element.TypeAnnotation?.Type;
+            }
+          }
+        }
+      } else if (['let', 'const', 'var'].includes(declaration.kind) && !node.Ref
+        && (node.BindingIdentifier as { name?: string } | undefined)?.name === reference.name) {
+        annotation = (node.TypeAnnotation as ParseNode.TypeAnnotation | null | undefined)?.Type;
+      }
+      if (annotation?.type !== 'TypeReference' || annotation.TypeArguments || annotation.TypeName.MemberNames.length) return undefined;
+      const name = annotation.TypeName.IdentifierReference;
+      const found = ResolveWrittenBindingDeclaration(name, name.name);
+      return found?.kind === 'class' && found.node.type === 'ClassDeclaration' && lexicalUnassigned(name, name.name) === true ? found.node : undefined;
+    };
+    const typedFieldOf = (member: ParseNode): ParseNode.FieldDefinition | undefined => {
+      if (member.type !== 'MemberExpression' || member.Expression) return undefined;
+      const name = member.IdentifierName?.name;
+      const privateName = (member as { PrivateIdentifier?: ParseNode.PrivateIdentifier | null }).PrivateIdentifier?.name;
+      if (name === undefined && privateName === undefined) return undefined;
+      const seen = new Set<ParseNode>();
+      for (let declaration: ParseNode | undefined = declaredReceiverClass(member.MemberExpression); declaration;) {
+        if ((declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression') || seen.has(declaration)) return undefined;
+        seen.add(declaration);
+        const field = declaration.ClassTail.ClassBody?.find((element) => element.type === 'FieldDefinition' && !element.static
+          && (privateName !== undefined
+            ? element.ClassElementName.type === 'PrivateIdentifier' && element.ClassElementName.name === privateName
+            : element.ClassElementName.type === 'IdentifierName' && element.ClassElementName.name === name)) as ParseNode.FieldDefinition | undefined;
+        if (field) return field.Decorators?.length || field.accessor || !field.TypeAnnotation ? undefined : field;
+        const heritage = declaration.ClassTail.ClassHeritage;
+        if (!heritage) return undefined;
+        const base = stableClassOrigin(heritage, new Set(), false, true);
+        if (!base || base.arguments) return undefined;
+        declaration = base.declaration;
+      }
+      return undefined;
+    };
+    const declaredFieldAccess = (candidate: ParseNode): boolean => {
+      const parent = candidate.parent;
+      const write = parent?.type === 'AssignmentExpression' && parent.LeftHandSideExpression === candidate;
+      if (write && parent.AssignmentOperator !== '=' || parent?.type === 'UpdateExpression') return false;
+      const field = typedFieldOf(candidate);
+      return !!field && (!write || transparentNominalAdmission(parent.AssignmentExpression, field.TypeAnnotation!.Type));
+    };
     const screen = (source: ParseNode, module?: AbstractModuleRecord): boolean => {
       const endpoint = source === root ? expression : undefined;
       let mutations = source === root ? globalBindingMutations : nominalProtocolScreens.get(source);
@@ -13319,6 +13431,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (candidate.type === 'ImportDeclaration') return sources.has(source);
         if (selectedTest(candidate)) return true;
+        if (settledInstanceTest(candidate)) return true;
+        if (declaredFieldAccess(candidate)) return true;
         if (candidate.type === 'MemberExpression' && namespaceClassOrigin(candidate)) return true;
         if (candidate.parent?.type === 'NewExpression' && candidate.parent.MemberExpression === candidate) {
           return constructorBodyIsTransparent(candidate);

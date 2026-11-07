@@ -152,9 +152,24 @@
       }
     },
     {
-      "name": "local-mutable-runtime",
+      "name": "local-mutable-static",
       "modules": {
         "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-mutable-captured-write-runtime",
+      "modules": {
+        "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const Selected=C.<string>;let Hidden=Selected;function swap(){Hidden=Selected;}swap();const result:boolean=new Hidden(\"ok\").get();"
       },
       "expected": {
         "status": "rejected",
@@ -316,16 +331,18 @@
       }
     },
     {
-      "name": "local-copy-mutable-runtime",
+      "name": "local-copy-mutable-static",
       "modules": {
         "main": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}const First=C.<string>;const Selected=(First);let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -480,16 +497,18 @@
       }
     },
     {
-      "name": "class-expression-mutable-runtime",
+      "name": "class-expression-mutable-static",
       "modules": {
         "main": "const Selected=(class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}).<string>;let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -660,18 +679,19 @@
       }
     },
     {
-      "name": "named-mutable-runtime",
+      "name": "named-mutable-static",
       "modules": {
         "main": "import {Selected} from \"dep\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -842,18 +862,19 @@
       }
     },
     {
-      "name": "namespace-mutable-runtime",
+      "name": "namespace-mutable-static",
       "modules": {
         "main": "import * as ns from \"dep\";let Hidden=ns.Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -1024,18 +1045,19 @@
       }
     },
     {
-      "name": "namespace-copy-mutable-runtime",
+      "name": "namespace-copy-mutable-static",
       "modules": {
         "main": "import * as ns from \"dep\";const Selected=ns.Selected;let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -1206,18 +1228,19 @@
       }
     },
     {
-      "name": "default-mutable-runtime",
+      "name": "default-mutable-static",
       "modules": {
         "main": "import Selected from \"dep\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -1388,18 +1411,19 @@
       }
     },
     {
-      "name": "default-namespace-mutable-runtime",
+      "name": "default-namespace-mutable-static",
       "modules": {
         "main": "import * as ns from \"dep\";let Hidden=ns.default;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;"
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -1586,7 +1610,7 @@
       }
     },
     {
-      "name": "reexport-mutable-runtime",
+      "name": "reexport-mutable-static",
       "modules": {
         "main": "import {Selected} from \"bridge\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Original=C.<string>;",
@@ -1594,12 +1618,12 @@
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "bridge",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -1786,7 +1810,7 @@
       }
     },
     {
-      "name": "default-reexport-mutable-runtime",
+      "name": "default-reexport-mutable-static",
       "modules": {
         "main": "import {Selected} from \"bridge\";let Hidden=Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export default C.<string>;",
@@ -1794,12 +1818,12 @@
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "bridge",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -1986,7 +2010,7 @@
       }
     },
     {
-      "name": "nested-namespace-mutable-runtime",
+      "name": "nested-namespace-mutable-static",
       "modules": {
         "main": "import * as ns from \"bridge\";let Hidden=ns.nested.Selected;const result:boolean=new Hidden(\"ok\").get();",
         "dep": "class C<T:type=string,U:type=T>{value:U;constructor(value:U){this.value=value;}get(){return this.value;}static id(x:U):U{return x;}}export const Selected=C.<string>;",
@@ -1994,12 +2018,12 @@
       },
       "expected": {
         "status": "rejected",
-        "bodyEntries": [
-          "dep",
-          "bridge",
-          "main"
-        ],
-        "errorClass": "TypeError"
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {

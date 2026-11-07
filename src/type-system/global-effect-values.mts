@@ -26,29 +26,42 @@ const isNode = (value: unknown): value is Node => !!value && typeof value === 'o
 const parameterKeys = ['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'];
 const newFlow = (): Flow => ({ values: new Set(), users: new Set() });
 
+// A `null` stored where the annotation admits null converts nothing, whatever
+// else the annotation names.
+const admitsNull = (type: ParseNode.Type): boolean => (type.type === 'PredefinedType' && type.keyword === 'null')
+  || (type.type === 'UnionType' && type.Types.some(admitsNull));
+
+// An imaginary literal makes a fresh complex value, and negating one is the
+// built-in negation: a literal's plain receiver takes no operator block.
 const literalInitializer = (value: unknown): boolean => {
   if (!isNode(value)) return false;
-  if (value.type === 'UnaryExpression' && value.operator === '-') {
-    const operand = value.UnaryExpression as Node | undefined;
-    return operand?.type === 'NumericLiteral' && !operand.Imaginary;
-  }
-  if (value.type === 'NumericLiteral') return !value.Imaginary;
-  return ['StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(value.type);
+  if (value.type === 'UnaryExpression' && value.operator === '-') return (value.UnaryExpression as Node | undefined)?.type === 'NumericLiteral';
+  return ['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(value.type);
 };
 
 /**
  * #sec-class-value-origin-order, #sec-elision-stability: whether constructing a
- * source class runs no user code. Heritage, a decorator, an explicit
- * constructor or an instance field computed by an expression could. Methods,
+ * source class runs no user code. Heritage other than a transparently
+ * constructed class nothing reassigns, a decorator, an explicit constructor or
+ * an instance field computed by an expression could. Methods,
  * accessors and operators run only when invoked, and static elements when the
  * class is defined, so none of them belongs to construction. A literal stored
  * in an untyped or intrinsic field converts nothing. A generic, partial or
  * otherwise modified class is not judged from this one body.
  */
 export function TransparentlyConstructedClass(node: ClassNode, intrinsicAdmission: (type: ParseNode.Type) => string | undefined,
-  propertyKey: (node: ParseNode) => string | undefined): boolean {
+  propertyKey: (node: ParseNode) => string | undefined, parentClass?: (heritage: ParseNode) => ClassNode | undefined,
+  seen = new Set<ClassNode>()): boolean {
   const tail = node.ClassTail;
-  if (tail.ClassHeritage || node.Decorators?.length || node.TypeParameters || node.ClassModifiers?.length || tail.WhereClauses?.length) return false;
+  if (node.Decorators?.length || node.TypeParameters || node.ClassModifiers?.length || tail.WhereClauses?.length || seen.has(node)) return false;
+  // A default derived constructor runs only its parent's construction: it
+  // reads its own prototype, an ordinary function's, and passes the
+  // arguments through without the iterator protocol.
+  if (tail.ClassHeritage) {
+    seen.add(node);
+    const parent = parentClass?.(tail.ClassHeritage);
+    if (!parent || !TransparentlyConstructedClass(parent, intrinsicAdmission, propertyKey, parentClass, seen)) return false;
+  }
   for (const element of tail.ClassBody ?? []) {
     if ((element as { Decorators?: readonly unknown[] | null }).Decorators?.length) return false;
     switch (element.type) {
@@ -59,7 +72,8 @@ export function TransparentlyConstructedClass(node: ClassNode, intrinsicAdmissio
       case 'FieldDefinition':
         if (element.static) break;
         if (element.accessor || element.Initializer && !literalInitializer(element.Initializer)
-          || element.TypeAnnotation && !intrinsicAdmission(element.TypeAnnotation.Type)) return false;
+          || element.TypeAnnotation && !intrinsicAdmission(element.TypeAnnotation.Type)
+            && !(element.Initializer?.type === 'NullLiteral' && admitsNull(element.TypeAnnotation.Type))) return false;
         break;
       case 'OperatorDefinition': case 'ClassStaticBlock':
         break;
@@ -98,6 +112,8 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   globalData: (key: string) => Value | undefined,
   unknown: readonly string[],
   optional: (node: ParseNode) => ParseNode,
+  /** The class declaration a heritage expression names through a binding nothing writes. */
+  parentClass?: (heritage: ParseNode) => ClassNode | undefined,
 }): {
   boundInvocation: (node: ParseNode | undefined) => boolean,
   origins: (node: ParseNode | undefined) => Set<string>,
@@ -126,7 +142,7 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   const transparentClass = (node: ClassNode): boolean => {
     let answer = transparentClasses.get(node);
     if (answer === undefined) {
-      answer = TransparentlyConstructedClass(node, options.intrinsicAdmission, options.propertyKey);
+      answer = TransparentlyConstructedClass(node, options.intrinsicAdmission, options.propertyKey, options.parentClass);
       transparentClasses.set(node, answer);
     }
     return answer;
@@ -1264,7 +1280,17 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
   // accessors by index count, as an object literal's would. Any other operator
   // keeps operations that consult the prototype opaque.
   const classPrototype = (node: ClassNode, constructor: Flow): Aggregate => {
-    const prototype = aggregate(); prototype.prototype = options.objectPrototype; prototype.classPrototype = node;
+    const prototype = aggregate(); prototype.classPrototype = node;
+    const heritage = node.ClassTail.ClassHeritage;
+    if (heritage) {
+      // A derived class's prototype inherits from its parent's.
+      prototype.prototypeFlow = newFlow(); prototype.initialPrototypeEffects = true;
+      watch(expression(heritage), (value) => {
+        const parent = propertiesOf(value);
+        if (parent?.sourceClass && classPrototypes.has(parent.sourceClass)) edge(slot(parent, 'prototype'), prototype.prototypeFlow!);
+        else add(prototype.prototypeFlow!, 'opaque-value');
+      });
+    } else prototype.prototype = options.objectPrototype;
     prototype.ownKeys.add('constructor'); edge(constructor, slot(prototype, 'constructor'));
     classPrototypes.set(node, prototype);
     for (const element of node.ClassTail.ClassBody ?? []) {
@@ -1309,7 +1335,12 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
     instance.prototypeFlow = newFlow(); instance.initialPrototypeEffects = true;
     add(instance.prototypeFlow, prototype);
     created.set(node, instance);
-    for (const element of node.ClassTail.ClassBody ?? []) {
+    const chain: ClassNode[] = [];
+    for (let at: ClassNode | undefined = node; at && !chain.includes(at);) {
+      chain.unshift(at);
+      at = at.ClassTail.ClassHeritage ? options.parentClass?.(at.ClassTail.ClassHeritage) : undefined;
+    }
+    for (const element of chain.flatMap((cls) => cls.ClassTail.ClassBody ?? [])) {
       if (element.type !== 'FieldDefinition' || element.static) continue;
       const name = element.ClassElementName;
       const key = name.type === 'PrivateIdentifier' ? privateKey(name) : options.propertyKey(name);
@@ -1612,6 +1643,9 @@ export function GlobalEffectValues(nodes: readonly ParseNode[], options: {
       nativeValue(options.external(node), result);
       if (options.opaqueGlobalRead(node)) opaque(result, node);
     } else if (['ParenthesizedExpression', 'TypeArgumentsExpression'].includes(node.type)) edge(expression(node.Expression), result);
+    // A reference reads the values its location holds; `ref x` carries those
+    // of `x`, including the admission that initialized it.
+    else if (node.type === 'RefExpression') edge(expression(node.Expression), result);
     else if (node.type === 'OptionalExpression') {
       if (node.MemberExpression.type !== 'NullLiteral') edge(expression(options.optional(node)), result);
     } else if (node.type === 'CommaOperator') edge(expression(node.ExpressionList.at(-1)), result);

@@ -1126,7 +1126,7 @@
     {
       "name": "non-nominal-scatter-control",
       "modules": {
-        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);let effects=0;let caught=false;try{a[0]={get x(){effects++;return 3;}};}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(effects,0);"
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);let effects=0;let caught=false;const value:any={get x(){effects++;return 3;}};try{a[0]=value;}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(effects,0);"
       },
       "expected": {
         "status": "fulfilled",
@@ -1136,6 +1136,24 @@
         "bodyEntries": [
           "main"
         ]
+      }
+    },
+    {
+      "name": "non-nominal-literal-scatter-static",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);let effects=0;let caught=false;try{a[0]={get x(){effects++;return 3;}};}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(effects,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
       }
     },
     {

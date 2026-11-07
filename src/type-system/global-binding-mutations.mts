@@ -3,7 +3,7 @@ import { ResolveInitializedBinding, type EnvironmentRecord } from '../execution-
 import type { Realm } from '../execution-context/Realm.mts';
 import { ObjectValue, Value, wellKnownSymbols } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
-import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
+import { AddWrittenNames, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { intrinsicEffectOrigin } from './intrinsic-effect-origin.mts';
 import { GlobalEffectValues, TransparentlyConstructedClass } from './global-effect-values.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
@@ -306,6 +306,19 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     intrinsicTypeNames.set(type, spelling);
     return spelling;
   };
+  // The class declaration a heritage expression names through a binding no
+  // assignment in the source writes; a direct eval may write any.
+  const writtenNames = new Set<string>();
+  for (const node of nodes) AddWrittenNames(node, writtenNames);
+  const directEval = nodes.some((node) => node.type === 'CallExpression' && node.CallExpression.type === 'IdentifierReference'
+    && node.CallExpression.name === 'eval');
+  const parentClass = (heritage: ParseNode): ParseNode.ClassDeclaration | undefined => {
+    let reference = heritage;
+    while (reference.type === 'ParenthesizedExpression') reference = reference.Expression;
+    if (directEval || reference.type !== 'IdentifierReference' || writtenNames.has(reference.name)) return undefined;
+    const declaration = ResolveBindingDeclaration(reference, reference.name);
+    return declaration?.kind === 'class' && declaration.node.type === 'ClassDeclaration' ? declaration.node : undefined;
+  };
   const collectValues = () => GlobalEffectValues(nodes, {
     objectPrototype: realm.Intrinsics['%Object.prototype%'],
     arrayPrototype: realm.Intrinsics['%Array.prototype%'],
@@ -368,6 +381,7 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
       return false;
     },
     nativeOrigins, globalData: (key) => intrinsicData(realm.GlobalObject, Value(key)), unknown: allOrigins, optional: (node) => optionalView(node as Node),
+    parentClass: (heritage) => parentClass(heritage),
   });
   let values = collectValues();
   // Builtin type spellings are value bindings too. A property/reflection alias
@@ -627,6 +641,6 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
   // One judgment of transparent construction, with this source's intrinsic
   // type spellings, for every analysis that relies on it.
   const transparentlyConstructed = (node: ParseNode.ClassDeclaration | ParseNode.ClassExpression): boolean =>
-    TransparentlyConstructedClass(node, intrinsicAdmission, (key) => propertyKey(key as Node));
+    TransparentlyConstructedClass(node, intrinsicAdmission, (key) => propertyKey(key as Node), parentClass);
   return { affects, mayPrecede, admissionsAreTransparent, bindingIsStableAtKnownInvocations, transparentlyConstructed };
 }

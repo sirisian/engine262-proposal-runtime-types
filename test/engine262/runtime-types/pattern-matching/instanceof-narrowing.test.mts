@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown, ok } from '../harness.mts';
 
 /**
  * Spec: #sec-narrowing (the narrowing-forms table).
@@ -55,15 +55,28 @@ test('a sealed hierarchy dispatches through it', () => {
       return sh.s;
     }
     String(area(new Square()));`)).toBe('2');
-  // A second test there can never fail, and `return 0` can never run (#sec-narrowfrom).
-  expectStaticTypeError(`sealed abstract class Shape { }
+  // Where the classes are local, a second test there can never fail, and
+  // `return 0` can never run (#sec-narrowfrom); the earlier test calls no hook
+  // (#sec-instanceof-operator).
+  expectStaticTypeError(`{ sealed abstract class Shape { }
+    class Circle extends Shape { r: float32 = 1; }
+    class Square extends Shape { s: float32 = 2; }
+    function area(sh: Shape): float32 {
+      if (sh instanceof Circle) { return 1; }
+      if (sh instanceof Square) { return 2; }
+      return 0;
+    } }`);
+  // Script-global classes read in a body this source never calls establish
+  // nothing: a later Script can replace either before the first call
+  // (#sec-class-value-origin-order), so the second test stays a run-time test.
+  expect(ok(`sealed abstract class Shape { }
     class Circle extends Shape { r: float32 = 1; }
     class Square extends Shape { s: float32 = 2; }
     function area(sh: Shape): float32 {
       if (sh instanceof Circle) { return sh.r; }
       if (sh instanceof Square) { return sh.s; }
       return 0;
-    }`);
+    }`)).toBe(true);
 });
 
 test('the other narrowing forms are unaffected', () => {

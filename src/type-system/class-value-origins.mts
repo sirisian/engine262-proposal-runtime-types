@@ -169,10 +169,10 @@ export function ClassValueOrigins(root: ParseNode,
   // #sec-class-value-origin-order: a potential call withdraws only the mutable
   // evidence it may affect, judged by its footprint as sec-elision-stability's
   // global mutation footprints are. A call of a function declaration the
-  // source never reassigns may write what its body, transitively, writes; a
-  // construction of a class the source never reassigns writes nothing when the
-  // class is transparently constructed (#sec-elision-stability). Every other
-  // operation may reach every global.
+  // source never reassigns may write what its body, transitively, writes.
+  // Every other operation may reach every global, except the construction of
+  // a transparently constructed class, which #sec-elision-stability says has
+  // no effect of its own (see `effect`).
   const literalOnly = (value: unknown): boolean => {
     const node = unwrap(value);
     if (!node) return false;
@@ -190,6 +190,140 @@ export function ClassValueOrigins(root: ParseNode,
   const transparentClass = (callee: unknown): boolean => {
     const found = declarationOf(callee, 'class', 'ClassDeclaration');
     return !!found && transparentlyConstructed(found.node as unknown as ParseNode.ClassDeclaration);
+  };
+  // A class declaration whose identity is established at _at_: a binding
+  // that is not a Script global, or a Script's own straight-line code
+  // (#sec-class-value-origin-order 962).
+  const establishedClass = (reference: unknown, at: Node): Node | undefined => {
+    const found = declarationOf(reference, 'class', 'ClassDeclaration');
+    return found && (!found.binding.global || ownerOf(at) === root) ? found.node : undefined;
+  };
+  // A binding's own annotation: a plain parameter's, found in its function's
+  // parameter list (the declaration names the function), or a `let`, `const`
+  // or `var` declarator's. A reference or optional parameter has none here.
+  const bindingAnnotation = (declaration: BindingDeclaration, name: string): ParseNode.Type | undefined => {
+    const node = declaration.node as Node;
+    if (declaration.kind === 'parameter') {
+      for (const key of ['FormalParameters', 'UniqueFormalParameters', 'ArrowParameters', 'PropertySetParameterList']) {
+        const list = node[key];
+        for (const element of (Array.isArray(list) ? list : list ? [list] : []) as Node[]) {
+          if (element?.type === 'SingleNameBinding' && (element.BindingIdentifier as { name?: string } | undefined)?.name === name) {
+            return element.Ref || element.Optional ? undefined : (element.TypeAnnotation as ParseNode.TypeAnnotation | undefined)?.Type;
+          }
+        }
+      }
+      return undefined;
+    }
+    if (!['let', 'const', 'var'].includes(declaration.kind) || node.Ref
+      || (node.BindingIdentifier as { name?: string } | undefined)?.name !== name) return undefined;
+    return (node.TypeAnnotation as ParseNode.TypeAnnotation | null | undefined)?.Type;
+  };
+  // The class whose instance a receiver binding holds: a `const` initialized
+  // by `new C()`, or a binding annotated with the class itself, whose every
+  // value is admitted as an instance of it and so is no Proxy.
+  const receiverClass = (receiver: unknown, at: Node): Node | undefined => {
+    const reference = unwrap(receiver);
+    if (reference?.type !== 'IdentifierReference') return undefined;
+    const declaration = bindingAt(reference, reference.name as string)?.declaration;
+    if (!declaration) return undefined;
+    if (declaration.kind === 'const' && unwrap(declaration.initializer)?.type === 'NewExpression') {
+      const construction = unwrap(declaration.initializer)!;
+      return construction.Arguments !== undefined ? establishedClass(construction.MemberExpression, construction) : undefined;
+    }
+    const annotation = bindingAnnotation(declaration, reference.name as string);
+    if (annotation?.type !== 'TypeReference' || annotation.TypeArguments || annotation.TypeName.MemberNames.length) return undefined;
+    return establishedClass(annotation.TypeName.IdentifierReference, at);
+  };
+  const admitsNull = (type: ParseNode.Type): boolean => (type.type === 'PredefinedType' && type.keyword === 'null')
+    || (type.type === 'UnionType' && type.Types.some(admitsNull));
+  // A value admitted to a field's annotation without conversion: `null` where
+  // the annotation admits null, or a construction of a class it names.
+  const admittedWithoutConversion = (value: unknown, type: ParseNode.Type, at: Node): boolean => {
+    const node = unwrap(value);
+    if (node?.type === 'NullLiteral') return admitsNull(type);
+    if (node?.type !== 'NewExpression') return false;
+    const constructed = establishedClass(node.MemberExpression, at);
+    const names = (t: ParseNode.Type): boolean => t.type === 'UnionType' ? t.Types.some(names)
+      : t.type === 'TypeReference' && !t.TypeArguments && !t.TypeName.MemberNames.length
+        && establishedClass(t.TypeName.IdentifierReference, at) === constructed;
+    return !!constructed && names(type);
+  };
+  // A subject whose every value is a class's instance, and so no Proxy: a
+  // `const` initialized by `new C()`, or a binding annotated with a class.
+  const subjectIsInstance = (subject: unknown): boolean => {
+    const reference = unwrap(subject);
+    if (reference?.type !== 'IdentifierReference') return false;
+    const declaration = bindingAt(reference, reference.name as string)?.declaration;
+    if (!declaration) return false;
+    if (declaration.kind === 'const' && unwrap(declaration.initializer)?.type === 'NewExpression') {
+      return !!declarationOf(unwrap(declaration.initializer)!.MemberExpression, 'class', 'ClassDeclaration');
+    }
+    const annotation = bindingAnnotation(declaration, reference.name as string);
+    return annotation?.type === 'TypeReference' && !annotation.TypeArguments && !annotation.TypeName.MemberNames.length
+      && !!declarationOf(annotation.TypeName.IdentifierReference, 'class', 'ClassDeclaration');
+  };
+  // #sec-instanceof-operator: an `instanceof` whose subject is a class's
+  // instance and whose right operand is an established class, none of whose
+  // chain declares a decorator or a static member a computed key could make a
+  // hook, calls no hook and meets no proxy. Only code that received the class
+  // could have installed a hook, and reaching that code was an effect that
+  // already withdrew every Script global; so the test withdraws only bindings
+  // some code writes.
+  const settledInstanceTest = (node: Node, state: State): boolean => {
+    if (node.operator !== 'instanceof' || !subjectIsInstance(node.RelationalExpression)) return false;
+    const target = unwrap(node.ShiftExpression);
+    if (target?.type !== 'IdentifierReference') return false;
+    const origin = read(target, state);
+    if (!origin || origin.deeper || origin.arguments || (origin.source as Node).type !== 'ClassDeclaration') return false;
+    const seen = new Set<Node>();
+    for (let cls: Node | undefined = origin.source as Node; cls; seen.add(cls)) {
+      if (seen.has(cls) || (cls.Decorators as unknown[] | null | undefined)?.length) return false;
+      for (const element of ((cls.ClassTail as Node).ClassBody as Node[] | null | undefined) ?? []) {
+        if ((element.Decorators as unknown[] | null | undefined)?.length) return false;
+        const name = element.ClassElementName as Node | undefined;
+        if (element.static && (name?.type === 'PropertyName' || name?.ComputedPropertyName)) return false;
+      }
+      const heritage: unknown = (cls.ClassTail as Node).ClassHeritage;
+      if (!heritage) return true;
+      cls = declarationOf(heritage, 'class', 'ClassDeclaration')?.node;
+      if (!cls) return false;
+    }
+    return false;
+  };
+  const withdrawWritten = (state: State): void => {
+    for (const binding of state.values.keys()) {
+      if (!binding.immutable && (written.has(binding) || captured.has(binding))) state.values.delete(binding);
+    }
+  };
+  // #sec-instanceof-operator: a read, or a `=` write, of a typed field that the
+  // receiver's class or an ancestor declares without a decorator or `accessor`
+  // reaches typed storage, which can be neither deleted nor redefined, so no
+  // accessor runs; a write must also convert nothing. Such an access has no
+  // effect, so it withdraws no evidence.
+  const inertFieldAccess = (member: Node): boolean => {
+    if (member.Expression) return false;
+    const parent = member.parent as Node | undefined;
+    const write = parent?.type === 'AssignmentExpression' && parent.LeftHandSideExpression === member;
+    if (write && parent.AssignmentOperator !== '=' || parent?.type === 'UpdateExpression') return false;
+    const name = (member.IdentifierName as { name?: string } | undefined)?.name;
+    const privateName = (member.PrivateIdentifier as { name?: string } | undefined)?.name;
+    if (name === undefined && privateName === undefined) return false;
+    const seen = new Set<Node>();
+    for (let cls = receiverClass(member.MemberExpression, member); cls && !seen.has(cls);) {
+      seen.add(cls);
+      const field = ((cls.ClassTail as Node).ClassBody as Node[] | null | undefined ?? []).find((element) => element.type === 'FieldDefinition'
+        && !element.static && (privateName !== undefined
+          ? (element.ClassElementName as Node).type === 'PrivateIdentifier' && (element.ClassElementName as { name: string }).name === privateName
+          : (element.ClassElementName as Node).type === 'IdentifierName' && (element.ClassElementName as { name: string }).name === name));
+      if (field) {
+        const annotation = (field.TypeAnnotation as ParseNode.TypeAnnotation | null | undefined)?.Type;
+        if ((field.Decorators as unknown[] | null | undefined)?.length || field.accessor || !annotation) return false;
+        return !write || admittedWithoutConversion(parent!.AssignmentExpression, annotation, member);
+      }
+      const heritage = (cls.ClassTail as Node).ClassHeritage;
+      cls = heritage ? establishedClass(heritage, member) : undefined;
+    }
+    return false;
   };
   const footprints = new Map<Node, Set<string> | null>();
   const footprintOf = (fn: Node): Set<string> | null => {
@@ -260,7 +394,21 @@ export function ClassValueOrigins(root: ParseNode,
     if (at.type === 'NewExpression') return transparentClass(at.MemberExpression) ? new Set() : null;
     return null;
   };
+  // Constructing a transparently constructed class has no effect of its own
+  // (#sec-elision-stability), a required judgment, so it withdraws nothing and
+  // marks nothing optional. That holds where the class's identity is
+  // established: a binding that is not a Script global, or a Script's own
+  // straight-line code. A deferred body can see a Script-global class that a
+  // later Script installed (#sec-class-value-origin-order 962), so there the
+  // footprint below keeps evidence as optional deeper analysis.
+  const transparentConstruction = (at: Node): boolean => {
+    if (at.type !== 'NewExpression') return false;
+    const found = declarationOf(at.MemberExpression, 'class', 'ClassDeclaration');
+    return !!found && transparentlyConstructed(found.node as unknown as ParseNode.ClassDeclaration)
+      && (!found.binding.global || ownerOf(at) === root);
+  };
   const effect = (state: State, at: Node, dynamic = false, all = false): void => {
+    if (!dynamic && !all && transparentConstruction(at)) return;
     const footprint = dynamic || all ? null : operationFootprint(at);
     for (const binding of state.values.keys()) {
       const shadowable = dynamic && !at.strict && binding.owner !== ownerOf(at);
@@ -296,6 +444,15 @@ export function ClassValueOrigins(root: ParseNode,
     // the shared global-effect proof at this actual read, not a snapshot of
     // the global cell when the function was declared.
     const value = binding && state.values.get(binding);
+    // A class declaration that is not a Script global, and that nothing in
+    // the source writes, holds its class at every read that succeeds; a read
+    // before initialization throws. So a deferred body sees that class
+    // whatever its entry state (#sec-class-value-origin-order: facts that
+    // remain valid at entry). A Script global can be replaced by a later
+    // Script, so its deferred reads keep the rule below.
+    if (!value && binding?.declaration.kind === 'class' && !binding.global && !written.has(binding)) {
+      return { source: binding.declaration.node };
+    }
     if (!value?.deferredGlobal) return value;
     if (!globalBindingIsStable(node as ParseNode.IdentifierReference)) return undefined;
     // This expression has now captured the value. A later alias is not a
@@ -456,7 +613,7 @@ export function ClassValueOrigins(root: ParseNode,
         const target = unwrap(node.LeftHandSideExpression);
         if (target?.type !== 'IdentifierReference') visit(node.LeftHandSideExpression, state);
         const initial = visit(node.AssignmentExpression, state);
-        if (target?.type !== 'IdentifierReference') effect(state, node);
+        if (target?.type !== 'IdentifierReference' && !(target?.type === 'MemberExpression' && inertFieldAccess(target))) effect(state, node);
         store(target, node.AssignmentOperator === '=' && target?.type === 'IdentifierReference' ? initial : undefined, state);
         return observe(node, node.AssignmentOperator === '=' ? initial : undefined);
       }
@@ -478,7 +635,8 @@ export function ClassValueOrigins(root: ParseNode,
           BitwiseANDExpression: ['A', 'B'], BitwiseORExpression: ['A', 'B'], BitwiseXORExpression: ['A', 'B'],
         };
         for (const key of operands[node.type]) visit(node[key], state);
-        effect(state, node);
+        if (node.type === 'RelationalExpression' && settledInstanceTest(node, state)) withdrawWritten(state);
+        else effect(state, node);
         return undefined;
       }
       case 'CallExpression': case 'NewExpression': {
@@ -491,7 +649,7 @@ export function ClassValueOrigins(root: ParseNode,
       case 'MemberExpression':
         visit(node.MemberExpression, state);
         visit(node.Expression, state);
-        effect(state, node);
+        if (!inertFieldAccess(node)) effect(state, node);
         // Module namespace origin is separately proved by the linked checker.
         return observe(node, { source: node });
       case 'IfStatement': case 'ConditionalExpression': {
