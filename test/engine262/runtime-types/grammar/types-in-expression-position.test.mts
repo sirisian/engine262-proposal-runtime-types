@@ -210,7 +210,11 @@ test('expression evaluation', () => {
   // type", and "where the expression's Static Type shows a value that is not generic
   // it is a type error"; that refusal is pinned in the next test.
   expect(evaluated('function f<T: type>() { return "seven"; } f.<uint8>();').stringValue()).toBe('seven');
-  expect(evaluated('((3 := uint8) is uint8) === true && (3 is uint8) === false && ("s" is uint8) === false ? "ok" : "no";').stringValue()).toBe('ok');
+  // Each operand is `any`, so each `is` is evaluated at run time. With their own
+  // Static Types the tests are settled, and in checked code a settled test is
+  // refused as dead code (#sec-narrowfrom).
+  expect(evaluated('const a: any = (3 := uint8); const b: any = 3; const c: any = "s"; (a is uint8) === true && (b is uint8) === false && (c is uint8) === false ? "ok" : "no";').stringValue()).toBe('ok');
+  expect(evaluated('try { eval(\'((3 := uint8) is uint8) === true ? "ok" : "no";\'); "ran"; } catch (e) { e.constructor.name; }').stringValue()).toBe('StaticTypeError');
   // A method's specialization is receiver-independent and a call supplies
   // `this` as any member call does (#sec-generic-function-values).
   expect(evaluated('const o = { m<T: type>() { return this === o ? "bound" : "lost"; } }; o.m.<uint8>();').stringValue()).toBe('bound');

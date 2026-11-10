@@ -7605,6 +7605,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
     case 'ComputedType': {
       const pendingDefault = deferredFamilyDefault(node, lookupTypeParameter);
       if (pendingDefault) return { ...pendingDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
+      const pendingApplication = deferredOverUnboundParameter(node, lookupTypeParameter);
+      if (pendingApplication) return { ...pendingApplication, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
       // #sec-evaluatebuildercall: the callee evaluates and is called with the
       // evaluated arguments; the result must be a Type Object.
       const completion = EnsureCompletion(yield* evaluateComputedType(node));
@@ -8208,7 +8210,7 @@ function ExtentNamesOpenParameter(expression: unknown): boolean {
 }
 
 import { intrinsicDeclarationRecord, intrinsicDeclarationName } from './records.mts';
-import { prepareFamilyPattern, finishFamilyPattern, FamilyWildcardName, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
+import { prepareFamilyPattern, finishFamilyPattern, FamilyWildcardName, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault, deferredOverUnboundParameter } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint } from './records.mts';
 

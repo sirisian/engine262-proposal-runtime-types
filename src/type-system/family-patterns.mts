@@ -44,6 +44,30 @@ export function deferredFamilyDefault(node: ParseNode.Type, lookup: (name: strin
     DefaultNode: node, OperandNames: [...bindings.keys()] };
 }
 
+/**
+ * #sec-deferred-applications: a builder call whose arguments name a type
+ * parameter nothing has bound yet - a generic class's field at its
+ * unspecialized declaration - is carried as an application and evaluated at
+ * specialization. Its arguments are expressions, so evaluating them now would
+ * read the parameter's binding before it is initialized.
+ */
+export function deferredOverUnboundParameter(node: ParseNode.ComputedType, lookup: (name: string) => TypeRecord | null): TypeRecord | undefined {
+  const bindings = new Map<string, TypeRecord>();
+  let unbound = false;
+  for (const argument of node.Arguments) {
+    walk(argument as ParseNode, (part) => {
+      const name = part.type === 'IdentifierReference' ? part.name : undefined;
+      const record = name ? lookup(name) : null;
+      if (!name || !record) return;
+      bindings.set(name, record);
+      if (record.Kind === 'parameter') unbound = true;
+    });
+  }
+  if (!unbound) return undefined;
+  return { Kind: 'deferred', Operator: node, Operands: [...bindings.values()],
+    DefaultNode: node, OperandNames: [...bindings.keys()] };
+}
+
 /** Defer the whole written default so nested computations also evaluate forward. */
 export function deferredDeclarationDefault(node: ParseNode.Type, lookup: (name: string) => TypeRecord | null): TypeRecord | undefined {
   if (!resolvingPattern || node.parent?.type !== 'TypeParameter' || node.parent.TypeParameterDefault !== node) return undefined;

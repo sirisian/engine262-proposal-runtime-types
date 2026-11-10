@@ -57,9 +57,14 @@ test('a nested record inside the metadata round-trips', () => {
   // Recursion is over CONTAINERS, and a marker is not the only one: a metadata
   // portion may be an ordinary nested record. This is the shape that proves the
   // conversion recurses generally rather than special-casing `__pattern`.
-  expect(evaluated("const T = Reflect.makeType({ kind: 'parameterized', base: uint32,"
+  // The top level is a flat record of claimed keys, and the values under them
+  // nest freely (#sec-metadata-decomposition), so `extra` is claimed first.
+  expect(evaluated("type X = { extra: any }; meta X { default = { extra: {} }; subtype(a, b) { return true; } }"
+    + " const T = Reflect.makeType({ kind: 'parameterized', base: uint32,"
     + " metadata: { brand: 'a', extra: { deep: 'v' } } });"
     + ' String(Reflect.makeType(Reflect.getReflection(T)) === T);')).toBe('true');
+  // Unclaimed, the same key is refused at the construction.
+  expectThrown("Reflect.makeType({ kind: 'parameterized', base: uint32, metadata: { brand: 'a', extra: { deep: 'v' } } });");
 });
 
 test('a SYMBOL-tagged brand round-trips, and its identity survives', () => {
@@ -133,8 +138,12 @@ test('a reflected `metadata` is readable, on both leaf kinds', () => {
     + ' String(Reflect.getReflection(B).metadata.brand);')).toBe('UserId');
   expect(evaluated('type Px = string.<{ pattern: /^a$/ }>;'
     + ' String(Reflect.getReflection(Px).metadata.pattern.source);')).toBe('^a$');
+  // A pattern reaches a reflected description as a RegExp value, and a member
+  // named `__pattern` carries no authority (#sec-metadata-decomposition).
   expect(evaluated('type Px = string.<{ pattern: /^a$/ }>;'
-    + ' String(Reflect.getReflection(Px).metadata.pattern.__pattern);')).toBe('true');
+    + ' String(Reflect.getReflection(Px).metadata.pattern instanceof RegExp);')).toBe('true');
+  expect(evaluated('type Px = string.<{ pattern: /^a$/ }>;'
+    + ' String(Reflect.getReflection(Px).metadata.pattern.__pattern);')).toBe('undefined');
 });
 
 test('the entry check refuses a metadata node that is not a plain record', () => {

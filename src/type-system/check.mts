@@ -6686,12 +6686,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         'LexicalBinding', 'VariableDeclaration', 'Catch'].includes(node.type)) {
         const annotation = (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
         if (annotation) {
+          let specialized: Known = null;
           typeParameterScopes.push(scoped);
           try {
-            requireBindingType(substituteTypeParameters(resolveType(annotation.Type), scoped));
+            specialized = substituteTypeParameters(resolveType(annotation.Type), scoped);
           } finally {
             typeParameterScopes.pop();
           }
+          // An alias applied to an open parameter is retained as its application
+          // (#sec-generic-specialization): close its arguments and apply it, so
+          // `V.<T>` for `type V<T: type> = T` is `void` under `T = void`.
+          if (specialized?.Kind !== 'void') {
+            for (const check of typeArgumentApplicationChecks.get(annotation.Type as unknown as GenericDefaultCheck['application']) ?? []) {
+              if (check.declaration?.type !== 'TypeAliasDeclaration') continue;
+              const args = check.parameters.map((parameter) => {
+                const bound = check.bindings.get(parameter.Name);
+                return bound ? substituteFreeTypeParameters(bound, scoped, undefined, inputs) : null;
+              });
+              if (args.some((a) => !a || mentionsTypeParameter(a))) continue;
+              const applied = resolveClosedAliasApplication(check.declaration, args as TypeRecord[]);
+              if (applied?.Kind === 'void') {
+                specialized = applied;
+                break;
+              }
+            }
+          }
+          requireBindingType(specialized);
         }
       }
       for (const obligation of variadicObligations.get(node) ?? []) {
@@ -11162,10 +11182,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         fail(`it has no \`${member.key}\``);
         continue;
       }
+      // A read compared over a parameter is deferred to its bindings; the
+      // write below is judged on its own either way.
       const wanted = substituteTypeParameters(member.type, bindings) ?? member.type;
-      if (mentionsTypeParameter(wanted) || mentionsTypeParameter(own.type)) continue;
-      if (!IsAssignable(own.type, wanted) || (own.type.Kind === 'function' && wanted.Kind === 'function'
-        && !IsCallableContractSubtype(own.type, wanted))) {
+      if (!mentionsTypeParameter(wanted) && !mentionsTypeParameter(own.type) && (!IsAssignable(own.type, wanted)
+        || (own.type.Kind === 'function' && wanted.Kind === 'function' && !IsCallableContractSubtype(own.type, wanted)))) {
         fail(`its \`${String(member.key)}\` is ${displayType(own.type)}, not assignable to ${displayType(wanted)}`);
       }
       // Methods are callable obligations. Fields and accessor setters also
@@ -44047,7 +44068,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // class over its own parameters, so a nested class there may extend
             // it.
             {
-              const origin = heritageOriginOf(n);
+              // A plain name in this type position denotes its declaration
+              // (#sec-parameterized-types), which is not the constructor value a
+              // deferred body may read (#sec-class-value-origin-order), so a
+              // generic class nothing reassigns needs no stable origin here.
+              let origin: ClassOrigin | undefined = heritageOriginOf(n);
+              if (!origin) {
+                let name: ParseNode = heritage;
+                while (name.type === 'ParenthesizedExpression') name = name.Expression;
+                const declared = name.type === 'IdentifierReference' ? ResolveWrittenBindingDeclaration(name, name.name) : undefined;
+                if (declared?.kind === 'class' && declared.node.type === 'ClassDeclaration' && name.type === 'IdentifierReference'
+                  && lexicalUnassigned(name, name.name) === true) origin = { declaration: declared.node } as ClassOrigin;
+              }
               const baseDeclaration = origin?.declaration;
               const baseList = (baseDeclaration as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters;
               let nested = false;

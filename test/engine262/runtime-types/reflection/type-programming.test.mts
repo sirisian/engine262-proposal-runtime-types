@@ -47,8 +47,10 @@ test('type builders: Reflect.typeOf in type position is the type of a value', ()
   // and a read of a `let` is not (#sec-iscompiletimeevaluable).
   expect(evaluated('const x = (5 := uint8); type T = Reflect.typeOf(x); (T === uint8) ? "yes" : "no";')).toBe('yes');
   // a value of that type passes the membership test, one not of it does not
-  expect(evaluated('let s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('yes');
-  expect(evaluated('let s = "hi"; (42 is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('no');
+  expect(evaluated('const s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('const s = "hi"; (42 is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('no');
+  // and the same query over a `let` is refused, since its read is not compile-time evaluable
+  expectThrown('let s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";');
 });
 
 test('type builders: an indexed-access type is the type of the named property', () => {

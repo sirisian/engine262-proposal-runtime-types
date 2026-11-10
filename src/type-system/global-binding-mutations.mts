@@ -1,5 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ResolveInitializedBinding, type EnvironmentRecord } from '../execution-context/Environment.mts';
+import { DeclarativeEnvironmentRecord, ResolveInitializedBinding, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import { ObjectValue, Value, wellKnownSymbols } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
@@ -293,7 +293,13 @@ export function GlobalBindingMutations(root: ParseNode, environment: Environment
     const spelling = name.IdentifierReference.name;
     if (spelling === 'undefined' && externalValue(spelling) === Value.undefined) return spelling;
     if (!/^(?:any|void|string|boolean|number|bigint|uint(?:8|16|32|64)?|int(?:8|16|32|64)?|float(?:16|32|64))$/.test(spelling)
-        || environment !== realm.GlobalEnv || realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(spelling))) return undefined;
+        || realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(spelling))) return undefined;
+    // A console entry or an eval is checked in declarative environments nested
+    // in the global one; none of them may hold a binding of this spelling, and
+    // an object environment (`with`) may hold any.
+    for (let at: EnvironmentRecord | null = environment; at !== realm.GlobalEnv; at = at.OuterEnv) {
+      if (!(at instanceof DeclarativeEnvironmentRecord) || at.bindings.has(Value(spelling))) return undefined;
+    }
     // These spellings fall back to intrinsic types only when no value binding
     // exists. Prove absence from raw ordinary descriptors; never run a getter.
     const seen = new Set<ObjectValue>();

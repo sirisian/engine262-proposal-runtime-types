@@ -1330,11 +1330,14 @@ test('an array method takes the index type, not `number`', () => {
   expect(accepts(`${A}a.at(0);`)).toBe(true);
   expect(accepts(`${A}a.indexOf((1 := uint8), 0);`)).toBe(true);
 
-  // A foreign argument is still refused, in the index position and the element
-  // position alike.
-  expect(accepts(`${A}a.at("s");`)).toBe(false);
-  expect(accepts(`${A}a.fill((1 := uint8), "s");`)).toBe(false);
+  // A foreign element is still refused. A relative-index or count argument is a
+  // quantity input that keeps the base language's coercion, at its ordinary
+  // evaluation position (#sec-typed-array-deletion-and-removal), so a string
+  // there is coerced at run time as it is in the base language.
   expect(accepts(`${A}a.includes("s");`)).toBe(false);
+  expect(accepts(`${A}a.at("s");`)).toBe(true);
+  expect(accepts(`${A}a.fill((1 := uint8), "s");`)).toBe(true);
+  expect(accepts(`${A}a.at(-1);`)).toBe(true);
 
   // The entries that already took the index type keep their answers.
   expect(accepts(`${A}a.slice((0 := uint64));`)).toBe(true);
