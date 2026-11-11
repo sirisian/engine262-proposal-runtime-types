@@ -28,3 +28,28 @@ test('an implementer may weaken an inherited clause over a parameter, never stre
   expect(evaluated("interface I { m(x: uint8): void where x > 10; } class C implements I { m(x: uint8): void where x > 5 {} } 'ok';")).toBe('ok');
   refused('interface I { m(x: uint8): void where x > 10; } class C implements I { m(x: uint8): void where x > 20 {} }', 'rt-implements-contract');
 });
+
+// #sec-generic-where: a signature's clauses are judged where it is declared,
+// under the generic parameters of the interface or object type that declares
+// it, as a method's are under its class's. An operator member's signature is
+// one of them.
+const signatureRefused = (source: string, rule: string): void => {
+  expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule } });
+};
+
+test('an interface\'s value parameter is a subject of its signatures\' clauses', () => {
+  signatureRefused('interface I<N: uint8> { m(): void where N > 300; }', 'rt-numeric-range');
+  signatureRefused('interface I<N: uint8> { m(): void where N > 5 where N < 3; }', 'rt-impossible-test');
+  signatureRefused('interface I<N: uint8> { x: [N].<uint8>; m(): void where N > 300; }', 'rt-numeric-range');
+  expect(observeScript("interface I<N: uint8> { m(): void where N > 5; } 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
+});
+
+test('a generic object type\'s value parameter is one too', () => {
+  signatureRefused('type O<N: uint8> = { m(): void where N > 5 where N < 3 };', 'rt-impossible-test');
+});
+
+test('an interface\'s operator signature has its clauses judged', () => {
+  signatureRefused('interface I { operator+(r: uint8): uint8 where r > 300; }', 'rt-numeric-range');
+  signatureRefused('interface I { operator+(r: uint8): uint8 where r > 5 where r < 3; }', 'rt-impossible-test');
+  expect(observeScript("interface I { operator+(r: uint8): uint8 where r > 5; } 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
+});

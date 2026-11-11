@@ -789,8 +789,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // each name is bound once.
       const parameters = check.closed ? [] : [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
         .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()]
-        // A specialization's list binds only the positions it fixes.
-        .filter((parameter) => !check.unreachableSpecialization || check.bindings.has(parameter.BindingIdentifier.name));
+        // A specialization's list binds only the positions it fixes, and a
+        // default's check only the parameters that have one.
+        .filter((parameter) => (!check.unreachableSpecialization && !check.unreachableDefault) || check.bindings.has(parameter.BindingIdentifier.name));
       const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
@@ -873,6 +874,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           X(scope.CreateImmutableBinding(Value(name), Value.true));
           X(scope.InitializeBinding(Value(name), value));
         }
+        // A constant that is evaluated where the clause is, a fresh aggregate
+        // of constants, gives no verdict where it cannot be built.
+        let undecided = false;
         for (const [name, literal] of check.values ?? []) {
           const raw = (literal as { Value: unknown }).Value;
           let value = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
@@ -882,10 +886,22 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           if (source) {
             const built = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(source as never))));
             if (built.Type === 'normal') value = built.Value;
+            else if ((literal as { EvaluatedSource?: boolean }).EvaluatedSource) undecided = true;
           }
           X(scope.CreateImmutableBinding(Value(name), Value.true));
           X(scope.InitializeBinding(Value(name), value));
         }
+        let returned: Value | undefined;
+        if (check.returnValue) {
+          const raw = (check.returnValue as { Value: unknown }).Value;
+          returned = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+          if (check.returnSource) {
+            const built = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.returnSource as never))));
+            if (built.Type === 'normal') returned = built.Value;
+            else undecided = true;
+          }
+        }
+        if (undecided) continue;
         context.LexicalEnvironment = scope;
         pushTypeParameterFrame(frame);
         // An imported helper can read this consumer again through a cycle.
@@ -895,10 +911,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         BeginFragmentEvaluation();
         let result;
         try {
-          if (check.returnValue) {
-            const raw = (check.returnValue as { Value: unknown }).Value;
-            PushContractReturn(raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint));
-          }
+          if (check.returnValue) PushContractReturn(returned!);
           let self: Value = Value.undefined;
           if (check.thisLiteral) {
             const evaluated = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.thisLiteral as never))));
