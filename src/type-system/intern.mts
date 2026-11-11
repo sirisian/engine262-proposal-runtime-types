@@ -505,6 +505,24 @@ function metKey(x: TypeRecord, y: TypeRecord): string {
   return a1 < b1 ? `${a1}\u0000${b1}` : `${b1}\u0000${a1}`;
 }
 
+/**
+ * A refinement read as its base and its `where` predicates, innermost first,
+ * or *undefined* for a type that is not one: a parameterization that carries
+ * anything but a `where` is another meta type's business.
+ */
+export function WhereChainOf(t: TypeRecord): { root: TypeRecord, predicates: unknown[] } | undefined {
+  const predicates: unknown[] = [];
+  let root = t;
+  while (root.Kind === 'parameterized') {
+    const metadata = (root as unknown as { Metadata: Record<string, unknown> }).Metadata;
+    const keys = Object.keys(metadata);
+    if (keys.length !== 1 || keys[0] !== 'where') break;
+    predicates.unshift(metadata.where);
+    root = (root as unknown as { Base: TypeRecord }).Base;
+  }
+  return predicates.length > 0 && root.Kind !== 'parameterized' ? { root, predicates } : undefined;
+}
+
 /** A meet the checking pass computed, keyed by DISPLAY: a canonical record is computed structurally and is not identity-stable. */
 export function SetMetResolution(left: TypeRecord, right: TypeRecord, met: TypeRecord, metaType: object): void {
   let byPair = metResolutions.get(metaType);

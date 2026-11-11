@@ -73,7 +73,7 @@ import {
   setAliasApplicationImpl,
   badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument, UnderlyingOf } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
-import { CanonicalizeType, isTypeObject } from './intern.mts';
+import { CanonicalizeType, isTypeObject, WhereChainOf } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration as ResolveWrittenBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
 import { DiscriminatingChainOf } from './DiscriminatingChain.mts';
@@ -4310,9 +4310,77 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `this`; a value failing the refinement is refused where it is written
    * rather than by the boundary at run time (round 5, Gap 5).
    */
+  /** The source clauses of a refinement, innermost first, where every predicate has one and reads no generic binding. */
+  const sourceClausesOf = (type: TypeRecord): { root: TypeRecord, clauses: ParseNode.WhereClause[] } | undefined => {
+    // In the checker a declared refinement is its declaration: a nominal
+    // record that keeps the alias's clauses over its structure.
+    if (type.Kind === 'nominal') {
+      const named = type as unknown as { Declaration?: ParseNode & { WhereClauses?: readonly ParseNode.WhereClause[] | null, TypeParameters?: unknown }, CapturedBindings?: readonly unknown[] };
+      if (named.Declaration?.type !== 'TypeAliasDeclaration' || !named.Declaration.WhereClauses?.length
+        || named.Declaration.TypeParameters || named.CapturedBindings?.length) return undefined;
+      const structure = structureOf(type as Known) as TypeRecord | null;
+      if (!structure) return undefined;
+      const inner = sourceClausesOf(structure);
+      return { root: inner?.root ?? structure, clauses: [...(inner?.clauses ?? []), ...named.Declaration.WhereClauses] };
+    }
+    const chain = WhereChainOf(type);
+    if (!chain) return undefined;
+    const clauses: ParseNode.WhereClause[] = [];
+    for (const predicate of chain.predicates) {
+      const origin = SourceWhereOrigin(predicate);
+      if (!origin || origin.bindings.size > 0) return undefined;
+      clauses.push(origin.clause);
+    }
+    return { root: chain.root, clauses };
+  };
+  /**
+   * Whether two refinements of one base, read as one clause sequence over
+   * `this`, leave some place no value. The walk is the declaration-time
+   * judgment's; nothing it reports is kept.
+   */
+  const refinementsShareNoValue = (first: TypeRecord, second: TypeRecord): boolean => {
+    const a = sourceClausesOf(first);
+    const b = sourceClausesOf(second);
+    if (!a || !b || !SameType(a.root, b.root)) return false;
+    const before = captureFlow();
+    const wasJudging = judgingRetainedObligations;
+    const mark = errors.length;
+    frames.push(emptyFrame());
+    thisTypeFrames.push(a.root as Known);
+    try {
+      judgingRetainedObligations = true;
+      for (const clause of [...a.clauses, ...b.clauses]) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseAssigns(predicate) || whereClauseNamesReturn(predicate)) continue;
+        const outcome = walkRefinementPredicate(predicate);
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+      const suffix = piecesKey('');
+      for (const frame of frames) {
+        for (const name of (frame as { narrowed?: Set<string> }).narrowed ?? []) {
+          if (name.endsWith(suffix) && piecesFact(name.slice(0, -suffix.length))?.length === 0) return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      thisTypeFrames.pop();
+      frames.pop();
+      judgingRetainedObligations = wasJudging;
+      errors.splice(mark);
+      restoreFlow(before);
+    }
+  };
   const constantRefinementSites: [ParseNode, ParseNode.TypeAnnotation, ParseNode][] = [];
   const recordRefinementCheck = (site: ParseNode, annotation: ParseNode.TypeAnnotation, sourceNode: ParseNode): void => {
     let source = sourceNode;
+    let writtenType = annotation.Type as ParseNode & { type?: string, Type?: ParseNode.Type };
+    while (writtenType?.type === 'ParenthesizedType' && writtenType.Type) writtenType = writtenType.Type as typeof writtenType;
+    if (writtenType?.type === 'IntersectionType') {
+      for (const member of (writtenType as unknown as { Types: readonly ParseNode.Type[] }).Types) recordRefinementCheck(site, { Type: member } as ParseNode.TypeAnnotation, sourceNode);
+      return;
+    }
     const written = annotation.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] }, TypeArguments?: unknown };
     const typeName = written.type === 'TypeReference' ? written.TypeName : null;
     if (!typeName?.IdentifierReference?.name || typeName.MemberNames?.length || written.TypeArguments) return;
@@ -4320,7 +4388,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const alias = aliasNodes.get(name);
     if (!alias || alias.type !== 'TypeAliasDeclaration' || (alias as { TypeParameters?: unknown }).TypeParameters) return;
     const clauses = (alias as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
-    if (!clauses?.length) return;
+    if (!clauses?.length) {
+      // An alias of an intersection of refinements: each member decides.
+      const body = (alias as { Type?: ParseNode.Type | null }).Type;
+      if (body?.type === 'IntersectionType') recordRefinementCheck(site, { Type: body } as ParseNode.TypeAnnotation, sourceNode);
+      return;
+    }
     // A `const` bound to a fresh literal supplies `this` as the literal does.
     if (source.type === 'IdentifierReference' && !assignedNames.has(source.name)) {
       const origin = ResolveBindingDeclaration(source, source.name);
@@ -7787,6 +7860,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (members.length >= 2 && members.every((m) => m.Kind === 'parameterized')
         && new Set(members.map((m) => displayType((m as { Base: TypeRecord }).Base))).size === 1) {
         crossingChecks.push({ node: at, value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
+        return;
+      }
+    }
+    // #sec-where-clauses: an intersection of refinements admits the values
+    // every one of them admits, so a value crosses into it by crossing into
+    // each, where each predicate is evaluated.
+    if (target.Kind === 'intersection' && !mentionsTypeParameter(target)) {
+      const members = (target as { Members?: readonly TypeRecord[] }).Members ?? [];
+      if (members.length >= 2 && members.every((m) => refinementBaseOf(m) !== null)) {
+        // A constant reaches each refinement through its base, as it reaches
+        // one written alone; the predicate is decided where it is evaluated.
+        for (const member of members) {
+          let through: TypeRecord = member;
+          for (let base = source.Kind === 'literal' ? refinementBaseOf(through) : null; base; base = refinementBaseOf(through)) through = base;
+          requireAssignable(source, through as Known, at);
+        }
         return;
       }
     }
@@ -16231,7 +16320,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
             for (let j = i + 1; j < Members.length; j += 1) {
-              if (AreDisjoint(Members[i], Members[j])) {
+              // #sec-where-clauses: two refinements of one base written in
+              // source are judged as one clause sequence, and a pair that
+              // leaves a place no value is a contradiction written in source.
+              if (AreDisjoint(Members[i], Members[j]) || refinementsShareNoValue(Members[i] as TypeRecord, Members[j] as TypeRecord)) {
                 reportedEmptyIntersections.add(node);
                 const completion = CreateTypeDiagnostic('rt-empty-intersection', node, diagnosticPhase, 'no value is of both $1 and $2, so their intersection is never', Value(displayType(Members[i])), Value(displayType(Members[j]))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
@@ -28634,12 +28726,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             seen.add(type);
             if (type.Kind === 'parameterized') type = type.Base;
             else if (type.Kind === 'nominal' && refinementBaseOf(type)) type = structureOf(type)!;
+            // Refinements that intersect share their base.
+            else if (type.Kind === 'intersection' && type.Members.length > 0 && type.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)) type = type.Members[0] as TypeRecord;
             else break;
           }
           return type;
         };
         const seen = new Set<TypeRecord>();
-        for (let type: Known = written; type && !seen.has(type);) {
+        // An intersection of refinements holds every member's clauses.
+        const refinedMembers = written.Kind === 'intersection' && written.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)
+          ? written.Members as readonly Known[] : [written];
+        for (const member of refinedMembers) for (let type: Known = member; type && !seen.has(type);) {
           seen.add(type);
           if (type.Kind === 'parameterized') {
             const origin = SourceWhereOrigin(type.Metadata.where);
@@ -30167,6 +30264,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       seen.add(base);
       if (base.Kind === 'parameterized') base = base.Base as TypeRecord;
       else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
+      // Refinements that intersect are ordered as the base they share.
+      else if (base.Kind === 'intersection' && base.Members.length > 0 && base.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)) base = base.Members[0] as TypeRecord;
     }
     return base;
   };
