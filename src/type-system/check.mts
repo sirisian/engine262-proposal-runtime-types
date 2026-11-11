@@ -30843,8 +30843,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (judgingRetainedObligations) declarePieces(nextX.length === 0 ? x : y, []);
             return false;
           }
-          if (!same(nextX, xs)) { declarePieces(x, nextX); changed = true; }
-          if (!same(nextY, ys)) { declarePieces(y, nextY); changed = true; }
+          if (!same(nextX, xs)) {
+            declarePieces(x, nextX);
+            changed = true;
+          }
+          if (!same(nextY, ys)) {
+            declarePieces(y, nextY);
+            changed = true;
+          }
         }
       }
       if (!changed) break;

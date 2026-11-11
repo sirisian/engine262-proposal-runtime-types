@@ -17,12 +17,18 @@ const verdictOf = (source: string): string => {
   for (const [key, descriptor] of value?.properties ?? []) if (key?.stringValue?.() === 'message') return descriptor?.Value?.stringValue?.() ?? '';
   return '';
 };
-const neverSucceeds = (source: string): void => { expect(verdictOf(source)).toContain('can never succeed'); };
-const neverFails = (source: string): void => { expect(verdictOf(source)).toContain('can never fail'); };
+const neverSucceeds = (source: string): void => {
+  expect(verdictOf(source)).toContain('can never succeed');
+};
+const neverFails = (source: string): void => {
+  expect(verdictOf(source)).toContain('can never fail');
+};
 const unsatisfied = (source: string): void => {
   expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-where-unsatisfied' } });
 };
-const accepted = (source: string): void => { expect(observeScript(source)).toMatchObject({ completion: { Type: 'normal' } }); };
+const accepted = (source: string): void => {
+  expect(observeScript(source)).toMatchObject({ completion: { Type: 'normal' } });
+};
 const call2 = ' function g(x: uint8, y: uint8) { return f(x, y); } ';
 
 test('one place compared with itself is decided', () => {
