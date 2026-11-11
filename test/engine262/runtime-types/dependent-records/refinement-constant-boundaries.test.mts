@@ -52,3 +52,30 @@ test('a value that is not a constant is left to the boundary', () => {
   expect(evaluated(`${SMALL}function f(v: uint8): Small { return v := Small; } function h(k: uint8) { return f(k); } String(h(5));`)).toBe('5');
   accepted('function f(v: uint8): Small { return v := Small; }');
 });
+
+test('a generic parameter default and a yield decide', () => {
+  refused('function f<N: Small = 20>(): void {}');
+  refused('function* g(): Generator.<Small> { yield 20; }');
+  expect(evaluated(`${SMALL}function* g(): Generator.<Small> { yield 5; } String([...g()].length);`)).toBe('1');
+});
+
+test('each constant of a fresh aggregate decides at its position', () => {
+  refused('const a: [2].<Small> = [1, 20];');
+  refused('const t: [Small, Small] = [1, 20];');
+  refused('const o: { a: Small } = { a: 20 };');
+  expect(evaluated(`${SMALL}const a: [2].<Small> = [1, 2]; String(a.length);`)).toBe('2');
+  expect(evaluated(`${SMALL}const o: { a: Small } = { a: 5 }; String(o.a);`)).toBe('5');
+});
+
+test('a return that is never reached is not judged', () => {
+  accepted('function f(): Small { return 1; return 20; }');
+  accepted("function f(): Small { throw new Error('x'); return 20; }");
+});
+
+test('a refinement of a refinement admits a constant that satisfies both', () => {
+  const NESTED = 'type Low = uint8 where this < 10; type Mid = Low where this > 3; ';
+  expect(evaluated(`${NESTED}let x: Mid = 5; String(x);`)).toBe('5');
+  expect(evaluated(`${NESTED}function f(x: Mid) { return x; } String(f(5));`)).toBe('5');
+  expect(observeScript(`${NESTED}let x: Mid = 20;`)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
+  expect(observeScript(`${NESTED}let x: Mid = 2;`)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
+});

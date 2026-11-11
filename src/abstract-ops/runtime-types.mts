@@ -2368,11 +2368,15 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // is entered by converting to the primitive and then checking the refinement
   // (round 5 follow-up, Q17): `(5 := P)` for `type P = uint8 where this > 2`
   // used to fail, because the number was checked against P unconverted.
+  // A refinement of a refinement is entered at the innermost base, as one
+  // refinement is at its base.
+  let refinedPrimitive: TypeRecord = t;
+  while (refinedPrimitive.Kind === 'parameterized' && Object.hasOwn(refinedPrimitive.Metadata, 'where')) refinedPrimitive = refinedPrimitive.Base;
   if (t.Kind === 'parameterized' && Object.hasOwn(t.Metadata, 'where')
-      && t.Base.Kind === 'primitive' && !(value instanceof ObjectValue) && !refinedConversionsInProgress.has(t)) {
+      && refinedPrimitive.Kind === 'primitive' && !(value instanceof ObjectValue) && !refinedConversionsInProgress.has(t)) {
     refinedConversionsInProgress.add(t);
     try {
-      const converted = Q(yield* convertChecked(value, t.Base));
+      const converted = Q(yield* convertChecked(value, refinedPrimitive));
       return Q(yield* RequireType(converted, t, sequenceObservation, choices, observations));
     } finally {
       refinedConversionsInProgress.delete(t);

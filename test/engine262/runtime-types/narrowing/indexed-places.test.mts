@@ -50,3 +50,16 @@ test('a position outside the tuple is still an error of its own', () => {
   expect(observeScript('function f(t: [uint8, uint8]) where t[2] > 5 { return t; }'))
     .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-index-signature' } });
 });
+
+test('a vector lane read by a constant index has the lane type and is a place', () => {
+  expect(observeScript('function f(v: vector.<float32, 4>) { let s: string = v[0]; }'))
+    .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
+  neverSucceeds('function f(v: vector.<uint8, 4>) where v[0] > 5 where v[0] < 3 { return v; }');
+  accepted('function f(v: vector.<uint8, 4>) where v[0] > 5 where v[1] < 3 { return v; }');
+  accepted('function f(v: vector.<float32, 4>, i: uint32): float32 { return v[i]; }');
+});
+
+test('a lane has one path whether it is read by name or by index', () => {
+  neverSucceeds('function f(v: vector.<uint8, 4>) where v[0] > 5 where v.x < 3 { return v; }');
+  neverSucceeds('function f(v: vector.<uint8, 4>) where v.y > 5 where v[1] < 3 { return v; }');
+});

@@ -855,7 +855,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
               : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
           });
         };
-        if (hasRuntimeSubject(predicate) && !check.returnValue && !check.thisLiteral) continue;
+        if (hasRuntimeSubject(predicate) && !check.returnValue && !check.thisLiteral && !check.thisConstant) continue;
         const context = surroundingAgent.runningExecutionContext;
         const outer = context.LexicalEnvironment;
         const scope = new DeclarativeEnvironmentRecord(outer);
@@ -913,6 +913,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         try {
           if (check.returnValue) PushContractReturn(returned!);
           let self: Value = Value.undefined;
+          if (check.thisConstant) {
+            const raw = (check.thisConstant as { Value: unknown }).Value;
+            self = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+          }
           if (check.thisLiteral) {
             const evaluated = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.thisLiteral as never))));
             if (evaluated.Type !== 'normal') {
@@ -963,7 +967,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
             ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : check.returnValue
               ? CreateTypeDiagnostic('rt-return-contract', clause, 'pre-evaluation', 'a result contract is not satisfied by this return: $1', Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
-            : check.thisLiteral
+            : check.thisLiteral || check.thisConstant
               ? CreateTypeDiagnostic('rt-assignability', clause, 'pre-evaluation', 'this value is not a $1: it fails the refinement $2', Value(check.targetName ?? 'refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
         }
@@ -972,7 +976,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // specialization's bindings or a closed clause. A verdict for one
         // call's arguments, one return or one literal source, or for a
         // default, says nothing about the next one.
-        if (!check.values && !check.returnValue && !check.thisLiteral && !check.unreachableDefault) MarkGenericWhereVerified(clause, frame);
+        if (!check.values && !check.returnValue && !check.thisLiteral && !check.thisConstant && !check.unreachableDefault) MarkGenericWhereVerified(clause, frame);
       }
     } finally {
       sourceContext.LexicalEnvironment = callerEnvironment;
