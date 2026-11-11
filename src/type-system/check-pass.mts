@@ -788,7 +788,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // The method's own parameters shadow its class's of the same name, and
       // each name is bound once.
       const parameters = check.closed ? [] : [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
-        .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()];
+        .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()]
+        // A specialization's list binds only the positions it fixes.
+        .filter((parameter) => !check.unreachableSpecialization || check.bindings.has(parameter.BindingIdentifier.name));
       const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
@@ -919,6 +921,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         }
         if (result.Type === 'throw') {
           if (IsBudgetExhausted()) return result;
+          // An application of the same arguments reports the evaluation; the
+          // specialization's declaration is given no verdict by it.
+          if (check.unreachableSpecialization) continue;
           return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
             'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
         }
@@ -928,6 +933,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         if (check.closed && !result.Value) {
           return CreateTypeDiagnostic('rt-impossible-test', clause, 'pre-evaluation',
             'this $1 clause does not depend on what it constrains and is always false, so nothing can satisfy it', Value('where'));
+        }
+        // #sec-specialization-lists: the primary binds first, so a list its
+        // clause rejects reaches no application.
+        if (check.unreachableSpecialization && !result.Value) {
+          return CreateTypeDiagnostic('rt-specialization-contract', check.unreachableSpecialization.node as never, 'pre-evaluation', '$1',
+            Value(`\`${check.unreachableSpecialization.label}\` fixes arguments that \`${(clause as { sourceText?: string }).sourceText ?? 'a where clause'}\` of the primary declaration rejects, so no application can select this specialization`));
         }
         // #sec-generic-where: a default its own clause rejects can never be taken.
         if (check.unreachableDefault && !result.Value) {

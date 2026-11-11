@@ -1,7 +1,7 @@
 import { AdmitWherePredicate, EvaluateWherePredicate } from '../type-system/where-predicates.mts';
 import { IsWhereMetaType } from '../intrinsics/Where.mts';
 import { WithoutFreshAccessors } from '../type-system/inferred-binding.mts';
-import { FunctionTypeParameterDeclarations, bindTypeParameter, markValueParameterBinding } from '../type-system/runtime.mts';
+import { FunctionTypeParameterDeclarations, bindTypeParameter, markValueParameterBinding, implicitFalseDefaultMatches } from '../type-system/runtime.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
@@ -5883,6 +5883,25 @@ function calleeIsReflectIsAssignable(call: object): boolean {
   return /\bReflect\s*\.\s*isAssignable\s*\(/.test(text);
 }
 
+/**
+ * #sec-where-clauses: the conditional form evaluates its test and then the
+ * predicate of the branch taken, and holds where the test fails and no `else`
+ * is written. A `match` that is a whole predicate or a whole branch carries
+ * the implicit `default: false`.
+ */
+function* EvaluateContractPredicate(predicate: ParseNode): ValueEvaluator {
+  if (predicate.type === 'ConditionalRefinement') {
+    const test = Q(yield* GetValue(Q(yield* Evaluate(predicate.Test as never))));
+    if (ToBoolean(test) === Value.true) return Q(yield* EvaluateContractPredicate(predicate.Consequent as ParseNode));
+    if (predicate.Alternate) return Q(yield* EvaluateContractPredicate(predicate.Alternate as ParseNode));
+    return Value.true;
+  }
+  let core = predicate;
+  while (core.type === 'ParenthesizedExpression') core = core.Expression as ParseNode;
+  if (core.type === 'MatchExpression') implicitFalseDefaultMatches.add(core);
+  return Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+}
+
 export function* VerifyContracts(fn: object, result: Value, args: readonly Value[] = []): ValueEvaluator {
   const clauses = functionWhereClauses(fn as never);
   if (!clauses || clauses.length === 0) {
@@ -5921,7 +5940,7 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
       contractContext.LexicalEnvironment = NewTypeParameterEnvironment(priorEnvironment as never, contractParameters as never, contractFrame) as never;
     }
     try {
-      verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+      verdict = Q(yield* EvaluateContractPredicate(predicate as ParseNode));
     } finally {
       contractContext.LexicalEnvironment = priorEnvironment;
       PopContractReturn();

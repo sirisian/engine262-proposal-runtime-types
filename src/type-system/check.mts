@@ -890,6 +890,13 @@ export interface GenericWhereCheck {
    */
   readonly outerDeclaration?: ParseNode;
   readonly outerParameters?: readonly ParseNode.TypeParameter[];
+  /**
+   * #sec-specialization-lists: a clause of the primary that reads only
+   * positions a class specialization fixes, bound to those arguments. Where it
+   * does not hold, no application can select the specialization, which is
+   * the declaration this names.
+   */
+  readonly unreachableSpecialization?: { readonly node: ParseNode, readonly label: string };
 }
 const genericWhereChecks = new WeakMap<object, readonly GenericWhereCheck[]>();
 export function GenericWhereChecksOf(root: object): readonly GenericWhereCheck[] {
@@ -3625,21 +3632,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
-  /** Whether a predicate contains a `match` expression, whose refinement reading has an implicit false default. */
-  const whereClauseContainsMatch = (predicate: ParseNode): boolean => {
-    let found = false;
-    const visit = (value: unknown): void => {
-      if (found || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
-      const node = value as ParseNode;
-      if (typeof node.type !== 'string') return;
-      if (node.type === 'MatchExpression') { found = true; return; }
-      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
-    };
-    visit(predicate);
-    return found;
-  };
-
   /** Whether a predicate assigns or updates anything: such a clause is not a pure test, and is not walked as one. */
   const whereClauseAssigns = (predicate: ParseNode): boolean => {
     let found = false;
@@ -4169,7 +4161,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const predicate = clause.RefinementPredicate as ParseNode;
         if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
         if (predicate.type === 'ConditionalRefinement') {
-          // A conditional clause holds the union of its branches under their test.
+          // A conditional clause holds the join of its branches under their
+          // test, over every place they read (#sec-where-clauses); a branch
+          // with no outcome leaves the one-place projection.
+          const joined = walkRefinementPredicate(predicate);
+          if (joined) {
+            if (joined.whenTrue) restoreFlow(joined.whenTrue);
+            continue;
+          }
           const projected = predicatePieces(predicate, (n) => orderedComparison(n) ?? equalityPoint(n));
           if (projected) declarePieces(projected.place, intersectPieces(currentPieces(projected.domain)[0], projected.pieces));
           continue;
@@ -29402,36 +29401,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // spares that test. Any other chain's certain last test is refused.
       const discriminating = chain ?? DiscriminatingChainOf({ RefinementPredicate: node } as unknown as ParseNode) !== undefined;
       if (chain !== undefined && discriminating && !conditional.Alternate) spareCertainTest(conditional.Test as ParseNode);
-      // Neither selected arm is an unconditional premise of a later clause.
+      // #sec-where-clauses: the conditional form establishes the facts of the
+      // conditional expression over the same test and branches, an absent
+      // `else` holding where the test fails. Neither selected arm is an
+      // unconditional premise of a later clause; their join is.
       const before = captureFlow();
       const outcome = walkWhereClause(conditional.Test as ParseNode);
+      let consequent: TestFlow | undefined = { whenTrue: undefined, whenFalse: undefined };
+      let alternate: TestFlow | undefined = conditional.Alternate
+        ? { whenTrue: undefined, whenFalse: undefined }
+        : { whenTrue: outcome.whenFalse, whenFalse: undefined };
       try {
         if (outcome.whenTrue) {
           restoreFlow(outcome.whenTrue);
-          walkRefinementPredicate(conditional.Consequent as ParseNode);
+          consequent = walkRefinementPredicate(conditional.Consequent as ParseNode);
         }
         if (conditional.Alternate && outcome.whenFalse) {
           restoreFlow(outcome.whenFalse);
-          walkRefinementPredicate(conditional.Alternate as ParseNode, discriminating);
+          alternate = walkRefinementPredicate(conditional.Alternate as ParseNode, discriminating);
         }
       } finally {
         restoreFlow(before);
       }
-      return undefined;
+      // A branch whose predicate establishes no outcome leaves the clause
+      // without one, so a later clause reads the facts before it.
+      if (!consequent || !alternate) return undefined;
+      return {
+        whenTrue: joinFlow([consequent.whenTrue, alternate.whenTrue]),
+        whenFalse: joinFlow([consequent.whenFalse, alternate.whenFalse]),
+      };
     }
     if (node.type === 'MatchExpression') {
+      // #sec-where-clauses: a `match` that is a whole predicate or a whole
+      // branch predicate carries the implicit `default: false`, which
+      // contributes no predecessor to the edge on which the predicate holds.
       implicitDefaultMatches.add(node);
       whereClauseWalkDepth += 1;
       try {
-        walkTest(node, false, false);
+        return walkTest(node, false, false);
       } finally {
         whereClauseWalkDepth -= 1;
       }
-      return undefined;
     }
-    // A `match` nested inside a larger predicate has no implicit default to
-    // judge its exhaustiveness against, so that predicate is not walked.
-    if (whereClauseContainsMatch(node)) return undefined;
+    // Any other `match` in a predicate is an ordinary expression: it has no
+    // implicit default, so it is judged for exhaustiveness and its patterns
+    // as in a statement, and the rest of the predicate as any test.
     return walkWhereClause(predicate);
   };
   /**
@@ -29677,6 +29691,110 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const isGenericDeclaration = (declaration: ParseNode): boolean => {
     const list = (declaration as { TypeParameters?: { ListKind?: string, TypeParameterList?: readonly unknown[] } | null }).TypeParameters;
     return !!list && list.ListKind !== 'specialization' && (list.TypeParameterList?.length ?? 0) > 0;
+  };
+  /**
+   * #sec-generic-where: a clause is judged under the clauses of each generic
+   * declaration lexically enclosing its own, over that declaration's generic
+   * parameters, from the outermost. A name a nearer declaration rebinds is
+   * another binding and carries nothing, and a clause that reads a formal,
+   * `this` or `return` speaks of one call of that declaration only.
+   */
+  const enclosingGenericPremises = (declaration: ParseNode, probe: ParseNode): { valueParameters: Set<string>, clauses: ParseNode.WhereClause[] } => {
+    const valueParameters = new Set<string>();
+    const premises: ParseNode.WhereClause[] = [];
+    const chain: ParseNode[] = [];
+    for (let p = declaration.parent as ParseNode | undefined; p; p = p.parent as ParseNode | undefined) chain.unshift(p);
+    for (const enclosing of chain) {
+      const names = valueTypeParameterNames(enclosing);
+      const own = (enclosing as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
+        ?? (enclosing as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses ?? [];
+      for (const name of names) {
+        const seen = ResolveBindingDeclaration(probe, name);
+        if (seen?.kind === 'type-parameter' && seen.node === enclosing) valueParameters.add(name);
+      }
+      for (const clause of own) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+        const references = LexicalFreeReferences(predicate);
+        let readsGeneric = false;
+        const carried = references.every((reference) => {
+          const written = ResolveBindingDeclaration(reference, reference.name);
+          if (written?.kind === 'parameter') return false;
+          if (written?.kind === 'type-parameter') readsGeneric = true;
+          return ResolveBindingDeclaration(probe, reference.name)?.node === written?.node;
+        });
+        if (carried && readsGeneric) premises.push(clause);
+      }
+    }
+    return { valueParameters, clauses: premises };
+  };
+  /**
+   * #sec-specialization-lists: a class specialization's own clauses are judged
+   * under its primary's, each capture reading as the primary parameter in its
+   * position and each fixed value as its constant, since the primary binds
+   * before a specialization is matched.
+   */
+  const walkPrimaryPremises = (specialization: ParseNode): void => {
+    const listOf = (node: ParseNode | undefined) => (node as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters ?? null;
+    const list = listOf(specialization);
+    if (!list || list.ListKind !== 'specialization' || !/^Class/.test(specialization.type)) return;
+    const primaryNode = declarationGroup(specialization).find((candidate) => {
+      const candidateList = listOf(candidate);
+      return candidateList && candidateList.ListKind !== 'specialization' && candidateList.ListKind !== 'mixed';
+    });
+    const primary = listOf(primaryNode);
+    const clauses = (primaryNode as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } } | undefined)?.ClassTail?.WhereClauses ?? [];
+    if (!primaryNode || !primary || clauses.length === 0) return;
+    const places = new Map<ParseNode.TypeParameter, string>();
+    const constants = new Map<ParseNode.TypeParameter, TypeRecord>();
+    ((list as { SpecializationEntryList?: readonly ParseNode[] }).SpecializationEntryList ?? []).forEach((entry, position) => {
+      const parameter = primary.TypeParameterList[position];
+      if (!parameter?.IsValueParameter) return;
+      const pattern = (entry as { Pattern?: ParseNode }).Pattern;
+      if (pattern?.type === 'CaptureBinding') {
+        const capture = pattern as unknown as ParseNode.CaptureBinding;
+        if (!capture.IsVariadic && !(capture.Arity > 0)) places.set(parameter, capture.BindingIdentifier.name);
+        return;
+      }
+      const resolved = pattern ? resolveType(pattern as ParseNode.Type) : null;
+      if (resolved?.Kind === 'literal') constants.set(parameter, resolved);
+    });
+    if (places.size === 0) return;
+    const priorPlaces = retainedParameterPlaces;
+    const priorConstants = retainedParameterConstants;
+    retainedParameterPlaces = places;
+    retainedParameterConstants = constants;
+    const mark = errors.length;
+    try {
+      for (const clause of clauses) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate) || whereClauseAssigns(predicate)) continue;
+        // A premise only where every parameter it reads has a place or a constant here.
+        const open = LexicalFreeReferences(predicate).some((reference) => {
+          const binding = ResolveBindingDeclaration(reference, reference.name);
+          if (binding?.kind !== 'type-parameter' || binding.node !== primaryNode) return false;
+          const parameter = primary.TypeParameterList.find((candidate) => candidate.BindingIdentifier.name === reference.name);
+          return !parameter || (!places.has(parameter) && !constants.has(parameter));
+        });
+        if (open) continue;
+        const outcome = walkRefinementPredicate(predicate);
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+    } finally {
+      retainedParameterPlaces = priorPlaces;
+      retainedParameterConstants = priorConstants;
+      errors.splice(mark);
+    }
+  };
+  /** Establish enclosing clauses as facts; their own judgments are reported at their declarations. */
+  const walkEnclosingPremises = (premises: readonly ParseNode.WhereClause[]): void => {
+    if (premises.length === 0) return;
+    const mark = errors.length;
+    for (const clause of premises) {
+      const outcome = walkRefinementPredicate(clause.RefinementPredicate as ParseNode);
+      if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+    }
+    errors.splice(mark);
   };
   const walkDeclarationClauses = (declaration: ParseNode, clauses: readonly ParseNode.WhereClause[], subjects: ClauseSubjects): void => {
     for (const clause of clauses) {
@@ -30530,6 +30648,232 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const hi = intervalFact(c.place, 'hi');
     return [higherLow(lo ?? null, c.min), lowerHigh(hi ?? null, c.max), lo !== undefined || hi !== undefined];
   };
+  /**
+   * #sec-narrowing-flow: within a clause sequence a proved ordered comparison
+   * or strict equality of two places of one ordered type retains the order
+   * relation between them. A relation is the set of orders the two values may
+   * still stand in, so a join unions it as it unions any other fact and a
+   * missing fact is every order. The closure is a fixed rule list: mirror,
+   * complement, transitivity, strict cycle, limit exchange with each place's
+   * interval set, and equality sharing one set. It is bounded propagation
+   * over source relations, not a solver, and infers no arithmetic relation.
+   */
+  type PlaceOrder = '<' | '=' | '>';
+  type OrderedPlace = { place: string, domain: NonNullable<ReturnType<typeof orderDomainOf>> };
+  type PlaceRelation = { a: OrderedPlace, b: OrderedPlace, op: string, holds: readonly PlaceOrder[], label: string };
+  const everyOrder: readonly PlaceOrder[] = ['<', '=', '>'];
+  const mirrorOrder = (order: PlaceOrder): PlaceOrder => (order === '<' ? '>' : order === '>' ? '<' : '=');
+  const relationMark = '.\u0000rel:';
+  const relationKey = (a: string, b: string): string => `${a}${relationMark}${b}`;
+  const orderedPlaceOf = (node: ParseNode): OrderedPlace | null => {
+    const subject = unparenthesized(node);
+    let constraint: TypeRecord | null = null;
+    if (subject.type === 'IdentifierReference') {
+      const binding = ResolveBindingDeclaration(subject, subject.name);
+      if (binding?.kind === 'type-parameter' && !retainedParameterPlaces?.has(typeParameterDeclarationOf(subject))) {
+        const list = (binding.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+        const parameter = list.find((candidate) => candidate.BindingIdentifier.name === subject.name);
+        const written = parameter && (parameter as { IsValueParameter?: boolean }).IsValueParameter
+          ? (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint : null;
+        constraint = written ? resolveType(written as ParseNode.Type) : null;
+        // A type parameter that is not a value, or a value a retained
+        // obligation binds to a constant, is no place.
+        if (!constraint || retainedParameterConstants?.has(typeParameterDeclarationOf(subject))) return null;
+      }
+    }
+    const place = narrowableName(subject);
+    if (place === null) return null;
+    const declared = (lookup(place) ?? constraint ?? staticType(subject)) as TypeRecord | null;
+    const domain = declared ? orderDomainOf(declared) : null;
+    return domain ? { place, domain } : null;
+  };
+  const placeRelation = (test: ParseNode): PlaceRelation | null => {
+    const t = unparenthesized(test);
+    let left: ParseNode | null | undefined;
+    let right: ParseNode | null | undefined;
+    let op: string;
+    if (t.type === 'RelationalExpression' && ['<', '<=', '>', '>='].includes(t.operator as string)) {
+      left = t.RelationalExpression as ParseNode | null;
+      right = t.ShiftExpression as ParseNode;
+      op = t.operator as string;
+    } else if (t.type === 'EqualityExpression' && ['===', '!=='].includes(t.operator)) {
+      left = t.EqualityExpression;
+      right = t.RelationalExpression;
+      op = t.operator;
+    } else return null;
+    if (!left || !right) return null;
+    const a = orderedPlaceOf(left);
+    const b = a && orderedPlaceOf(right);
+    if (!a || !b || a.domain.width !== b.domain.width) return null;
+    if (changesPlace(t, a.place) || changesPlace(t, b.place)) return null;
+    const holds: readonly PlaceOrder[] = op === '<' ? ['<'] : op === '<=' ? ['<', '='] : op === '>' ? ['>'] : op === '>=' ? ['>', '=']
+      : op === '===' ? ['='] : ['<', '>'];
+    return { a, b, op, holds, label: `${a.place} ${op} ${b.place}` };
+  };
+  const relationFact = (a: string, b: string): PlaceOrder[] | undefined => {
+    const read = (x: string, y: string): PlaceOrder[] | undefined => {
+      const t = lookup(relationKey(x, y));
+      if (!t) return undefined;
+      const orders: PlaceOrder[] = [];
+      for (const member of (t.Kind === 'union' ? t.Members : [t]) as TypeRecord[]) {
+        const raw = member.Kind === 'literal' ? literalString((member as { Value?: unknown }).Value) : undefined;
+        if (raw !== '<' && raw !== '=' && raw !== '>') return undefined;
+        orders.push(raw);
+      }
+      return orders;
+    };
+    // The fact is kept under both places, so a store to either drops it.
+    const forward = read(a, b);
+    return forward && read(b, a) ? forward : undefined;
+  };
+  const declareRelation = (a: string, b: string, orders: readonly PlaceOrder[]): void => {
+    const stringBase = makePrimitive('string');
+    const encode = (list: readonly PlaceOrder[]): TypeRecord => unionOf(list.map((order) => ({ Kind: 'literal', Value: order, Base: stringBase }) as unknown as TypeRecord)) as TypeRecord;
+    declareNarrowed(relationKey(a, b), encode(orders));
+    declareNarrowed(relationKey(b, a), encode(orders.map(mirrorOrder)));
+  };
+  const nanPossibleAt = (place: OrderedPlace): boolean => place.domain.width !== null && !lookup(categoryKey(place.place, 4));
+  const placePieces = (place: OrderedPlace): Piece[] => currentPieces({ place: place.place, min: place.domain.min, max: place.domain.max } as unknown as OrderedComparison)[0];
+  /** The orders two places may stand in: their retained relation, cut by what their interval sets leave. */
+  const possibleOrders = (a: OrderedPlace, b: OrderedPlace): PlaceOrder[] => {
+    if (a.place === b.place) return ['='];
+    let orders = [...(relationFact(a.place, b.place) ?? everyOrder)];
+    // Limits are exchanged over integral keys only: a floating domain's two
+    // zeros are equal values with different keys.
+    if (a.domain.width !== null) return orders;
+    const as = placePieces(a);
+    const bs = placePieces(b);
+    if (as.length === 0 || bs.length === 0) return [];
+    const [aLo, aHi] = [as[0]![0], as[as.length - 1]![1]];
+    const [bLo, bHi] = [bs[0]![0], bs[bs.length - 1]![1]];
+    if (aHi !== null && bLo !== null && aHi <= bLo) orders = orders.filter((order) => order !== '>' && (aHi < bLo ? order !== '=' : true));
+    if (aLo !== null && bHi !== null && aLo >= bHi) orders = orders.filter((order) => order !== '<' && (aLo > bHi ? order !== '=' : true));
+    if (intersectPieces(as, bs).length === 0) orders = orders.filter((order) => order !== '=');
+    return orders;
+  };
+  /** A related place's integral domain, kept beside its relations so it travels with the facts. */
+  const relationDomainKey = (place: string): string => `${place}.\u0000reldom`;
+  const declareRelatedPlace = (place: OrderedPlace): void => {
+    if (place.domain.width !== null) return;
+    declareNarrowed(relationDomainKey(place.place), { Kind: 'literal', Value: `${place.domain.min ?? ''}|${place.domain.max ?? ''}`, Base: makePrimitive('string') } as unknown as TypeRecord);
+  };
+  const relatedPlace = (place: string): OrderedPlace | null => {
+    const t = lookup(relationDomainKey(place));
+    const raw = t?.Kind === 'literal' ? literalString((t as { Value?: unknown }).Value) : undefined;
+    if (raw === undefined) return null;
+    const [min, max] = raw.split('|');
+    return { place, domain: { min: min === '' ? null : BigInt(min!), max: max === '' ? null : BigInt(max!), width: null, closed: false } };
+  };
+  /** Close the retained relations and exchange limits with the interval sets; `false` where nothing is left. */
+  const propagateRelations = (): boolean => {
+    const graph = new Map<string, Map<string, PlaceOrder[]>>();
+    for (const frame of frames) {
+      for (const name of (frame as { narrowed?: Set<string> }).narrowed ?? []) {
+        const at = name.indexOf(relationMark);
+        if (at < 0) continue;
+        const a = name.slice(0, at);
+        const b = name.slice(at + relationMark.length);
+        const orders = relationFact(a, b);
+        if (!orders) continue;
+        if (!graph.has(a)) graph.set(a, new Map());
+        graph.get(a)!.set(b, orders);
+      }
+    }
+    const nodes = [...graph.keys()];
+    if (nodes.length === 0) return true;
+    const get = (x: string, y: string): readonly PlaceOrder[] => graph.get(x)?.get(y) ?? everyOrder;
+    const compose = (first: readonly PlaceOrder[], second: readonly PlaceOrder[]): PlaceOrder[] => {
+      const out = new Set<PlaceOrder>();
+      for (const p of first) {
+        for (const q of second) {
+          if (p === '=') out.add(q);
+          else if (q === '=' || q === p) out.add(p);
+          else everyOrder.forEach((order) => out.add(order));
+        }
+      }
+      return [...out];
+    };
+    const tightened = new Set<string>();
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const k of nodes) {
+        for (const i of nodes) {
+          for (const j of nodes) {
+            if (i === j || i === k || j === k) continue;
+            const through = compose(get(i, k), get(k, j));
+            const current = get(i, j);
+            const next = current.filter((order) => through.includes(order));
+            if (next.length === current.length) continue;
+            if (next.length === 0) return false;
+            if (!graph.has(i)) graph.set(i, new Map());
+            if (!graph.has(j)) graph.set(j, new Map());
+            graph.get(i)!.set(j, next);
+            graph.get(j)!.set(i, next.map(mirrorOrder));
+            tightened.add(i < j ? `${i}\u0000${j}` : `${j}\u0000${i}`);
+            changed = true;
+          }
+        }
+      }
+    }
+    for (const pair of tightened) {
+      const [i, j] = pair.split('\u0000') as [string, string];
+      declareRelation(i, j, get(i, j));
+    }
+    const same = (x: readonly Piece[], y: readonly Piece[]): boolean => x.length === y.length && x.every((piece, index) => piece[0] === y[index]![0] && piece[1] === y[index]![1]);
+    for (let round = 0; round <= nodes.length; round += 1) {
+      let changed = false;
+      for (const x of nodes) {
+        for (const [y, orders] of graph.get(x)!) {
+          const px = relatedPlace(x);
+          const py = relatedPlace(y);
+          if (!px || !py || px.domain.width !== null || orders.includes('>')) continue;
+          const xs = placePieces(px);
+          const ys = placePieces(py);
+          if (xs.length === 0 || ys.length === 0) return false;
+          const strict = orders.includes('=') ? 0n : 1n;
+          const xLo = xs[0]![0];
+          const yHi = ys[ys.length - 1]![1];
+          let nextY = intersectPieces(ys, [[xLo === null ? null : xLo + strict, null]]);
+          let nextX = intersectPieces(xs, [[null, yHi === null ? null : yHi - strict]]);
+          if (orders.length === 1 && orders[0] === '=') {
+            nextX = intersectPieces(nextX, nextY);
+            nextY = nextX;
+          }
+          if (nextX.length === 0 || nextY.length === 0) {
+            if (judgingRetainedObligations) declarePieces(nextX.length === 0 ? x : y, []);
+            return false;
+          }
+          if (!same(nextX, xs)) { declarePieces(x, nextX); changed = true; }
+          if (!same(nextY, ys)) { declarePieces(y, nextY); changed = true; }
+        }
+      }
+      if (!changed) break;
+    }
+    return true;
+  };
+  /** Record what an edge of a two-place test leaves; `false` where that edge is impossible. */
+  const recordRelationEdge = (relation: PlaceRelation, outcome: boolean): boolean => {
+    const { a, b } = relation;
+    // NaN satisfies no comparison and equals nothing, so it sits on the edge
+    // where `!==` succeeds and on every other test's failing edge.
+    const nanOnEdge = (relation.op === '!==') === outcome;
+    if (nanOnEdge && (nanPossibleAt(a) || nanPossibleAt(b))) return true;
+    const possible = possibleOrders(a, b);
+    const next = possible.filter((order) => relation.holds.includes(order) === outcome);
+    if (next.length === 0) {
+      if (judgingRetainedObligations) declarePieces(a.place, []);
+      return false;
+    }
+    if (a.place === b.place || whereClauseWalkDepth === 0) return true;
+    declareRelatedPlace(a);
+    declareRelatedPlace(b);
+    declareRelation(a.place, b.place, next);
+    if (!nanOnEdge && a.domain.width !== null) {
+      recordCategories(a.place, allCategories & ~4);
+      recordCategories(b.place, allCategories & ~4);
+    }
+    return true;
+  };
   const walkTestOutcomes = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     const live = flowLive;
     const canon = live && visit ? testCanon(test) : null;
@@ -30542,6 +30886,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const decimal = !ordered && !textual && live && visit && whereClauseWalkDepth > 0 ? decimalComparison(test) : null;
     const pointed = !ordered && !textual && !decimal && live && visit && whereClauseWalkDepth > 0 ? equalityPoint(test) : null;
     const packed = !ordered && !textual && !decimal && !pointed && live && visit && whereClauseWalkDepth > 0 ? packCallback(test) : null;
+    // Two places are related within a clause sequence; one binding compared
+    // with itself is decided wherever the test decides a branch, as its
+    // self-equality is (#sec-narrowfrom).
+    const twoPlaces = !ordered && !textual && !decimal && !pointed && !packed && live && visit ? placeRelation(test) : null;
+    const related = twoPlaces && (whereClauseWalkDepth > 0
+      || (twoPlaces.a.place === twoPlaces.b.place && !twoPlaces.a.place.includes('.'))) ? twoPlaces : null;
     let repeated = canon && deciding ? recordedOutcome(canon) : undefined;
     if (repeated === undefined && deciding && packed) repeated = packed.verdict;
     if (repeated === undefined && deciding && ordered) {
@@ -30553,6 +30903,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (intersectPieces(pieces, edgeRegions(ordered, true)).length === 0) repeated = false;
         else if (!nanPossible && intersectPieces(pieces, edgeRegions(ordered, false)).length === 0) repeated = true;
       }
+    }
+    if (repeated === undefined && deciding && related) {
+      const possible = possibleOrders(related.a, related.b);
+      const nan = nanPossibleAt(related.a) || nanPossibleAt(related.b);
+      const nanOnTrue = related.op === '!==';
+      if (!possible.some((order) => related.holds.includes(order)) && !(nanOnTrue && nan)) repeated = false;
+      else if (possible.every((order) => related.holds.includes(order)) && !(!nanOnTrue && nan)) repeated = true;
     }
     if (repeated === undefined && deciding && pointed) {
       const [, narrowed] = currentPieces(pointed);
@@ -30580,9 +30937,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
     // A comparison against a negative literal has no canonical form, but its
     // interval is as exact as any other's.
-    if (!canon && !ordered && !textual && !decimal && !pointed && !packed) return result;
+    if (!canon && !ordered && !textual && !decimal && !pointed && !packed && !related) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal?.label ?? pointed?.label ?? packed!.label, test);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon?.key ?? ordered?.label ?? textual?.label ?? decimal?.label ?? pointed?.label ?? packed?.label ?? related!.label, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
@@ -30593,10 +30950,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (textual) recordStringEdge(textual, outcome);
       if (decimal) recordDecimalEdge(decimal, outcome);
       if (pointed) recordEqualityEdge(pointed, outcome);
+      if (related && !recordRelationEdge(related, outcome)) impossibleEdge[outcome ? 'whenTrue' : 'whenFalse'] = true;
+      else if ((related || ordered || pointed) && whereClauseWalkDepth > 0 && !propagateRelations()) {
+        impossibleEdge[outcome ? 'whenTrue' : 'whenFalse'] = true;
+      }
       return captureFlow();
     };
+    const impossibleEdge = { whenTrue: false, whenFalse: false };
     const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };
     if (resume) restoreFlow(resume);
+    // A test the retained relations leave no order on which it succeeds can
+    // never succeed, and one they leave none on which it fails can never fail.
+    if (repeated === undefined && deciding && errors.length === errorsBefore) {
+      const shown = canon?.key ?? related?.label ?? ordered?.label ?? pointed?.label;
+      if (impossibleEdge.whenTrue && shown) pushImpossibleTest('never-succeeds', shown, test);
+      else if (impossibleEdge.whenFalse && related) pushImpossibleTest('never-fails', shown ?? related.label, test);
+    }
     return recorded;
   };
   const walkTestResult = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
@@ -31673,8 +32042,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           missed = captureFlow();
           restoreFlow(clauseEntry);
         }
+        // #sec-narrowing-flow: within a clause sequence a range pattern with
+        // constant endpoints bounds its subject on each edge, as the same
+        // pattern in an `is` test does.
+        const rangeArm = whereClauseWalkDepth > 0 && clause.Pattern?.type === 'MatchRangePattern' && subjectName !== null && subjectStable
+          ? orderedComparison({
+            type: 'IsExpression', Expression: me.Expression, Pattern: clause.Pattern, parent: me, location: clause.Pattern.location,
+          } as unknown as ParseNode)
+          : null;
+        if (rangeArm) restoreFlow(clauseEntry);
+        if (rangeArm && missed) {
+          restoreFlow(missed);
+          recordOrderedEdge(rangeArm, false);
+          missed = captureFlow();
+          restoreFlow(clauseEntry);
+        }
         if (subjectStable && clause.Pattern) projectDataPattern(me.Expression, clause.Pattern);
         publishSubject(selected);
+        if (rangeArm) recordOrderedEdge(rangeArm, true);
         // #sec-pattern-static-semantics: bounds supply universal verdicts,
         // without replacing a surviving parameter's identity in its bindings.
         let patternDead = subjectName !== null && !!clause.Pattern && scalarFactExcluded({ name: subjectName,
@@ -36999,10 +37384,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             while (classNode && classNode.type !== 'ClassDeclaration' && classNode.type !== 'ClassExpression' && classNode.type !== 'ObjectLiteral') classNode = classNode.parent as ParseNode | undefined;
             if (classNode?.type === 'ObjectLiteral') classNode = undefined;
           }
-          const classClauses = (classNode as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } } | undefined)?.ClassTail?.WhereClauses ?? [];
+          const enclosing = enclosingGenericPremises(owner, clauses[0]!.RefinementPredicate as ParseNode);
           const formals = new Set((params ?? []).flatMap((formal) => (formal.type === 'SingleNameBinding' ? [(formal as ParseNode.SingleNameBinding).BindingIdentifier.name] : [])));
           const captures = new Map([...captureDomainsOf(classNode), ...captureDomainsOf(owner)]);
-          const valueParameters = new Set([...valueTypeParameterNames(owner), ...valueTypeParameterNames(classNode), ...captures.keys()]);
+          const valueParameters = new Set([...valueTypeParameterNames(owner), ...valueTypeParameterNames(classNode), ...enclosing.valueParameters, ...captures.keys()]);
           // #sec-checked-contracts: `return` is read at the effective result,
           // which a `void` function does not have.
           let result = hasDeclaredReturn ? returnTypes[returnTypes.length - 1] as Known | null : null;
@@ -37020,18 +37405,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (captures.size > 0) frames.push(emptyFrame());
           try {
             for (const [name, domain] of captures) declare(name, domain);
-            // The class's clauses establish the facts a method clause is
-            // judged under; their own judgments are reported at the class.
-            if (classClauses.length > 0) {
-              const mark = errors.length;
-              for (const clause of classClauses) {
-                const predicate = clause.RefinementPredicate;
-                if (predicate.type === 'ConditionalRefinement' || whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
-                const outcome = walkWhereClause(predicate as ParseNode);
-                if (outcome.whenTrue) restoreFlow(outcome.whenTrue);
-              }
-              errors.splice(mark);
-            }
+            // The clauses of the enclosing generic declarations, a method's
+            // class the nearest, establish the facts this clause is judged
+            // under; their own judgments are reported where they are written.
+            walkEnclosingPremises(enclosing.clauses);
             walkDeclarationClauses(owner, clauses, { formals, valueParameters, returnType: result && result.Kind !== 'void' && !isNeverType(result) ? result as Known : null, thisType: declaredReceiverOf(owner) });
             recordDefaultWhereChecks(owner, clauses, params ?? []);
           } finally {
@@ -41683,11 +42060,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const base = resolved.Kind === 'parameterized' ? ((resolved as { Base?: TypeRecord }).Base ?? resolved) : resolved;
           const beforeClauses = captureFlow();
           try {
-            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: new Set(), thisType: base as Known });
+            const enclosing = enclosingGenericPremises(n, aliasClauses[0]!.RefinementPredicate as ParseNode);
+            walkEnclosingPremises(enclosing.clauses);
+            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: enclosing.valueParameters, thisType: base as Known });
           } finally {
             restoreFlow(beforeClauses);
           }
-        } else if (aliasClauses.length > 0 && n.TypeParameters) {
+        } else if (aliasClauses.length > 0 && (n.TypeParameters
+          || enclosingGenericPremises(n, aliasClauses[0]!.RefinementPredicate as ParseNode).valueParameters.size > 0)) {
           // #sec-generic-where: a generic alias's clauses over its parameters
           // are judged at its declaration, as a generic function's are.
           const beforeClauses = captureFlow();
@@ -41697,7 +42077,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // dependent record type, judged once here with `this` read at the
             // base and each type parameter through its bound.
             const genericBase = resolved && resolved.Kind === 'parameterized' ? ((resolved as { Base?: TypeRecord }).Base ?? resolved) : resolved;
-            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: valueTypeParameterNames(n), thisType: (genericBase ?? undefined) as Known | undefined });
+            const enclosing = enclosingGenericPremises(n, aliasClauses[0]!.RefinementPredicate as ParseNode);
+            walkEnclosingPremises(enclosing.clauses);
+            walkDeclarationClauses(n, aliasClauses, { formals: new Set(), valueParameters: new Set([...valueTypeParameterNames(n), ...enclosing.valueParameters]), thisType: (genericBase ?? undefined) as Known | undefined });
             recordDefaultWhereChecks(n, aliasClauses, []);
           } finally {
             if (pushedAliasScope) typeParameterScopes.pop();
@@ -44016,7 +44398,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (classCaptures.size > 0) frames.push(emptyFrame());
             try {
               for (const [name, domain] of classCaptures) declare(name, domain);
-              if (ownClauses.length > 0) walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: new Set([...classValues, ...classCaptures.keys()]) });
+              const enclosing = ownClauses.length > 0 ? enclosingGenericPremises(n, ownClauses[0]!.RefinementPredicate as ParseNode) : { valueParameters: new Set<string>(), clauses: [] };
+              walkEnclosingPremises(enclosing.clauses);
+              if (ownClauses.length > 0) walkPrimaryPremises(n);
+              if (ownClauses.length > 0) walkDeclarationClauses(n, ownClauses, { formals: new Set(), valueParameters: new Set([...classValues, ...enclosing.valueParameters, ...classCaptures.keys()]) });
               if (memberClauses.length > 0) walkDeclarationClauses(n, memberClauses, { formals: new Set(), valueParameters: classValues });
               recordDefaultWhereChecks(n, ownClauses, []);
             } finally {
@@ -44818,6 +45203,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           { isTypeDomain: isTypeDomainRecord, fixedArgumentProblem: fixedArgumentProblem(primary) });
         for (const diagnostic of diagnostics) {
           report(diagnostic.message);
+        }
+        // #sec-specialization-lists: the primary's clauses bind with its
+        // parameters, so a list whose fixed arguments one of them rejects
+        // reaches no application either. A clause is decided here only where
+        // every parameter it reads stands in a fixed position; its evaluation
+        // and deferral are those of an application of the same arguments.
+        const primaryClass = classes.find((candidate) => listOf(candidate) === primary);
+        const primaryClauses = (primaryClass?.ClassTail as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
+        if (diagnostics.length === 0 && primaryClass && primaryClauses.length > 0) {
+          const captureNames = new Set((list.Captures ?? []).map((capture) => capture.BindingIdentifier.name));
+          const fixed = new Map<string, TypeRecord>();
+          SpecializationPatternsOf(list).forEach((entry, index) => {
+            const parameter = primary.TypeParameterList[index];
+            const text = entry.sourceText;
+            if (!parameter || (parameter.Arity ?? 0) > 0 || text.includes('const ') || /(^|[^A-Za-z0-9_$])_([^A-Za-z0-9_$]|$)/.test(text)
+              || [...captureNames].some((capture) => new RegExp(`(^|[^A-Za-z0-9_$])${capture}([^A-Za-z0-9_$]|$)`).test(text))) return;
+            const resolved = resolveType(entry as ParseNode.Type);
+            if (resolved && resolved.Kind !== 'any' && !mentionsTypeParameter(resolved)) fixed.set(parameter.BindingIdentifier.name, resolved);
+          });
+          const decided = primaryClauses.filter((clause) => {
+            const predicate = clause.RefinementPredicate as ParseNode;
+            if (whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate) || whereClauseAssigns(predicate)) return false;
+            const read = LexicalFreeReferences(predicate).filter((reference) => {
+              const binding = ResolveBindingDeclaration(reference, reference.name);
+              return binding?.kind === 'type-parameter' && binding.node === primaryClass;
+            });
+            return read.length > 0 && read.every((reference) => fixed.has(reference.name));
+          });
+          if (decided.length > 0) {
+            const checks = whereChecks.get(c) ?? [];
+            checks.push({
+              declaration: primaryClass as unknown as GenericWhereCheck['declaration'],
+              clauses: decided,
+              bindings: fixed,
+              sourceModule: importedDeclarationSourceModule(primaryClass),
+              unreachableSpecialization: { node: c, label: `class ${name}${list.sourceText}` },
+            });
+            whereChecks.set(c, checks);
+          }
         }
         if (diagnostics.length > 0 || IsPartialDeclaration(c)) continue;
         const key = listKey(list, primary);
