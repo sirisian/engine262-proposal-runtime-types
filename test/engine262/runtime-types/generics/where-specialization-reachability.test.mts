@@ -50,3 +50,9 @@ test('an application of the same arguments is still refused by the primary\'s cl
   expect(observeScript('class B<N: uint8> where N > 100 {} new B.<5>();'))
     .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-where-unsatisfied' } });
 });
+
+test('a list that captures a position the primary\'s clause can hold for no value of is unreachable', () => {
+  unreachable('class B<N: uint8, M: uint8> where N < M {} class B<255, const K> {}');
+  unreachable('class B<N: uint8, M: uint8> where N < M {} class B<const K, 0> {}');
+  expect(evaluated("class B<N: uint8, M: uint8> where N < M {} class B<5, const K> {} 'ok';")).toBe('ok');
+});

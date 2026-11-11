@@ -456,7 +456,35 @@ export interface CallableGroup<S> {
   readonly Diagnostics: readonly SpecializationDiagnostic[];
 }
 
-function accepts<S>(owner: CallableDeclaration<S>, list: ParseNode.TypeParameters, host: CallableGroupHost<S>): boolean {
+/**
+ * #sec-callable-overload-contracts: the callable cases an owner's `where`
+ * clauses reject, as the checker decided them. Such a case does not attach:
+ * it is a standalone case. The run time rebuilds a group's roles from the
+ * same record, so both agree.
+ */
+const ownerClauseRejections = new WeakMap<object, WeakSet<object>>();
+export function RecordOwnerClauseRejection(kase: object, owner: object): void {
+  let owners = ownerClauseRejections.get(kase);
+  if (!owners) {
+    owners = new WeakSet();
+    ownerClauseRejections.set(kase, owners);
+  }
+  owners.add(owner);
+}
+export function OwnerClausesRejected(kase: object, owner: object): boolean {
+  return ownerClauseRejections.get(kase)?.has(owner) ?? false;
+}
+
+function accepts<S>(owner: CallableDeclaration<S>, declaration: CallableDeclaration<S>, host: CallableGroupHost<S>,
+  ownerClausesReject?: (owner: CallableDeclaration<S>, declaration: CallableDeclaration<S>) => boolean): boolean {
+  const list = declaration.List!;
+  if (!acceptsStructure(owner, list, host)) return false;
+  // The owner's clauses are part of its contract: a list they reject is no
+  // more admitted than one its domain or bound rejects.
+  return !(ownerClausesReject ? ownerClausesReject(owner, declaration) : OwnerClausesRejected(declaration.Node, owner.Node));
+}
+
+function acceptsStructure<S>(owner: CallableDeclaration<S>, list: ParseNode.TypeParameters, host: CallableGroupHost<S>): boolean {
   const terms = new TermBuilder(host, list);
   const parameters = owner.Parameters ?? [];
   const entries = SpecializationPatternsOf(list);
@@ -481,7 +509,8 @@ function accepts<S>(owner: CallableDeclaration<S>, list: ParseNode.TypeParameter
  * accepting owners are an error naming both; none leaves it standalone. A
  * mixed list carries its own labels and never attaches.
  */
-export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclaration<S>[], host: CallableGroupHost<S>, describe?: (domain: S) => string, isTypeDomain?: (domain: S) => boolean): CallableGroup<S> {
+export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclaration<S>[], host: CallableGroupHost<S>, describe?: (domain: S) => string, isTypeDomain?: (domain: S) => boolean,
+  ownerClausesReject?: (owner: CallableDeclaration<S>, declaration: CallableDeclaration<S>) => boolean): CallableGroup<S> {
   const owners = declarations.filter((d) => d.List?.ListKind === 'parameters');
   const attached: { Case: CallableDeclaration<S>, Owner: CallableDeclaration<S> }[] = [];
   const standalone: CallableDeclaration<S>[] = [];
@@ -495,7 +524,7 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
     if (d.List?.ListKind !== 'specialization') {
       continue;
     }
-    const accepting = owners.filter((o) => accepts(o, d.List!, host));
+    const accepting = owners.filter((o) => accepts(o, d, host, ownerClausesReject));
     if (accepting.length > 1) {
       diagnostics.push({
         kind: 'two-owners',
@@ -529,9 +558,14 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
       }
       if (entry.type === 'CaptureBinding' && !entry.TypeParameterDomain) {
         const name = entry.BindingIdentifier.name;
+        // A case its owner's clauses reject is told so: it has an owner, and
+        // the clauses are why it stands alone.
+        const refusing = owners.find((o) => acceptsStructure(o, d.List!, host));
         diagnostics.push({
           kind: 'no-slot-domain',
-          message: `\`const ${name}\` stands at the top of ${d.Label}, which attaches to no owner, so its slot has no domain to inherit; write \`const ${name}: type\` or a value domain, or declare an owner`,
+          message: refusing
+            ? `\`const ${name}\` stands at the top of ${d.Label}, which the \`where\` clauses of ${refusing.Label} reject, so it is a standalone case and its slot has no domain to inherit; write a domain for \`const ${name}\`, or change a clause so that some application satisfies both`
+            : `\`const ${name}\` stands at the top of ${d.Label}, which attaches to no owner, so its slot has no domain to inherit; write \`const ${name}: type\` or a value domain, or declare an owner`,
           node: entry,
         });
       }

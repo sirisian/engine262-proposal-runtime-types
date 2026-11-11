@@ -23,7 +23,7 @@ import { resolveOverloadChecked, resolveOverloadByTypes, describeParameters, ass
 import { displayType, builtinTypeRecord, makePrimitive, anyType, restElementType, type ParameterRecord, type TypeRecord } from '../type-system/records.mts';
 import { IsSubtype } from '../type-system/relations.mts';
 import { MatchSpecializationList, SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
-import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
+import { AnalyzeCallableGroup, SelectSpecialization, OwnerClausesRejected } from '../type-system/specialization-selection.mts';
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
 import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
 import { ReferenceValue } from '../value.mts';
@@ -767,7 +767,8 @@ export function* SelectExplicitCase(
   if (!ownerNode && choice.Kind !== 'owner') {
     const owner = bodylessOwnerMethodOf(choice.Declaration);
     const ownerClauses = (owner as { WhereClauses?: readonly unknown[] | null } | undefined)?.WhereClauses ?? [];
-    if (owner && ownerClauses.length > 0) {
+    // A case the owner's clauses reject is a standalone case, not one of its attached declarations.
+    if (owner && ownerClauses.length > 0 && !OwnerClausesRejected(choice.Declaration, owner)) {
       const caseFn = fnOf(choice.Declaration) as unknown as Record<string, unknown>;
       const ownerParameters = owner.TypeParameters?.TypeParameterList ?? [];
       const bound = EnsureCompletion(yield* InCallableDeclarationContext(caseFn as unknown as Value, new Map(), classFrame, function* bindOwner() {

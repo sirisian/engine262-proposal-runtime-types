@@ -36,7 +36,7 @@ import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
-import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
+import { AnalyzeCallableGroup, SelectSpecialization, RecordOwnerClauseRejection } from './specialization-selection.mts';
 import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase, FixedTypeSubtrees } from './component-patterns.mts';
 import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution, StaticFlatteningContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -20693,7 +20693,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }));
     let analysis;
     try {
-      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord), isTypeDomainRecord);
+      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord), isTypeDomainRecord, (owner, declaration) => ownerClausesRejectCase(owner.Node, declaration.Node));
     } catch {
       return undefined;
     }
@@ -21110,8 +21110,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return siblings?.find((s) => s.type === 'AbstractMethodDefinition' && !!(s as { BodylessOwner?: boolean }).BodylessOwner
           && (s as { ClassElementName?: { name?: string } | null }).ClassElementName?.name === ownerName && !!(s as { static?: boolean }).static === !!d.static);
       };
+      const beside = choice.Kind === 'owner' ? undefined : besideOwner(choice.Declaration as ParseNode);
       const ownerNode = choice.Kind === 'owner' ? choice.Declaration as ParseNode
-        : (analysis.Attached.find((a) => a.Case.Node === choice.Declaration)?.Owner.Node as ParseNode | undefined) ?? besideOwner(choice.Declaration as ParseNode);
+        : (analysis.Attached.find((a) => a.Case.Node === choice.Declaration)?.Owner.Node as ParseNode | undefined)
+          // A case the owner's clauses reject is a standalone case, not one of its attached declarations.
+          ?? (beside && !ownerClausesRejectCase(beside, choice.Declaration as ParseNode) ? beside : undefined);
       const ownerClauses = (ownerNode as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
       const ownerParams = (ownerNode as D | undefined)?.TypeParameters?.TypeParameterList ?? [];
       const ownerBound = ownerNode ? boundOwners.get(ownerNode) ?? (args.length === ownerParams.length ? args : undefined) : undefined;
@@ -29786,6 +29789,161 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.splice(mark);
     }
   };
+  /**
+   * The positions a specialization list gives its owner's parameters: a fixed
+   * argument, a fixed value as a constant, or a capture as a place at its
+   * domain. `null` where the list does not align with the parameters one to one.
+   */
+  const listPositionsOf = (ownerNode: ParseNode, caseNode: ParseNode) => {
+    const list = (caseNode as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters;
+    const ownerList = (ownerNode as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
+    if (!list || list.ListKind !== 'specialization') return null;
+    const patterns = SpecializationPatternsOf(list);
+    if (patterns.length !== ownerList.length || ownerList.some((parameter) => parameter.IsVariadic || (parameter.Arity ?? 0) > 0)) return null;
+    const captureNames = new Set((list.Captures ?? []).map((capture) => capture.BindingIdentifier.name));
+    const fixed = new Map<string, TypeRecord>();
+    const places = new Map<ParseNode.TypeParameter, string>();
+    const constants = new Map<ParseNode.TypeParameter, TypeRecord>();
+    const domains = new Map<string, Known>();
+    patterns.forEach((pattern, index) => {
+      const parameter = ownerList[index]!;
+      if (pattern.type === 'CaptureBinding') {
+        const capture = pattern as unknown as ParseNode.CaptureBinding;
+        if (capture.IsVariadic || capture.Arity > 0 || !parameter.IsValueParameter) return;
+        const domainNode = capture.TypeParameterDomain ?? (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint;
+        const domain = domainNode ? resolveType(domainNode as ParseNode.Type) : null;
+        if (!domain) return;
+        places.set(parameter, capture.BindingIdentifier.name);
+        domains.set(capture.BindingIdentifier.name, domain as Known);
+        return;
+      }
+      const text = pattern.sourceText;
+      if (/(^|[^A-Za-z0-9_$])_([^A-Za-z0-9_$]|$)/.test(text)
+        || [...captureNames].some((capture) => new RegExp(`(^|[^A-Za-z0-9_$])${capture}([^A-Za-z0-9_$]|$)`).test(text))) return;
+      const resolved = resolveType(pattern as ParseNode.Type);
+      if (!resolved || resolved.Kind === 'any' || mentionsTypeParameter(resolved)) return;
+      fixed.set(parameter.BindingIdentifier.name, resolved);
+      if (parameter.IsValueParameter && resolved.Kind === 'literal') constants.set(parameter, resolved);
+    });
+    return { fixed, places, constants, domains };
+  };
+  /** The owner's parameters a clause reads. */
+  const ownerParametersRead = (predicate: ParseNode, ownerNode: ParseNode): (ParseNode & { name: string })[] => LexicalFreeReferences(predicate)
+    .filter((reference) => {
+      const binding = ResolveBindingDeclaration(reference, reference.name);
+      return binding?.kind === 'type-parameter' && binding.node === ownerNode;
+    });
+  /**
+   * Whether an owner's clauses can hold for a list that captures a position:
+   * the case's own clauses are premises, and the owner's are walked as tests
+   * with each fixed value as its constant and each capture as a place at its
+   * domain. A place left no value means no application satisfies both.
+   */
+  const ownerClausesCanHold = (ownerNode: ParseNode, caseNode: ParseNode, ownerClauses: readonly ParseNode.WhereClause[],
+    positions: NonNullable<ReturnType<typeof listPositionsOf>>): boolean => {
+    if (positions.places.size === 0) return true;
+    const ownerList = (ownerNode as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
+    const before = captureFlow();
+    const wasJudging = judgingRetainedObligations;
+    const priorPlaces = retainedParameterPlaces;
+    const priorConstants = retainedParameterConstants;
+    const mark = errors.length;
+    frames.push(emptyFrame());
+    try {
+      judgingRetainedObligations = true;
+      for (const [name, domain] of positions.domains) declare(name, domain);
+      const ownClauses = (caseNode as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
+        ?? (caseNode as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses ?? [];
+      for (const clause of ownClauses) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate) || whereClauseAssigns(predicate)) continue;
+        const outcome = walkRefinementPredicate(predicate);
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+      retainedParameterPlaces = positions.places;
+      retainedParameterConstants = positions.constants;
+      for (const clause of ownerClauses) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate) || whereClauseAssigns(predicate)) continue;
+        // Only a clause every parameter of which has a place or a constant here.
+        const open = ownerParametersRead(predicate, ownerNode).some((reference) => {
+          const parameter = ownerList.find((candidate) => candidate.BindingIdentifier.name === reference.name);
+          return !parameter || (!positions.places.has(parameter) && !positions.constants.has(parameter));
+        });
+        if (open) continue;
+        const outcome = walkRefinementPredicate(predicate);
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+      return ![...positions.places.values()].some((place) => piecesFact(place)?.length === 0);
+    } finally {
+      retainedParameterPlaces = priorPlaces;
+      retainedParameterConstants = priorConstants;
+      judgingRetainedObligations = wasJudging;
+      frames.pop();
+      errors.splice(mark);
+      restoreFlow(before);
+    }
+  };
+  /**
+   * #sec-callable-overload-contracts: whether an owner's clauses reject a
+   * callable case's list, so that the case does not attach and is a
+   * standalone case. A clause that reads only fixed positions is decided by
+   * the constant evaluation a case's filter is decided by; one that reads a
+   * captured position, by the declaration-time judgment. A clause neither
+   * decides leaves the case attached. The verdict is shared with the run
+   * time, which rebuilds the group's roles from it.
+   */
+  const rejectedByOwnerClauses = new Map<ParseNode, Set<ParseNode>>();
+  const ownerClausesRejectCase = (ownerNode: ParseNode, caseNode: ParseNode): boolean => {
+    if (rejectedByOwnerClauses.get(ownerNode)?.has(caseNode)) return true;
+    const ownerClauses = (ownerNode as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    if (ownerClauses.length === 0 || /^Class/.test(caseNode.type)) return false;
+    let rejected = false;
+    try {
+      const positions = listPositionsOf(ownerNode, caseNode);
+      if (!positions) return false;
+      const bindings = [...positions.fixed].map(([Name, Value]) => ({ Capture: { Name }, Value }));
+      for (const clause of ownerClauses) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseNamesThis(predicate) || whereClauseNamesReturn(predicate) || whereClauseAssigns(predicate)) continue;
+        const read = ownerParametersRead(predicate, ownerNode);
+        if (read.length === 0 || !read.every((reference) => positions.fixed.has(reference.name))) continue;
+        if (staticFilterVerdict({ WhereClauses: [clause] } as unknown as ParseNode, bindings, null) === false
+          || fixedAssignabilityVerdict(predicate, positions.fixed) === false) {
+          rejected = true;
+          break;
+        }
+      }
+      if (!rejected) rejected = !ownerClausesCanHold(ownerNode, caseNode, ownerClauses, positions);
+    } catch {
+      rejected = false;
+    }
+    if (rejected) {
+      if (!rejectedByOwnerClauses.has(ownerNode)) rejectedByOwnerClauses.set(ownerNode, new Set());
+      rejectedByOwnerClauses.get(ownerNode)!.add(caseNode);
+      RecordOwnerClauseRejection(caseNode, ownerNode);
+    }
+    return rejected;
+  };
+  /** `Reflect.isAssignable(A, B)` over fixed type arguments and built-in type names, or 'unknown'. */
+  const fixedAssignabilityVerdict = (predicate: ParseNode, fixed: ReadonlyMap<string, TypeRecord>): boolean | 'unknown' => {
+    const call = unparenthesized(predicate) as unknown as { type: string, CallExpression?: ParseNode, MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] };
+    if (call.type !== 'CallExpression' || call.Arguments?.length !== 2) return 'unknown';
+    const callee = unparenthesized((call.CallExpression ?? call.MemberExpression) as ParseNode) as unknown as { type: string, MemberExpression?: { type?: string, name?: string }, IdentifierName?: { name?: string } };
+    if (callee?.type !== 'MemberExpression' || callee.MemberExpression?.type !== 'IdentifierReference' || callee.MemberExpression.name !== 'Reflect'
+      || callee.IdentifierName?.name !== 'isAssignable' || ResolveBindingDeclaration(predicate, 'Reflect')) return 'unknown';
+    const typeOf = (argument: ParseNode): TypeRecord | null => {
+      const node = unparenthesized(argument);
+      if (node.type !== 'IdentifierReference') return null;
+      const name = (node as ParseNode.IdentifierReference).name;
+      const bound = fixed.get(name);
+      if (bound) return ResolveBindingDeclaration(node, name)?.kind === 'type-parameter' ? bound : null;
+      return ResolveBindingDeclaration(node, name) ? null : builtinTypeRecord(name) ?? null;
+    };
+    const source = typeOf(call.Arguments[0]!);
+    const target = typeOf(call.Arguments[1]!);
+    return source && target ? IsAssignable(source, target) : 'unknown';
+  };
   /** Establish enclosing clauses as facts; their own judgments are reported at their declarations. */
   const walkEnclosingPremises = (premises: readonly ParseNode.WhereClause[]): void => {
     if (premises.length === 0) return;
@@ -30011,8 +30169,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint : null;
       return constraint ? resolveType(constraint as ParseNode.Type) : null;
     };
-    const placeOf = (node: ParseNode): string | null => narrowableName(node)
-      ?? (valueParameterConstraint(node) ? (node as ParseNode.IdentifierReference).name : null);
+    // A parameter a retained obligation binds to a constant is that constant, not a place.
+    const placeOf = (node: ParseNode): string | null => (node.type === 'IdentifierReference' && retainedParameterConstants?.has(typeParameterDeclarationOf(node)) ? null
+      : narrowableName(node) ?? (valueParameterConstraint(node) ? (node as ParseNode.IdentifierReference).name : null));
     // A String's `length` and a value pack's are places as an array's is, at
     // an array's length type (#sec-narrowing, the path rule).
     const lengthType = (node: ParseNode): TypeRecord | null => {
@@ -44984,7 +45143,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }));
         let analysis;
         try {
-          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord), isTypeDomainRecord);
+          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord), isTypeDomainRecord, (owner, declaration) => ownerClausesRejectCase(owner.Node, declaration.Node));
         } catch (e) {
           report(`${labelOf(group[0]!)}: ${(e as Error).message}`);
           continue;
@@ -45237,6 +45396,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             });
             return read.length > 0 && read.every((reference) => fixed.has(reference.name));
           });
+          // A clause that reads a captured position is judged with the fixed
+          // positions as constants and each capture at its domain; the
+          // specialization's own clauses are judged where they are written.
+          const ownClauses = (c.ClassTail as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+          const positions = ownClauses.length === 0 ? listPositionsOf(primaryClass, c) : null;
+          if (positions && !ownerClausesCanHold(primaryClass, c, primaryClauses, positions)) {
+            report(`\`class ${name}${list.sourceText}\` fixes arguments for which the \`where\` clauses of the primary declaration can hold for no value of its captures, so no application can select this specialization`);
+          }
           if (decided.length > 0) {
             const checks = whereChecks.get(c) ?? [];
             checks.push({
