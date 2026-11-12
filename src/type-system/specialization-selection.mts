@@ -463,6 +463,25 @@ export interface CallableGroup<S> {
  * same record, so both agree.
  */
 const ownerClauseRejections = new WeakMap<object, WeakSet<object>>();
+/**
+ * #sec-specialization-lists: pairs of cases of one list whose clauses the
+ * checker proved disjoint. No application satisfies both, so they are two
+ * cases and not one declared twice.
+ */
+const disjointCases = new WeakMap<object, WeakSet<object>>();
+export function RecordDisjointCases(a: object, b: object): void {
+  for (const [x, y] of [[a, b], [b, a]] as const) {
+    let others = disjointCases.get(x);
+    if (!others) {
+      others = new WeakSet();
+      disjointCases.set(x, others);
+    }
+    others.add(y);
+  }
+}
+export function CasesAreDisjoint(a: object, b: object): boolean {
+  return disjointCases.get(a)?.has(b) ?? false;
+}
 export function RecordOwnerClauseRejection(kase: object, owner: object): void {
   let owners = ownerClauseRejections.get(kase);
   if (!owners) {
@@ -510,7 +529,8 @@ function acceptsStructure<S>(owner: CallableDeclaration<S>, list: ParseNode.Type
  * mixed list carries its own labels and never attaches.
  */
 export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclaration<S>[], host: CallableGroupHost<S>, describe?: (domain: S) => string, isTypeDomain?: (domain: S) => boolean,
-  ownerClausesReject?: (owner: CallableDeclaration<S>, declaration: CallableDeclaration<S>) => boolean): CallableGroup<S> {
+  ownerClausesReject?: (owner: CallableDeclaration<S>, declaration: CallableDeclaration<S>) => boolean,
+  casesDisjoint?: (a: object, b: object) => boolean): CallableGroup<S> {
   const owners = declarations.filter((d) => d.List?.ListKind === 'parameters');
   const attached: { Case: CallableDeclaration<S>, Owner: CallableDeclaration<S> }[] = [];
   const standalone: CallableDeclaration<S>[] = [];
@@ -576,6 +596,8 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
   for (const owner of owners) {
     const mine = attached.filter((a) => a.Owner === owner).map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
     for (const [a, b] of FindDuplicateCases(mine, owner.Parameters ?? [], host)) {
+      // Two cases whose clauses no application satisfies together are not duplicates.
+      if (casesDisjoint ? casesDisjoint(a.Declaration, b.Declaration) : CasesAreDisjoint(a.Declaration, b.Declaration)) continue;
       diagnostics.push({ kind: 'duplicate', message: `${a.Label} and ${b.Label} specialize ${owner.Label} for the same applications`, node: b.Declaration });
     }
   }

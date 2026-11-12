@@ -18,8 +18,10 @@ test('is consults an application\'s predicate', () => {
 
 test('a boundary enforces an application\'s predicate', () => {
   expect(evaluated(`${NE} let b: NE.<string> = 'x'; b;`)).toBe('x');
-  expect(observeScript(`${NE} let b: NE.<string> = '';`)).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
-  expect(evaluated(`${NE} const s: any = ''; let m = 'none'; try { let b: NE.<string> = s; m = 'ran'; } catch (e) { m = 'threw'; } m;`)).toBe('threw');
+  // #sec-check-insertion: a constant decides an applied refinement where it is written.
+  expect(observeScript(`${NE} let b: NE.<string> = '';`)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
+  // A value that is not a constant is checked when it crosses.
+  expect(evaluated(`${NE} function cross(s: any) { try { let b: NE.<string> = s; return 'ran'; } catch (e) { return 'threw'; } } cross('') + cross('x');`)).toBe('threwran');
 });
 
 test('a clause that reads a value parameter is evaluated under the application\'s bindings', () => {

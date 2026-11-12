@@ -36,7 +36,7 @@ import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
-import { AnalyzeCallableGroup, SelectSpecialization, RecordOwnerClauseRejection } from './specialization-selection.mts';
+import { AnalyzeCallableGroup, SelectSpecialization, RecordOwnerClauseRejection, RecordDisjointCases } from './specialization-selection.mts';
 import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase, FixedTypeSubtrees } from './component-patterns.mts';
 import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution, StaticFlatteningContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -3511,7 +3511,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   let gateNode: ParseNode | undefined;
   const inCheckedCode = (): boolean => !gateNode || IsCheckedCode(gateNode);
   const diagnosticPhase = afterTypeEvaluation ? 'pre-evaluation' : 'static';
+  /** The verdicts of the impossible-test judgment, in order, for a walk that asks what was concluded and keeps no error. */
+  const impossibleTestVerdicts: ('never-succeeds' | 'never-fails')[] = [];
   const reportType = (code: TypeDiagnosticRule, source: unknown, message: string, ...args: readonly Formattable[]): void => {
+    if (code === 'rt-impossible-test') impossibleTestVerdicts.push(message.includes('never succeed') ? 'never-succeeds' : 'never-fails');
     const node = source && typeof source === 'object' && 'type' in source ? source as ParseNode : root;
     ReportTypeDiagnostic(errors, code, node, diagnosticPhase, message, ...args);
     if (code === 'rt-layout' || code === 'rt-unproductive-type' || code === 'rt-inference-limit') invalidTypeGraph = true;
@@ -4035,8 +4038,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ?? (declaration as { FunctionTypeParameterList?: readonly ParseNode[] }).FunctionTypeParameterList ?? [];
     const names: string[] = [];
     for (const formal of formals) {
-      if (formal.type !== 'SingleNameBinding' || (formal as { Ref?: boolean }).Ref) return;
-      names.push((formal as ParseNode.SingleNameBinding).BindingIdentifier.name);
+      // A signature's parameter is named as a method's is; an unnamed one
+      // gives a clause nothing to read.
+      const named = (formal as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+      if (!named || (formal.type !== 'SingleNameBinding' && formal.type !== 'FunctionTypeParameter') || (formal as { Ref?: boolean }).Ref) return;
+      names.push(named);
     }
     const written = positionalArguments(call.Arguments, names);
     if (written === null) return;
@@ -4061,7 +4067,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (complete) decided.push(clause);
     }
-    if (decided.length === 0) return;
+    if (decided.length === 0) {
+      judgeArgumentTypes(call, declaration, names, formals, written, clauses);
+      return;
+    }
     const checks = whereChecks.get(call) ?? [];
     if (checks.some((check) => check.declaration === declaration && check.values)) return;
     checks.push({ declaration: declaration as ParseNode.MethodDefinition, clauses: decided, bindings: new Map(), values, sourceModule: importedDeclarationSourceModule(declaration) });
@@ -4495,10 +4504,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const written = annotation.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] }, TypeArguments?: unknown };
     const typeName = written.type === 'TypeReference' ? written.TypeName : null;
-    if (!typeName?.IdentifierReference?.name || typeName.MemberNames?.length || written.TypeArguments) return;
+    if (!typeName?.IdentifierReference?.name || typeName.MemberNames?.length) return;
     const name = typeName.IdentifierReference.name;
     const alias = aliasNodes.get(name);
-    if (!alias || alias.type !== 'TypeAliasDeclaration' || (alias as { TypeParameters?: unknown }).TypeParameters) return;
+    if (!alias || alias.type !== 'TypeAliasDeclaration') return;
+    // #sec-check-insertion: a refinement applied to arguments decides a
+    // constant with its parameters bound to them; one applied to an open
+    // argument is left to the boundary.
+    const applied = new Map<string, TypeRecord>();
+    const aliasParameters = (alias as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
+    const writtenArguments = ((written.TypeArguments as { TypeArgumentList?: readonly ParseNode[] } | readonly ParseNode[] | undefined | null) as { TypeArgumentList?: readonly ParseNode[] } | null)?.TypeArgumentList
+      ?? (Array.isArray(written.TypeArguments) ? written.TypeArguments as readonly ParseNode[] : []);
+    if (aliasParameters.length > 0 || writtenArguments.length > 0) {
+      if (aliasParameters.length !== writtenArguments.length) return;
+      for (let index = 0; index < aliasParameters.length; index += 1) {
+        const argument = writtenArguments[index]!;
+        const resolved = resolveType(((argument as { Type?: ParseNode.Type }).Type ?? argument) as ParseNode.Type);
+        if (!resolved || resolved.Kind === 'any' || mentionsTypeParameter(resolved)) return;
+        applied.set(aliasParameters[index]!.BindingIdentifier.name, resolved);
+      }
+    }
     const clauses = (alias as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
     if (!clauses?.length) {
       // An alias of an intersection of refinements: each member decides.
@@ -4518,7 +4543,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!literalObject(source) && !enumerator) return;
     const checks = whereChecks.get(site) ?? [];
     checks.push({
-      declaration: alias as unknown as ParseNode.TypeAliasDeclaration, clauses, bindings: new Map(), thisLiteral: source, targetName: name,
+      declaration: alias as unknown as ParseNode.TypeAliasDeclaration, clauses, bindings: applied, thisLiteral: source, targetName: name,
       ...(enumerator ? { thisDeferrable: true } : {}), sourceModule: importedDeclarationSourceModule(alias),
     });
     whereChecks.set(site, checks);
@@ -4626,6 +4651,69 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * is decided here, as a specialization predicate is, and refused at the call
    * before the body rather than by the runtime contract at first execution.
    */
+  /**
+   * #sec-check-insertion: a call is judged against the callee's contract with
+   * each parameter read at the static type of its argument. Where a clause
+   * can then never succeed, no value the argument can hold satisfies the
+   * contract, and the call is a type error where it is written. A constant
+   * argument is the case the evaluation above decides; this is the case of
+   * an argument whose type, a refinement or a narrower member, decides it.
+   */
+  const judgeArgumentTypes = (call: ParseNode, declaration: ParseNode, names: readonly string[], formals: readonly ParseNode[],
+    written: readonly (ParseNode | undefined)[], clauses: readonly ParseNode.WhereClause[]): void => {
+    if (clauses.length === 0 || (whereChecks.get(call) ?? []).some((check) => check.declaration === declaration && check.values)) return;
+    const typed = new Map<string, Known>();
+    let informative = false;
+    for (let index = 0; index < names.length; index += 1) {
+      const annotation = (formals[index] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+      const declared = annotation ? resolveType(annotation.Type) : null;
+      const argument = written[index];
+      const given = argument ? staticType(argument) : null;
+      if (!declared || mentionsTypeParameter(declared)) return;
+      // Only an argument that is narrower than the parameter says anything.
+      if (given && given.Kind !== 'any' && !mentionsTypeParameter(given) && !SameType(given, declared) && IsAssignable(given, declared)) {
+        typed.set(names[index]!, given);
+        informative = true;
+      } else {
+        typed.set(names[index]!, declared);
+      }
+    }
+    if (!informative) return;
+    const before = captureFlow();
+    const mark = errors.length;
+    const logged = impossibleTestVerdicts.length;
+    let refused: ParseNode.WhereClause | undefined;
+    frames.push(emptyFrame());
+    try {
+      for (const [name, type] of typed) declare(name, type);
+      for (const clause of clauses) {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate) || whereClauseAssigns(predicate)) continue;
+        // Only a clause over the parameters alone: any other name would be
+        // read in the caller's scope here, not the callee's.
+        if (!LexicalFreeReferences(predicate).every((reference) => names.includes(reference.name)
+          && ResolveBindingDeclaration(reference, reference.name)?.kind === 'parameter')) continue;
+        const from = impossibleTestVerdicts.length;
+        const outcome = walkRefinementPredicate(predicate);
+        if (impossibleTestVerdicts.slice(from).includes('never-succeeds')) {
+          refused = clause;
+          break;
+        }
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+    } catch {
+      refused = undefined;
+    } finally {
+      frames.pop();
+      errors.splice(mark);
+      impossibleTestVerdicts.length = logged;
+      restoreFlow(before);
+    }
+    if (refused) {
+      reportType('rt-where-unsatisfied', call, 'a $1 clause is not satisfied by this call: no value its arguments can hold satisfies $2',
+        Value('where'), Value((refused as { sourceText?: string }).sourceText ?? 'the contract'));
+    }
+  };
   const recordRuntimeSubjectWhereCheck = (call: ParseNode.CallExpression): void => {
     const callee = call.CallExpression;
     if (callee.type !== 'IdentifierReference') return;
@@ -4698,7 +4786,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (complete) decided.push(clause);
     }
-    if (decided.length === 0) return;
+    if (decided.length === 0) {
+      judgeArgumentTypes(call, declaration, names, formals, written, clauses);
+      return;
+    }
     const checks = whereChecks.get(call) ?? [];
     if (checks.some((check) => check.declaration === declaration && check.values)) return;
     checks.push({ declaration: declaration as ParseNode.FunctionDeclaration, clauses: decided, bindings: new Map(), values, sources, sourceModule: importedDeclarationSourceModule(declaration) });
@@ -20992,7 +21083,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }));
     let analysis;
     try {
-      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord), isTypeDomainRecord, (owner, declaration) => ownerClausesRejectCase(owner.Node, declaration.Node));
+      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord), isTypeDomainRecord, (owner, declaration) => ownerClausesRejectCase(owner.Node, declaration.Node), (a, b) => casesClausesDisjoint(a as ParseNode, b as ParseNode));
     } catch {
       return undefined;
     }
@@ -28908,14 +28999,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             else if (type.Kind === 'nominal' && refinementBaseOf(type)) type = structureOf(type)!;
             // Refinements that intersect share their base.
             else if (type.Kind === 'intersection' && type.Members.length > 0 && type.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)) type = type.Members[0] as TypeRecord;
+            else if (nullableOf(type as Known)) type = nullableOf(type as Known)!;
             else break;
           }
           return type;
         };
         const seen = new Set<TypeRecord>();
         // An intersection of refinements holds every member's clauses.
-        const refinedMembers = written.Kind === 'intersection' && written.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)
-          ? written.Members as readonly Known[] : [written];
+        const nullableOf = (type: Known): TypeRecord | null => {
+          if (!type || type.Kind !== 'union') return null;
+          const others = (type.Members as readonly TypeRecord[]).filter((member) => !(member.Kind === 'primitive' && (member as { Name?: string }).Name === 'null'));
+          return others.length === 1 && others.length < type.Members.length && refinementBaseOf(others[0]!) ? others[0]! : null;
+        };
+        // A place that may be `null` holds its refinement's set and, for
+        // `null`, the 0 a comparison reads it as.
+        const nullableRefinement = nullableOf(written);
+        const refinedMembers = nullableRefinement ? [nullableRefinement as Known]
+          : written.Kind === 'intersection' && written.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)
+            ? written.Members as readonly Known[] : [written];
         for (const member of refinedMembers) for (let type: Known = member; type && !seen.has(type);) {
           seen.add(type);
           if (type.Kind === 'parameterized') {
@@ -28931,13 +29032,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const declaration = type.Declaration;
             const parameters = declaration.TypeParameters?.TypeParameterList ?? [];
             const bindings = new Map<string, TypeRecord>();
+            // #sec-refinement-narrowing: a refinement applied to value
+            // arguments projects its clauses with those arguments read as
+            // their constants, so `Lt.<10>` for `uint8 where this < N`
+            // projects what `uint8 where this < 10` does.
+            const constants = new Map<ParseNode.TypeParameter, TypeRecord>();
+            const constantOf = (parameter: ParseNode.TypeParameter, argument: unknown): void => {
+              if (!(parameter as { IsValueParameter?: boolean }).IsValueParameter) return;
+              if (typeof argument === 'number' || typeof argument === 'bigint') {
+                const domain = (parameter as { TypeParameterConstraint?: ParseNode | null }).TypeParameterConstraint;
+                const base = domain ? resolveType(domain as ParseNode.Type) : null;
+                constants.set(parameter, { Kind: 'literal', Value: argument, ...(base ? { Base: base } : {}) } as unknown as TypeRecord);
+              } else if (argument && typeof argument === 'object' && (argument as TypeRecord).Kind === 'literal') {
+                constants.set(parameter, argument as TypeRecord);
+              }
+            };
             parameters.forEach((parameter, i) => {
               const argument = type!.Kind === 'nominal' ? type!.Arguments[i] : undefined;
               if (argument && typeof argument !== 'number') bindings.set(parameter.BindingIdentifier.name, argument);
+              constantOf(parameter, argument);
             });
-            for (const capture of type.CapturedBindings ?? []) bindings.set(capture.Declaration.BindingIdentifier.name, capture.Type);
+            for (const capture of type.CapturedBindings ?? []) {
+              bindings.set(capture.Declaration.BindingIdentifier.name, capture.Type);
+              constantOf(capture.Declaration, capture.Type);
+            }
             for (const clause of (declaration.WhereClauses ?? []).filter((entry) => !judgedClauses.has(entry))) clauses.push({ predicate: clause.RefinementPredicate, bindings,
-              declarations: [...parameters, ...(type.CapturedBindings ?? []).map((capture) => capture.Declaration)] });
+              declarations: [...parameters, ...(type.CapturedBindings ?? []).map((capture) => capture.Declaration)], constants });
             type = structureOf(type);
           } else break;
         }
@@ -29090,6 +29210,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
          * set rather than narrowing it (#sec-refinement-narrowing).
          */
         const piecesOf = (node: ParseNode) => predicatePieces(node, (n) => orderedAssertion(n, name, read) ?? pointAssertion(n, name, read));
+        // A comparison reads `null` as 0. A refinement whose set holds 0 is
+        // therefore the numeric image of the nullable place too, and projects
+        // as written; one whose set excludes 0 would say of `null` what is
+        // false of it, and projects nothing.
+        if (nullableRefinement) {
+          const holdsZero = whereClauseWalkDepth > 0 && clauses.every((clause) => {
+            activeClause = clause;
+            const scope = new Map<string, Known>(clause.bindings);
+            retainTypeArgumentDeclarations(scope, clause.declarations, clause.bindings);
+            typeParameterScopes.push(scope);
+            try {
+              const projected = piecesOf(clause.predicate);
+              return !!projected && (projected.domain as { width?: number | null }).width == null
+                && projected.pieces.some(([lo, hi]) => (lo === null || lo <= 0n) && (hi === null || hi >= 0n));
+            } finally {
+              typeParameterScopes.pop();
+            }
+          });
+          if (!holdsZero) continue;
+        }
         // Each pass only installs stricter existing types. A syntax-sized
         // bound also keeps recursive aliases and contradictory clauses finite.
         const limit = clauses.reduce((total, clause) => total + RefinementProjectionSize(clause.predicate), 0);
@@ -29102,10 +29242,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             typeParameterScopes.push(scope);
             try {
               if (whereClauseWalkDepth > 0 && pass === 0) {
-                const projected = piecesOf(clause.predicate);
-                if (projected) {
-                  const [current] = currentPieces(projected.domain);
-                  declarePieces(projected.place, intersectPieces(current, projected.pieces));
+                const appliedConstants = (clause as { constants?: Map<ParseNode.TypeParameter, TypeRecord> }).constants;
+                const priorConstants = retainedParameterConstants;
+                if (appliedConstants?.size) retainedParameterConstants = new Map([...(priorConstants ?? []), ...appliedConstants]);
+                try {
+                  const projected = piecesOf(clause.predicate);
+                  if (projected) {
+                    const [current] = currentPieces(projected.domain);
+                    declarePieces(projected.place, intersectPieces(current, projected.pieces));
+                  }
+                } finally {
+                  retainedParameterConstants = priorConstants;
                 }
               }
               ProjectRefinement(clause.predicate, { decide, assert, decidePattern(subject, pattern) {
@@ -30299,6 +30446,67 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const target = typeOf(call.Arguments[1]!);
     return source && target ? IsAssignable(source, target) : 'unknown';
   };
+  /**
+   * #sec-specialization-lists: whether two cases of one list have clauses no
+   * application satisfies together, by the declaration-time judgment: the
+   * first's clauses are premises and the second's are walked under them.
+   * Decided only where both name their captures alike, position by position.
+   * The verdict is shared with the run time.
+   */
+  const disjointCaseVerdicts = new WeakMap<object, WeakSet<object>>();
+  const casesClausesDisjoint = (first: ParseNode, second: ParseNode): boolean => {
+    if (disjointCaseVerdicts.get(first)?.has(second)) return true;
+    const clausesOf = (node: ParseNode): readonly ParseNode.WhereClause[] => (node as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses
+      ?? (node as { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } }).ClassTail?.WhereClauses ?? [];
+    const a = clausesOf(first);
+    const b = clausesOf(second);
+    if (a.length === 0 || b.length === 0) return false;
+    const capturesOf = (node: ParseNode): string[] => SpecializationPatternsOf((node as { TypeParameters: ParseNode.TypeParameters }).TypeParameters)
+      .map((pattern) => (pattern.type === 'CaptureBinding' ? (pattern as unknown as ParseNode.CaptureBinding).BindingIdentifier.name : ''));
+    let disjoint = false;
+    const before = captureFlow();
+    const mark = errors.length;
+    const logged = impossibleTestVerdicts.length;
+    frames.push(emptyFrame());
+    try {
+      const names = capturesOf(first);
+      if (names.join('\u0000') !== capturesOf(second).join('\u0000')) return false;
+      for (const [name, domain] of captureDomainsOf(first)) declare(name, domain);
+      const usable = (clause: ParseNode.WhereClause): boolean => {
+        const predicate = clause.RefinementPredicate as ParseNode;
+        return !whereClauseNamesReturn(predicate) && !whereClauseNamesThis(predicate) && !whereClauseAssigns(predicate)
+          && LexicalFreeReferences(predicate).every((reference) => names.includes(reference.name));
+      };
+      for (const clause of a.filter(usable)) {
+        const outcome = walkRefinementPredicate(clause.RefinementPredicate as ParseNode);
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+      for (const clause of b.filter(usable)) {
+        const from = impossibleTestVerdicts.length;
+        const outcome = walkRefinementPredicate(clause.RefinementPredicate as ParseNode);
+        if (impossibleTestVerdicts.slice(from).includes('never-succeeds')) {
+          disjoint = true;
+          break;
+        }
+        if (outcome?.whenTrue) restoreFlow(outcome.whenTrue);
+      }
+    } catch {
+      disjoint = false;
+    } finally {
+      frames.pop();
+      errors.splice(mark);
+      impossibleTestVerdicts.length = logged;
+      restoreFlow(before);
+    }
+    if (disjoint) {
+      for (const [x, y] of [[first, second], [second, first]] as const) {
+        if (!disjointCaseVerdicts.has(x)) disjointCaseVerdicts.set(x, new WeakSet());
+        disjointCaseVerdicts.get(x)!.add(y);
+      }
+      RecordDisjointCases(first, second);
+    }
+    return disjoint;
+  };
   /** Establish enclosing clauses as facts; their own judgments are reported at their declarations. */
   const walkEnclosingPremises = (premises: readonly ParseNode.WhereClause[]): void => {
     if (premises.length === 0) return;
@@ -30450,6 +30658,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       else if (base.Kind === 'nominal' && refinementBaseOf(base)) base = structureOf(base)!;
       // Refinements that intersect are ordered as the base they share.
       else if (base.Kind === 'intersection' && base.Members.length > 0 && base.Members.every((member) => refinementBaseOf(member as TypeRecord) !== null)) base = base.Members[0] as TypeRecord;
+      // #sec-narrowing-flow: a place that may be `null` is ordered as its
+      // other member. A comparison reads `null` as 0, which every numeric
+      // domain holds, so the member's interval set is the place's numeric
+      // image.
+      else if (base.Kind === 'union') {
+        const others = (base.Members as readonly TypeRecord[]).filter((member) => !(member.Kind === 'primitive' && (member as { Name?: string }).Name === 'null'));
+        if (others.length === 1 && others.length < base.Members.length) base = others[0]!;
+      }
     }
     return base;
   };
@@ -45551,7 +45767,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }));
         let analysis;
         try {
-          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord), isTypeDomainRecord, (owner, declaration) => ownerClausesRejectCase(owner.Node, declaration.Node));
+          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord), isTypeDomainRecord, (owner, declaration) => ownerClausesRejectCase(owner.Node, declaration.Node), (a, b) => casesClausesDisjoint(a as ParseNode, b as ParseNode));
         } catch (e) {
           report(`${labelOf(group[0]!)}: ${(e as Error).message}`);
           continue;
