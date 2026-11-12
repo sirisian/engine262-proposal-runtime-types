@@ -79,3 +79,45 @@ test('a refinement of a refinement admits a constant that satisfies both', () =>
   expect(observeScript(`${NESTED}let x: Mid = 20;`)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
   expect(observeScript(`${NESTED}let x: Mid = 2;`)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
 });
+
+test('a fresh aggregate decides at an argument and a return as at an initializer', () => {
+  refused('function g(a: [2].<Small>) { return a; } g([1, 20]);');
+  refused('function g(o: { a: Small }) { return o; } g({ a: 20 });');
+  refused('function f(): [Small, Small] { return [1, 20]; }');
+  expect(evaluated(`${SMALL}function g(a: [2].<Small>): uint8 { return a[0]; } String(g([1, 2]));`)).toBe('1');
+  expect(evaluated(`${SMALL}function f(): [Small, Small] { return [1, 2]; } String(f()[1]);`)).toBe('2');
+});
+
+test('a constant type argument decides a refined domain', () => {
+  refused('function f<N: Small>(): string { return "ok"; } f.<20>();');
+  expect(evaluated(`${SMALL}function f<N: Small>(): string { return 'ok'; } f.<5>();`)).toBe('ok');
+  expect(evaluated(`${SMALL}class C<N: Small> {} String(new C.<5>() instanceof C.<5>);`)).toBe('true');
+});
+
+/**
+ * #sec-where-clauses: the base's default is the refinement's default where
+ * every predicate holds of it; a false predicate means the refinement has
+ * none, and a declaration of it needs an initializer.
+ */
+const noDefault = (source: string): void => {
+  expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-missing-default' } });
+};
+
+test('a refinement the base default satisfies has that default', () => {
+  expect(evaluated(`${SMALL}let x: Small; String(x);`)).toBe('0');
+  expect(evaluated(`${SMALL}class K { a: Small; } String(new K().a);`)).toBe('0');
+  expect(evaluated("type Short = string where this.length < 3; let s: Short; String(s.length);")).toBe('0');
+});
+
+test('a refinement the base default fails has no default', () => {
+  noDefault('type Big = uint8 where this > 5; let x: Big;');
+  noDefault('type Big = uint8 where this > 5; class K { a: Big; }');
+  noDefault("type Long = string where this.length > 3; let s: Long;");
+  noDefault('type Low = uint8 where this < 10; type Mid = Low where this > 3; let x: Mid;');
+});
+
+test('an array is filled with its element type\'s default only where there is one', () => {
+  noDefault('type Big = uint8 where this > 5; const a: [2].<Big> = new [2].<Big>();');
+  expect(evaluated(`${SMALL}const a: [2].<Small> = new [2].<Small>(); String(a.length) + String(a[0]);`)).toBe('20');
+  expect(evaluated('const a: [2].<uint8> = new [2].<uint8>(); String(a.length);')).toBe('2');
+});

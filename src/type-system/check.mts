@@ -885,6 +885,8 @@ export interface GenericWhereCheck {
   readonly thisLiteral?: ParseNode;
   /** A constant that is not an expression of its own, such as a generic parameter's default, bound to `this` as its value. */
   readonly thisConstant?: TypeRecord;
+  /** The constant is the base's default: a predicate it fails leaves the refinement no default. */
+  readonly missingDefault?: boolean;
   /** The name of the refined type, for the diagnostic. */
   readonly targetName?: string;
   /**
@@ -4381,8 +4383,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * type. Every declared refinement the target holds, its bases and the
    * members of an intersection among them, decides the constant.
    */
-  const recordConstantRefinement = (site: ParseNode, target: TypeRecord | null | undefined, source: TypeRecord | null | undefined): void => {
-    if (!target || !source || source.Kind !== 'literal') return;
+  const recordConstantRefinement = (site: ParseNode, target: TypeRecord | null | undefined, source: TypeRecord | null | undefined, missingDefault = false): boolean => {
+    if (!target || !source || source.Kind !== 'literal') return false;
+    let recorded = false;
     const members = target.Kind === 'intersection' ? target.Members as readonly TypeRecord[] : [target];
     for (const member of members) {
       const seen = new Set<TypeRecord>();
@@ -4394,10 +4397,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checks.push({
           declaration: named.Declaration as unknown as ParseNode.TypeAliasDeclaration, clauses: named.Declaration.WhereClauses, bindings: new Map(),
           thisConstant: source, targetName: named.Declaration.BindingIdentifier?.name, sourceModule: importedDeclarationSourceModule(named.Declaration),
+          ...(missingDefault ? { missingDefault: true } : {}),
         });
         whereChecks.set(site, checks);
+        recorded = true;
       }
     }
+    return recorded;
+  };
+  /**
+   * #sec-where-clauses: the base's default is the refinement's default where
+   * every predicate holds of it. A primitive base's default is a constant,
+   * so the question is decided as any constant against the refinement is.
+   * *false* where the type is not such a refinement, and the ordinary
+   * default requirement applies.
+   */
+  const recordRefinementDefault = (site: ParseNode, declared: TypeRecord | null | undefined): boolean => {
+    if (!declared || declared.Kind !== 'nominal' || !refinementBaseOf(declared)) return false;
+    let base: TypeRecord | null = declared;
+    for (const seen = new Set<TypeRecord>(); base && base.Kind === 'nominal' && !seen.has(base) && refinementBaseOf(base);) {
+      seen.add(base);
+      base = refinementBaseOf(base);
+    }
+    if (!base || base.Kind !== 'primitive') return false;
+    const name = (base as { Name?: string }).Name;
+    const zero = name === 'string' ? Value('') : name === 'boolean' ? Value.false : name === 'bigint' ? 0n : isNumericValueTypeName(name) ? 0 : undefined;
+    if (zero === undefined) return false;
+    return recordConstantRefinement(site, declared, { Kind: 'literal', Value: zero, Base: base } as unknown as TypeRecord, true);
   };
   /** The constants of a fresh array, tuple or object literal, each against the type its position is given. */
   const recordAggregateRefinements = (site: ParseNode, target: TypeRecord | null | undefined, source: ParseNode | null | undefined): void => {
@@ -4429,6 +4455,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (literalObject(node)) recordConstantRefinement(site, target, staticType(node));
+  };
+  /** A fresh aggregate that crosses a boundary other than a binding's initializer: each constant against its position. */
+  const recordAggregateArgument = (site: ParseNode, annotation: ParseNode.TypeAnnotation, source: ParseNode): void => {
+    if (!['ArrayLiteral', 'ObjectLiteral'].includes(unparenthesized(source).type)) return;
+    const target = resolveType(annotation.Type) as TypeRecord | null;
+    if (target && !refinementBaseOf(target)) recordAggregateRefinements(site, target, source);
   };
   /** Whether a statement follows one in its own list that cannot complete, so that it is never reached. */
   const followsNonCompleting = (statement: ParseNode): boolean => {
@@ -4590,7 +4622,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       formals.forEach((formal, index) => {
         const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
         const argument = call.Arguments[index];
-        if (annotation && argument && argument.type !== 'AssignmentRestElement' && argument.type !== 'NamedArgument') recordRefinementCheck(call, annotation, argument);
+        if (annotation && argument && argument.type !== 'AssignmentRestElement' && argument.type !== 'NamedArgument') {
+          recordRefinementCheck(call, annotation, argument);
+          recordAggregateArgument(call, annotation, argument);
+        }
       });
       return;
     }
@@ -4608,7 +4643,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     formals.forEach((formal, index) => {
       const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
       const argument = written[index];
-      if (annotation && argument) recordRefinementCheck(call, annotation, argument);
+      if (annotation && argument) {
+        recordRefinementCheck(call, annotation, argument);
+        recordAggregateArgument(call, annotation, argument);
+      }
     });
     const values = new Map<string, TypeRecord>();
     const sources = new Map<string, ParseNode>();
@@ -7861,6 +7899,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const requireAssignable = (source: Known, target: Known, at: ParseNode = root) => {
     if (!source || !target) {
       return;
+    }
+    // #sec-check-insertion: a constant that meets a refinement anywhere a
+    // value crosses into it, a type argument included, is built at the
+    // innermost base and decided against each predicate where it is written.
+    // Only a constant that is written there: a binding narrowed to a literal
+    // is not one, and crosses by a conversion as any value of the base does.
+    if (source.Kind === 'literal' && target.Kind === 'nominal' && refinementBaseOf(target)
+      && !['IdentifierReference', 'MemberExpression', 'ThisExpression'].includes(unparenthesized(at).type)) {
+      let innermost: TypeRecord | null = target;
+      for (const seen = new Set<TypeRecord>(); innermost && innermost.Kind === 'nominal' && !seen.has(innermost) && refinementBaseOf(innermost);) {
+        seen.add(innermost);
+        innermost = refinementBaseOf(innermost);
+      }
+      if (innermost?.Kind === 'primitive' && (IsAssignable(source, innermost) || literalFitsNumericType(source, innermost))
+        && recordConstantRefinement(at, target, source)) return;
     }
     // The nominal source view retains a clause for checking; the runtime type
     // is a parameterization. Entering its composite base still performs the
@@ -14890,6 +14943,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (annotatedFields > 0 && untypedFields > 0) return 'unknown';
     return verdict;
   };
+  const defaultFilledSites = new WeakSet<object>();
   const refuseClassWithoutDefault = (declared: TypeRecord): boolean => {
     if (staticDefaultOf(declared) !== 'none') return false;
     reportType('rt-missing-default', root, '$1 has no default value, so a declaration of it needs an initializer', Value(displayType(declared)));
@@ -23689,6 +23743,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 : extentName && typeParameterInScope(extentName) ? parameterTypeRecord(extentName, typeParameterConstraintOf(extentName) ?? undefined)
                   : folded !== null && folded >= 0n ? Number(folded)
                     : { Kind: 'parameter', Name: (extentNode as { sourceText?: string }).sourceText ?? 'extent', Opaque: true };
+            // #sec-where-clauses: a construction with no elements written
+            // fills them with the element type's default, which a refinement
+            // has only where its predicate holds of the base's.
+            const constructed = (spec as unknown as { parent?: { Arguments?: readonly unknown[] } }).parent;
+            if (extent !== 0 && extent !== 'dynamic' && (constructed?.Arguments?.length ?? 0) === 0 && !defaultFilledSites.has(node)) {
+              defaultFilledSites.add(node);
+              recordRefinementDefault(node, element as TypeRecord);
+            }
             return CanonicalizeType({
               Kind: 'array', Element: element as TypeRecord, Extent: extent,
             } as unknown as TypeRecord) as Known;
@@ -43350,12 +43412,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             checkDefaultInitialization(declared);
             refuseClassWithoutDefault(declared as TypeRecord);
             const written = (n.TypeAnnotation?.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } | undefined);
-            defaultsNeeded.push({
-              node: n as ParseNode,
-              type: declared as TypeRecord,
-              display: displayType(declared as TypeRecord),
-              annotationName: written?.type === 'TypeReference' ? written.TypeName?.IdentifierReference?.name : undefined,
-            });
+            if (!recordRefinementDefault(n as ParseNode, declared as TypeRecord)) {
+              defaultsNeeded.push({
+                node: n as ParseNode,
+                type: declared as TypeRecord,
+                display: displayType(declared as TypeRecord),
+                annotationName: written?.type === 'TypeReference' ? written.TypeName?.IdentifierReference?.name : undefined,
+              });
+            }
           }
           if (n.TypeAnnotation && declared && n.Initializer) {
             const src = staticType(n.Initializer);
@@ -44549,6 +44613,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const declaredResult = (owner as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined)?.TypeAnnotation;
           if (expr && reached && declaredResult && owner && /^(FunctionDeclaration|FunctionExpression|MethodDefinition|ArrowFunction)$/.test(owner.type)) {
             recordRefinementCheck(n, declaredResult, expr);
+            recordAggregateArgument(n, declaredResult, expr);
           }
           if (literal?.Kind === 'literal') {
             const decided = clauses!.filter((clause) => whereClauseNamesReturn(clause.RefinementPredicate)
@@ -44659,10 +44724,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // default. check-pass.mts resolves this after metadata processing.
               const written = n.TypeAnnotation.Type;
               refuseClassWithoutDefault(declared as TypeRecord);
-              defaultsNeeded.push({
-                node: n, type: declared, display: displayType(declared),
-                annotationName: written.type === 'TypeReference' ? written.TypeName.IdentifierReference?.name : undefined,
-              });
+              if (!recordRefinementDefault(n, declared as TypeRecord)) {
+                defaultsNeeded.push({
+                  node: n, type: declared, display: displayType(declared),
+                  annotationName: written.type === 'TypeReference' ? written.TypeName.IdentifierReference?.name : undefined,
+                });
+              }
             }
           }
           walk(n.Initializer);

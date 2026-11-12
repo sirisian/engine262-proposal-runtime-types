@@ -967,6 +967,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
             ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : check.returnValue
               ? CreateTypeDiagnostic('rt-return-contract', clause, 'pre-evaluation', 'a result contract is not satisfied by this return: $1', Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+            : check.missingDefault
+              ? CreateTypeDiagnostic('rt-missing-default', clause, 'pre-evaluation', '$1 has no default value, so a declaration of it needs an initializer: the default of its base fails $2',
+                Value(check.targetName ?? 'the refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'its predicate'))
             : check.thisLiteral || check.thisConstant
               ? CreateTypeDiagnostic('rt-assignability', clause, 'pre-evaluation', 'this value is not a $1: it fails the refinement $2', Value(check.targetName ?? 'refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
             : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
