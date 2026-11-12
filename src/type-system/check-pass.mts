@@ -776,216 +776,231 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     const declaration = item.type === 'ExportDeclaration' ? item.HoistableDeclaration : item;
     return declaration?.type === 'FunctionDeclaration' || declaration?.type === 'ImportDeclaration' ? [declaration] : [];
   }));
-  for (const check of GenericWhereChecksOf(root)) {
-    const sourceContext = surroundingAgent.runningExecutionContext;
-    const callerEnvironment = sourceContext.LexicalEnvironment;
-    if (check.sourceModule) {
-      if (!check.sourceModule.Environment) continue;
-      sourceContext.LexicalEnvironment = check.sourceModule.Environment;
-    }
-    const endRequiredInputs = check.sourceModule ? RequireModuleInputs() : () => {};
-    try {
-      // The method's own parameters shadow its class's of the same name, and
-      // each name is bound once.
-      const parameters = check.closed ? [] : [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
-        .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()]
-        // A specialization's list binds only the positions it fixes, and a
-        // default's check only the parameters that have one.
-        .filter((parameter) => (!check.unreachableSpecialization && !check.unreachableDefault) || check.bindings.has(parameter.BindingIdentifier.name));
-      const frame = new Map<string, TypeRecord>();
-      for (const parameter of parameters) {
-        const name = parameter.BindingIdentifier.name;
-        // Use the ordinary binder's value domains for functions and aliases.
-        // A checking-time number and its runtime uint32 value must not form
-        // different verification keys for the same bound parameter.
-        Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
+  // #sec-type-errors: the clauses a constant decides are evaluated once the
+  // enumerations of this source text have been processed, so that a clause
+  // or a constant that names an enumerator can read it.
+  const decideWhereChecks = function* decideWhereChecks(): PlainEvaluator {
+    for (const check of GenericWhereChecksOf(root)) {
+      const sourceContext = surroundingAgent.runningExecutionContext;
+      const callerEnvironment = sourceContext.LexicalEnvironment;
+      if (check.sourceModule) {
+        if (!check.sourceModule.Environment) continue;
+        sourceContext.LexicalEnvironment = check.sourceModule.Environment;
       }
-      // A value parameter bound to a literal argument (round 5, Gap 1) is as
-      // available to the predicate as a bound generic parameter.
-      const available = new Set([...frame.keys(), ...(check.values?.keys() ?? [])]);
-      for (const clause of check.clauses) {
-        const predicate = clause.RefinementPredicate;
-        if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate)) continue;
-        // Free names must denote available source bindings, never a same-spelled
-        // outer value in place of an uninstantiated nested declaration.
-        const admitted = new Set(available);
-        const references = LexicalFreeReferences(predicate);
-        for (const reference of references) {
-          if (admitted.has(reference.name)) continue;
-          const binding = ResolveBindingDeclaration(reference, reference.name);
-          if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name) || ERROR_CONSTRUCTORS.includes(reference.name)))
-            || (check.sourceModule && isModuleBinding(reference))
-            || ((binding?.kind === 'function' || binding?.kind === 'import') && availableDeclarations.has(binding.node))) admitted.add(reference.name);
-        }
-        if (references.some((reference) => !admitted.has(reference.name))) continue;
-        if (references.some((reference) => frame.has(reference.name) && whereInputNeedsRuntimeValue(frame.get(reference.name)!))) continue;
-        // Inspect transitive lexical captures before calling helpers. A caught
-        // premature TDZ read is no more evidence than an uncaught one. Imported
-        // inputs retain the module boundary's required-failure rule.
-        let importedInputs = false;
-        if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
-          if (check.values?.has(reference.name) && binding.kind === 'parameter') return false;
-          let source: ParseNode = reference;
-          while (source.parent) source = source.parent;
-          if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') {
-            importedInputs = true;
-            return false;
-          }
-          // A class parameter a method clause reads is available when the
-          // receiver's class arguments bound it (round 5, Q7).
-          if (binding.kind === 'type-parameter') return !(binding.node === check.declaration
-            || (check.outerParameters?.some((parameter) => parameter.BindingIdentifier.name === reference.name) ?? false)) || !frame.has(reference.name);
-          // A local clause may reach a foreign module through a helper. Its
-          // module-level captures are required inputs too, even though the
-          // clause itself has no foreign sourceModule. Evaluate the real read
-          // so module initialization order and sticky input failure govern it.
-          if ((check.sourceModule || source !== root) && isModuleBinding(reference)) return false;
-          if (source !== root) return true;
-          if (binding.kind === 'function') return !availableDeclarations.has(binding.node);
-          if (binding.kind === 'type') return !preEvaluatedTypeDeclarations.has(binding.node);
-          return true;
-        }, check.sourceModule)) continue;
-        // Runtime subjects and writes require their evaluation-time environment.
-        const hasRuntimeSubject = (node: ParseNode): boolean => {
-          if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
-            || (node.type === 'UnaryExpression' && node.operator === 'delete')) return true;
-          return Object.entries(node).some(([key, child]) => {
-            if (['parent', 'location', 'sourceText'].includes(key)) return false;
-            return Array.isArray(child) ? child.some((part) => part && typeof part === 'object' && 'type' in part && hasRuntimeSubject(part))
-              : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
-          });
-        };
-        if (hasRuntimeSubject(predicate) && !check.returnValue && !check.thisLiteral && !check.thisConstant) continue;
-        const context = surroundingAgent.runningExecutionContext;
-        const outer = context.LexicalEnvironment;
-        const scope = new DeclarativeEnvironmentRecord(outer);
+      const endRequiredInputs = check.sourceModule ? RequireModuleInputs() : () => {};
+      try {
+        // The method's own parameters shadow its class's of the same name, and
+        // each name is bound once.
+        const parameters = check.closed ? [] : [...new Map([...(check.outerParameters ?? []), ...(check.declaration.TypeParameters?.TypeParameterList ?? [])]
+          .map((parameter) => [parameter.BindingIdentifier.name, parameter] as const)).values()]
+          // A specialization's list binds only the positions it fixes, and a
+          // default's check only the parameters that have one.
+          .filter((parameter) => (!check.unreachableSpecialization && !check.unreachableDefault) || check.bindings.has(parameter.BindingIdentifier.name));
+        const frame = new Map<string, TypeRecord>();
         for (const parameter of parameters) {
           const name = parameter.BindingIdentifier.name;
-          const bound = frame.get(name)!;
-          let value: Value;
-          if (parameter.IsValueParameter && bound.Kind === 'literal') {
-            value = bound.Value;
-          } else if (parameter.IsValueParameter && bound.Kind === 'tuple') {
-            value = Q(yield* ValuePackView(bound));
-          } else {
-            value = GetTypeObject(bound);
-          }
-          typeParameterBindingScopes.add(scope);
-          X(scope.CreateImmutableBinding(Value(name), Value.true));
-          X(scope.InitializeBinding(Value(name), value));
+          // Use the ordinary binder's value domains for functions and aliases.
+          // A checking-time number and its runtime uint32 value must not form
+          // different verification keys for the same bound parameter.
+          Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
         }
-        // A constant that is evaluated where the clause is, a fresh aggregate
-        // of constants, gives no verdict where it cannot be built.
-        let undecided = false;
-        for (const [name, literal] of check.values ?? []) {
-          const raw = (literal as { Value: unknown }).Value;
-          let value = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
-          // #sec-generic-where: a written literal argument is the value the call
-          // binds, built at its parameter's type as the call builds it.
-          const source = check.sources?.get(name);
-          if (source) {
-            const built = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(source as never))));
-            if (built.Type === 'normal') value = built.Value;
-            else if ((literal as { EvaluatedSource?: boolean }).EvaluatedSource) undecided = true;
+        // A value parameter bound to a literal argument (round 5, Gap 1) is as
+        // available to the predicate as a bound generic parameter.
+        const available = new Set([...frame.keys(), ...(check.values?.keys() ?? [])]);
+        for (const clause of check.clauses) {
+          const predicate = clause.RefinementPredicate;
+          if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate)) continue;
+          // Free names must denote available source bindings, never a same-spelled
+          // outer value in place of an uninstantiated nested declaration.
+          const admitted = new Set(available);
+          const references = LexicalFreeReferences(predicate);
+          for (const reference of references) {
+            if (admitted.has(reference.name)) continue;
+            const binding = ResolveBindingDeclaration(reference, reference.name);
+            if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name) || ERROR_CONSTRUCTORS.includes(reference.name)))
+              || (check.sourceModule && isModuleBinding(reference))
+              || ((binding?.kind === 'function' || binding?.kind === 'import') && availableDeclarations.has(binding.node))
+                // An enumeration this pass has processed is an input it can read.
+                || ((binding?.node as { type?: string } | undefined)?.type === 'EnumDeclaration' && preEvaluatedTypeDeclarations.has(binding!.node))) admitted.add(reference.name);
           }
-          X(scope.CreateImmutableBinding(Value(name), Value.true));
-          X(scope.InitializeBinding(Value(name), value));
-        }
-        let returned: Value | undefined;
-        if (check.returnValue) {
-          const raw = (check.returnValue as { Value: unknown }).Value;
-          returned = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
-          if (check.returnSource) {
-            const built = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.returnSource as never))));
-            if (built.Type === 'normal') returned = built.Value;
-            else undecided = true;
-          }
-        }
-        if (undecided) continue;
-        context.LexicalEnvironment = scope;
-        pushTypeParameterFrame(frame);
-        // An imported helper can read this consumer again through a cycle.
-        // That is a required imported input even when the binding's owning
-        // environment is the checking scope's home. A catch cannot certify it.
-        const endPredicateInputs = importedInputs ? RequireModuleInputs() : () => {};
-        BeginFragmentEvaluation();
-        let result;
-        try {
-          if (check.returnValue) PushContractReturn(returned!);
-          let self: Value = Value.undefined;
-          if (check.thisConstant) {
-            const raw = (check.thisConstant as { Value: unknown }).Value;
-            self = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
-          }
-          if (check.thisLiteral) {
-            const evaluated = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.thisLiteral as never))));
-            if (evaluated.Type !== 'normal') {
-              return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation', 'a $1 clause could not be evaluated: $2', Value('where'), inspect(evaluated.Value));
+          if (references.some((reference) => !admitted.has(reference.name))) continue;
+          if (references.some((reference) => frame.has(reference.name) && whereInputNeedsRuntimeValue(frame.get(reference.name)!))) continue;
+          // Inspect transitive lexical captures before calling helpers. A caught
+          // premature TDZ read is no more evidence than an uncaught one. Imported
+          // inputs retain the module boundary's required-failure rule.
+          let importedInputs = false;
+          if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
+            if (check.values?.has(reference.name) && binding.kind === 'parameter') return false;
+            let source: ParseNode = reference;
+            while (source.parent) source = source.parent;
+            if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') {
+              importedInputs = true;
+              return false;
             }
-            self = evaluated.Value;
+            // A class parameter a method clause reads is available when the
+            // receiver's class arguments bound it (round 5, Q7).
+            if (binding.kind === 'type-parameter') return !(binding.node === check.declaration
+              || (check.outerParameters?.some((parameter) => parameter.BindingIdentifier.name === reference.name) ?? false)) || !frame.has(reference.name);
+            // A local clause may reach a foreign module through a helper. Its
+            // module-level captures are required inputs too, even though the
+            // clause itself has no foreign sourceModule. Evaluate the real read
+            // so module initialization order and sticky input failure govern it.
+            if ((check.sourceModule || source !== root) && isModuleBinding(reference)) return false;
+            if (source !== root) return true;
+            if (binding.kind === 'function') return !availableDeclarations.has(binding.node);
+            if (binding.kind === 'type') return !preEvaluatedTypeDeclarations.has(binding.node);
+            // An enumeration the pass has processed is readable, as an alias is.
+            if ((binding.node as { type?: string } | undefined)?.type === 'EnumDeclaration') return !preEvaluatedTypeDeclarations.has(binding.node);
+            return true;
+          }, check.sourceModule)) continue;
+          // Runtime subjects and writes require their evaluation-time environment.
+          const hasRuntimeSubject = (node: ParseNode): boolean => {
+            if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
+              || (node.type === 'UnaryExpression' && node.operator === 'delete')) return true;
+            return Object.entries(node).some(([key, child]) => {
+              if (['parent', 'location', 'sourceText'].includes(key)) return false;
+              return Array.isArray(child) ? child.some((part) => part && typeof part === 'object' && 'type' in part && hasRuntimeSubject(part))
+                : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
+            });
+          };
+          if (hasRuntimeSubject(predicate) && !check.returnValue && !check.thisLiteral && !check.thisConstant) continue;
+          const context = surroundingAgent.runningExecutionContext;
+          const outer = context.LexicalEnvironment;
+          const scope = new DeclarativeEnvironmentRecord(outer);
+          for (const parameter of parameters) {
+            const name = parameter.BindingIdentifier.name;
+            const bound = frame.get(name)!;
+            let value: Value;
+            if (parameter.IsValueParameter && bound.Kind === 'literal') {
+              value = bound.Value;
+            } else if (parameter.IsValueParameter && bound.Kind === 'tuple') {
+              value = Q(yield* ValuePackView(bound));
+            } else {
+              value = GetTypeObject(bound);
+            }
+            typeParameterBindingScopes.add(scope);
+            X(scope.CreateImmutableBinding(Value(name), Value.true));
+            X(scope.InitializeBinding(Value(name), value));
           }
+          // A constant that is evaluated where the clause is, an enumerator or
+          // a fresh aggregate of constants, gives no verdict where it cannot be
+          // read.
+          let undecided = false;
+          for (const [name, literal] of check.values ?? []) {
+            const raw = (literal as { Value: unknown }).Value;
+            let value = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+            // #sec-generic-where: a written literal argument is the value the call
+            // binds, built at its parameter's type as the call builds it.
+            const source = check.sources?.get(name) ?? (literal as { Source?: ParseNode }).Source;
+            if (source) {
+              const reference = EnsureCompletion(yield* Evaluate(source as never));
+              const built = reference.Type === 'normal' ? EnsureCompletion(yield* GetValue(reference.Value as never)) : reference;
+              if (built.Type === 'normal') value = built.Value as Value;
+              else if ((literal as { EvaluatedSource?: boolean }).EvaluatedSource) undecided = true;
+            } else if ((literal as { EvaluatedSource?: boolean }).EvaluatedSource) {
+              undecided = true;
+            }
+            X(scope.CreateImmutableBinding(Value(name), Value.true));
+            X(scope.InitializeBinding(Value(name), value));
+          }
+          let returned: Value | undefined;
+          if (check.returnValue) {
+            const raw = (check.returnValue as { Value: unknown }).Value;
+            returned = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+            if (check.returnSource) {
+              const reference = EnsureCompletion(yield* Evaluate(check.returnSource as never));
+              const built = reference.Type === 'normal' ? EnsureCompletion(yield* GetValue(reference.Value as never)) : reference;
+              if (built.Type === 'normal') returned = built.Value as Value;
+              else undecided = true;
+            }
+          }
+          if (undecided) continue;
+          context.LexicalEnvironment = scope;
+          pushTypeParameterFrame(frame);
+          // An imported helper can read this consumer again through a cycle.
+          // That is a required imported input even when the binding's owning
+          // environment is the checking scope's home. A catch cannot certify it.
+          const endPredicateInputs = importedInputs ? RequireModuleInputs() : () => {};
+          BeginFragmentEvaluation();
+          let result;
           try {
-            result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, self));
+            if (check.returnValue) PushContractReturn(returned!);
+            let self: Value = Value.undefined;
+            if (check.thisConstant) {
+              const raw = (check.thisConstant as { Value: unknown }).Value;
+              self = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
+            }
+            if (check.thisLiteral) {
+              const evaluated = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.thisLiteral as never))));
+              if (evaluated.Type !== 'normal') {
+                return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation', 'a $1 clause could not be evaluated: $2', Value('where'), inspect(evaluated.Value));
+              }
+              self = evaluated.Value;
+            }
+            try {
+              result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, self));
+            } finally {
+              if (check.returnValue) PopContractReturn();
+            }
+            result = RequiredModuleInputFailure() ?? result;
           } finally {
-            if (check.returnValue) PopContractReturn();
+            EndFragmentEvaluation();
+            endPredicateInputs();
+            popTypeParameterFrame();
+            context.LexicalEnvironment = outer;
           }
-          result = RequiredModuleInputFailure() ?? result;
-        } finally {
-          EndFragmentEvaluation();
-          endPredicateInputs();
-          popTypeParameterFrame();
-          context.LexicalEnvironment = outer;
+          if (result.Type === 'throw') {
+            if (IsBudgetExhausted()) return result;
+            // An application of the same arguments reports the evaluation; the
+            // specialization's declaration is given no verdict by it.
+            if (check.unreachableSpecialization) continue;
+            return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
+              'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
+          }
+          // #sec-generic-where: a closed clause is evaluated at its declaration. A
+          // false one leaves the declaration unusable; a true one is a static
+          // assertion about the declarations it reads, and stands.
+          if (check.closed && !result.Value) {
+            return CreateTypeDiagnostic('rt-impossible-test', clause, 'pre-evaluation',
+              'this $1 clause does not depend on what it constrains and is always false, so nothing can satisfy it', Value('where'));
+          }
+          // #sec-specialization-lists: the primary binds first, so a list its
+          // clause rejects reaches no application.
+          if (check.unreachableSpecialization && !result.Value) {
+            return CreateTypeDiagnostic('rt-specialization-contract', check.unreachableSpecialization.node as never, 'pre-evaluation', '$1',
+              Value(`\`${check.unreachableSpecialization.label}\` fixes arguments that \`${(clause as { sourceText?: string }).sourceText ?? 'a where clause'}\` of the primary declaration rejects, so no application can select this specialization`));
+          }
+          // #sec-generic-where: a default its own clause rejects can never be taken.
+          if (check.unreachableDefault && !result.Value) {
+            return CreateTypeDiagnostic('rt-unreachable-default', clause, 'pre-evaluation', 'the default of $2 can never be taken: this $1 clause rejects it',
+              Value('where'), Value(check.unreachableDefault.join(', ')));
+          }
+          if (!result.Value) {
+            return check.values
+              ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+              : check.returnValue
+                ? CreateTypeDiagnostic('rt-return-contract', clause, 'pre-evaluation', 'a result contract is not satisfied by this return: $1', Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+              : check.missingDefault
+                ? CreateTypeDiagnostic('rt-missing-default', clause, 'pre-evaluation', '$1 has no default value, so a declaration of it needs an initializer: the default of its base fails $2',
+                  Value(check.targetName ?? 'the refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'its predicate'))
+              : check.thisLiteral || check.thisConstant
+                ? CreateTypeDiagnostic('rt-assignability', clause, 'pre-evaluation', 'this value is not a $1: it fails the refinement $2', Value(check.targetName ?? 'refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
+              : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
+          }
+          // The memo answers for every later use of the clause under this frame,
+          // so only a verdict that holds for every use may enter it: a
+          // specialization's bindings or a closed clause. A verdict for one
+          // call's arguments, one return or one literal source, or for a
+          // default, says nothing about the next one.
+          if (!check.values && !check.returnValue && !check.thisLiteral && !check.thisConstant && !check.unreachableDefault) MarkGenericWhereVerified(clause, frame);
         }
-        if (result.Type === 'throw') {
-          if (IsBudgetExhausted()) return result;
-          // An application of the same arguments reports the evaluation; the
-          // specialization's declaration is given no verdict by it.
-          if (check.unreachableSpecialization) continue;
-          return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
-            'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
-        }
-        // #sec-generic-where: a closed clause is evaluated at its declaration. A
-        // false one leaves the declaration unusable; a true one is a static
-        // assertion about the declarations it reads, and stands.
-        if (check.closed && !result.Value) {
-          return CreateTypeDiagnostic('rt-impossible-test', clause, 'pre-evaluation',
-            'this $1 clause does not depend on what it constrains and is always false, so nothing can satisfy it', Value('where'));
-        }
-        // #sec-specialization-lists: the primary binds first, so a list its
-        // clause rejects reaches no application.
-        if (check.unreachableSpecialization && !result.Value) {
-          return CreateTypeDiagnostic('rt-specialization-contract', check.unreachableSpecialization.node as never, 'pre-evaluation', '$1',
-            Value(`\`${check.unreachableSpecialization.label}\` fixes arguments that \`${(clause as { sourceText?: string }).sourceText ?? 'a where clause'}\` of the primary declaration rejects, so no application can select this specialization`));
-        }
-        // #sec-generic-where: a default its own clause rejects can never be taken.
-        if (check.unreachableDefault && !result.Value) {
-          return CreateTypeDiagnostic('rt-unreachable-default', clause, 'pre-evaluation', 'the default of $2 can never be taken: this $1 clause rejects it',
-            Value('where'), Value(check.unreachableDefault.join(', ')));
-        }
-        if (!result.Value) {
-          return check.values
-            ? CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this call: $2', Value('where'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
-            : check.returnValue
-              ? CreateTypeDiagnostic('rt-return-contract', clause, 'pre-evaluation', 'a result contract is not satisfied by this return: $1', Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
-            : check.missingDefault
-              ? CreateTypeDiagnostic('rt-missing-default', clause, 'pre-evaluation', '$1 has no default value, so a declaration of it needs an initializer: the default of its base fails $2',
-                Value(check.targetName ?? 'the refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'its predicate'))
-            : check.thisLiteral || check.thisConstant
-              ? CreateTypeDiagnostic('rt-assignability', clause, 'pre-evaluation', 'this value is not a $1: it fails the refinement $2', Value(check.targetName ?? 'refined type'), Value((clause as { sourceText?: string }).sourceText ?? 'the clause'))
-            : CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
-        }
-        // The memo answers for every later use of the clause under this frame,
-        // so only a verdict that holds for every use may enter it: a
-        // specialization's bindings or a closed clause. A verdict for one
-        // call's arguments, one return or one literal source, or for a
-        // default, says nothing about the next one.
-        if (!check.values && !check.returnValue && !check.thisLiteral && !check.thisConstant && !check.unreachableDefault) MarkGenericWhereVerified(clause, frame);
+      } finally {
+        sourceContext.LexicalEnvironment = callerEnvironment;
+        endRequiredInputs();
       }
-    } finally {
-      sourceContext.LexicalEnvironment = callerEnvironment;
-      endRequiredInputs();
     }
-  }
+    return undefined;
+  };
   // The unclaimed-key error, adjudicated HERE and not in the walk: claims
   // register when a MetaDeclaration evaluates, and the loop above has just
   // pre-evaluated this source text's own, so a parameterization written above
@@ -1154,6 +1169,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         EndFragmentEvaluation();
       }
     }
+  }
+  {
+    const refused = yield* decideWhereChecks();
+    if (refused !== undefined) return refused;
   }
   // A completed result can close the captures of a containing operation.
   // Drain those dependencies before checking crossings, in the same budget.

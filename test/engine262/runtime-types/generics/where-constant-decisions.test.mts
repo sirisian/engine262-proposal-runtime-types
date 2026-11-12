@@ -56,3 +56,31 @@ test('a default is judged against a clause that reads only defaulted parameters'
   // A clause that also reads a parameter without a default can hold for some application.
   expect(evaluated("function f<N: uint8, M: uint8 = 3>(): string where N < M { return 'ok'; } f.<1>();")).toBe('ok');
 });
+
+test('an enumerator decides a clause, whether or not the clause names the enumeration', () => {
+  const E = 'enum E { a, b, c } ';
+  refused(`${E}function g(e: E): E where e > E.a { return e; } g(E.a);`, 'rt-where-unsatisfied');
+  refused(`${E}class C { m(e: E): E where e !== E.c { return e; } } new C().m(E.c);`, 'rt-where-unsatisfied');
+  refused("enum U: string { a = 'x', b = 'y' } function g(e: U): U where e !== U.a { return e; } g(U.a);", 'rt-where-unsatisfied');
+  refused("enum U: string { b = 'b', a = 'a', c = 'c' } function f(u: U) where u > 'a' { return u; } f(U.a);", 'rt-where-unsatisfied');
+  expect(evaluated(`${E}function g(e: E): E where e > E.a { return e; } String(g(E.b));`)).toBe('1');
+  expect(evaluated("enum U: string { b = 'b', a = 'a', c = 'c' } function f(u: U) where u > 'a' where u < 'c' { return u; } String(f(U.b));")).toBe('b');
+});
+
+test('an enumerator result and an enumerator default decide as well', () => {
+  const E = 'enum E { a, b, c } ';
+  refused(`${E}function f(): E where return > E.a { return E.a; }`, 'rt-return-contract');
+  refused(`${E}function g(e: E = E.a): E where e > E.a { return e; }`, 'rt-unreachable-default');
+  expect(evaluated(`${E}function f(): E where return > E.a { return E.b; } String(f());`)).toBe('1');
+  expect(evaluated(`${E}function g(e: E = E.b): E where e > E.a { return e; } String(g());`)).toBe('1');
+});
+
+test('a fresh aggregate decides through a method and through a default, and a valid one is accepted', () => {
+  const body = '(t: [uint8, uint8]): uint8 where t[0] > 10 { return t[0]; }';
+  expect(evaluated(`class C { m${body} } String(new C().m([50, 6]));`)).toBe('50');
+  expect(evaluated(`class C { static m${body} } String(C.m([50, 6]));`)).toBe('50');
+  expect(evaluated(`const o = { m${body} }; String(o.m([50, 6]));`)).toBe('50');
+  expect(evaluated('function g(t: [uint8, uint8] = [50, 6]): uint8 where t[0] > 10 { return t[0]; } String(g());')).toBe('50');
+  refused(`class C { m${body} } new C().m([5, 6]);`, 'rt-where-unsatisfied');
+  refused('function g(t: [uint8, uint8] = [5, 6]): uint8 where t[0] > 10 { return t[0]; }', 'rt-unreachable-default');
+});

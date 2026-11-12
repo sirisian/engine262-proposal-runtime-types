@@ -875,7 +875,7 @@ export interface GenericWhereCheck {
   readonly sources?: ReadonlyMap<string, ParseNode>;
   /** Round 5, Gap 8: a result contract decided at a `return` whose operand is a literal; `return` is bound to it. */
   readonly returnValue?: TypeRecord;
-  /** A constant result that is evaluated where the clause is: a fresh aggregate of constants. */
+  /** A constant result that is evaluated where the clause is: an enumerator or a fresh aggregate of constants. */
   readonly returnSource?: ParseNode;
   /**
    * Round 5, Gap 5: a dependent record type's refinement decided for a source
@@ -4553,11 +4553,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (core.type === 'IdentifierReference' && core.name === 'undefined' && !ResolveBindingDeclaration(core, 'undefined')) {
       return { Kind: 'literal', Value: undefined, Base: makePrimitive('undefined') } as unknown as TypeRecord;
     }
-    // An enumerator is a constant too, but an enumeration's enumerators do
-    // not exist until its declaration is evaluated, so a clause one would
-    // decide is evaluated when the call runs.
-    if ((core.type === 'ArrayLiteral' || core.type === 'ObjectLiteral') && literalObject(core)) {
-      return { Kind: 'literal', Value: undefined, Base: makePrimitive('undefined'), EvaluatedSource: true } as unknown as TypeRecord;
+    // An enumerator is a constant: the checking pass processes this source
+    // text's enumerations before it evaluates a clause.
+    const member = core as unknown as { type: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+    const enumerator = member.type === 'MemberExpression' && !!member.IdentifierName && member.MemberExpression?.type === 'IdentifierReference'
+      && enumNodes.has((member.MemberExpression as ParseNode.IdentifierReference).name)
+      && !assignedNames.has((member.MemberExpression as ParseNode.IdentifierReference).name);
+    if (enumerator || ((core.type === 'ArrayLiteral' || core.type === 'ObjectLiteral') && literalObject(core))) {
+      // The expression travels with the record, so every boundary that binds
+      // the constant evaluates it and none binds the placeholder.
+      return { Kind: 'literal', Value: undefined, Base: makePrimitive('undefined'), EvaluatedSource: true, Source: core } as unknown as TypeRecord;
     }
     return null;
   };
@@ -29930,6 +29935,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const recordDefaultWhereChecks = (declaration: ParseNode, clauses: readonly ParseNode.WhereClause[], formals: readonly ParseNode[]): void => {
     const names: string[] = [];
     const defaulted = new Map<string, TypeRecord>();
+    // A default that is evaluated where the clause is: an enumerator or a fresh aggregate.
+    const defaultSources = new Map<string, ParseNode>();
     for (const formal of formals) {
       // A signature's parameter is a FunctionTypeParameter; its `this`
       // parameter binds no name and takes no default.
@@ -29962,6 +29969,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const literal = initializer ? staticType(initializer as never) as TypeRecord | null : null;
           const value = initializer ? decidedArgumentValue(initializer as never, binding) ?? (literal?.Kind === 'literal' ? literal : undefined) : undefined;
           if (value) defaulted.set(binding.BindingIdentifier.name, value);
+          if (value && initializer && (value as { EvaluatedSource?: boolean }).EvaluatedSource) defaultSources.set(binding.BindingIdentifier.name, initializer as ParseNode);
         }
         continue;
       }
@@ -29970,6 +29978,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const initializer = (binding as { Initializer?: ParseNode | null }).Initializer;
       const value = initializer ? decidedArgumentValue(initializer as never, binding) : undefined;
       if (value) defaulted.set(binding.BindingIdentifier.name, value);
+      if (value && initializer && (value as { EvaluatedSource?: boolean }).EvaluatedSource) defaultSources.set(binding.BindingIdentifier.name, initializer as ParseNode);
     }
     const parameters = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
     const generic = new Map<string, TypeRecord>();
@@ -29986,7 +29995,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const readsFormal = [...new Set(references.map((reference) => reference.name).filter((name) => names.includes(name)))];
       let check: GenericWhereCheck | undefined;
       if (readsGeneric.length === 0 && readsFormal.length > 0 && readsFormal.every((name) => defaulted.has(name))) {
-        check = { declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: new Map(), values: new Map(readsFormal.map((name) => [name, defaulted.get(name)!])), unreachableDefault: readsFormal, sourceModule: importedDeclarationSourceModule(declaration) };
+        check = { declaration: declaration as ParseNode.FunctionDeclaration, clauses: [clause], bindings: new Map(), values: new Map(readsFormal.map((name) => [name, defaulted.get(name)!])), sources: new Map(readsFormal.filter((name) => defaultSources.has(name)).map((name) => [name, defaultSources.get(name)!])), unreachableDefault: readsFormal, sourceModule: importedDeclarationSourceModule(declaration) };
       } else if (readsFormal.length === 0 && readsGeneric.length > 0 && readsGeneric.every((name) => generic.has(name))) {
         // #sec-generic-where: a default is judged against each clause that
         // reads only parameters with defaults, whatever the others do.
