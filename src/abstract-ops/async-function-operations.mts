@@ -45,7 +45,7 @@ export function* AsyncBlockStart(promiseCapability: PromiseCapabilityRecord, asy
       // #sec-generic-where (round 5, Q3): a result contract on an async function
       // constrains the fulfilled value of its promise, which is the value the body returns; a failure rejects.
       if (result.Type === 'return' && acAsyncContext.Function !== Value.null) {
-        const contract = EnsureCompletion(yield* VerifyContracts(acAsyncContext.Function as unknown as object, result.Value as Value));
+        const contract = EnsureCompletion(yield* VerifyContracts(acAsyncContext.Function as unknown as object, result.Value as Value, [], 'result'));
         if (contract.Type === 'throw') result = contract;
       }
     }

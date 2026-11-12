@@ -4024,9 +4024,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * other checks.
    */
   const recordMethodArgumentWhereCheck = (call: ParseNode.CallExpression, declaration: ParseNode): void => {
-    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    const own = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
+    // #sec-generic-where: a member that states no clause keeps the contract
+    // of the member it implements or overrides, so a constant call of it is
+    // decided against that contract.
+    const clauses = own.length > 0 ? own
+      : (inheritedWhereDeclarations.get(declaration) as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
     const formals = (declaration as { FormalParameters?: readonly ParseNode[] }).FormalParameters
-      ?? (declaration as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? [];
+      ?? (declaration as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters
+      ?? (declaration as { FunctionTypeParameterList?: readonly ParseNode[] }).FunctionTypeParameterList ?? [];
     const names: string[] = [];
     for (const formal of formals) {
       if (formal.type !== 'SingleNameBinding' || (formal as { Ref?: boolean }).Ref) return;
@@ -4070,7 +4076,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (fnType?.Kind !== 'function' || fnType.Signatures.length !== 1) return;
     const declaration = signatureDeclarations.get(fnType.Signatures[0]) as ParseNode.FunctionDeclaration | undefined;
     if (!declaration || (declaration as { TypeParameters?: unknown }).TypeParameters) return;
-    if (!(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) return;
+    if (!(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) {
+      // A member that states no clause keeps the contract it inherits.
+      if ((inheritedWhereDeclarations.get(declaration) as { WhereClauses?: readonly unknown[] | null } | undefined)?.WhereClauses?.length) {
+        recordMethodArgumentWhereCheck(call, declaration);
+      }
+      return;
+    }
     const outer = receiverClassBindings((callee as ParseNode.MemberExpression).MemberExpression as ParseNode);
     if (outer) recordWhereCheck(call, declaration, new Map(), outer);
     recordMethodArgumentWhereCheck(call, declaration);

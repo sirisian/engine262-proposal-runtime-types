@@ -93,6 +93,9 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
     }
     try {
       Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
+      // #sec-generic-where: a clause over the call's own values is checked
+      // before the body, while each parameter still holds what was passed.
+      Q(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'entry'));
       // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
       // type of a call is the type its position requires". A `return` in an
       // annotated function is such a position - EnforceReturnType below
@@ -119,11 +122,19 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
         // is falsy is a type error". Checked HERE because this is the first
         // moment a result exists - the clause's other reading, the ASSUMED one,
         // is the checker's and runs where no result does.
-        const contract = EnsureCompletion(yield* VerifyContracts(functionObject as unknown as object, enforced as Value, argumentsList as readonly Value[]));
+        const contract = EnsureCompletion(yield* VerifyContracts(functionObject as unknown as object, enforced as Value, argumentsList as readonly Value[], 'result'));
         if (contract.Type === 'throw') {
           return contract;
         }
         return TransferResultDependency(result, new Completion({ Type: 'return', Value: enforced, Target: undefined }));
+      }
+      // #sec-checked-contracts: a body that ends without a `return` has the
+      // result `undefined`, and a result contract is judged of it as of any other.
+      if (result.Type === 'normal') {
+        const contract = EnsureCompletion(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'result'));
+        if (contract.Type === 'throw') {
+          return contract;
+        }
       }
       if (result.Type === 'normal' && ConversionResultTypeNode(functionObject)) {
         const value = Q(yield* EnforceReturnType(functionObject, Value.undefined));
@@ -182,6 +193,9 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
     }
     try {
       Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment as never));
+      // #sec-generic-where: a clause over the call's own values is checked
+      // before the body, while each parameter still holds what was passed.
+      Q(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'entry'));
       // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
       // type of a call is the type its position requires". A `return` in an
       // annotated function is such a position - EnforceReturnType below
@@ -222,6 +236,9 @@ function* EvaluateBody_AsyncConciseBody({ ExpressionBody }: ParseNode.AsyncConci
   // 2. Let declResult be FunctionDeclarationInstantiation(functionObject, argumentsList).
   const declResult = EnsureCompletion(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
   Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
+  // #sec-generic-where: a clause over the call's own values is checked
+  // before the body, while each parameter still holds what was passed.
+  Q(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'entry'));
   // 3. If declResult is not an abrupt completion, then
   if (declResult.Type === 'normal') {
     // a. Perform ! AsyncFunctionStart(promiseCapability, ExpressionBody).
@@ -250,6 +267,9 @@ export function* EvaluateBody_GeneratorBody(GeneratorBody: ParseNode.GeneratorBo
   // narrower than it was: `function* g({a}: {a: uint8})` refused where
   // `function* g(a: uint8)` did not.
   Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
+  // #sec-generic-where: a clause over the call's own values is checked
+  // before the body, while each parameter still holds what was passed.
+  Q(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'entry'));
   // 2. Let G be ? OrdinaryCreateFromConstructor(functionObject, "%GeneratorPrototype%", « [[GeneratorState]], [[GeneratorContext]], [[GeneratorBrand]] »).
   const G = Q(yield* OrdinaryCreateFromConstructor(functionObject, '%GeneratorFunction.prototype.prototype%', ['GeneratorState', 'GeneratorContext', 'GeneratorBrand'])) as Mutable<GeneratorObject>;
   // 3. Set G.[[GeneratorBrand]] to empty.
@@ -272,6 +292,9 @@ export function* EvaluateBody_AsyncGeneratorBody(FunctionBody: ParseNode.AsyncGe
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
   Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
+  // #sec-generic-where: a clause over the call's own values is checked
+  // before the body, while each parameter still holds what was passed.
+  Q(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'entry'));
   // 2. Let generator be ? OrdinaryCreateFromConstructor(functionObject, "%AsyncGeneratorFunction.prototype.prototype%", « [[AsyncGeneratorState]], [[AsyncGeneratorContext]], [[AsyncGeneratorQueue]], [[GeneratorBrand]] »).
   const generator = Q(yield* OrdinaryCreateFromConstructor(functionObject, '%AsyncGeneratorFunction.prototype.prototype%', [
     'AsyncGeneratorState',
@@ -300,6 +323,9 @@ export function* EvaluateBody_AsyncFunctionBody(FunctionBody: ParseNode.AsyncBod
   // 2. Let declResult be FunctionDeclarationInstantiation(functionObject, argumentsList).
   const declResult = yield* FunctionDeclarationInstantiation(functionObject, argumentsList);
   Q(yield* EnforceParameterTypes(functionObject, surroundingAgent.runningExecutionContext.VariableEnvironment));
+  // #sec-generic-where: a clause over the call's own values is checked
+  // before the body, while each parameter still holds what was passed.
+  Q(yield* VerifyContracts(functionObject as unknown as object, Value.undefined, argumentsList as readonly Value[], 'entry'));
   // 3. If declResult is not an abrupt completion, then
   if (!(declResult instanceof AbruptCompletion)) {
     // a. Perform ! AsyncFunctionStart(promiseCapability, FunctionBody).

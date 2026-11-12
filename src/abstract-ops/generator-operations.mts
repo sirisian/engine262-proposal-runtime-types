@@ -85,7 +85,7 @@ export function GeneratorStart(generator: GeneratorObject, generatorBody: ParseN
       // #sec-generic-where (round 5, Q3): a result contract on a generator
       // constrains the generator's return value; a failure is the generator's throw.
       if (result.Type === 'return' && acGenContext.Function !== Value.null) {
-        const contract = EnsureCompletion(yield* VerifyContracts(acGenContext.Function as unknown as object, result.Value as Value));
+        const contract = EnsureCompletion(yield* VerifyContracts(acGenContext.Function as unknown as object, result.Value as Value, [], 'result'));
         if (contract.Type === 'throw') result = contract;
       }
     }

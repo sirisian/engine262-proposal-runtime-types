@@ -5906,7 +5906,38 @@ function* EvaluateContractPredicate(predicate: ParseNode): ValueEvaluator {
   return Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
 }
 
-export function* VerifyContracts(fn: object, result: Value, args: readonly Value[] = []): ValueEvaluator {
+/** Whether a clause's predicate names `return`, so that it can be judged only once a result exists. */
+const predicatesNamingReturn = new WeakMap<object, boolean>();
+function predicateNamesReturn(predicate: object): boolean {
+  const known = predicatesNamingReturn.get(predicate);
+  if (known !== undefined) return known;
+  let found = false;
+  const visit = (value: unknown): void => {
+    if (found || !value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    const node = value as { type?: unknown };
+    if (typeof node.type !== 'string') return;
+    if (node.type === 'ContractReturn') {
+      found = true;
+      return;
+    }
+    for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
+  };
+  visit(predicate);
+  predicatesNamingReturn.set(predicate, found);
+  return found;
+}
+
+/**
+ * #sec-generic-where, #sec-checked-contracts: a clause over a call's own
+ * values is checked before the body, where the parameters still hold what
+ * was passed; a clause that names `return` is checked once a result exists,
+ * whether a `return` produced it or the body ended without one.
+ */
+export function* VerifyContracts(fn: object, result: Value, args: readonly Value[] = [], phase: 'entry' | 'result' | 'all' = 'all'): ValueEvaluator {
   const clauses = functionWhereClauses(fn as never);
   if (!clauses || clauses.length === 0) {
     return Value.undefined;
@@ -5917,6 +5948,7 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
     if (!predicate) {
       continue;
     }
+    if (phase !== 'all' && predicateNamesReturn(predicate) !== (phase === 'result')) continue;
     // EVERY clause, with `return` bound for every one. #sec-checked-contracts:
     // "at every concrete evaluation of the builder ... each clause is evaluated
     // with `return` bound to it, and a clause that is falsy is a type error".
