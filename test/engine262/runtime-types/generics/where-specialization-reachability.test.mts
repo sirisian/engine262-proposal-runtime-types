@@ -56,3 +56,21 @@ test('a list that captures a position the primary\'s clause can hold for no valu
   unreachable('class B<N: uint8, M: uint8> where N < M {} class B<const K, 0> {}');
   expect(evaluated("class B<N: uint8, M: uint8> where N < M {} class B<5, const K> {} 'ok';")).toBe('ok');
 });
+
+/**
+ * #sec-generic-where: a class specialization's `where` clauses are its
+ * selection filter. One whose clauses do not hold for an application is not
+ * applicable to it, and selection proceeds among the rest.
+ */
+test('a class specialization is selected only where its clauses hold', () => {
+  const B = "class B<N: uint8> { t(): string { return 'primary'; } } class B<const M> where M > 100 { t(): string { return 'big'; } } ";
+  expect(evaluated(`${B}new B.<120>().t() + '/' + new B.<5>().t();`)).toBe('big/primary');
+  expect(evaluated(`${B}function mk<K: uint8>() { return new B.<K>().t(); } mk.<120>() + '/' + mk.<5>();`)).toBe('big/primary');
+  expect(evaluated(`${B}class B<7> { t(): string { return 'seven'; } } new B.<7>().t() + '/' + new B.<120>().t() + '/' + new B.<5>().t();`)).toBe('seven/big/primary');
+});
+
+test('two class specializations of one list with disjoint clauses are two cases', () => {
+  const B = "class B<N: uint8> { static t(): string { return 'primary'; } } class B<const M> where M > 100 { static t(): string { return 'big'; } } class B<const M> where M < 50 { static t(): string { return 'small'; } } ";
+  expect(evaluated(`${B}B.<120>.t() + '/' + B.<5>.t() + '/' + B.<70>.t();`)).toBe('big/small/primary');
+  unreachable('class B<N: uint8> {} class B<const M> where M > 100 {} class B<const M> where M > 50 {}');
+});

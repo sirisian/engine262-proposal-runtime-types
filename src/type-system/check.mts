@@ -1364,6 +1364,17 @@ const inheritedWhereDeclarations = new WeakMap<object, ParseNode>();
 export function InheritedWhereDeclarationOf(declaration: object): ParseNode | undefined {
   return inheritedWhereDeclarations.get(declaration);
 }
+/**
+ * #sec-generic-where: every member whose contract a member that states no
+ * clause keeps. One member is the ordinary case. With several, a call is
+ * admitted where the parameter clauses of any one of them hold, since a
+ * caller holding that base promised no more, and a result must satisfy the
+ * result clauses of all of them, since each base's callers rely on theirs.
+ */
+const inheritedWhereAlternatives = new WeakMap<object, ParseNode[]>();
+export function InheritedWhereDeclarationsOf(declaration: object): readonly ParseNode[] {
+  return inheritedWhereAlternatives.get(declaration) ?? [];
+}
 const publishedNarrowings = new WeakMap<object, Pick<SignatureRecord, 'Return' | 'Narrows'>>();
 // Signature-owned provenance crosses module checking sessions with the exported
 // contract. Structural equality with another signature supplies no evidence.
@@ -3932,7 +3943,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const inheritWhereClauses = (base: ParseNode, override: ParseNode): void => {
     const own = (override as { WhereClauses?: readonly unknown[] | null }).WhereClauses ?? [];
     const inherited = (base as { WhereClauses?: readonly unknown[] | null }).WhereClauses ?? [];
-    if (own.length > 0 || inherited.length === 0) return;
+    if (own.length > 0) return;
+    if (inherited.length === 0) {
+      // A base that states no clause promises its callers nothing is asked of
+      // them, so beside a base that states one it is the alternative that
+      // admits every call.
+      const known = inheritedWhereAlternatives.get(override) ?? [];
+      if (!known.includes(base)) inheritedWhereAlternatives.set(override, [...known, base]);
+      return;
+    }
     const names = (declaration: ParseNode): string => {
       const typeParameters = ((declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [])
         .map((parameter) => parameter.BindingIdentifier.name);
@@ -3944,7 +3963,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       });
       return `${typeParameters.join(',')}|${formalNames.join(',')}`;
     };
-    if (names(base) === names(override)) inheritedWhereDeclarations.set(override, base);
+    if (names(base) !== names(override)) return;
+    if (!inheritedWhereDeclarations.has(override)) inheritedWhereDeclarations.set(override, base);
+    const alternatives = inheritedWhereAlternatives.get(override) ?? [];
+    if (alternatives.includes(base)) return;
+    alternatives.push(base);
+    inheritedWhereAlternatives.set(override, alternatives);
   };
   const clausesImplied = (base: ParseNode, override: ParseNode): boolean => {
     const own = (override as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
@@ -4086,8 +4110,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const declaration = signatureDeclarations.get(fnType.Signatures[0]) as ParseNode.FunctionDeclaration | undefined;
     if (!declaration || (declaration as { TypeParameters?: unknown }).TypeParameters) return;
     if (!(declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length) {
-      // A member that states no clause keeps the contract it inherits.
-      if ((inheritedWhereDeclarations.get(declaration) as { WhereClauses?: readonly unknown[] | null } | undefined)?.WhereClauses?.length) {
+      // A member that states no clause keeps the contract it inherits. One
+      // that inherits several is admitted by any of them, which the call decides.
+      if ((inheritedWhereAlternatives.get(declaration)?.length ?? 0) <= 1
+        && (inheritedWhereDeclarations.get(declaration) as { WhereClauses?: readonly unknown[] | null } | undefined)?.WhereClauses?.length) {
         recordMethodArgumentWhereCheck(call, declaration);
       }
       return;
@@ -11613,9 +11639,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!owner) return undefined;
     let result: { Kind: string, Case?: { Declaration: ParseNode }, Bindings?: readonly { Capture: { Name: string }, Value: TypeRecord | number }[], Cases?: readonly { Label: string }[] };
     try {
-      const attached = analysis.Attached.filter((a) => a.Owner === owner
-        && MatchSpecializationList(a.Case.List! as never, owner.Parameters as never, args as never, host as never) !== 'no-match')
-        .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+      const attached = analysis.Attached.filter((a) => {
+        if (a.Owner !== owner) return false;
+        const matched = MatchSpecializationList(a.Case.List! as never, owner.Parameters as never, args as never, host as never);
+        if (matched === 'no-match') return false;
+        // #sec-generic-where: a class specialization's `where` clauses are
+        // its selection filter. One a constant application decides against
+        // is not applicable; one it cannot decide stays a candidate, and the
+        // application decides when it is evaluated.
+        const node = a.Case.Node as ParseNode & { ClassTail?: { WhereClauses?: readonly ParseNode.WhereClause[] | null } };
+        const filter = /^Class/.test(node.type) ? node.ClassTail?.WhereClauses ?? [] : [];
+        return filter.length === 0
+          || staticFilterVerdict({ WhereClauses: filter } as unknown as ParseNode, matched as unknown as readonly { Capture: { Name: string }, Value: TypeRecord | number }[], null) !== false;
+      }).map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
       result = SelectSpecialization(attached as never, owner.Parameters as never, args as never, host as never) as typeof result;
     } catch (e) {
       // A pattern the host cannot expose is a diagnostic, never a host crash.
@@ -46046,7 +46082,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const family = seenLists.get(name!) ?? new Map<string, ParseNode.ClassDeclaration>();
         seenLists.set(name!, family);
         const earlier = family.get(key);
-        if (earlier) {
+        // Two specializations of one list whose clauses no application
+        // satisfies together are two cases, and each is selected by its own.
+        if (earlier && casesClausesDisjoint(earlier, c)) {
+          family.set(`${key}\u0000${family.size}`, c);
+        } else if (earlier) {
           report(`\`class ${name}${list.sourceText}\` repeats the specialization \`class ${name}${listOf(earlier)!.sourceText}\` for the same applications; no application could choose between them, so remove one`);
         } else {
           family.set(key, c);

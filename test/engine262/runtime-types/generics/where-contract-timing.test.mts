@@ -73,3 +73,27 @@ test('a constant call is decided against an inherited contract where it is writt
   refusedCall('class P { m(x: uint8): void where x > 100 {} } class C extends P { m(x: uint8): void {} } new C().m(20);');
   expect(evaluated('interface A { m(x: uint8): uint8 where x > 100; } class C implements A { m(x: uint8): uint8 { return x; } } String(new C().m(120));')).toBe('120');
 });
+
+/**
+ * #sec-generic-where: a member that keeps the contracts of several members
+ * is admitted where the parameter clauses of any one of them hold, since a
+ * caller holding that member promised no more, and its result satisfies the
+ * result clauses of every one, since each member's callers rely on theirs.
+ */
+test('two inherited parameter contracts admit a call that satisfies either', () => {
+  const AB = 'interface A { m(x: uint8): uint8 where x > 100; } interface B { m(x: uint8): uint8 where x < 50; } class C implements A, B { m(x: uint8): uint8 { return x; } } ';
+  const g = 'function g(v: uint8) { try { return String(new C().m(v)); } catch (e) { return e.constructor.name; } } ';
+  expect(evaluated(`${AB}${g}g(120) + '/' + g(20) + '/' + g(70);`)).toBe('120/20/TypeError');
+});
+
+test('a base that states no clause admits every call', () => {
+  const AB = 'interface A { m(x: uint8): uint8 where x > 100; } interface B { m(x: uint8): uint8; } class C implements A, B { m(x: uint8): uint8 { return x; } } ';
+  const g = 'function g(v: uint8) { try { return String(new C().m(v)); } catch (e) { return e.constructor.name; } } ';
+  expect(evaluated(`${AB}${g}g(120) + '/' + g(20);`)).toBe('120/20');
+});
+
+test('two inherited result contracts both hold of the result', () => {
+  const AB = 'interface A { m(x: uint8): uint8 where return > 10; } interface B { m(x: uint8): uint8 where return < 50; } class C implements A, B { m(x: uint8): uint8 { return x; } } ';
+  const g = 'function g(v: uint8) { try { return String(new C().m(v)); } catch (e) { return e.constructor.name; } } ';
+  expect(evaluated(`${AB}${g}g(20) + '/' + g(5) + '/' + g(70);`)).toBe('20/TypeError/TypeError');
+});

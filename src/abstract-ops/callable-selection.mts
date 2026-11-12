@@ -227,6 +227,40 @@ export function* SelectClassCase(primary: Declaration, cases: readonly Declarati
     if (a.Owner !== owner) continue;
     const matched = MatchSpecializationList(a.Case.List!, owner.Parameters as never, filled as never, host as never);
     if (matched === 'no-match') continue;
+    // #sec-generic-where: a specialization's `where` clauses are its
+    // selection filter. One whose clauses do not all hold for the
+    // application is not applicable to it, and selection proceeds among the rest.
+    const node = a.Case.Node as { WhereClauses?: readonly ParseNode[] | null, ClassTail?: { WhereClauses?: readonly ParseNode[] | null }, TypeParameters?: { Captures?: readonly ParseNode.CaptureBinding[] } | null };
+    const clauses = node.WhereClauses ?? node.ClassTail?.WhereClauses ?? [];
+    if (clauses.length > 0) {
+      const frame = Q(yield* TypedFrameOfBindings(a.Case.Node, matched as never));
+      const context = surroundingAgent.runningExecutionContext;
+      const prior = context.LexicalEnvironment;
+      context.LexicalEnvironment = NewTypeParameterEnvironment(prior as never, (node.TypeParameters?.Captures ?? []) as never, frame) as never;
+      pushTypeParameterFrame(frame);
+      let holds = true;
+      try {
+        for (const clause of clauses) {
+          const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
+          if (!predicate) continue;
+          BeginFragmentEvaluation();
+          let verdict;
+          try {
+            verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+          } finally {
+            EndFragmentEvaluation();
+          }
+          if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+            holds = false;
+            break;
+          }
+        }
+      } finally {
+        popTypeParameterFrame();
+        context.LexicalEnvironment = prior;
+      }
+      if (!holds) continue;
+    }
     attached.push({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label });
   }
   const result = SelectSpecialization(attached, owner.Parameters as never, filled as never, host as never);

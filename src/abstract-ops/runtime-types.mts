@@ -36,7 +36,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf } from '../type-system/check.mts';
+import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
@@ -5938,7 +5938,37 @@ function predicateNamesReturn(predicate: object): boolean {
  * whether a `return` produced it or the body ended without one.
  */
 export function* VerifyContracts(fn: object, result: Value, args: readonly Value[] = [], phase: 'entry' | 'result' | 'all' = 'all'): ValueEvaluator {
-  const clauses = functionWhereClauses(fn as never);
+  const code = (fn as { ECMAScriptCode?: { parent?: { WhereClauses?: readonly ParseNode[] | null } } | null }).ECMAScriptCode;
+  const own = code?.parent?.WhereClauses;
+  // A base that states no clause is an alternative that admits every call.
+  const inherited = own && own.length > 0 ? [] : (code?.parent ? InheritedWhereDeclarationsOf(code.parent) : [])
+    .map((declaration) => (declaration as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses ?? []);
+  if (inherited.length < 2) return yield* VerifyContractClauses(fn, functionWhereClauses(fn as never), result, args, phase);
+  // #sec-generic-where: a member that keeps the contracts of several members
+  // is admitted where the parameter clauses of any one of them hold, and its
+  // result satisfies the result clauses of every one.
+  if (phase !== 'result') {
+    let refusal: ThrowCompletion | undefined;
+    let admitted = false;
+    for (const list of inherited) {
+      const attempt = EnsureCompletion(yield* VerifyContractClauses(fn, list, result, args, 'entry'));
+      if (attempt.Type !== 'throw') {
+        admitted = true;
+        break;
+      }
+      refusal ??= attempt as ThrowCompletion;
+    }
+    if (!admitted && refusal) return refusal;
+  }
+  if (phase !== 'entry') {
+    for (const list of inherited) {
+      Q(yield* VerifyContractClauses(fn, list, result, args, 'result'));
+    }
+  }
+  return Value.undefined;
+}
+
+function* VerifyContractClauses(fn: object, clauses: readonly ParseNode[] | null, result: Value, args: readonly Value[], phase: 'entry' | 'result' | 'all'): ValueEvaluator {
   if (!clauses || clauses.length === 0) {
     return Value.undefined;
   }
