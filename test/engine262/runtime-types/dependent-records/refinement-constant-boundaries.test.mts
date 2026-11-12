@@ -121,3 +121,34 @@ test('an array is filled with its element type\'s default only where there is on
   expect(evaluated(`${SMALL}const a: [2].<Small> = new [2].<Small>(); String(a.length) + String(a[0]);`)).toBe('20');
   expect(evaluated('const a: [2].<uint8> = new [2].<uint8>(); String(a.length);')).toBe('2');
 });
+
+/**
+ * #sec-where-clauses: a refinement of an enum admits the enum's own values
+ * where its predicate holds of them, at every boundary, and an enumerator is
+ * a constant that decides the refinement where it is written.
+ */
+const LATE = 'enum E { a, b, c } type Late = E where this > E.a; ';
+
+test('a refinement of a numeric enum admits the enumerators its predicate holds of', () => {
+  expect(evaluated(`${LATE}let x: Late = E.b; String(x);`)).toBe('1');
+  expect(evaluated(`${LATE}function f(x: Late) { return x; } String(f(E.c));`)).toBe('2');
+  expect(evaluated(`${LATE}function f(v: E) { return v is Late; } String(f(E.b)) + String(f(E.a));`)).toBe('truefalse');
+  expect(evaluated(`${LATE}const y = E.b := Late; function h(x: Late) { return x; } String(h(y));`)).toBe('1');
+  expect(evaluated('enum N: uint8 { a = 1, b = 2 } type Big = N where this > N.a; let x: Big = N.b; String(x);')).toBe('2');
+  expect(evaluated("enum U: string { a = 'x', b = 'y' } type NotA = U where this !== U.a; let x: NotA = U.b; String(x);")).toBe('y');
+});
+
+test('an enumerator that fails a refinement is refused where it is written', () => {
+  const refusedLate = (source: string): void => {
+    expect(observeScript(LATE + source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-assignability' } });
+  };
+  refusedLate('let x: Late = E.a;');
+  refusedLate('function f(x: Late) { return x; } f(E.a);');
+  refusedLate('function f(): Late { return E.a; }');
+  refusedLate('class K { a: Late = E.a; }');
+});
+
+test('an enumerator of an enumeration that is not processed ahead of the program is left to the boundary', () => {
+  expect(observeScript("@d enum D { a, b } function d(v) { return v; } type Late2 = D where this > D.a; function f(x: Late2) { return x; } 'ok';"))
+    .toMatchObject({ completion: { Type: 'normal' } });
+});

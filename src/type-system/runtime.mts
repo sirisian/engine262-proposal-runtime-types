@@ -4608,6 +4608,32 @@ export function* ObserveSequenceElement(object: ObjectValue, index: number, obse
   return entry;
 }
 
+/**
+ * Whether a type is a `where` refinement, at any depth, of an enum: the
+ * parameterization the run time builds, or the declared alias a published
+ * contract names.
+ */
+function refinesAnEnum(t: TypeRecord): boolean {
+  let base = t;
+  let refined = false;
+  for (;;) {
+    if (base.Kind === 'parameterized' && Object.hasOwn(base.Metadata, 'where')) {
+      base = base.Base;
+      refined = true;
+      continue;
+    }
+    const alias = base as unknown as { Declaration?: { type?: string, WhereClauses?: readonly unknown[] | null }, Structure?: TypeRecord, EnumMembers?: unknown };
+    if (base.Kind === 'nominal' && alias.EnumMembers === undefined && alias.Declaration?.type === 'TypeAliasDeclaration'
+        && (alias.Declaration.WhereClauses?.length ?? 0) > 0 && alias.Structure) {
+      base = alias.Structure;
+      refined = true;
+      continue;
+    }
+    break;
+  }
+  return refined && base.Kind === 'nominal' && (base as { EnumMembers?: unknown }).EnumMembers !== undefined;
+}
+
 export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation, choices?: ConstructionSelections, observations?: StructuralValueObservations): PlainEvaluator<boolean> {
   if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t, storage, selection, sequence, choices, observations);
   const checkpoint = storage?.length;
@@ -4787,6 +4813,12 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
     if (valueRecord?.Kind === 'nominal' && valueRecord.EnumMembers !== undefined
         && valueRecord.Underlying !== undefined
         && !(t.Kind === 'nominal' && t.EnumMembers !== undefined)
+        // #sec-where-clauses: a refinement of an enum admits the enum's own
+        // values where its predicate holds of them. Read at the underlying
+        // type, an enumerator is no value of the enum the refinement is over,
+        // so `E.b` was refused by `E where this > E.a` at every boundary but a
+        // conversion.
+        && !refinesAnEnum(t)
         // A qualified member such as `Color.Red` denotes the ENUMERATOR, and is
         // a literal type over the enum. Reading the value at its underlying type
         // before that test would compare an int32 against an enum-tagged member

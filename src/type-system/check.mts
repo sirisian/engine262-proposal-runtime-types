@@ -887,6 +887,8 @@ export interface GenericWhereCheck {
   readonly thisConstant?: TypeRecord;
   /** The constant is the base's default: a predicate it fails leaves the refinement no default. */
   readonly missingDefault?: boolean;
+  /** The source is an enumerator, which gives no verdict where its enumeration cannot be read yet. */
+  readonly thisDeferrable?: boolean;
   /** The name of the refined type, for the diagnostic. */
   readonly targetName?: string;
   /**
@@ -4498,9 +4500,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const initializer = origin?.kind === 'const' ? ((origin as { initializer?: ParseNode | null }).initializer ?? (origin.node as { Initializer?: ParseNode | null }).Initializer) : null;
       if (initializer && literalObject(initializer)) source = initializer;
     }
-    if (!literalObject(source)) return;
+    // An enumerator is a constant as a literal is; it is read where the
+    // refinement is evaluated, and gives no verdict where it cannot be.
+    const enumerator = isEnumerator(source);
+    if (!literalObject(source) && !enumerator) return;
     const checks = whereChecks.get(site) ?? [];
-    checks.push({ declaration: alias as unknown as ParseNode.TypeAliasDeclaration, clauses, bindings: new Map(), thisLiteral: source, targetName: name, sourceModule: importedDeclarationSourceModule(alias) });
+    checks.push({
+      declaration: alias as unknown as ParseNode.TypeAliasDeclaration, clauses, bindings: new Map(), thisLiteral: source, targetName: name,
+      ...(enumerator ? { thisDeferrable: true } : {}), sourceModule: importedDeclarationSourceModule(alias),
+    });
     whereChecks.set(site, checks);
     // A refinement of a refinement holds its base's clauses as well.
     const refined = (alias as { Type?: ParseNode.Type | null }).Type;
@@ -4547,6 +4555,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * its own. `null` and `undefined` are bound as themselves; a fresh
    * aggregate of constants is evaluated where the clause is, and is marked so.
    */
+  /** Whether an expression names an enumerator of an enumeration this source text declares. */
+  const isEnumerator = (node: ParseNode): boolean => {
+    const member = unparenthesized(node) as unknown as { type: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+    return member.type === 'MemberExpression' && !!member.IdentifierName && member.MemberExpression?.type === 'IdentifierReference'
+      && enumNodes.has((member.MemberExpression as ParseNode.IdentifierReference).name)
+      && !assignedNames.has((member.MemberExpression as ParseNode.IdentifierReference).name);
+  };
   const constantOfExpression = (node: ParseNode): TypeRecord | null => {
     const core = unparenthesized(node);
     if (core.type === 'NullLiteral') return { Kind: 'literal', Value: Value.null, Base: makePrimitive('null') } as unknown as TypeRecord;
@@ -4555,11 +4570,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // An enumerator is a constant: the checking pass processes this source
     // text's enumerations before it evaluates a clause.
-    const member = core as unknown as { type: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
-    const enumerator = member.type === 'MemberExpression' && !!member.IdentifierName && member.MemberExpression?.type === 'IdentifierReference'
-      && enumNodes.has((member.MemberExpression as ParseNode.IdentifierReference).name)
-      && !assignedNames.has((member.MemberExpression as ParseNode.IdentifierReference).name);
-    if (enumerator || ((core.type === 'ArrayLiteral' || core.type === 'ObjectLiteral') && literalObject(core))) {
+    if (isEnumerator(core) || ((core.type === 'ArrayLiteral' || core.type === 'ObjectLiteral') && literalObject(core))) {
       // The expression travels with the record, so every boundary that binds
       // the constant evaluates it and none binds the placeholder.
       return { Kind: 'literal', Value: undefined, Base: makePrimitive('undefined'), EvaluatedSource: true, Source: core } as unknown as TypeRecord;

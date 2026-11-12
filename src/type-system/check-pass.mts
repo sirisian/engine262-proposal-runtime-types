@@ -930,15 +930,22 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
               const raw = (check.thisConstant as { Value: unknown }).Value;
               self = raw instanceof Value ? raw : Value(raw as string | number | boolean | bigint);
             }
+            let unread = false;
             if (check.thisLiteral) {
-              const evaluated = EnsureCompletion(yield* GetValue(Q(yield* Evaluate(check.thisLiteral as never))));
+              const reference = EnsureCompletion(yield* Evaluate(check.thisLiteral as never));
+              const evaluated = reference.Type === 'normal' ? EnsureCompletion(yield* GetValue(reference.Value as never)) : reference;
               if (evaluated.Type !== 'normal') {
-                return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation', 'a $1 clause could not be evaluated: $2', Value('where'), inspect(evaluated.Value));
+                // An enumerator that cannot be read yet decides nothing here.
+                if (!check.thisDeferrable) {
+                  return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation', 'a $1 clause could not be evaluated: $2', Value('where'), inspect(evaluated.Value));
+                }
+                unread = true;
+              } else {
+                self = evaluated.Value as Value;
               }
-              self = evaluated.Value;
             }
             try {
-              result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, self));
+              result = unread ? EnsureCompletion(Value.true) : EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, self));
             } finally {
               if (check.returnValue) PopContractReturn();
             }
