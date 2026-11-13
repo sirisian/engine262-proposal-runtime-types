@@ -18,7 +18,7 @@ import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
 import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord, displayType } from '../type-system/records.mts';
-import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, SubstituteTypeArguments } from '../type-system/runtime.mts';
 import { invalidTupleRest } from '../type-system/tuple-rests.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from '../type-system/library-type-arguments.mts';
 import { IsAssignable } from '../type-system/relations.mts';
@@ -867,6 +867,13 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       // the same `familyOfRecord` the Type Object's getter answers with, so the
       // two cannot disagree.
       set('family', Value(familyOfRecord(t)));
+      // #table-reflection-nodes: the node of an interface type carries
+      // `extends`, the types its declaration extends, as Type Objects in the
+      // order written. A leaf that is not an interface has no such property.
+      if (t.Kind === 'nominal' && t.LibraryName === undefined && (t.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
+        const written = (t as { Bases?: readonly TypeRecord[] }).Bases ?? [];
+        set('extends', list(written.map((base) => SubstituteTypeArguments(base, t.Declaration, t.Arguments))));
+      }
       // An enum needs no node kind of its own. #table-reflection-nodes lists ten
       // kinds and says the "primitive" node covers "the built-in primitives,
       // classes, interfaces, enums", and `family` above answers ~enum~ for one,

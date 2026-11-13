@@ -164,6 +164,12 @@ export function* ResolveInterfaceDeclaration(node: ParseNode.InterfaceDeclaratio
     Q(yield* Evaluate_RuntimeTypesBindingDeclaration(node, true, (resolved) => {
       Assert(resolved.Kind === 'nominal' && resolved.Structure !== undefined);
       tieAliasKnot(structure, resolved.Structure);
+      // #sec-interface-declaration-identity: the bases an interface extends
+      // are retained with its declaration identity.
+      const bases = (resolved as { Extends?: readonly TypeRecord[] }).Extends;
+      if (bases) (record as { Extends?: readonly TypeRecord[] }).Extends = bases;
+      const written = (resolved as { Bases?: readonly TypeRecord[] }).Bases;
+      if (written) (record as { Bases?: readonly TypeRecord[] }).Bases = written;
     }));
     completed = true;
     return record;
@@ -580,11 +586,19 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Signatures?: readonly unknown[],
     };
     const Extends: TypeRecord[] = [];
+    // Every base as written, in order, which is what reflection reports.
+    const Bases: TypeRecord[] = [];
+    const nonObjectBases: TypeRecord[] = [];
     const inheritedStructures: InheritedStructure[] = [];
     for (const entry of (node as { Heritage?: readonly ParseNode.Type[] }).Heritage ?? []) {
       const base = Q(yield* TypeNodeToTypeRecord(entry)) as TypeRecord;
+      Bases.push(base);
       for (const part of (base.Kind === 'intersection' ? base.Members : [base]) as readonly TypeRecord[]) {
         const isInterface = part.Kind === 'nominal' && (part.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration';
+        if (part.Kind === 'array' || part.Kind === 'tuple') {
+          nonObjectBases.push(part);
+          continue;
+        }
         if (!isInterface && part.Kind !== 'object' && part.Kind !== 'function') {
           return Throw.TypeError('$1 cannot extend $2: it is not an interface or a type with a structural form', name, Value((entry as { sourceText?: string }).sourceText ?? 'this type'));
         }
@@ -610,6 +624,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         Arguments: [],
         Structure: callable,
         ...(Extends.length > 0 ? { Extends } : {}),
+        ...(Bases.length > 0 ? { Bases } : {}),
       } as unknown as TypeRecord;
       if (shapeOnly) {
         shapeOnly(fnRecord);
@@ -838,8 +853,13 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Kind: 'nominal',
       Declaration: node,
       Arguments: [],
-      Structure: { Kind: 'object', Properties, IndexSignatures },
+      // #sec-object-types: where a base is not an object type, the structural
+      // form is the intersection of that base with the record of the members.
+      Structure: nonObjectBases.length > 0
+        ? { Kind: 'intersection', Members: [...nonObjectBases, { Kind: 'object', Properties, IndexSignatures }] }
+        : { Kind: 'object', Properties, IndexSignatures },
       ...(Extends.length > 0 ? { Extends } : {}),
+      ...(Bases.length > 0 ? { Bases } : {}),
     } as TypeRecord;
     if (shapeOnly) {
       shapeOnly(record);

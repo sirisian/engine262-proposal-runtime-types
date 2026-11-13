@@ -12,7 +12,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf, BindTypeArgumentsInto, BindTypeParameterTyped } from '../type-system/runtime.mts';
-import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression, type TypeArgumentsCallTarget } from './RuntimeTypesDeclarations.mts';
+import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression, ResolveImplementedInterfaces, type TypeArgumentsCallTarget } from './RuntimeTypesDeclarations.mts';
 import { CaseGroupMembers, SelectExplicitCase, WithSelectedInvocation } from '../abstract-ops/callable-selection.mts';
 import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
@@ -39,7 +39,7 @@ import { IsCheckedCode } from '../type-system/checked-code.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall } from './all.mts';
 import { ArgumentListEvaluationItems, PositionalArgumentListEvaluation } from './ArgumentListEvaluation.mts';
-import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate, InstantiateCheckedBindings } from '#self';
+import { OrdinaryObjectCreate, CreateDataProperty, CreateArrayFromList, ArrayCreate, InstantiateCheckedBindings } from '#self';
 import { Throw as ThrowError } from '#self';
 import {
   surroundingAgent,
@@ -719,6 +719,11 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // refusing is the same fact this reports.
         X(CreateDataProperty(reflection, Value('abstract'),
           (constructor as { IsAbstract?: boolean }).IsAbstract === true ? Value.true : Value.false));
+        // #sec-reflect-getreflection: `implements`, the interfaces the class
+        // declares, as Type Objects in the order written.
+        const declared = (classRecord as { Implements?: readonly TypeRecord[] }).Implements
+          ?? Q(yield* ResolveImplementedInterfaces((classRecord as { Declaration: ParseNode.ClassDeclaration }).Declaration, constructor)) ?? [];
+        X(CreateDataProperty(reflection, Value('implements'), CreateArrayFromList(declared.map((each) => GetTypeObject(each) as unknown as Value))));
         const base = constructor instanceof ObjectValueClass ? Q(yield* constructor.GetPrototypeOf()) : Value.undefined;
         X(CreateDataProperty(reflection, Value('metadata'), MetadataObjectFor(constructor, base)));
         return reflection;

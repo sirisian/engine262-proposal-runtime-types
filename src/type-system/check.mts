@@ -4042,6 +4042,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(declaration);
     return found;
   };
+  /**
+   * The signatures that state an interface's contract for one member: its own
+   * where it declares the member, and otherwise those of each base that
+   * supplies it (#sec-interface-declaration-identity).
+   */
+  const interfaceMethodSignatures = (declaration: ParseNode, key: string, seen: Set<ParseNode> = new Set()): ParseNode[] => {
+    if (seen.has(declaration)) return [];
+    seen.add(declaration);
+    const own = interfaceMethodSignature(declaration, key);
+    if (own) return [own];
+    const found: ParseNode[] = [];
+    for (const entry of (declaration as { Heritage?: readonly ParseNode.Type[] }).Heritage ?? []) {
+      const base = resolveType(entry) as TypeRecord | null;
+      for (const part of (base?.Kind === 'intersection' ? base.Members as readonly TypeRecord[] : base ? [base] : [])) {
+        const baseDeclaration = (part as { Declaration?: ParseNode }).Declaration;
+        if (part.Kind === 'nominal' && baseDeclaration?.type === 'InterfaceDeclaration') {
+          for (const signature of interfaceMethodSignatures(baseDeclaration, key, seen)) {
+            if (!found.includes(signature)) found.push(signature);
+          }
+        }
+      }
+    }
+    return found;
+  };
 
   /**
    * #sec-generic-where: a method takes its clauses as a function declaration
@@ -9737,7 +9761,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base.Kind === 'parameter') return 'a type parameter, whose members are not known here';
     if (base.Kind === 'union') return 'a union';
     if (base.Kind === 'primitive' || base.Kind === 'literal') return 'a primitive';
-    if (base.Kind === 'array' || base.Kind === 'tuple' || base.Kind === 'function') return `${base.Kind === 'array' ? 'an' : 'a'} ${base.Kind} type, which this engine does not yet extend`;
+    if (base.Kind === 'function') return 'a function type, which only an interface of call signatures extends';
     return 'not an interface or a type with a structural form';
   };
   const extendInterface = (node: ParseNode, record: Known, Properties: InterfaceProperty[], IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[],
@@ -9749,6 +9773,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const Extends: TypeRecord[] = [];
     (record as unknown as { Extends: TypeRecord[] }).Extends = Extends;
     const inherited = new Map<unknown, { member: InterfaceProperty, from: string }>();
+    const nonObjectBases: TypeRecord[] = [];
     const shown = (key: unknown): string => (typeof key === 'string' ? key : 'a symbol-keyed member');
     formingHeritage.add(node);
     try {
@@ -9759,6 +9784,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const part of (base.Kind === 'intersection' ? base.Members as readonly TypeRecord[] : [base])) {
           const declaration = (part as { Declaration?: ParseNode }).Declaration;
           const isInterface = part.Kind === 'nominal' && declaration?.type === 'InterfaceDeclaration';
+          if (part.Kind === 'array' || part.Kind === 'tuple') {
+            // #sec-object-types: where a base is not an object type, the
+            // structural form is the intersection of that base with the
+            // record of the members.
+            nonObjectBases.push(part);
+            continue;
+          }
           if (!isInterface && part.Kind !== 'object') {
             report(entry, `\`${name}\` cannot extend ${label}: it is ${baseKindOf(part)}`);
             continue;
@@ -9781,8 +9813,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const structure = (isInterface ? structureOf(part as Known) : part) as unknown as {
               Kind?: string, Properties?: readonly InterfaceProperty[], IndexSignatures?: readonly { Key: TypeRecord, Value: TypeRecord }[],
             } | null;
+            if (structure?.Kind === 'function') {
+              // #sec-object-types: call signatures do not mix with named members.
+              report(entry, `\`${name}\` cannot extend ${label}: only an interface whose members are all call signatures extends a callable type`);
+              return;
+            }
             if (!structure || structure.Kind !== 'object') return;
             for (const member of structure.Properties ?? []) {
+              if (ownKeys.has(member.key) && typeof member.key === 'string' && isInterface) {
+                const replacing = interfaceMethodSignature(node, member.key);
+                const replaced = interfaceMethodSignatures(declaration!, member.key);
+                if (replacing && replaced.some((signature) => !clausesImplied(signature, replacing))) {
+                  report(replacing, `\`${member.key}\` of \`${name}\` states a where clause the member it replaces in ${label} does not imply; a replacing member may only repeat or weaken the contract`);
+                }
+              }
               if (ownKeys.has(member.key)) {
                 const own = Properties.find((property) => property.key === member.key);
                 if (own && !memberSatisfies(own, member)) {
@@ -9819,6 +9863,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     } finally {
       formingHeritage.delete(node);
+    }
+    if (nonObjectBases.length > 0) {
+      const members = (record as unknown as { Structure: TypeRecord }).Structure;
+      (record as unknown as { Structure: TypeRecord }).Structure = { Kind: 'intersection', Members: [...nonObjectBases, members] } as unknown as TypeRecord;
     }
   };
   const interfaceFormed = (node: ParseNode): void => {
@@ -12098,6 +12146,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const [name, type] of it.SpecializationBindings ?? []) ifaceBindings.set(name, type);
       const bound = ifaceBindings.size > 0;
       const istruct = structureOf(it);
+      // #sec-interface-declaration-identity: a class implements an interface
+      // with a base that is not an object type only where it can satisfy that
+      // base, and a class is neither an array nor a tuple.
+      if (istruct?.Kind === 'intersection') {
+        const unsatisfied = (istruct.Members as readonly TypeRecord[]).find((member) => member.Kind === 'array' || member.Kind === 'tuple');
+        if (unsatisfied) reportType('rt-implements-contract', n, '$1 extends $2, which a class instance is not', Value(nm), Value(displayType(unsatisfied)));
+      }
       if (istruct?.Kind === 'function') {
         const capability = classCallCapability(n);
         if (capability === 'noncallable') {
@@ -12133,10 +12188,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // the clauses its interface's signature states.
           if (own.type?.Kind === 'function' && p.type?.Kind === 'function') {
             const ownDeclaration = signatureDeclarations.get((own.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object);
-            const signatureDeclaration = signatureDeclarations.get((p.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object)
-              ?? interfaceMethodSignature(ifaceDecl as ParseNode, String(p.key));
-            if (ownDeclaration && signatureDeclaration) inheritWhereClauses(signatureDeclaration, ownDeclaration);
-            if (ownDeclaration && signatureDeclaration && !clausesImplied(signatureDeclaration, ownDeclaration)) {
+            // #sec-interface-declaration-identity: an inherited signature
+            // keeps its `where` clauses. A member the interface does not
+            // declare itself is held to the signature of each base that
+            // supplies it, and two such contracts combine as two implemented
+            // interfaces' do (#sec-generic-where).
+            const registered = signatureDeclarations.get((p.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object);
+            const contracts = registered ? [registered] : interfaceMethodSignatures(ifaceDecl as ParseNode, String(p.key));
+            for (const signatureDeclaration of contracts) {
+              if (ownDeclaration) inheritWhereClauses(signatureDeclaration, ownDeclaration);
+            }
+            if (ownDeclaration && contracts.some((signatureDeclaration) => !clausesImplied(signatureDeclaration, ownDeclaration))) {
               reportType('rt-implements-contract', n, '$1 states a where clause the signature it implements does not imply; an implementation may only repeat or weaken the contract', Value(String(p.key)));
             }
           }

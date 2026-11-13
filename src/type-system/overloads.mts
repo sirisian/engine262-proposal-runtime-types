@@ -17,7 +17,7 @@ import { anyType, mentionsTypeParameter } from './records.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
 import { BindNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, type ArgumentItem } from './named-arguments.mts';
-import { ClassImplements, IsAssignable, IsSubtype, SameType } from './relations.mts';
+import { ClassImplements, InterfaceExtends, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits, IsOfType } from './runtime.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -211,6 +211,11 @@ export function assignArguments(params: readonly OverloadParameter[], argTypes: 
 const enum Tier {
   // Lower is better. The argument's type is exactly the parameter's type.
   Exact = 0,
+  // The argument's type is not the parameter's and refines it by declaration
+  // while having its shape exactly: `interface B extends A {}` against `A`.
+  // #sec-resolveoverload: a type that refines the parameter's type matches
+  // above one that only satisfies it structurally.
+  Refines = 0.5,
   // #table-argument-match-ranks rank 2: the argument satisfies a ~nominal~
   // parameter type STRUCTURALLY, being neither that type nor a refinement of
   // it. An interface and a structurally identical alias are mutually assignable,
@@ -222,6 +227,11 @@ const enum Tier {
   Literal = 2,
   // The argument is assignable to the parameter by an ordinary widening.
   Assignable = 3,
+  // The argument is a ~nominal~ type that reaches a ~nominal~ interface
+  // parameter only through its structure, having declared no relation to it.
+  // #sec-resolveoverload: a class or interface that declares the relation "is
+  // not made to lose to an unrelated structural signature".
+  StructuralWidening = 3.5,
   // #sec-overload-resolution: the parameter is a TYPE PARAMETER of a generic
   // member, which binds from the argument at the call. Viable, and below every
   // concrete match: "a concrete position beats a type parameter". The
@@ -345,7 +355,10 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
           && (argType as { Declaration?: unknown }).Declaration === (paramType as { Declaration?: unknown }).Declaration;
         const refines = argNominal && paramNominal
           && ClassImplements(argType, (paramType as { Declaration: ParseNode }).Declaration, paramType);
-        return sameDeclaration || refines ? Tier.Exact : Tier.StructuralNominal;
+        const extended = argNominal && paramNominal
+          && InterfaceExtends(argType, (paramType as { Declaration: ParseNode }).Declaration, paramType);
+        if (sameDeclaration || refines) return Tier.Exact;
+        return extended ? Tier.Refines : Tier.StructuralNominal;
       }
       return Tier.Exact;
     }
@@ -354,6 +367,15 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
     // plain widening between two non-literal types.
     if (argType.Kind === 'literal' && paramType.Kind !== 'literal') {
       return Tier.Literal;
+    }
+    if (argType.Kind === 'nominal' && paramType.Kind === 'nominal'
+      && (paramType as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration'
+      && (paramType as { LibraryName?: string }).LibraryName === undefined
+      && (argType as { LibraryName?: string }).LibraryName === undefined
+      && /^(?:Class|Interface)/.test((argType as { Declaration?: { type?: string } }).Declaration?.type ?? '')
+      && !ClassImplements(argType, (paramType as { Declaration: ParseNode }).Declaration, paramType)
+      && !InterfaceExtends(argType, (paramType as { Declaration: ParseNode }).Declaration, paramType)) {
+      return Tier.StructuralWidening;
     }
     return Tier.Assignable;
   }
@@ -396,7 +418,10 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   if (paramType.Kind === 'nominal' && paramType.Structure !== undefined
       && (paramType.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
       && IsAssignable(argType, paramType.Structure)) {
-    return Tier.Assignable;
+    // A class or interface that declared no relation to the parameter's
+    // interface reaches it by structure alone, below one that declared it.
+    return argType.Kind === 'nominal' && /^(?:Class|Interface)/.test((argType as { Declaration?: { type?: string } }).Declaration?.type ?? '')
+      ? Tier.StructuralWidening : Tier.Assignable;
   }
   if (argType.Kind === 'primitive' && argType.Name === 'bigint'
       && paramType.Kind === 'primitive' && (paramType.Name === 'int' || paramType.Name === 'uint')) {
