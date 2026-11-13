@@ -9709,6 +9709,124 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * own node alone - a case is never recorded under its family's name, so its
    * members refine the application that selects it and merge into nothing.
    */
+  /**
+   * #sec-interface-declaration-identity: an interface declaration extends the
+   * types its `extends` list names. Its members are its own and those of
+   * every base; the interface refines each base that is an interface. A base
+   * is an interface, or a type with a structural form.
+   */
+  type InterfaceProperty = { key: unknown, type: TypeRecord, optional: boolean, readonly: boolean, initial?: unknown, InitializerNode?: ParseNode };
+  const formingHeritage = new Set<ParseNode>();
+  const formedInterfaces = new WeakSet<ParseNode>();
+  const pendingHeirs = new Map<ParseNode, (() => void)[]>();
+  /** Whether one member may stand where another is asked for: read-only covariance, writable invariance, and no loss of a required member. */
+  const memberSatisfies = (member: InterfaceProperty, asked: InterfaceProperty): boolean => {
+    if (member.optional && !asked.optional) return false;
+    if (asked.readonly) return IsSubtype(member.type, asked.type, []);
+    return !member.readonly && SameType(member.type, asked.type);
+  };
+  const baseKindOf = (base: TypeRecord): string => {
+    if (base.Kind === 'nominal') {
+      const declaration = (base as { Declaration?: { type?: string } }).Declaration?.type ?? '';
+      if (/^Class/.test(declaration)) return 'a class, which has no structural form';
+      if (declaration === 'EnumDeclaration') return 'an enum';
+      if (declaration === 'TypeAliasDeclaration') return 'a type with a `where` clause, which an interface cannot carry';
+      return 'a named type that is not an interface';
+    }
+    if (base.Kind === 'parameterized') return 'a parameterized type, whose members are not its own';
+    if (base.Kind === 'parameter') return 'a type parameter, whose members are not known here';
+    if (base.Kind === 'union') return 'a union';
+    if (base.Kind === 'primitive' || base.Kind === 'literal') return 'a primitive';
+    if (base.Kind === 'array' || base.Kind === 'tuple' || base.Kind === 'function') return `${base.Kind === 'array' ? 'an' : 'a'} ${base.Kind} type, which this engine does not yet extend`;
+    return 'not an interface or a type with a structural form';
+  };
+  const extendInterface = (node: ParseNode, record: Known, Properties: InterfaceProperty[], IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[],
+    ownKeys: ReadonlySet<unknown>): void => {
+    const heritage = (node as { Heritage?: readonly ParseNode.Type[] }).Heritage ?? [];
+    if (heritage.length === 0) return;
+    const name = (node as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'this interface';
+    const report = (at: ParseNode, message: string): void => reportType('rt-interface-heritage', at, '$1', Value(message));
+    const Extends: TypeRecord[] = [];
+    (record as unknown as { Extends: TypeRecord[] }).Extends = Extends;
+    const inherited = new Map<unknown, { member: InterfaceProperty, from: string }>();
+    const shown = (key: unknown): string => (typeof key === 'string' ? key : 'a symbol-keyed member');
+    formingHeritage.add(node);
+    try {
+      for (const entry of heritage) {
+        const base = resolveType(entry) as TypeRecord | null;
+        const label = `\`${entry.sourceText}\``;
+        if (!base || base.Kind === 'any') continue;
+        for (const part of (base.Kind === 'intersection' ? base.Members as readonly TypeRecord[] : [base])) {
+          const declaration = (part as { Declaration?: ParseNode }).Declaration;
+          const isInterface = part.Kind === 'nominal' && declaration?.type === 'InterfaceDeclaration';
+          if (!isInterface && part.Kind !== 'object') {
+            report(entry, `\`${name}\` cannot extend ${label}: it is ${baseKindOf(part)}`);
+            continue;
+          }
+          if (isInterface) {
+            if (declaration === node || formingHeritage.has(declaration!)) {
+              const cycle = [...formingHeritage].map((each) => (each as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '?');
+              report(entry, declaration === node ? `\`${name}\` cannot extend itself`
+                : `\`${name}\` cannot extend ${label}: ${cycle.slice(cycle.indexOf((declaration as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '?')).join(', ')} extend each other in a cycle`);
+              continue;
+            }
+            // The same declaration at the same arguments: two interfaces of one shape are two bases.
+            if (Extends.some((earlier) => (earlier as { Declaration?: ParseNode }).Declaration === declaration && SameType(earlier, part))) {
+              report(entry, `\`${name}\` lists ${label} twice`);
+              continue;
+            }
+            Extends.push(part);
+          }
+          const take = (): void => {
+            const structure = (isInterface ? structureOf(part as Known) : part) as unknown as {
+              Kind?: string, Properties?: readonly InterfaceProperty[], IndexSignatures?: readonly { Key: TypeRecord, Value: TypeRecord }[],
+            } | null;
+            if (!structure || structure.Kind !== 'object') return;
+            for (const member of structure.Properties ?? []) {
+              if (ownKeys.has(member.key)) {
+                const own = Properties.find((property) => property.key === member.key);
+                if (own && !memberSatisfies(own, member)) {
+                  report(node, `\`${shown(member.key)}\` of \`${name}\` does not satisfy the member it replaces in ${label}: ${!member.optional && own.optional ? 'a required member may not become optional'
+                    : member.readonly ? `"${displayType(own.type)}" is not assignable to "${displayType(member.type)}"` : `a writable member keeps its type, "${displayType(member.type)}"`}`);
+                }
+                continue;
+              }
+              const earlier = inherited.get(member.key);
+              if (!earlier) {
+                inherited.set(member.key, { member, from: label });
+                Properties.push(member);
+              } else if (memberSatisfies(earlier.member, member)) {
+                // The member already taken satisfies this one.
+              } else if (memberSatisfies(member, earlier.member)) {
+                Properties[Properties.indexOf(earlier.member)] = member;
+                inherited.set(member.key, { member, from: label });
+              } else {
+                report(node, `${earlier.from} and ${label} both declare \`${shown(member.key)}\`, and neither satisfies the other; declare \`${shown(member.key)}\` in \`${name}\` so that it satisfies both`);
+              }
+            }
+            for (const signature of structure.IndexSignatures ?? []) {
+              if (!IndexSignatures.some((own) => SameType(own.Key, signature.Key) && SameType(own.Value, signature.Value))) IndexSignatures.push(signature);
+            }
+          };
+          // A base still being formed, reached through one of its own members,
+          // gives its members when its formation completes.
+          if (isInterface && interfaceTypeMemo.has(declaration!) && !formedInterfaces.has(declaration!)) {
+            pendingHeirs.set(declaration!, [...(pendingHeirs.get(declaration!) ?? []), take]);
+          } else {
+            take();
+          }
+        }
+      }
+    } finally {
+      formingHeritage.delete(node);
+    }
+  };
+  const interfaceFormed = (node: ParseNode): void => {
+    formedInterfaces.add(node);
+    const heirs = pendingHeirs.get(node);
+    pendingHeirs.delete(node);
+    for (const complete of heirs ?? []) complete();
+  };
   const interfaceTypeOfNode = (node: ParseNode, declared: readonly ParseNode[] | undefined): Known => {
     const imported = importedInterfacesByNode.get(node);
     if (imported) {
@@ -9815,8 +9933,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // call through it with the wrong arguments was checked nowhere.
     const callable = callSignaturesOf(memberSources.map(({ member }) => member));
     if (callable !== undefined) {
-      (inProgress as unknown as { Structure: Known }).Structure = callable;
+      // A callable interface is callable with its own signatures and with each base's.
+      const inheritedSignatures: unknown[] = [];
+      const callableBases: TypeRecord[] = [];
+      for (const entry of (node as { Heritage?: readonly ParseNode.Type[] }).Heritage ?? []) {
+        const base = resolveType(entry) as TypeRecord | null;
+        const structure = base && (base.Kind === 'nominal' ? structureOf(base as Known) : base) as unknown as { Kind?: string, Signatures?: readonly unknown[] } | null;
+        if (!base || structure?.Kind !== 'function') {
+          if (base && base.Kind !== 'any') reportType('rt-interface-heritage', entry, '$1', Value(`a callable interface extends only callable types, and \`${entry.sourceText}\` is not one`));
+          continue;
+        }
+        inheritedSignatures.push(...structure.Signatures ?? []);
+        if (base.Kind === 'nominal') callableBases.push(base);
+      }
+      const merged = inheritedSignatures.length === 0 ? callable
+        : { ...(callable as object), Signatures: [...(callable as unknown as { Signatures: readonly unknown[] }).Signatures, ...inheritedSignatures] } as unknown as Known;
+      (inProgress as unknown as { Structure: Known }).Structure = merged;
+      if (callableBases.length > 0) (inProgress as unknown as { Extends: TypeRecord[] }).Extends = callableBases;
       checkedInterfaceTypes.set(node, inProgress as TypeRecord);
+      interfaceFormed(node);
       return inProgress;
     }
     const declaredIn = new Map<string, number>();
@@ -10005,6 +10140,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Properties.push({ key, type: t, optional: tm.Optional === true, readonly: !!(tm as { Readonly?: boolean }).Readonly, initial: tmInitial, InitializerNode: tmInit ?? undefined });
       }
     }
+      extendInterface(node, inProgress, Properties as unknown as InterfaceProperty[], IndexSignatures, new Set(declaredIn.keys()));
     } finally {
       if (ifaceParamNames.length > 0) {
         typeParameterScopes.pop();
@@ -10019,6 +10155,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Cases are checked in the producer too. Publish their own descriptions,
     // including capture parameters, rather than falling back to the primary.
     checkedInterfaceTypes.set(node, inProgress as TypeRecord);
+    interfaceFormed(node);
     return inProgress;
   };
 

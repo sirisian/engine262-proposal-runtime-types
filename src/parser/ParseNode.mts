@@ -2849,6 +2849,8 @@ export namespace ParseNode {
     readonly Partial?: boolean;
     readonly BindingIdentifier: BindingIdentifier;
     readonly TypeParameters: TypeParameters | null;
+    /** proposal-runtime-types InterfaceHeritage: the types after `extends`, in the order written. */
+    readonly Heritage?: readonly Type[];
     readonly InterfaceMemberList: readonly InterfaceMember[];
   }
 

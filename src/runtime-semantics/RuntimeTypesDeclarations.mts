@@ -32,7 +32,7 @@ import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
 import type { Arguments, ReferenceRecord } from '../value.mts';
 import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
-import { IsAssignable, SameType } from '../type-system/relations.mts';
+import { IsAssignable, IsSubtype, SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, NormalCompletion, Q, X } from '../completion.mts';
@@ -569,13 +569,47 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // the function record, and everything reading a Structure - the parameter
     // boundary, `is`, satisfaction - sees a function type, which is what the
     // clause says the interface denotes. A mix gets the clause's error.
-    const callable = Q(yield* functionRecordFromCallSignatures(node.InterfaceMemberList as readonly ParseNode[]));
+    // #sec-interface-declaration-identity: the bases an interface extends are
+    // resolved where its declaration is evaluated. Each is an interface or a
+    // type with a structural form; the interface has their members and
+    // refines each one that is an interface.
+    type InheritedStructure = {
+      Kind?: string,
+      Properties?: readonly { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean, initial?: Value }[],
+      IndexSignatures?: readonly { Key: TypeRecord, Value: TypeRecord }[],
+      Signatures?: readonly unknown[],
+    };
+    const Extends: TypeRecord[] = [];
+    const inheritedStructures: InheritedStructure[] = [];
+    for (const entry of (node as { Heritage?: readonly ParseNode.Type[] }).Heritage ?? []) {
+      const base = Q(yield* TypeNodeToTypeRecord(entry)) as TypeRecord;
+      for (const part of (base.Kind === 'intersection' ? base.Members : [base]) as readonly TypeRecord[]) {
+        const isInterface = part.Kind === 'nominal' && (part.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration';
+        if (!isInterface && part.Kind !== 'object' && part.Kind !== 'function') {
+          return Throw.TypeError('$1 cannot extend $2: it is not an interface or a type with a structural form', name, Value((entry as { sourceText?: string }).sourceText ?? 'this type'));
+        }
+        if (isInterface) {
+          Extends.push(part);
+          const nominal = part as TypeRecord & { Structure?: TypeRecord, Declaration: ParseNode, Arguments: readonly (TypeRecord | number)[] };
+          if (nominal.Structure) inheritedStructures.push(SubstituteTypeArguments(nominal.Structure, nominal.Declaration, nominal.Arguments as never) as unknown as InheritedStructure);
+        } else {
+          inheritedStructures.push(part as unknown as InheritedStructure);
+        }
+      }
+    }
+    const ownCallable = Q(yield* functionRecordFromCallSignatures(node.InterfaceMemberList as readonly ParseNode[]));
+    // A callable interface is callable with its own signatures and with each base's.
+    const inheritedSignatures = inheritedStructures.filter((structure) => structure.Kind === 'function').flatMap((structure) => structure.Signatures ?? []);
+    const callable = ownCallable !== undefined && inheritedSignatures.length > 0
+      ? { ...(ownCallable as object), Signatures: [...(ownCallable as unknown as { Signatures: readonly unknown[] }).Signatures, ...inheritedSignatures] } as unknown as typeof ownCallable
+      : ownCallable;
     if (callable !== undefined) {
       const fnRecord: TypeRecord = {
         Kind: 'nominal',
         Declaration: node,
         Arguments: [],
         Structure: callable,
+        ...(Extends.length > 0 ? { Extends } : {}),
       } as unknown as TypeRecord;
       if (shapeOnly) {
         shapeOnly(fnRecord);
@@ -782,12 +816,31 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       return undefined;
     }
 
+    // An own member replaces an inherited one. Where two bases supply one
+    // key, the interface has the member that satisfies the other, which the
+    // checking pass has already required to exist.
+    const ownKeyCount = Properties.length;
+    for (const structure of inheritedStructures) {
+      if (structure.Kind !== 'object') continue;
+      for (const member of structure.Properties ?? []) {
+        const at = Properties.findIndex((existing) => existing.key === member.key);
+        if (at === -1) {
+          Properties.push(member);
+        } else if (at >= ownKeyCount && !IsSubtype(Properties[at]!.type, member.type, []) && IsSubtype(member.type, Properties[at]!.type, [])) {
+          Properties[at] = member;
+        }
+      }
+      for (const signature of structure.IndexSignatures ?? []) {
+        if (!IndexSignatures.some((own) => SameType(own.Key, signature.Key) && SameType(own.Value, signature.Value))) IndexSignatures.push(signature);
+      }
+    }
     const record: TypeRecord = {
       Kind: 'nominal',
       Declaration: node,
       Arguments: [],
       Structure: { Kind: 'object', Properties, IndexSignatures },
-    };
+      ...(Extends.length > 0 ? { Extends } : {}),
+    } as TypeRecord;
     if (shapeOnly) {
       shapeOnly(record);
       return undefined;

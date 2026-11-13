@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: e31b48497e7cb84d856fd9fac906b49c9fbe9ac6e2323a83b663923aa8d0c945
+// Catalog SHA-256: 1136ce66c9303ba0c6fcf0a801cb4f112c6de1224fa38f5356c3ebe249d0e2fc
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -892,7 +892,32 @@ export const TypeDiagnosticCatalog = [
     "specification": [
       "sec-typed-classes"
     ],
-    "explanation": "The implements target or implementing callable shape is invalid.",
+    "explanation": "The implements target is invalid, or an implemented member is missing or does not satisfy the target's member contract.",
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relatedLocations": [
+      "declaration",
+      "origin"
+    ]
+  },
+  {
+    "code": "RT_INTERFACE_HERITAGE",
+    "rule": "rt-interface-heritage",
+    "status": "provisional",
+    "applicability": "always",
+    "phases": [
+      "static",
+      "pre-evaluation"
+    ],
+    "errorClass": "StaticTypeError",
+    "specification": [
+      "sec-interface-declaration-identity"
+    ],
+    "explanation": "An interface's extends list names a base that cannot be extended, repeats a base or closes a cycle of bases, or a member of the interface or of two of its bases does not satisfy the member it inherits.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2861,4 +2886,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = 'e31b48497e7cb84d856fd9fac906b49c9fbe9ac6e2323a83b663923aa8d0c945';
+export const TypeDiagnosticCatalogHash = '1136ce66c9303ba0c6fcf0a801cb4f112c6de1224fa38f5356c3ebe249d0e2fc';

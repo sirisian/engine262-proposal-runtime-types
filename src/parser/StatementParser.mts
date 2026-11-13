@@ -227,6 +227,19 @@ export abstract class StatementParser extends TypeParser {
     this.expect('interface');
     node.BindingIdentifier = this.parseBindingIdentifier();
     node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, isPartial ? 'partial' : 'interface') : null;
+    // InterfaceHeritage : `extends` InterfaceExtendsList
+    // InterfaceExtendsList : Type | InterfaceExtendsList `,` Type
+    // #sec-interface-declaration-identity: only the primary declaration
+    // states what an interface extends, so a `partial` one has no heritage.
+    const Heritage: ParseNode.Type[] = [];
+    if (this.test(Token.EXTENDS)) {
+      if (isPartial) this.unexpected();
+      this.next();
+      do {
+        Heritage.push(this.parseType());
+      } while (this.eat(Token.COMMA));
+    }
+    node.Heritage = Heritage;
     this.expect(Token.LBRACE);
     const InterfaceMemberList: ParseNode.InterfaceMember[] = [];
     while (!this.test(Token.RBRACE)) {

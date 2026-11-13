@@ -826,6 +826,25 @@ function spanElementOf(t: TypeRecord): TypeRecord | undefined {
  * Walked up [[Base]] as well, because a class implements what its superclass
  * implements.
  */
+/**
+ * #sec-issubtype: a type refines another when its declaration extends that
+ * type's declaration. An interface declaration extends the interfaces its
+ * `extends` list names (#sec-interface-declaration-identity), so an interface
+ * refines each of them at the arguments its declaration gives, and each that
+ * one extends in turn.
+ */
+export function InterfaceExtends(s: TypeRecord, interfaceDeclaration: ParseNode, target?: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean {
+  if (s.Kind !== 'nominal' || seen.has(s)) return false;
+  seen.add(s);
+  for (const extended of (s as { Extends?: readonly TypeRecord[] }).Extends ?? []) {
+    const resolved = SubstituteTypeArguments(extended, s.Declaration, s.Arguments);
+    if (resolved.Kind !== 'nominal') continue;
+    if (resolved.Declaration === interfaceDeclaration && (!target || IsSubtype(resolved, target, []))) return true;
+    if (InterfaceExtends(resolved, interfaceDeclaration, target, seen)) return true;
+  }
+  return false;
+}
+
 export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode, target?: TypeRecord): boolean {
   let current: TypeRecord | undefined = s;
   const seen = new Set<TypeRecord>();
@@ -835,6 +854,8 @@ export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode, 
       const resolved = SubstituteTypeArguments(implemented, current.Declaration, current.Arguments);
       if (resolved.Kind === 'nominal' && resolved.Declaration === interfaceDeclaration
           && (!target || IsSubtype(resolved, target, []))) return true;
+      // A class that implements an interface refines each interface it extends.
+      if (resolved.Kind === 'nominal' && InterfaceExtends(resolved, interfaceDeclaration, target)) return true;
     }
     current = current.Base && SubstituteTypeArguments(current.Base, current.Declaration, current.Arguments);
   }
@@ -1564,6 +1585,9 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       if ((s.Declaration.type === 'ClassDeclaration' || s.Declaration.type === 'ClassExpression')
         && s.LibraryName === undefined && tn.Declaration.type === 'InterfaceDeclaration'
         && ClassImplements(s, tn.Declaration, tn)) return true;
+      // An interface refines the interfaces its declaration extends.
+      if (s.Declaration.type === 'InterfaceDeclaration' && s.LibraryName === undefined
+        && tn.Declaration.type === 'InterfaceDeclaration' && InterfaceExtends(s, tn.Declaration, tn)) return true;
       // [[Base]] is declared on the record
       // now, so this reads a field rather than hoping for one.
       const { Base: base } = s;
