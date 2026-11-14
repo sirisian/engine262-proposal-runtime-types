@@ -148,3 +148,28 @@ test('a member may restate or weaken a clause whose bound is its declaration\'s 
   expect(observeScript(`${Sized}class T implements Sized.<10> { take(i: uint8): void where i < 5 {} }`))
     .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-implements-contract' } });
 });
+
+test('a clause is compared the same way wherever a member restates it', () => {
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const accepted = (source: string): void => expect(observeScript(`${source} 'ok';`)).toMatchObject({ completion: { Type: 'normal' } });
+  const stricter = (source: string, rule: string): void => {
+    expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule } });
+  };
+  // In a class that implements, in an interface that extends, in an override
+  // of a superclass's member, and against an abstract member.
+  accepted(`${Sized}class T implements Sized.<10> { take(i: uint8): void where i < 10 {} }`);
+  accepted(`${Sized}interface Ten extends Sized.<10> { take(i: uint8): void where i < 10; }`);
+  accepted(`${Sized}interface Ten extends Sized.<10> { take(i: uint8): void where i < 50; }`);
+  accepted('class P<N: uint8> { take(i: uint8): void where i < N {} } class C extends P.<10> { take(i: uint8): void where i < 10 {} }');
+  accepted('abstract class P<N: uint8> { abstract take(i: uint8): void where i < N; } class C extends P.<10> { take(i: uint8): void where i < 10 {} }');
+  stricter(`${Sized}interface Ten extends Sized.<10> { take(i: uint8): void where i < 5; }`, 'rt-interface-heritage');
+  stricter('class P<N: uint8> { take(i: uint8): void where i < N {} } class C extends P.<10> { take(i: uint8): void where i < 5 {} }', 'rt-inherited-contract');
+});
+
+test('a class that reaches one interface at two arguments keeps both contracts', () => {
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const U = `${Sized}class T implements Sized.<10> { take(i: uint8): void {} } class U extends T implements Sized.<5> {} `;
+  // A caller holding a U as a Sized.<10> may pass 7, so either reading admits the call.
+  expect(evaluated(`${U}function g(v: uint8) { try { new U().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(3) + '/' + g(7) + '/' + g(12);`)).toBe('ran/ran/TypeError');
+  expect(observeScript(`${U}new U().take(7); 'ok';`)).toMatchObject({ completion: { Type: 'normal' } });
+});

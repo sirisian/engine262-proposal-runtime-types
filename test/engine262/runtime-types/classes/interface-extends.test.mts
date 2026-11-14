@@ -214,3 +214,8 @@ test('a parameter that asks for raw is the closer match for a template', () => {
   expect(evaluated("interface Strings extends [].<string | undefined> { raw: [].<string>; } function pick(s: Strings): string { return 'template'; } "
     + "function pick(s: [].<string>): string { return 'array'; } " + "pick`a` + '/' + pick(['a']);")).toBe('template/array');
 });
+
+test('a read-only member of an interface that extends an array type is not assigned', () => {
+  refused('interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } function tag(s: Strings): string { s.raw = []; return "x"; }', 'rt-readonly-store');
+  expect(observeScript("interface WithTag extends [].<uint8> { tag: string; } function f(s: WithTag): string { s.tag = 't'; return s.tag; } 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
+});

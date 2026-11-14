@@ -5267,15 +5267,6 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // subtyping too - `relations.mts` at 833 and 837 - and the comment above
         // says why that matters: "Subtyping and membership are different
         // questions of the same record."
-        // #sec-iteration-types: a class that declares a protocol is verified
-        // where it is declared, and its instances are of the protocol by that
-        // declaration afterwards - "checked once at its declaration and by
-        // brand afterwards". Its members are methods, which the member walk
-        // below would compare with the protocol's functions one by one.
-        if ((t.Declaration as { ProtocolName?: string } | undefined)?.ProtocolName !== undefined && value instanceof ObjectValue) {
-          const own = RuntimeTypeOf(value);
-          if (own.Kind === 'nominal' && own.LibraryName === undefined && IsSubtype(own, t, [])) return true;
-        }
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
         const structurallyMatches = Q(yield* isMember(value, substituted, storage, selection));
         if (!structurallyMatches) {

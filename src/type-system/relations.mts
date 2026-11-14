@@ -888,19 +888,32 @@ export function ArrayWithMembers(type: TypeRecord): { array: Extract<TypeRecord,
  * declaration - through `implements`, `extends` and a superclass - with the
  * arguments each step gives. Undefined where it declares no such relation.
  */
-export function InterfaceApplicationOf(s: TypeRecord, interfaceDeclaration: ParseNode, seen: Set<TypeRecord> = new Set()): TypeRecord | undefined {
+export function InterfaceApplicationOf(s: TypeRecord, interfaceDeclaration: ParseNode): TypeRecord | undefined {
+  return InterfaceApplicationsOf(s, interfaceDeclaration)[0];
+}
+
+/**
+ * Every application of a declaration that a type reaches by declaration. A
+ * class may reach one interface at two arguments - `class U extends T
+ * implements Sized.<5>` where `T implements Sized.<10>` - and each is a
+ * contract some caller holds it by.
+ */
+export function InterfaceApplicationsOf(s: TypeRecord, interfaceDeclaration: ParseNode, seen: Set<TypeRecord> = new Set(), found: TypeRecord[] = []): TypeRecord[] {
   let current: TypeRecord | undefined = s;
   while (current && current.Kind === 'nominal' && !seen.has(current)) {
     seen.add(current);
-    if (current.Declaration === interfaceDeclaration) return current;
+    if (current.Declaration === interfaceDeclaration) {
+      const application = current;
+      if (!found.some((earlier) => SameType(earlier, application))) found.push(application);
+      return found;
+    }
     const declared = [...(current.Implements ?? []), ...((current as { Extends?: readonly TypeRecord[] }).Extends ?? [])];
     for (const entry of declared) {
-      const found = InterfaceApplicationOf(SubstituteTypeArguments(entry, current.Declaration, current.Arguments), interfaceDeclaration, seen);
-      if (found) return found;
+      InterfaceApplicationsOf(SubstituteTypeArguments(entry, current.Declaration, current.Arguments), interfaceDeclaration, seen, found);
     }
     current = current.Base ? SubstituteTypeArguments(current.Base, current.Declaration, current.Arguments) : undefined;
   }
-  return undefined;
+  return found;
 }
 
 export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode, target?: TypeRecord): boolean {

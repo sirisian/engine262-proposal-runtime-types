@@ -98,7 +98,7 @@ import {
   typeArgumentNameOf as typeArgumentNameOfShared,
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
-import { ArrayWithMembers, InterfaceApplicationOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
+import { ArrayWithMembers, InterfaceApplicationOf, InterfaceApplicationsOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { NominalAssignmentEvidence } from './nominal-evidence.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
@@ -4139,7 +4139,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const ownerBound: ParseNode.TypeParameter[] = [];
     if (owner && call.CallExpression.type === 'MemberExpression') {
       const receiver = staticType((call.CallExpression as ParseNode.MemberExpression).MemberExpression as ParseNode);
-      const application = receiver ? InterfaceApplicationOf(receiver as TypeRecord, owner) : undefined;
+      const applications = receiver ? InterfaceApplicationsOf(receiver as TypeRecord, owner) : [];
+      // Reached at two arguments, the member keeps two contracts, and the
+      // call decides between them when it runs.
+      if (applications.length > 1) return;
+      const application = applications[0];
       const ownerParameters = (owner as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
       if (application?.Kind === 'nominal') {
         ownerParameters.forEach((parameter, index) => {
@@ -8939,7 +8943,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (receiver?.Kind === 'union') return receiver.Members.some(hasReadonlyMember);
       if (keys.includes('length') && spanElementOfReceiver(receiver)) return true;
       const shape = structureOf(receiver);
-      return shape?.Kind === 'object' && shape.Properties.some((property) => keys.includes(property.key) && property.readonly);
+      // The members of an interface that extends an array type are one part
+      // of its structural form, the intersection of the base with them.
+      const parts = shape?.Kind === 'intersection' ? shape.Members : shape ? [shape] : [];
+      return parts.some((part) => part.Kind === 'object' && part.Properties.some((property) => keys.includes(property.key) && property.readonly));
     };
     if (hasReadonlyMember(sealedReceiver)) {
       reportType('rt-readonly-store', expression, '$1 is a readonly member and cannot be assigned', keys.length === 1 && typeof keys[0] !== 'string' ? keys[0] : Value(keys.map((key) => typeof key === 'string'
@@ -9884,7 +9891,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (ownKeys.has(member.key) && typeof member.key === 'string' && isInterface) {
                 const replacing = interfaceMethodSignature(node, member.key);
                 const replaced = interfaceMethodSignatures(declaration!, member.key);
-                if (replacing && replaced.some((signature) => !clausesImplied(signature, replacing))) {
+                if (replacing && replaced.some((signature) => !clausesImplied(signature, replacing, statedConstants(signature, part)))) {
                   report(replacing, `\`${member.key}\` of \`${name}\` states a where clause the member it replaces in ${label} does not imply; a replacing member may only repeat or weaken the contract`);
                 }
               }
@@ -12547,7 +12554,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const ownDeclaration = ownSignature ? signatureDeclarations.get(ownSignature) : undefined;
           const baseDeclaration = baseSignature ? signatureDeclarations.get(baseSignature) : undefined;
           if (ownDeclaration && baseDeclaration && ownDeclaration !== baseDeclaration) inheritWhereClauses(baseDeclaration, ownDeclaration);
-          if (ownDeclaration && baseDeclaration && ownDeclaration !== baseDeclaration && !clausesImplied(baseDeclaration, ownDeclaration)) {
+          if (ownDeclaration && baseDeclaration && ownDeclaration !== baseDeclaration
+            && !clausesImplied(baseDeclaration, ownDeclaration, statedConstants(baseDeclaration, (base ?? boundedBase) as TypeRecord | null))) {
             reportType('rt-inherited-contract', n, '$1 states a where clause the member it overrides does not imply; an override may only repeat or weaken the inherited contract', Value(String(own.key)));
           }
         }
@@ -45783,7 +45791,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (member.kind === 'field' || !member.Declaration) continue;
           const obligation = chain.slice(1).flat().find((prior) => prior.abstract && prior.key === member.key && prior.static === member.static && prior.kind === member.kind);
           if (obligation?.Declaration) inheritWhereClauses(obligation.Declaration, member.Declaration);
-          if (obligation?.Declaration && !clausesImplied(obligation.Declaration, member.Declaration)) {
+          if (obligation?.Declaration && !clausesImplied(obligation.Declaration, member.Declaration, statedConstants(obligation.Declaration, instanceType as TypeRecord | null))) {
             reportType('rt-inherited-contract', (node as ParseNode), '$1 states a where clause the member it overrides does not imply; an override may only repeat or weaken the inherited contract', Value(String(member.key)));
           }
         }

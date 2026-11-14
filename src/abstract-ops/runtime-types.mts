@@ -38,7 +38,7 @@ import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf, InterfaceOfSignature } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
-import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES, InterfaceApplicationOf } from '../type-system/relations.mts';
+import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -5942,19 +5942,24 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   const own = code?.parent?.WhereClauses;
   // A base that states no clause is an alternative that admits every call.
   const inheritedFrom = own && own.length > 0 ? [] : (code?.parent ? InheritedWhereDeclarationsOf(code.parent) : []);
-  const inherited = inheritedFrom.map((declaration) => (declaration as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses ?? []);
-  if (inherited.length < 2) {
-    const only = own && own.length > 0 ? undefined : inheritedFrom[0] ?? (code?.parent ? InheritedWhereDeclarationOf(code.parent) : undefined);
-    return yield* VerifyContractClauses(fn, functionWhereClauses(fn as never), result, args, phase, only ? inheritedClauseBindings(only) : undefined);
+  const single = own && own.length > 0 ? undefined : (inheritedFrom.length === 0 && code?.parent ? InheritedWhereDeclarationOf(code.parent) : undefined);
+  // #sec-generic-where: each alternative is one inherited contract under one
+  // reading of its declaration's parameters. A member that keeps several is
+  // admitted where the parameter clauses of any one hold, and its result
+  // satisfies the result clauses of every one.
+  const alternatives: { clauses: readonly ParseNode[], reading: InheritedBindings | undefined }[] = [];
+  for (const declaration of single ? [single] : inheritedFrom) {
+    const clauses = (declaration as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses ?? [];
+    for (const reading of inheritedClauseBindings(declaration)) alternatives.push({ clauses, reading });
   }
-  // #sec-generic-where: a member that keeps the contracts of several members
-  // is admitted where the parameter clauses of any one of them hold, and its
-  // result satisfies the result clauses of every one.
+  if (alternatives.length < 2) {
+    return yield* VerifyContractClauses(fn, functionWhereClauses(fn as never), result, args, phase, alternatives[0]?.reading);
+  }
   if (phase !== 'result') {
     let refusal: ThrowCompletion | undefined;
     let admitted = false;
-    for (const [index, list] of inherited.entries()) {
-      const attempt = EnsureCompletion(yield* VerifyContractClauses(fn, list, result, args, 'entry', inheritedClauseBindings(inheritedFrom[index]!)));
+    for (const alternative of alternatives) {
+      const attempt = EnsureCompletion(yield* VerifyContractClauses(fn, alternative.clauses, result, args, 'entry', alternative.reading));
       if (attempt.Type !== 'throw') {
         admitted = true;
         break;
@@ -5964,8 +5969,8 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
     if (!admitted && refusal) return refusal;
   }
   if (phase !== 'entry') {
-    for (const [index, list] of inherited.entries()) {
-      Q(yield* VerifyContractClauses(fn, list, result, args, 'result', inheritedClauseBindings(inheritedFrom[index]!)));
+    for (const alternative of alternatives) {
+      Q(yield* VerifyContractClauses(fn, alternative.clauses, result, args, 'result', alternative.reading));
     }
   }
   return Value.undefined;
@@ -5980,23 +5985,27 @@ type InheritedBindings = { readonly parameters: readonly ParseNode[], readonly f
  * implemented as `Sized.<10>`, directly or through an interface that extends
  * it, is checked as `i < 10`.
  */
-function inheritedClauseBindings(signature: object): InheritedBindings | undefined {
+function inheritedClauseBindings(signature: object): (InheritedBindings | undefined)[] {
   const owner = InterfaceOfSignature(signature) as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } | undefined;
   const parameters = owner?.TypeParameters?.TypeParameterList;
-  if (!owner || !parameters || parameters.length === 0) return undefined;
+  if (!owner || !parameters || parameters.length === 0) return [undefined];
   const thisEnvironment = GetThisEnvironment();
-  if (thisEnvironment.HasThisBinding() !== Value.true) return undefined;
+  if (thisEnvironment.HasThisBinding() !== Value.true) return [undefined];
   const receiver = EnsureCompletion((thisEnvironment as unknown as { GetThisBinding(): unknown }).GetThisBinding() as never);
-  if (receiver.Type !== 'normal') return undefined;
-  const application = InterfaceApplicationOf(RuntimeTypeOf(receiver.Value as Value), owner as unknown as ParseNode);
-  if (!application || application.Kind !== 'nominal') return undefined;
-  const frame = new Map(currentTypeParameterFrame() ?? []);
-  parameters.forEach((parameter, index) => {
-    const argument = application.Arguments[index];
-    const name = (parameter as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
-    if (name && argument !== undefined && typeof argument !== 'number') bindTypeParameter(frame, name, argument, parameter);
+  if (receiver.Type !== 'normal') return [undefined];
+  // One reading per application the receiver's class reaches: a class may
+  // reach `Sized` at two arguments, and each is a contract a caller holds.
+  const applications = InterfaceApplicationsOf(RuntimeTypeOf(receiver.Value as Value), owner as unknown as ParseNode);
+  const readings = applications.filter((application) => application.Kind === 'nominal').map((application) => {
+    const frame = new Map(currentTypeParameterFrame() ?? []);
+    parameters.forEach((parameter, index) => {
+      const argument = (application as Extract<TypeRecord, { Kind: 'nominal' }>).Arguments[index];
+      const name = (parameter as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+      if (name && argument !== undefined && typeof argument !== 'number') bindTypeParameter(frame, name, argument, parameter);
+    });
+    return { parameters, frame };
   });
-  return { parameters, frame };
+  return readings.length > 0 ? readings : [undefined];
 }
 
 function* VerifyContractClauses(fn: object, clauses: readonly ParseNode[] | null, result: Value, args: readonly Value[], phase: 'entry' | 'result' | 'all',
