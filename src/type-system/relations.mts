@@ -860,6 +860,26 @@ export function InterfaceExtends(s: TypeRecord, interfaceDeclaration: ParseNode,
   return false;
 }
 
+/**
+ * The application of an interface that a class or an interface reaches by
+ * declaration - through `implements`, `extends` and a superclass - with the
+ * arguments each step gives. Undefined where it declares no such relation.
+ */
+export function InterfaceApplicationOf(s: TypeRecord, interfaceDeclaration: ParseNode, seen: Set<TypeRecord> = new Set()): TypeRecord | undefined {
+  let current: TypeRecord | undefined = s;
+  while (current && current.Kind === 'nominal' && !seen.has(current)) {
+    seen.add(current);
+    if (current.Declaration === interfaceDeclaration) return current;
+    const declared = [...(current.Implements ?? []), ...((current as { Extends?: readonly TypeRecord[] }).Extends ?? [])];
+    for (const entry of declared) {
+      const found = InterfaceApplicationOf(SubstituteTypeArguments(entry, current.Declaration, current.Arguments), interfaceDeclaration, seen);
+      if (found) return found;
+    }
+    current = current.Base ? SubstituteTypeArguments(current.Base, current.Declaration, current.Arguments) : undefined;
+  }
+  return undefined;
+}
+
 export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode, target?: TypeRecord): boolean {
   let current: TypeRecord | undefined = s;
   const seen = new Set<TypeRecord>();

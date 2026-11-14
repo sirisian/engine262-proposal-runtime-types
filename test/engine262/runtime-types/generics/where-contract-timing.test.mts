@@ -97,3 +97,27 @@ test('two inherited result contracts both hold of the result', () => {
   const g = 'function g(v: uint8) { try { return String(new C().m(v)); } catch (e) { return e.constructor.name; } } ';
   expect(evaluated(`${AB}${g}g(20) + '/' + g(5) + '/' + g(70);`)).toBe('20/TypeError/TypeError');
 });
+
+/**
+ * #sec-generic-where: a clause a member inherits reads the type parameters of
+ * the declaration that states it, at the arguments by which the receiver's
+ * class reaches that declaration.
+ */
+test('an inherited clause reads the parameters of the declaration that states it', () => {
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const g = (cls: string): string => `function g(v: uint8) { try { new ${cls}().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(5) + '/' + g(20);`;
+  expect(evaluated(`${Sized}class T implements Sized.<10> { take(i: uint8): void {} } ${g('T')}`)).toBe('ran/TypeError');
+  expect(evaluated(`${Sized}interface Ten extends Sized.<10> {} class T implements Ten { take(i: uint8): void {} } ${g('T')}`)).toBe('ran/TypeError');
+  expect(evaluated(`${Sized}class A implements Sized.<10> { take(i: uint8): void {} } class B implements Sized.<100> { take(i: uint8): void {} } `
+    + "function g(o: A | B, v: uint8) { try { o.take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(new A(), 20) + '/' + g(new B(), 20);")).toBe('TypeError/ran');
+});
+
+test('an inherited clause reads a type parameter of its declaration as a type', () => {
+  expect(evaluated('interface Typed<T: type> { same(x: any): boolean where x is T; } class C implements Typed.<uint8> { same(x: any): boolean { return true; } } '
+    + "function g(v: any) { try { new C().same(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(1 := uint8) + '/' + g('s');")).toBe('ran/TypeError');
+});
+
+test('an override keeps a clause that reads its superclass\'s parameter', () => {
+  expect(evaluated('class P<N: uint8> { take(i: uint8): void where i < N {} } class C extends P.<10> { take(i: uint8): void {} } '
+    + "function g(v: uint8) { try { new C().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(5) + '/' + g(20);")).toBe('ran/TypeError');
+});

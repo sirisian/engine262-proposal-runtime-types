@@ -1366,6 +1366,16 @@ export function InheritedWhereDeclarationOf(declaration: object): ParseNode | un
   return inheritedWhereDeclarations.get(declaration);
 }
 /**
+ * The interface or class declaration that states a member. An inherited
+ * clause may read that declaration's type parameters, `where i < N`, and
+ * reads them as the application the implementing or extending declaration
+ * names (#sec-generic-where).
+ */
+const signatureOwners = new WeakMap<object, ParseNode>();
+export function InterfaceOfSignature(signature: object): ParseNode | undefined {
+  return signatureOwners.get(signature);
+}
+/**
  * #sec-generic-where: every member whose contract a member that states no
  * clause keeps. One member is the ordinary case. With several, a call is
  * admitted where the parameter clauses of any one of them hold, since a
@@ -4052,7 +4062,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (seen.has(declaration)) return [];
     seen.add(declaration);
     const own = interfaceMethodSignature(declaration, key);
-    if (own) return [own];
+    if (own) {
+      signatureOwners.set(own, declaration);
+      return [own];
+    }
     const found: ParseNode[] = [];
     for (const entry of (declaration as { Heritage?: readonly ParseNode.Type[] }).Heritage ?? []) {
       const base = resolveType(entry) as TypeRecord | null;
@@ -12195,6 +12208,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // supplies it, and two such contracts combine as two implemented
             // interfaces' do (#sec-generic-where).
             const registered = signatureDeclarations.get((p.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object);
+            if (registered && !signatureOwners.has(registered)) signatureOwners.set(registered, ifaceDecl as ParseNode);
             const contracts = registered ? [registered] : interfaceMethodSignatures(ifaceDecl as ParseNode, String(p.key));
             for (const signatureDeclaration of contracts) {
               if (ownDeclaration) inheritWhereClauses(signatureDeclaration, ownDeclaration);
@@ -45655,6 +45669,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const scope = pushTypeParameterScopeOf(cls, 'type-only');
           try {
             for (const element of classBodyOf(cls)) {
+              // The class that states a member, for a clause an override keeps
+              // and that reads this class's type parameters.
+              if (!signatureOwners.has(element)) signatureOwners.set(element, cls);
               if ((element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName?.type === 'PrivateIdentifier') continue;
               const kind = memberKind(element);
               const key = classElementKey((element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);

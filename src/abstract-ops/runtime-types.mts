@@ -36,9 +36,9 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf } from '../type-system/check.mts';
+import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf, InterfaceOfSignature } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
-import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
+import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES, InterfaceApplicationOf } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -56,7 +56,7 @@ import {
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   GetIterator, GetIteratorFromMethod, GetMethod, type IteratorRecord,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
-  IsComposite, CompositeFromShape } from '#self';
+  IsComposite, CompositeFromShape, GetThisEnvironment } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, CreateDecimalSpecial, ParseDecimalDigits, DecimalFromRational, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
@@ -5941,17 +5941,20 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   const code = (fn as { ECMAScriptCode?: { parent?: { WhereClauses?: readonly ParseNode[] | null } } | null }).ECMAScriptCode;
   const own = code?.parent?.WhereClauses;
   // A base that states no clause is an alternative that admits every call.
-  const inherited = own && own.length > 0 ? [] : (code?.parent ? InheritedWhereDeclarationsOf(code.parent) : [])
-    .map((declaration) => (declaration as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses ?? []);
-  if (inherited.length < 2) return yield* VerifyContractClauses(fn, functionWhereClauses(fn as never), result, args, phase);
+  const inheritedFrom = own && own.length > 0 ? [] : (code?.parent ? InheritedWhereDeclarationsOf(code.parent) : []);
+  const inherited = inheritedFrom.map((declaration) => (declaration as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses ?? []);
+  if (inherited.length < 2) {
+    const only = own && own.length > 0 ? undefined : inheritedFrom[0] ?? (code?.parent ? InheritedWhereDeclarationOf(code.parent) : undefined);
+    return yield* VerifyContractClauses(fn, functionWhereClauses(fn as never), result, args, phase, only ? inheritedClauseBindings(only) : undefined);
+  }
   // #sec-generic-where: a member that keeps the contracts of several members
   // is admitted where the parameter clauses of any one of them hold, and its
   // result satisfies the result clauses of every one.
   if (phase !== 'result') {
     let refusal: ThrowCompletion | undefined;
     let admitted = false;
-    for (const list of inherited) {
-      const attempt = EnsureCompletion(yield* VerifyContractClauses(fn, list, result, args, 'entry'));
+    for (const [index, list] of inherited.entries()) {
+      const attempt = EnsureCompletion(yield* VerifyContractClauses(fn, list, result, args, 'entry', inheritedClauseBindings(inheritedFrom[index]!)));
       if (attempt.Type !== 'throw') {
         admitted = true;
         break;
@@ -5961,14 +5964,43 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
     if (!admitted && refusal) return refusal;
   }
   if (phase !== 'entry') {
-    for (const list of inherited) {
-      Q(yield* VerifyContractClauses(fn, list, result, args, 'result'));
+    for (const [index, list] of inherited.entries()) {
+      Q(yield* VerifyContractClauses(fn, list, result, args, 'result', inheritedClauseBindings(inheritedFrom[index]!)));
     }
   }
   return Value.undefined;
 }
 
-function* VerifyContractClauses(fn: object, clauses: readonly ParseNode[] | null, result: Value, args: readonly Value[], phase: 'entry' | 'result' | 'all'): ValueEvaluator {
+type InheritedBindings = { readonly parameters: readonly ParseNode[], readonly frame: Map<string, TypeRecord> };
+
+/**
+ * #sec-generic-where: a clause a member inherits reads the type parameters of
+ * the declaration that states it as the receiver's class reaches that
+ * declaration: `interface Sized<N: uint8> { take(i: uint8): void where i < N; }`
+ * implemented as `Sized.<10>`, directly or through an interface that extends
+ * it, is checked as `i < 10`.
+ */
+function inheritedClauseBindings(signature: object): InheritedBindings | undefined {
+  const owner = InterfaceOfSignature(signature) as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } | undefined;
+  const parameters = owner?.TypeParameters?.TypeParameterList;
+  if (!owner || !parameters || parameters.length === 0) return undefined;
+  const thisEnvironment = GetThisEnvironment();
+  if (thisEnvironment.HasThisBinding() !== Value.true) return undefined;
+  const receiver = EnsureCompletion((thisEnvironment as unknown as { GetThisBinding(): unknown }).GetThisBinding() as never);
+  if (receiver.Type !== 'normal') return undefined;
+  const application = InterfaceApplicationOf(RuntimeTypeOf(receiver.Value as Value), owner as unknown as ParseNode);
+  if (!application || application.Kind !== 'nominal') return undefined;
+  const frame = new Map(currentTypeParameterFrame() ?? []);
+  parameters.forEach((parameter, index) => {
+    const argument = application.Arguments[index];
+    const name = (parameter as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+    if (name && argument !== undefined && typeof argument !== 'number') bindTypeParameter(frame, name, argument, parameter);
+  });
+  return { parameters, frame };
+}
+
+function* VerifyContractClauses(fn: object, clauses: readonly ParseNode[] | null, result: Value, args: readonly Value[], phase: 'entry' | 'result' | 'all',
+  inheritedBindings?: InheritedBindings): ValueEvaluator {
   if (!clauses || clauses.length === 0) {
     return Value.undefined;
   }
@@ -6005,9 +6037,14 @@ function* VerifyContractClauses(fn: object, clauses: readonly ParseNode[] | null
     if (contractParameters && contractParameters.length > 0 && contractFrame) {
       contractContext.LexicalEnvironment = NewTypeParameterEnvironment(priorEnvironment as never, contractParameters as never, contractFrame) as never;
     }
+    if (inheritedBindings) {
+      contractContext.LexicalEnvironment = NewTypeParameterEnvironment(contractContext.LexicalEnvironment as never, inheritedBindings.parameters as never, inheritedBindings.frame) as never;
+      pushTypeParameterFrame(inheritedBindings.frame);
+    }
     try {
       verdict = Q(yield* EvaluateContractPredicate(predicate as ParseNode));
     } finally {
+      if (inheritedBindings) popTypeParameterFrame();
       contractContext.LexicalEnvironment = priorEnvironment;
       PopContractReturn();
     }
