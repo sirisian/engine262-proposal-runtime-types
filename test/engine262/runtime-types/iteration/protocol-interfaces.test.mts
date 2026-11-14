@@ -61,3 +61,16 @@ test('an interface that extends a generic application reaches it, invariantly', 
   expect(evaluated(`${G}interface H extends G.<uint8> { w: uint8; } String(Reflect.isAssignable(H, G.<uint8>)) + String(Reflect.isAssignable(H, G.<uint16>));`)).toBe('truefalse');
   expect(evaluated(`${G}interface H<T: type> extends G.<T> { w: T; } String(Reflect.isAssignable(H.<uint8>, G.<uint8>)) + String(Reflect.isAssignable(H.<uint8>, G.<uint16>));`)).toBe('truefalse');
 });
+
+test('a hook annotated with the protocol it returns is the hook the protocol asks for', () => {
+  // A protocol's member is a method, and a method member is read-only, so it
+  // is compared covariantly: the hook may return the Iterator interface, or a
+  // subtype of it, whether the object is written in place or held in a variable.
+  const f = 'function f(x: Iterable.<uint8>) { return 1; } const a: [].<uint8> = [1]; ';
+  expect(evaluated(`${f}String(f({ [Symbol.iterator](): Iterator.<uint8> { return a.values(); } }));`)).toBe('1');
+  expect(evaluated(`${f}const o = { [Symbol.iterator](): Iterator.<uint8> { return a.values(); } }; String(f(o));`)).toBe('1');
+  expect(evaluated(`${f}const o = { [Symbol.iterator](): IterableIterator.<uint8> { return a.values(); } }; String(f(o));`)).toBe('1');
+  expect(evaluated(`${f}function mk(): Iterator.<uint8> { return a.values(); } const o = { [Symbol.iterator]: mk }; String(f(o));`)).toBe('1');
+  expect(evaluated(`${f}const o = { [Symbol.iterator]: (): Iterator.<uint8> => a.values() }; String(f(o));`)).toBe('1');
+  refused(`${f}const o = { [Symbol.iterator](): Iterator.<string> { return ['s'].values(); } }; f(o);`, 'rt-assignability');
+});

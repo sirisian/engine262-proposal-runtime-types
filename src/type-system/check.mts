@@ -17339,6 +17339,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * The parts of a sequence type with members, for a read through it: an
+   * interface that extends an array or tuple type, or the intersection that
+   * spells the same type (#sec-object-types). A named member is read from the
+   * member part; an index, `length` and the array methods are read from the
+   * sequence part. Null for any other type.
+   */
+  const sequenceWithMembers = (type: Known): { sequence: TypeRecord, members: readonly Extract<TypeRecord, { Kind: 'object' }>[] } | null => {
+    if (!type) return null;
+    const form = type.Kind === 'nominal' && (type.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration' ? structureOf(type) : type;
+    if (form?.Kind !== 'intersection') return null;
+    const sequences = form.Members.filter((member) => member.Kind === 'array' || member.Kind === 'tuple');
+    const members = form.Members.filter((member) => member.Kind !== 'array' && member.Kind !== 'tuple');
+    return sequences.length === 1 && members.length > 0 && members.every((member) => member.Kind === 'object')
+      ? { sequence: sequences[0]!, members: members as Extract<TypeRecord, { Kind: 'object' }>[] } : null;
+  };
+
   const structureOf = (t: Known): Known => {
     t = withPartialStructure(t);
     if (t && t.Kind === 'nominal') {
@@ -23643,7 +23660,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return fixedProperty();
             }
           }
-          const receiver = staticType(m.MemberExpression);
+          const wholeReceiver = staticType(m.MemberExpression);
+          // A sequence type with members: a named member is read from its
+          // member part, and everything else from the array or tuple it is.
+          const receiverParts = sequenceWithMembers(wholeReceiver);
+          if (receiverParts && m.IdentifierName) {
+            for (const part of receiverParts.members) {
+              const named = part.Properties.find((property) => property.key === m.IdentifierName!.name);
+              if (named) return named.type as Known;
+            }
+          }
+          const receiver = receiverParts ? receiverParts.sequence as Known : wholeReceiver;
           // #sec-composite-types: the shape of `Composite.<S>` is read with every
           // member readonly and every nested shape a composite in turn, which
           // `compositeTreeShape` already builds; a member read through the
@@ -23946,7 +23973,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // hole easy to miss - the asymmetry read as "indexing is checked" when
         // only half of it was.
         if (m.Expression && m.MemberExpression) {
-          const receiver = staticType(m.MemberExpression);
+          const indexedWhole = staticType(m.MemberExpression);
+          // An index into a sequence type with members reads the sequence.
+          const receiver = (sequenceWithMembers(indexedWhole)?.sequence ?? indexedWhole) as Known;
           // A SYMBOL KEY IS NOT AN INDEX. Every rule below decides a numeric
           // one - a literal index against an extent, a tuple position, a
           // computed index at the index type - and the array arm ends by

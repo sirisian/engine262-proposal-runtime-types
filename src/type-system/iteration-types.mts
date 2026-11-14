@@ -232,7 +232,12 @@ function objectType(properties: { key: string | symbol, type: TypeRecord, option
           : p.key),
       type: p.type,
       optional: p.optional ?? false,
-      readonly: false,
+      // A member flagged read-only is compared covariantly, as an interface's
+      // method member is: a hook that returns the `Iterator` interface, or a
+      // subtype of it, is the hook `Iterable` asks for. The flag was dropped
+      // here, which made the hook a writable member that only an identical
+      // type could meet.
+      readonly: p.readonly ?? false,
     })),
     // Required by the record shape and omitted at first, which is what made the
     // RUNTIME walk crash while the checker was happy: EnforceAnnotation reads
@@ -351,10 +356,18 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
       // `Iterator.<uint8>` reads exactly as it did before this unification, and
       // no annotation naming an iteration type had to move.
       const wrap = (result: TypeRecord) => (name === 'AsyncIterator' ? promiseOf(result) : result);
+      // These three are compared INVARIANTLY, as they were while the flag
+      // each carried was dropped: a built-in reaches a protocol through its
+      // structural form today, and a void generator's completion is `any`
+      // there, which a covariant `next` would let stand for an explicit
+      // `undefined` - `Iterator.<uint8, undefined, void>` from `function*
+      // f(): uint8 {}`. Once a built-in DECLARES its protocols the arguments
+      // are compared instead, invariantly, and these can be read-only as any
+      // method member is.
       return objectType([
-        { key: 'next', type: methodType([N], wrap(iteratorResult(T, R))), readonly: true },
-        { key: 'return', type: methodType([R], wrap(iteratorResult(T, R))), optional: true, readonly: true },
-        { key: 'throw', type: methodType([anyType], wrap(iteratorResult(T, R))), optional: true, readonly: true },
+        { key: 'next', type: methodType([N], wrap(iteratorResult(T, R))) },
+        { key: 'return', type: methodType([R], wrap(iteratorResult(T, R))), optional: true },
+        { key: 'throw', type: methodType([anyType], wrap(iteratorResult(T, R))), optional: true },
       ]);
     }
     case 'Iterable':
@@ -364,17 +377,17 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
     case 'IterableIterator':
       return objectType([
         ...(iterationInterfaceRecord('Iterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
-        { key: Symbol.for('iterator'), type: methodType([], iterationInterfaceRecord('Iterator', [T, R, N])!) },
+        { key: Symbol.for('iterator'), type: methodType([], iterationInterfaceRecord('Iterator', [T, R, N])!), readonly: true },
       ] as never);
 
     case 'AsyncIterable':
       return objectType([
-        { key: Symbol.for('asyncIterator'), type: methodType([], iterationInterfaceRecord('AsyncIterator', [T])!) },
+        { key: Symbol.for('asyncIterator'), type: methodType([], iterationInterfaceRecord('AsyncIterator', [T])!), readonly: true },
       ]);
     case 'AsyncIterableIterator':
       return objectType([
         ...(iterationInterfaceRecord('AsyncIterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
-        { key: Symbol.for('asyncIterator'), type: methodType([], iterationInterfaceRecord('AsyncIterator', [T, R, N])!) },
+        { key: Symbol.for('asyncIterator'), type: methodType([], iterationInterfaceRecord('AsyncIterator', [T, R, N])!), readonly: true },
       ] as never);
     default:
       return null;

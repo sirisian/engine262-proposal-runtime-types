@@ -219,3 +219,39 @@ test('a read-only member of an interface that extends an array type is not assig
   refused('interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } function tag(s: Strings): string { s.raw = []; return "x"; }', 'rt-readonly-store');
   expect(observeScript("interface WithTag extends [].<uint8> { tag: string; } function f(s: WithTag): string { s.tag = 't'; return s.tag; } 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
 });
+
+/**
+ * #sec-interface-declaration-identity: "A base that is not an interface type
+ * declares nothing; the interface is a subtype of it through its structural
+ * form."
+ */
+test('an interface that extends an array or tuple type is that array or tuple', () => {
+  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  expect(evaluated(`${TSA}function count(xs: [].<string | undefined>): string { return String(xs.length); } function tag(s: Strings, ...v: [].<uint8>): string { return count(s); } `
+    + 'const one: uint8 = 1; tag`a${one}b`;')).toBe('2');
+  refused(`${TSA}function count(xs: [].<uint8>): string { return 'x'; } function tag(s: Strings): string { return count(s); }`, 'rt-assignability');
+  expect(observeScript("interface Pair extends [string, uint32] { label: string; } function first(p: [string, uint32]): string { return p[0]; } function g(p: Pair): string { return first(p); } 'ok';"))
+    .toMatchObject({ completion: { Type: 'normal' } });
+});
+
+/**
+ * #sec-object-types: a read through a sequence type with members takes a
+ * named member from its member part and everything else from the array or
+ * tuple it is, in the interface spelling and the intersection spelling.
+ */
+test('a read through an array type with members has its declared type', () => {
+  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  const alias = 'type Strings = [].<string | undefined> & { raw: [].<string> }; ';
+  for (const declared of [TSA, alias]) {
+    refused(`${declared}function tag(s: Strings): uint8 { const a: uint8 = s[0]; return a; }`, 'rt-assignability');
+    refused(`${declared}function tag(s: Strings): string { const a: string = s[0]; return a; }`, 'rt-assignability');
+    refused(`${declared}function tag(s: Strings): uint8 { const b: uint8 = s.raw[0]; return b; }`, 'rt-assignability');
+    refused(`${declared}function tag(s: Strings): string { const c: string = s.length; return c; }`, 'rt-assignability');
+    refused(`${declared}function tag(s: Strings): uint8 { const r: uint8 = s.raw; return r; }`, 'rt-assignability');
+    expect(observeScript(`${declared}function tag(s: Strings): string { const a: string | undefined = s[0]; const b: string = s.raw[0]; return (a ?? '') + b; } 'ok';`))
+      .toMatchObject({ completion: { Type: 'normal' } });
+  }
+  refused('interface Pair extends [string, uint32] { label: string; } function f(p: Pair): uint8 { const n: uint8 = p[0]; return n; }', 'rt-assignability');
+  expect(observeScript("interface Pair extends [string, uint32] { label: string; } function f(p: Pair): string { const n: string = p[0]; const k: uint32 = p[1]; return n + p.label + String(k); } 'ok';"))
+    .toMatchObject({ completion: { Type: 'normal' } });
+});

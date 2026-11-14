@@ -133,3 +133,14 @@ test('the catch-all stays [[Untyped]] and a written any signature does not', () 
   expect(evaluated('String(Reflect.isAssignable(Reflect.typeOf((x: uint8) => x), type (x: uint8) => uint8));')).toBe('true');
   expect(evaluated('String(Reflect.isAssignable(type (x: any) => any, type (x: uint8) => uint8));')).toBe('false');
 });
+
+test('a literal\'s own method is a method member, held in a variable or not', () => {
+  // #sec-this-adoption: two methods agree on the self [[ThisType]]. A method
+  // an object literal types by its own annotations is one, whether the literal
+  // is written at the interface-typed position or reaches it through a variable.
+  expect(evaluated('interface I { m(): uint8; } const o = { m(): uint8 { return 1; } }; const v: I = o; String(v.m());')).toBe('1');
+  expect(evaluated('interface I { m(): uint8; } const v: I = { m(): uint8 { return 1; } }; String(v.m());')).toBe('1');
+  // Its result is still compared.
+  expect(ok('interface I { m(): uint8; } const o = { m(): string { return String(1); } }; const v: I = o;')).toBe(false);
+  expect(ok('interface I { m(x: uint8): uint8; } const o = { m(x: string): uint8 { return 1; } }; const v: I = o;')).toBe(false);
+});

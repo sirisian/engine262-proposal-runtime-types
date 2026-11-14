@@ -1418,6 +1418,14 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
     }
     const sourceStructure = InterfaceStructureOf(s);
+    // #sec-interface-declaration-identity: "A base that is not an interface
+    // type declares nothing; the interface is a subtype of it through its
+    // structural form." An interface that extends an array or tuple type is
+    // compared with an array or tuple through that form, the intersection of
+    // the base with its members.
+    if (sourceStructure?.Kind === 'intersection' && (t.Kind === 'array' || t.Kind === 'tuple')) {
+      return IsSubtype(SubstituteTypeArguments(sourceStructure, (s as { Declaration?: unknown }).Declaration, (s as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), t, next);
+    }
     if (sourceStructure && (t.Kind === 'object' || (t.Kind === 'function' && sourceStructure.Kind === 'function'))) {
       return IsSubtype(SubstituteTypeArguments(sourceStructure, (s as { Declaration?: unknown }).Declaration, (s as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), t, next);
     }
@@ -2284,9 +2292,13 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
       // none cannot take: "none is an absence rather than a wildcard" there.
       const selfReceiver = tThis !== null && tThis.Kind === 'nominal'
         && (tThis.Declaration as { type?: string } | undefined)?.type === 'SelfThisMarker';
-      // A literal's method whose position has not typed it yet has a receiver
-      // too, only an unknown one; it is not a function that declares none.
-      if (!(sThis === null && selfReceiver && !(sg as { PendingReceiver?: boolean }).PendingReceiver)) return false;
+      // A literal's method is a METHOD: it has a receiver, its object, though
+      // no position has given that receiver a type yet. Two methods agree on
+      // the self [[ThisType]], so a method the literal types itself - by its
+      // annotations - is the member. One that is still an untyped stand-in is
+      // not compared as if it were a function that declares no receiver.
+      const pendingStandIn = (sg as { PendingReceiver?: boolean }).PendingReceiver === true && (sg as { Untyped?: boolean }).Untyped === true;
+      if (!(sThis === null && selfReceiver && !pendingStandIn)) return false;
     }
     // `this` is contravariant "as a parameter is", so it takes the parameter
     // rule: the same asymmetry reached here too. `this: uint8` was refused where
