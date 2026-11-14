@@ -22,7 +22,7 @@ import { CreateArrayView } from '../abstract-ops/array-view.mts';
 import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
-import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, SubstituteTypeArguments } from '../type-system/runtime.mts';
 import { InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { NewPromiseCapability } from '../abstract-ops/promise-operations.mts';
@@ -684,6 +684,48 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           return ThrowError.TypeError('$1 is not an enumerator of the enum', wantedValue);
         }
         return nodeFor(at);
+      }
+      if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Interface') {
+        // #sec-reflection-shape-interface: `kind`, `name`, `type`, `extends`,
+        // `members` and `own`. The type's own node stays an opaque named leaf;
+        // this record says what its declaration states.
+        const interfaceRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
+        const declaration = interfaceRecord.Kind === 'nominal' ? interfaceRecord.Declaration as {
+          type?: string, BindingIdentifier?: { name: string }, ProtocolName?: string,
+          InterfaceMemberList?: readonly { PropertyName?: { name?: string, stringValue?: string }, IdentifierName?: { name?: string } }[],
+        } | undefined : undefined;
+        if (interfaceRecord.Kind !== 'nominal' || declaration?.type !== 'InterfaceDeclaration') {
+          return ThrowError.TypeError('$1 is not an interface type', Value('the target of Reflect.getReflection'));
+        }
+        const realm = surroundingAgent.currentRealmRecord;
+        const reflection = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+        X(CreateDataProperty(reflection, Value('kind'), Value('Interface')));
+        const declaredName = declaration.BindingIdentifier?.name;
+        X(CreateDataProperty(reflection, Value('name'), declaredName === undefined ? Value.undefined : Value(declaredName)));
+        X(CreateDataProperty(reflection, Value('type'), GetTypeObject(interfaceRecord) as unknown as Value));
+        // The types the declaration extends, in the order written, at this application's arguments.
+        const written = ((interfaceRecord as { Bases?: readonly TypeRecord[] }).Bases ?? [])
+          .map((base) => SubstituteTypeArguments(base, interfaceRecord.Declaration, interfaceRecord.Arguments));
+        X(CreateDataProperty(reflection, Value('extends'), CreateArrayFromList(written.map((base) => GetTypeObject(base) as unknown as Value))));
+        // Its members, inherited ones included: the node of its structural form.
+        const form = interfaceRecord.Structure ? SubstituteTypeArguments(interfaceRecord.Structure, interfaceRecord.Declaration, interfaceRecord.Arguments) : undefined;
+        X(CreateDataProperty(reflection, Value('members'), form ? TypeStructureReflection(form, realm) : Value.undefined));
+        // The keys this declaration states itself, as against those it inherits.
+        const ownKeys: Value[] = [];
+        const formProperties = (form as { Properties?: readonly { key: string | object }[] } | undefined)?.Properties ?? [];
+        const inheritedKeys = new Set<string | object>();
+        for (const base of written) {
+          const baseForm = base.Kind === 'nominal' && base.Structure ? SubstituteTypeArguments(base.Structure, base.Declaration, base.Arguments) : base;
+          for (const member of (baseForm as { Properties?: readonly { key: string | object, type: TypeRecord }[] }).Properties ?? []) {
+            const here = (form as { Properties?: readonly { key: string | object, type: TypeRecord }[] } | undefined)?.Properties?.find((own) => own.key === member.key);
+            if (here && here.type === member.type) inheritedKeys.add(member.key);
+          }
+        }
+        for (const property of formProperties) {
+          if (!inheritedKeys.has(property.key)) ownKeys.push(typeof property.key === 'string' ? Value(property.key) : property.key as unknown as Value);
+        }
+        X(CreateDataProperty(reflection, Value('own'), CreateArrayFromList(ownKeys)));
+        return reflection;
       }
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.Enum') {
         const enumRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));

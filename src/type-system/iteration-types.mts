@@ -197,6 +197,23 @@ export function protocolNameOf(record: TypeRecord | null | undefined): string | 
  * built-in interface name keeps its structural record. A bare name takes the
  * defaults, as `Iterator.<uint8>` is `Iterator.<uint8, void, void>`.
  */
+/**
+ * The protocol's declaration itself, unapplied: what the name `Iterable`
+ * denotes as a value, and what `Iterable.<uint8>` reflects as its generic
+ * base, as a declared generic interface's name does.
+ */
+export function protocolDeclarationRecord(name: string): TypeRecord | null {
+  if (!PROTOCOL_INTERFACES.has(name)) return iterationInterfaceRecord(name);
+  const declaration = protocolDeclaration(name);
+  return {
+    Kind: 'nominal',
+    Declaration: declaration,
+    Arguments: [],
+    Structure: declaration.Structure,
+    ...(declaration.Extends ? { Extends: declaration.Extends, Bases: declaration.Extends } : {}),
+  } as unknown as TypeRecord;
+}
+
 export function protocolInterfaceRecord(name: string, args: readonly (TypeRecord | number)[] = []): TypeRecord | null {
   if (!PROTOCOL_INTERFACES.has(name)) return iterationInterfaceRecord(name, args);
   const declaration = protocolDeclaration(name);

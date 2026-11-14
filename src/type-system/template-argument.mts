@@ -24,15 +24,17 @@ export function isTemplateArgumentType(type: TypeRecord): boolean {
  * What the template object has beside its cooked strings: `raw`, a frozen
  * array of strings. A tag function's first parameter is an array type with
  * that member - `interface TemplateStringsArray extends [].<string | undefined>
- * { raw: [].<string>; }`, or the intersection that spells the same type - and
+ * { readonly raw: [].<string>; }`, or the intersection that spells the same type - and
  * the strings argument of a tagged template satisfies it.
  */
 const templateMembers: TypeRecord = {
   Kind: 'object',
   Properties: [{
-    // Typed as the design declares it, `raw: [].<string>`. The object is
-    // frozen, so a write to it throws as a write to any frozen object does.
-    key: 'raw', type: { Kind: 'array', Element: makePrimitive('string'), Extent: 'dynamic' } as TypeRecord, optional: false, readonly: false,
+    // `raw` is read-only, as the object is: it is frozen where it is made.
+    // The design declares `readonly raw: [].<string>`, and a type that asks
+    // for a writable `raw` is not met by a template, whose `raw` cannot be
+    // written.
+    key: 'raw', type: { Kind: 'array', Element: makePrimitive('string'), Extent: 'dynamic' } as TypeRecord, optional: false, readonly: true,
   }],
   IndexSignatures: [],
 } as unknown as TypeRecord;

@@ -160,22 +160,35 @@ test('a reference back to the interface through a base is a recursive edge', () 
 });
 
 /**
- * #table-reflection-nodes: the node of an interface type carries `extends`,
- * the types its declaration extends, in the order written; the reflection of
- * a class carries `implements`.
+ * #sec-reflection-shape-interface: an interface is reflected as a class and
+ * an enum are. Its type's node is an opaque named leaf, and its record,
+ * `Reflect.Interface`, gives its name, what it extends, its members and
+ * which of them it states itself. A class's record carries `implements`.
  */
-test('reflection reports what an interface extends and what a class implements', () => {
-  const C = `${B}class C implements B { a: string = 'x'; b: uint8 = 1; } `;
-  expect(evaluated(`${C}const n = Reflect.getReflection.<Reflect.Type>(B); n.kind + '/' + String(n.extends.length) + '/' + String(n.extends[0] === A);`)).toBe('primitive/1/true');
-  expect(evaluated(`${C}const n = Reflect.getReflection.<Reflect.Type>(A); String(Array.isArray(n.extends)) + '/' + String(n.extends.length);`)).toBe('true/0');
-  expect(evaluated(`${C}const n = Reflect.getReflection.<Reflect.Type>(uint8); String(n.extends) + '/' + String('extends' in n);`)).toBe('undefined/false');
+test('an interface is reflected through its own record', () => {
+  const C = `${A}interface B extends A { readonly b?: uint8; m(x: uint8): string; } class C implements B { a: string = 'x'; m(x: uint8): string { return 'y'; } } `;
+  // The type's node exposes nothing of the declaration.
+  expect(evaluated(`${C}Object.keys(Reflect.getReflection.<Reflect.Type>(B)).join(',');`)).toBe('kind,type,family');
+  expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.Interface, B>(); Object.keys(r).join(',') + '|' + r.kind + '|' + r.name + '|' + String(r.type === B);`))
+    .toBe('kind,name,type,extends,members,own|Interface|B|true');
+  expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.Interface, B>(); String(r.extends.length) + '|' + String(r.extends[0] === A);`)).toBe('1|true');
+  // Members are the node of its structural form, inherited ones included; `own` says which it states.
+  expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.Interface, B>(); r.members.kind + '|' + r.members.properties.map((p) => p.name).join(',') + '|' + r.own.join(',');`))
+    .toBe('object|b,m,a|b,m');
+  expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.Interface, A>(); String(r.extends.length) + '|' + r.own.join(',');`)).toBe('0|a');
+  expect(evaluated('interface R { readonly n: uint8 | string; } interface R1 extends R { readonly n: uint8; } Reflect.getReflection.<Reflect.Interface, R1>().own.join(",");')).toBe('n');
+  // A class and an object type are not interfaces; a class's record lists what it implements.
+  expect(evaluated(`${C}try { Reflect.getReflection.<Reflect.Interface, C>(); 'reflected'; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
+  expect(evaluated("type O = { a: string }; try { Reflect.getReflection.<Reflect.Interface, O>(); 'reflected'; } catch (e) { e.constructor.name; }")).toBe('TypeError');
   expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.Class, C>(); String(r.implements.length) + '/' + String(r.implements[0] === B);`)).toBe('1/true');
   expect(evaluated('class K {} String(Reflect.getReflection.<Reflect.Class, K>().implements.length);')).toBe('0');
 });
 
-test('reflection reports a generic base at its arguments and every kind of base in order', () => {
-  expect(evaluated('interface G<T: type> { v: T; } interface H<T: type> extends G.<T> { w: T; } const n = Reflect.getReflection.<Reflect.Type>(H.<uint8>); String(n.extends.length) + \'/\' + String(n.extends[0] === G.<uint8>);')).toBe('1/true');
-  expect(evaluated("type CR = { name: string; }; interface X1 { m(): uint8; } interface Cls extends CR, X1 { tag: uint8; } const n = Reflect.getReflection.<Reflect.Type>(Cls); String(n.extends[0] === CR) + '/' + String(n.extends[1] === X1);")).toBe('true/true');
+test('an interface record reports a generic base at its arguments and every kind of base in order', () => {
+  expect(evaluated('interface G<T: type> { v: T; } interface H<T: type> extends G.<T> { w: T; } const r = Reflect.getReflection.<Reflect.Interface, H.<uint8>>(); '
+    + "String(r.extends[0] === G.<uint8>) + '|' + r.members.properties.map((p) => p.name).join(',') + '|' + r.own.join(',') + '|' + String(Reflect.getReflection.<Reflect.Type>(H.<uint8>).generic.base === H);"))
+    .toBe('true|w,v|w|true');
+  expect(evaluated("type CR = { name: string; }; interface X1 { m(): uint8; } interface Cls extends CR, X1 { tag: uint8; } const r = Reflect.getReflection.<Reflect.Interface, Cls>(); String(r.extends[0] === CR) + '/' + String(r.extends[1] === X1);")).toBe('true/true');
 });
 
 /**
@@ -195,24 +208,50 @@ test('an interface may extend the built-in iteration protocols', () => {
  * it. The strings object of a tagged template is such an array.
  */
 test('a tagged template\'s strings object is a TemplateStringsArray', () => {
-  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  const TSA = 'interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } ';
   expect(evaluated(`${TSA}function tag(strings: Strings, ...values: [].<uint8>): string { return String(strings.raw.length) + '/' + String(strings.length) + '/' + String(strings[0]); } `
     + 'const one: uint8 = 1; tag`a${one}b`;')).toBe('2/2/a');
-  expect(evaluated('type Strings = [].<string | undefined> & { raw: [].<string> }; function tag(strings: Strings, ...values: [].<uint8>): string { return String(strings.raw.length); } '
+  expect(evaluated('type Strings = [].<string | undefined> & { readonly raw: [].<string> }; function tag(strings: Strings, ...values: [].<uint8>): string { return String(strings.raw.length); } '
     + 'const one: uint8 = 1; tag`a${one}b`;')).toBe('2');
   expect(evaluated(`${TSA}function sql(strings: Strings, ...values: [].<uint32 | string>): string { return strings.join('?'); } const id: uint32 = 5; `
     + 'sql`select * from t where id = ${id}`;')).toBe('select * from t where id = ?');
 });
 
 test('a tagged template\'s interpolations and a plain array are still checked', () => {
-  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  const TSA = 'interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } ';
   refused(`${TSA}function sql(strings: Strings, ...values: [].<uint32 | string>): string { return 'x'; } ` + 'sql`a${true}b`;', 'rt-assignability');
   refused(`${TSA}function tag(strings: Strings): string { return 'x'; } tag(['a', 'b']);`, 'rt-assignability');
 });
 
-test('a parameter that asks for raw is the closer match for a template', () => {
-  expect(evaluated("interface Strings extends [].<string | undefined> { raw: [].<string>; } function pick(s: Strings): string { return 'template'; } "
-    + "function pick(s: [].<string>): string { return 'array'; } " + "pick`a` + '/' + pick(['a']);")).toBe('template/array');
+/**
+ * A tagged template's first argument is ranked in one stated order: a
+ * signature that names its cooked literals, then an array with `raw`, then a
+ * plain array. Each describes less of the object than the one before.
+ */
+test('a template selects the signature that describes its strings most closely', () => {
+  const Strings = 'interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } ';
+  const one = 'const one: uint8 = 1; ';
+  // The literals, where they match; otherwise the array with raw.
+  const t = `${Strings}function t(s: ['a', 'b'], v: uint8): string { return 'literal'; } function t(s: Strings, v: uint8): string { return 'raw'; } ${one}`;
+  expect(evaluated(`${t}` + 't`a${one}b`;')).toBe('literal');
+  expect(evaluated(`${t}` + 't`x${one}y`;')).toBe('raw');
+  // All three: adding a more descriptive signature never makes a call ambiguous.
+  const w = `${Strings}function w(s: ['a', 'b'], v: uint8): string { return 'literal'; } function w(s: Strings, v: uint8): string { return 'raw'; } `
+    + `function w(s: [].<string>, v: uint8): string { return 'array'; } ${one}`;
+  expect(evaluated(`${w}` + "w`a${one}b` + '/' + w`x${one}y`;")).toBe('literal/raw');
+  // An array with raw before a plain array; a plain array can only be the second.
+  const pick = `${Strings}function pick(s: Strings): string { return 'raw'; } function pick(s: [].<string>): string { return 'array'; } `;
+  expect(evaluated(`${pick}` + "pick`a` + '/' + pick(['a']);")).toBe('raw/array');
+  // The intersection spelling ranks as the interface spelling does.
+  expect(evaluated("type S2 = [].<string | undefined> & { readonly raw: [].<string> }; function pick2(s: S2): string { return 'raw'; } function pick2(s: [].<string>): string { return 'array'; } "
+    + "pick2`a` + '/' + pick2(['a']);")).toBe('raw/array');
+  // A call the checker did not see chooses as the checker would.
+  expect(evaluated(`${pick}const loose: any = pick; ` + "loose`a` + '/' + loose(['a']);")).toBe('raw/array');
+});
+
+test('a template is not an argument for a type whose raw may be written', () => {
+  // The object is frozen, so its `raw` is read-only; a writable `raw` asks for more.
+  refused('interface Loose extends [].<string | undefined> { raw: [].<string>; } function tag(s: Loose): string { return "x"; } tag`a`;', 'rt-assignability');
 });
 
 test('a read-only member of an interface that extends an array type is not assigned', () => {
@@ -226,7 +265,7 @@ test('a read-only member of an interface that extends an array type is not assig
  * form."
  */
 test('an interface that extends an array or tuple type is that array or tuple', () => {
-  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  const TSA = 'interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } ';
   expect(evaluated(`${TSA}function count(xs: [].<string | undefined>): string { return String(xs.length); } function tag(s: Strings, ...v: [].<uint8>): string { return count(s); } `
     + 'const one: uint8 = 1; tag`a${one}b`;')).toBe('2');
   refused(`${TSA}function count(xs: [].<uint8>): string { return 'x'; } function tag(s: Strings): string { return count(s); }`, 'rt-assignability');
@@ -240,8 +279,8 @@ test('an interface that extends an array or tuple type is that array or tuple', 
  * tuple it is, in the interface spelling and the intersection spelling.
  */
 test('a read through an array type with members has its declared type', () => {
-  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
-  const alias = 'type Strings = [].<string | undefined> & { raw: [].<string> }; ';
+  const TSA = 'interface Strings extends [].<string | undefined> { readonly raw: [].<string>; } ';
+  const alias = 'type Strings = [].<string | undefined> & { readonly raw: [].<string> }; ';
   for (const declared of [TSA, alias]) {
     refused(`${declared}function tag(s: Strings): uint8 { const a: uint8 = s[0]; return a; }`, 'rt-assignability');
     refused(`${declared}function tag(s: Strings): string { const a: string = s[0]; return a; }`, 'rt-assignability');

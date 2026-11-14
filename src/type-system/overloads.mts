@@ -429,8 +429,9 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
       && IsAssignable(argType, paramType.Structure)) {
     // A class or interface that declared no relation to the parameter's
     // interface reaches it by structure alone, below one that declared it.
-    return argType.Kind === 'nominal' && /^(?:Class|Interface)/.test((argType as { Declaration?: { type?: string } }).Declaration?.type ?? '')
-      ? Tier.StructuralWidening : Tier.Assignable;
+    // A built-in class is the same: a `Set` reaches an interface of the
+    // protocol's shape by structure, and `Iterable` because it declares it.
+    return argType.Kind === 'nominal' ? Tier.StructuralWidening : Tier.Assignable;
   }
   if (argType.Kind === 'primitive' && argType.Name === 'bigint'
       && paramType.Kind === 'primitive' && (paramType.Name === 'int' || paramType.Name === 'uint')) {

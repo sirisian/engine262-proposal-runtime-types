@@ -404,6 +404,13 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // a tuple declare nothing and satisfy one through that form, by the two
   // rules below. A class or interface declared in source reaches one by
   // declaring it, which the nominal arm decides.
+  // A string iterates its code points, each a string, so a string type is an
+  // `Iterable.<string>` by the rule that makes an array one of its element.
+  if (!structuralOnly && protocolNameOf(t) === 'Iterable'
+      && ((s.Kind === 'primitive' && s.Name === 'string') || (s.Kind === 'literal' && s.Base.Kind === 'primitive' && s.Base.Name === 'string'))) {
+    const element = (t as unknown as { Arguments: readonly (TypeRecord | number)[] }).Arguments[0];
+    return element !== undefined && typeof element !== 'number' && SameType(element, { Kind: 'primitive', Name: 'string', Arguments: [] } as unknown as TypeRecord);
+  }
   if (!structuralOnly && protocolNameOf(t) !== undefined
       && (s.Kind === 'array' || s.Kind === 'tuple' || (s.Kind === 'nominal' && s.LibraryName !== undefined))) {
     const protocol = t as unknown as { Structure: TypeRecord, Declaration: unknown, Arguments: readonly (TypeRecord | number)[] };

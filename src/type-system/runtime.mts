@@ -5267,6 +5267,13 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // subtyping too - `relations.mts` at 833 and 837 - and the comment above
         // says why that matters: "Subtyping and membership are different
         // questions of the same record."
+        // #sec-iteration-types: a String iterates its code points, each a
+        // String, so a String value is an `Iterable.<string>`, as the relation
+        // says of the string type.
+        if ((t.Declaration as { ProtocolName?: string } | undefined)?.ProtocolName === 'Iterable' && value instanceof JSStringValue) {
+          const element = t.Arguments[0];
+          return element !== undefined && typeof element !== 'number' && element.Kind === 'primitive' && element.Name === 'string';
+        }
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
         const structurallyMatches = Q(yield* isMember(value, substituted, storage, selection));
         if (!structurallyMatches) {

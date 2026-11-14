@@ -867,13 +867,10 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       // the same `familyOfRecord` the Type Object's getter answers with, so the
       // two cannot disagree.
       set('family', Value(familyOfRecord(t)));
-      // #table-reflection-nodes: the node of an interface type carries
-      // `extends`, the types its declaration extends, as Type Objects in the
-      // order written. A leaf that is not an interface has no such property.
-      if (t.Kind === 'nominal' && t.LibraryName === undefined && (t.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration') {
-        const written = (t as { Bases?: readonly TypeRecord[] }).Bases ?? [];
-        set('extends', list(written.map((base) => SubstituteTypeArguments(base, t.Declaration, t.Arguments))));
-      }
+      // A nominal type's node exposes nothing of its declaration
+      // (#table-type-families). What an interface extends and what its
+      // members are is read from its own record, `Reflect.Interface`, as a
+      // class's are from `Reflect.Class`.
       // An enum needs no node kind of its own. #table-reflection-nodes lists ten
       // kinds and says the "primitive" node covers "the built-in primitives,
       // classes, interfaces, enums", and `family` above answers ~enum~ for one,
@@ -1824,6 +1821,21 @@ export function matchArmBlockContextRecord(): TypeRecord {
   };
 }
 
+const interfaceContextDeclaration = { type: 'ReflectionContext', name: 'Interface' } as unknown as ParseNode;
+
+/**
+ * #sec-reflection-shape-interface: the target that reflects an interface
+ * declaration, as `Reflect.Class` reflects a class and `Reflect.Enum` an enum.
+ */
+export function interfaceContextRecord(): TypeRecord {
+  return {
+    Kind: 'nominal',
+    Declaration: interfaceContextDeclaration,
+    Arguments: [],
+    LibraryName: 'Reflect.Interface',
+  };
+}
+
 const enumContextDeclaration = { type: 'ReflectionContext', name: 'Enum' } as unknown as ParseNode;
 
 export function enumContextRecord(): TypeRecord {
@@ -2142,6 +2154,12 @@ export function bootstrapReflectClassField(realmRec: Realm) {
   })));
   X(reflect.DefineOwnProperty(Value('MatchArmBlock'), Descriptor({
     Value: GetTypeObject(matchArmBlockContextRecord(), realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.false,
+  })));
+  X(reflect.DefineOwnProperty(Value('Interface'), Descriptor({
+    Value: GetTypeObject(interfaceContextRecord(), realmRec),
     Writable: Value.false,
     Enumerable: Value.false,
     Configurable: Value.false,

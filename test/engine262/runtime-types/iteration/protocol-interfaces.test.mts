@@ -51,9 +51,10 @@ test('what satisfied a protocol before still does', () => {
 
 test('the protocols relate by declaration and reflect as interfaces', () => {
   expect(evaluated('String(Reflect.isAssignable(IterableIterator.<uint8>, Iterable.<uint8>)) + String(Reflect.isAssignable(Iterable.<uint8>, IterableIterator.<uint8>));')).toBe('truefalse');
-  expect(evaluated("const n = Reflect.getReflection.<Reflect.Type>(IterableIterator.<uint8>); n.kind + '/' + String(n.extends.length) + '/' + String(n.extends[0] === Iterable.<uint8>);")).toBe('primitive/2/true');
-  expect(evaluated('const n = Reflect.getReflection.<Reflect.Type>(Iterable.<uint8>); String(n.extends.length) + String(Iterable.<uint8> === Iterable.<uint8>);')).toBe('0true');
-  expect(evaluated("interface Counted<T: type> extends Iterable.<T> { count: uint8; } String(Reflect.isAssignable(Counted.<uint8>, Iterable.<uint8>)) + String(Reflect.getReflection.<Reflect.Type>(Counted.<uint8>).extends[0] === Iterable.<uint8>);")).toBe('truetrue');
+  expect(evaluated("const n = Reflect.getReflection.<Reflect.Type>(IterableIterator.<uint8>); n.kind + '/' + Object.keys(n).join(',');")).toBe('primitive/kind,type,family,generic');
+  expect(evaluated("const r = Reflect.getReflection.<Reflect.Interface, IterableIterator.<uint8>>(); r.name + '/' + String(r.extends.length) + '/' + String(r.extends[0] === Iterable.<uint8>);")).toBe('IterableIterator/2/true');
+  expect(evaluated('String(Reflect.getReflection.<Reflect.Interface, Iterable.<uint8>>().extends.length) + String(Iterable.<uint8> === Iterable.<uint8>);')).toBe('0true');
+  expect(evaluated("interface Counted<T: type> extends Iterable.<T> { count: uint8; } String(Reflect.isAssignable(Counted.<uint8>, Iterable.<uint8>)) + String(Reflect.getReflection.<Reflect.Interface, Counted.<uint8>>().extends[0] === Iterable.<uint8>);")).toBe('truetrue');
 });
 
 test('an interface that extends a generic application reaches it, invariantly', () => {
@@ -73,4 +74,33 @@ test('a hook annotated with the protocol it returns is the hook the protocol ask
   expect(evaluated(`${f}function mk(): Iterator.<uint8> { return a.values(); } const o = { [Symbol.iterator]: mk }; String(f(o));`)).toBe('1');
   expect(evaluated(`${f}const o = { [Symbol.iterator]: (): Iterator.<uint8> => a.values() }; String(f(o));`)).toBe('1');
   refused(`${f}const o = { [Symbol.iterator](): Iterator.<string> { return ['s'].values(); } }; f(o);`, 'rt-assignability');
+});
+
+test('a built-in\'s declared protocol outranks an interface of the same shape', () => {
+  // #sec-resolveoverload: a `Set` declares `Iterable`; it has the members of
+  // `Mine` and declared nothing about it.
+  expect(evaluated("interface Mine { [Symbol.iterator](): Iterator.<uint8>; } function pick(x: Iterable.<uint8>): string { return 'protocol'; } "
+    + "function pick(x: Mine): string { return 'mine'; } pick(new Set.<uint8>());")).toBe('protocol');
+});
+
+test('a protocol application reflects its protocol as its generic base', () => {
+  expect(evaluated('String(Reflect.getReflection.<Reflect.Type>(Iterable.<uint8>).generic.base === Iterable) + String(Reflect.getReflection.<Reflect.Type>(IterableIterator.<uint8>).generic.base === IterableIterator);'))
+    .toBe('truetrue');
+  expect(evaluated('function f(v: any) { return v is Iterable; } const a: [].<uint8> = [1]; String(f(a)) + String(f({}));')).toBe('truefalse');
+});
+
+test('a string is an Iterable of strings', () => {
+  expect(evaluated("function h(x: Iterable.<string>): string { let out = ''; for (const c of x) out += c + '.'; return out; } const s: string = 'ab'; h('xy') + h(s);")).toBe('x.y.a.b.');
+  refused("function h(x: Iterable.<uint8>) { return 1; } h('ab');", 'rt-assignability');
+});
+
+test('a generator reaches a protocol through its structural form', () => {
+  // The pinned cases of conformance/generator-lifecycle.json, held here beside
+  // the declared relations so that a change to one is seen against the other:
+  // a generator's operation result is more precise than the application it
+  // would name, so it is compared with the protocol's form, not its arguments.
+  refused('function* f(): Generator.<uint8, string, void> { return "done"; } const it: Iterator.<uint8, string, void> = f();', 'rt-assignability');
+  expect(observeScript("function* f(): Generator.<uint8, string, void> { return 'done'; } const it: Iterator.<uint8, string | undefined, void> = f(); 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
+  refused('function* f(): uint8 {} const it: Iterator.<uint8, undefined, void> = f();', 'rt-assignability');
+  expect(observeScript("function* f(): uint8 {} const it: Iterator.<uint8, void, void> = f(); 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
 });
