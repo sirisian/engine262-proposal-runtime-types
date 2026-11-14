@@ -25700,6 +25700,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
   };
 
+  /**
+   * Whether a function literal can be the function `wanted` asks for: its
+   * result, inferred with the parameters `wanted` gives it, is assignable to
+   * the result `wanted` declares.
+   *
+   * A union's arms may each declare a member with a different signature, and
+   * a literal's method or arrow has no one signature to adopt there. It is
+   * tried against each arm that declares the member, and this is the test of
+   * one try (#sec-contextual-types). A literal that annotates its own result
+   * is judged by that annotation, and a generator or async form as before.
+   */
+  const functionLiteralFits = (fn: ParseNode | null | undefined, wanted: Known): boolean => {
+    if (!fn || !/^(?:MethodDefinition|ArrowFunction|FunctionExpression)$/.test(fn.type)) return true;
+    if (wanted?.Kind !== 'function' || wanted.Signatures.length !== 1) return true;
+    const literal = fn as { TypeAnnotation?: unknown, UniqueFormalParameters?: readonly ParseNode[], ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] };
+    if (literal.TypeAnnotation) return true;
+    const signature = wanted.Signatures[0]!;
+    const declared = signature.Return as Known;
+    if (!declared || declared.Kind === 'any' || declared.Kind === 'void' || mentionsTypeParameter(declared)) return true;
+    const formals = literal.UniqueFormalParameters ?? literal.ArrowParameters ?? literal.FormalParameters ?? [];
+    if (!Array.isArray(formals)) return true;
+    const parameterTypes = formals.map((formal, index) => {
+      const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+      return annotation ? resolveType(annotation.Type) : (signature.Parameters[index]?.Type ?? null) as Known;
+    });
+    const inferred = inferredReturnType(fn, parameterTypes, declared, { anchored: false }, 'return');
+    return !inferred || inferred.Kind === 'any' || IsAssignable(inferred as TypeRecord, declared as TypeRecord);
+  };
+
+  /** The methods and function-valued members an object literal writes, by key. */
+  const literalFunctionMembers = (node: ParseNode): { key: string | SymbolValue, fn: ParseNode }[] => {
+    const found: { key: string | SymbolValue, fn: ParseNode }[] = [];
+    for (const member of ((node as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList ?? [])) {
+      const named = member as { type: string, PropertyName?: ParseNode.PropertyName, ClassElementName?: ParseNode.PropertyName, AssignmentExpression?: ParseNode };
+      const name = named.PropertyName ?? named.ClassElementName;
+      const key = name ? memberKeyOf(name) : undefined;
+      if (key === undefined) continue;
+      if (named.type === 'MethodDefinition') found.push({ key, fn: member });
+      else if (named.type === 'PropertyDefinition' && named.AssignmentExpression && /^(?:ArrowFunction|FunctionExpression)$/.test(named.AssignmentExpression.type)) {
+        found.push({ key, fn: named.AssignmentExpression });
+      }
+    }
+    return found;
+  };
+
+  /** Literals already refused because no arm of their union accepts a member's result. */
+  const armlessLiterals = new WeakSet<ParseNode>();
+
   const unionFreshnessChecks = new Set<ParseNode>();
   // Select a complete shape only when compatibility or the existing numeric
   // preference identifies one alternative. Competing callable contexts do not
@@ -25715,6 +25763,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     collect(target);
     const viable: TypeRecord[] = [];
+    const functionMembers = literalFunctionMembers(node);
+    // A member whose result an arm refuses, where that was the arm's only objection.
+    let refusedResult: string | SymbolValue | undefined;
     for (const alternative of alternatives) {
       const before = errors.length;
       try {
@@ -25745,7 +25796,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? { ...property, type: wanted } : property;
             }) };
           }
-          if (!pending && errors.length === before && comparable && IsAssignable(comparable, alternative)) viable.push(alternative);
+          // The shape adopts the arm's signature for each method, so it says
+          // nothing about the method's body. The body is tried here: its
+          // result under this arm's parameters must be this arm's result.
+          const misfit = expected?.Kind === 'object' ? functionMembers.find(({ key, fn }) => !functionLiteralFits(fn,
+            (expected.Properties.find((entry) => entry.key === key)?.type ?? null) as Known)) : undefined;
+          const shapeFits = !pending && errors.length === before && !!comparable && IsAssignable(comparable, alternative);
+          if (shapeFits && !misfit) viable.push(alternative);
+          else if (shapeFits && misfit) refusedResult ??= misfit.key;
           return false;
         });
       } finally { errors.length = before; }
@@ -25775,6 +25833,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return better;
     };
+    // #sec-contextual-types: a literal must satisfy one complete alternative.
+    // Where every arm its shape could be refuses the result of a member's
+    // body, it satisfies none, and it is refused here: nothing later compares
+    // that body with an arm.
+    if (viable.length === 0 && refusedResult !== undefined && trialDepth === 0 && !armlessLiterals.has(node)) {
+      armlessLiterals.add(node);
+      reportType('rt-assignability', node, 'the result of $1 is not the result any alternative of $2 declares for it',
+        typeof refusedResult === 'string' ? Value(refusedResult) : refusedResult, Value(displayType(target)));
+    }
     const selected = viable.length === 1 ? viable[0]
       : viable.find((candidate) => viable.every((other) => candidate === other || numericPreference(candidate, other) === true));
     if (!selected) return null;
@@ -26058,10 +26125,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null, Narrows?: SignatureRecord['Narrows'] } = {
             Parameters, Return, ...methodPredicate(member.TypeAnnotation, Parameters, Return),
             ...(expected?.ThisType ? { ThisType: expected.ThisType } : {}),
-            // A method no position has typed yet is still a METHOD: it has a
-            // receiver, whose type is pending. It is not a function that
-            // declares none, which #sec-this-adoption lets be a method's member.
-            ...((expected?.ThisType ? {} : { PendingReceiver: true }) as object),
             Untyped: !member.TypeAnnotation && annotations.every((type) => !type) && !expected,
             // #sec-annotations-on-the-remaining-function-forms: "a method
             // keeps its declarations; context supplies only positions without
@@ -26216,7 +26279,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A member that adapts cleanly reports nothing whatever it returns,
             // which is the same test the object case arrived at.
             staticTypeIn(memberNode, arm);
-            return errors.length === before;
+            // A function literal reports nothing when it takes an arm's
+            // signature; its body is compared with that arm's result here, or
+            // the first arm would win whatever the body returns.
+            return errors.length === before && functionLiteralFits(memberNode, arm as Known);
           });
           errors.length = before;
           if (won) {

@@ -409,6 +409,31 @@ test("an object literal's shape carries readonly", () => {
   expect(accepts('let c: { a?: int32 } = { };')).toBe(true);
 });
 
+test('a literal is tried against each arm of a union and must satisfy one', () => {
+  // One rule for a method, an arrow, a function expression and a field.
+  const U = 'type U = { m(): int32 } | { m(): string }; ';
+  const F = 'type F = { m: () => int32 } | { m: () => string }; ';
+  const V = 'type V = { m(x: int32): int32 } | { m(x: string): string }; ';
+  const W = 'type W = { m(): int32, n: int32 } | { m(): string, n: string }; ';
+  // An arrow is no longer judged by the first arm alone.
+  expect(accepts(`${F}let f: F = { m: () => (1 := int32) };`)).toBe(true);
+  expect(accepts(`${F}let f: F = { m: () => "s" };`)).toBe(true);
+  expect(accepts(`${F}let f: F = { m: () => { return "s"; } };`)).toBe(true);
+  expect(accepts(`${F}let f: F = { m: function () { return "s"; } };`)).toBe(true);
+  expect(accepts(`${F}let f: F = { m: () => true };`)).toBe(false);
+  // A parameter takes its type from the arm being tried.
+  expect(accepts(`${V}let v: V = { m(x) { return x; } };`)).toBe(true);
+  expect(accepts(`${V}let v: V = { m(x) { return true; } };`)).toBe(false);
+  // The arm is one COMPLETE alternative: its other members count, and `this` is typed by it.
+  expect(accepts(`${W}let w: W = { m() { return this.n; }, n: (1 := int32) };`)).toBe(true);
+  expect(accepts(`${W}let w: W = { m() { return (1 := int32); }, n: "s" };`)).toBe(false);
+  // The same at an argument position, and an annotation still decides alone.
+  expect(accepts(`${U}function take(u: U): string { return String(u.m()); } take({ m() { return "s"; } }); take({ m() { return (1 := int32); } });`)).toBe(true);
+  expect(accepts(`${U}function take(u: U): string { return "x"; } take({ m() { return true; } });`)).toBe(false);
+  expect(accepts(`${U}let c: U = { m(): string { return "s"; } };`)).toBe(true);
+  expect(accepts(`${U}let c: U = { m(): boolean { return true; } };`)).toBe(false);
+});
+
 test("a literal's method member takes the signature its position wants", () => {
   // The member was typed `{ Kind: 'function', Signatures: [] }` - the method-shorthand
   // deliberate stub, right for the member WALK where each member is compared on
@@ -428,10 +453,19 @@ test("a literal's method member takes the signature its position wants", () => {
   // checked against that return independently. These two must keep firing.
   expect(accepts('let c: { m(): int32 } | { y: string } = { m() { return "s"; } };')).toBe(false);
   expect(accepts('let p: { m(): uint8 } = { m() { return "s"; } };')).toBe(false);
-  // ...and a non-function value, a method no arm declares, and DISAGREEING arms.
+  // ...and a non-function value, and a method no arm declares.
   expect(accepts('let c: { m(): int32 } | { y: string } = { m: "s" };')).toBe(false);
   expect(accepts('let c: { y: string } | { z: int32 } = { m() { return (1 := int32); } };')).toBe(false);
-  expect(accepts('let c: { m(): int32 } | { m(): string } = { m() { return (1 := int32); } };')).toBe(false);
+
+  // DISAGREEING arms. #sec-contextual-types: there is no one signature to
+  // adopt, so the method is tried against each arm that declares it, and the
+  // literal must satisfy one complete arm. This row asserted a refusal while
+  // the method was an untyped stand-in there; that stand-in also let
+  // `{ m() { return true; } }` through, which is a value of neither arm.
+  expect(accepts('let c: { m(): int32 } | { m(): string } = { m() { return (1 := int32); } };')).toBe(true);
+  expect(accepts('let c: { m(): int32 } | { m(): string } = { m() { return "s"; } };')).toBe(true);
+  expect(accepts('let c: { m(): string } | { m(): int32 } = { m() { return (1 := int32); } };')).toBe(true);
+  expect(accepts('let c: { m(): int32 } | { m(): string } = { m() { return true; } };')).toBe(false);
 
   // ARITY tolerance: a zero-parameter method satisfies a one-parameter
   // signature, at a union as at a single target, an intersection, a binding and
