@@ -104,3 +104,29 @@ test('a generator reaches a protocol through its structural form', () => {
   refused('function* f(): uint8 {} const it: Iterator.<uint8, undefined, void> = f();', 'rt-assignability');
   expect(observeScript("function* f(): uint8 {} const it: Iterator.<uint8, void, void> = f(); 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
 });
+
+test('an argument of any asks nothing of its position', () => {
+  // `Iterable.<any>`, which the bare name also means in an annotation, is
+  // every iterable: an array, a tuple, a string, a built-in, a generator, a
+  // class that declares the protocol, and a hand-written object.
+  const n = 'let n = 0; for (const v of x) n += 1; return n;';
+  expect(evaluated(`function f(x: Iterable) { ${n} } const a: [].<uint8> = [1, 2]; String(f(a)) + String(f(new Set.<uint8>([1 := uint8]))) + String(f(new Map.<string, uint8>()));`)).toBe('210');
+  expect(evaluated(`function f(x: Iterable.<any>) { ${n} } const t: [uint8, string] = [1, 'a']; String(f(t)) + String(f('abc'));`)).toBe('23');
+  expect(evaluated(`function f(x: Iterable.<any>) { ${n} } function* g(): Generator.<uint8, string, void> { yield 1 := uint8; return 's'; } String(f(g()));`)).toBe('1');
+  expect(evaluated(`function f(x: Iterable.<any>) { ${n} } class Bag implements Iterable.<uint8> { *[Symbol.iterator](): Generator.<uint8> { yield 1 := uint8; } } String(f(new Bag()));`)).toBe('1');
+  expect(evaluated(`function f(x: Iterable.<any>) { ${n} } const a: [].<uint8> = [1]; String(f({ [Symbol.iterator]() { return a.values(); } }));`)).toBe('1');
+  expect(evaluated("function f(x: Iterator.<any, any, any>) { return 1; } function* g(): Generator.<uint8, string, void> { yield 1 := uint8; return 's'; } const a: [].<uint8> = [1]; String(f(g())) + String(f(a.values()));")).toBe('11');
+  // What is not iterable is still refused, and a stated element is still exact.
+  refused('function f(x: Iterable.<any>) { return 1; } f(5);', 'rt-assignability');
+  refused('function f(x: Iterable.<uint8>) { return 1; } const a: [].<uint16> = [1]; f(a);', 'rt-assignability');
+  expect(evaluated('String(Reflect.isAssignable(Iterable.<uint8>, Iterable.<any>)) + String(Reflect.isAssignable(Iterable.<any>, Iterable.<uint8>));')).toBe('truefalse');
+});
+
+test('an instance of a class that declares an interface is of it by that declaration', () => {
+  // Checked once at the declaration and by brand afterwards; a value whose
+  // class declared nothing is asked for the members.
+  const I = 'interface I { m(): uint8; } class C implements I { m(): uint8 { return 1; } } function f(v: any) { return v is I; } ';
+  expect(evaluated(`${I}String(f(new C())) + String(f({ m() { return 1; } })) + String(f({}));`)).toBe('truetruefalse');
+  expect(evaluated('interface Box<T: type> { v: T; } class B8 implements Box.<uint8> { v: uint8 = 1; } function f(v: any) { return v is Box.<uint16>; } function g(v: any) { return v is Box.<uint8>; } String(f(new B8())) + String(g(new B8()));')).toBe('falsetrue');
+  expect(evaluated("interface A { a: string; } interface B extends A { b: uint8; } class C implements B { a: string = 'x'; b: uint8 = 1; } function f(v: any) { return v is A; } String(f(new C()));")).toBe('true');
+});

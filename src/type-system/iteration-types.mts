@@ -560,6 +560,34 @@ const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]
   ])!],
 };
 
+/**
+ * The protocol applications a built-in class declares, as interface types:
+ * `Set.<T>` declares `Iterable.<T>`. These name WHICH protocols it declares.
+ * How it is compared with one is still through the structural form
+ * (`BUILTIN_IMPLEMENTS`), since a generator's operations return more than the
+ * application it would name; the declared list decides only where an argument
+ * of the target is `any`, and so asks nothing of that position.
+ */
+export function builtinDeclaredProtocols(libraryName: string | undefined, args: readonly (TypeRecord | number)[]): TypeRecord[] {
+  const element = args[0];
+  const named = (name: string, list: readonly (TypeRecord | number)[]): TypeRecord[] => {
+    const record = protocolInterfaceRecord(name, list);
+    return record ? [record] : [];
+  };
+  switch (libraryName) {
+    case 'Set': return named('Iterable', [element]);
+    case 'Map': return named('Iterable', [{
+      Kind: 'tuple',
+      Elements: [args[0], args[1]].map((type) => ({ Type: type as TypeRecord, Rest: false, Initial: 'none' })),
+    } as unknown as TypeRecord]);
+    case 'Generator': case 'Iterator': case 'IteratorHelper':
+      return [...named('IterableIterator', args), ...named('Iterator', args), ...named('Iterable', [element])];
+    case 'AsyncGenerator': case 'AsyncIterator': case 'AsyncIteratorHelper':
+      return [...named('AsyncIterableIterator', args), ...named('AsyncIterator', args), ...named('AsyncIterable', [element])];
+    default: return [];
+  }
+}
+
 /** Whether a built-in nominal declares that it implements `target`. */
 export function builtinImplements(
   libraryName: string | undefined,

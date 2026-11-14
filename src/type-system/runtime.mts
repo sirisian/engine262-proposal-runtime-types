@@ -5272,7 +5272,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // says of the string type.
         if ((t.Declaration as { ProtocolName?: string } | undefined)?.ProtocolName === 'Iterable' && value instanceof JSStringValue) {
           const element = t.Arguments[0];
-          return element !== undefined && typeof element !== 'number' && element.Kind === 'primitive' && element.Name === 'string';
+          return element !== undefined && typeof element !== 'number' && (element.Kind === 'any' || (element.Kind === 'primitive' && element.Name === 'string'));
+        }
+        // "A class that declares an interface is checked once at its
+        // declaration and by brand afterwards": an instance of a class that
+        // declares this interface is of it, and no member is walked. The walk
+        // is for a value whose class declared nothing. It also cannot answer
+        // where an argument is `any`, which sits inside a method's result in
+        // the structural form.
+        if (value instanceof ObjectValue) {
+          const own = RuntimeTypeOf(value);
+          if (own.Kind === 'nominal' && /^Class/.test((own.Declaration as { type?: string } | undefined)?.type ?? '') && IsSubtype(own, t, [])) return true;
         }
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
         const structurallyMatches = Q(yield* isMember(value, substituted, storage, selection));

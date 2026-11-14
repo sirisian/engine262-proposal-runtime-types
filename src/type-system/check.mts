@@ -25748,6 +25748,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Literals already refused because no arm of their union accepts a member's result. */
   const armlessLiterals = new WeakSet<ParseNode>();
 
+  /**
+   * Whether a function literal's whole body is accepted under the signature
+   * the current try has given it. The result alone does not say: `{ m(x) {
+   * const y: boolean = x; return x; } }` returns what either arm of `{ m(x:
+   * int32): int32 } | { m(x: string): string }` asks and is the body of
+   * neither. The body is walked as it will be once an arm is chosen, inside
+   * the try, and whatever the walk records is rolled back with the try; only
+   * whether it reported anything is kept. One answer per function and arm:
+   * the literal is typed more than once, at one program point.
+   */
+  const triedBodies = new WeakMap<ParseNode, Map<TypeRecord, boolean>>();
+  const functionBodyFits = (fn: ParseNode, alternative: TypeRecord): boolean => {
+    if (!/^(?:MethodDefinition|ArrowFunction|FunctionExpression)$/.test(fn.type)) return true;
+    const known = triedBodies.get(fn)?.get(alternative);
+    if (known !== undefined) return known;
+    const before = errors.length;
+    const verdicts = impossibleTestVerdicts.length;
+    const outerFlow = captureFlow();
+    const outerLive = flowLive;
+    const outerExits = flowExits;
+    let fits = true;
+    try {
+      walkNode(fn);
+      fits = errors.length === before;
+    } finally {
+      errors.length = before;
+      impossibleTestVerdicts.length = verdicts;
+      restoreFlow(outerFlow);
+      flowLive = outerLive;
+      flowExits = outerExits;
+    }
+    const answers = triedBodies.get(fn) ?? new Map<TypeRecord, boolean>();
+    answers.set(alternative, fits);
+    triedBodies.set(fn, answers);
+    return fits;
+  };
+
   const unionFreshnessChecks = new Set<ParseNode>();
   // Select a complete shape only when compatibility or the existing numeric
   // preference identifies one alternative. Competing callable contexts do not
@@ -25799,9 +25836,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // The shape adopts the arm's signature for each method, so it says
           // nothing about the method's body. The body is tried here: its
           // result under this arm's parameters must be this arm's result.
-          const misfit = expected?.Kind === 'object' ? functionMembers.find(({ key, fn }) => !functionLiteralFits(fn,
-            (expected.Properties.find((entry) => entry.key === key)?.type ?? null) as Known)) : undefined;
           const shapeFits = !pending && errors.length === before && !!comparable && IsAssignable(comparable, alternative);
+          // A member the arm declares as a function is tried in two steps:
+          // its result first, which costs little, and then its whole body.
+          const declares = (key: string | SymbolValue): Known => (expected?.Kind === 'object'
+            ? (expected.Properties.find((entry) => entry.key === key)?.type ?? null) as Known : null);
+          const misfit = !shapeFits ? undefined : functionMembers.find(({ key, fn }) => {
+            const wantedMember = declares(key);
+            if (wantedMember?.Kind !== 'function') return false;
+            return !functionLiteralFits(fn, wantedMember) || !functionBodyFits(fn, alternative);
+          });
           if (shapeFits && !misfit) viable.push(alternative);
           else if (shapeFits && misfit) refusedResult ??= misfit.key;
           return false;
@@ -25839,7 +25883,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // that body with an arm.
     if (viable.length === 0 && refusedResult !== undefined && trialDepth === 0 && !armlessLiterals.has(node)) {
       armlessLiterals.add(node);
-      reportType('rt-assignability', node, 'the result of $1 is not the result any alternative of $2 declares for it',
+      reportType('rt-assignability', node, '$1 is not the member any alternative of $2 declares: its body, with the parameters and the result that alternative gives it, is refused under each',
         typeof refusedResult === 'string' ? Value(refusedResult) : refusedResult, Value(displayType(target)));
     }
     const selected = viable.length === 1 ? viable[0]

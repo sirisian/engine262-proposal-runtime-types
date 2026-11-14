@@ -434,6 +434,24 @@ test('a literal is tried against each arm of a union and must satisfy one', () =
   expect(accepts(`${U}let c: U = { m(): boolean { return true; } };`)).toBe(false);
 });
 
+test('a try at an arm checks the whole body, not its result alone', () => {
+  // The result of each of these is what either arm asks; the body decides.
+  const V = 'type V = { m(x: int32): int32 } | { m(x: string): string }; ';
+  const G = 'type G = { m: (x: int32) => int32 } | { m: (x: string) => string }; ';
+  // The body of neither arm: `x` is a boolean under no arm.
+  expect(accepts(`${V}let v: V = { m(x) { const y: boolean = x; return x; } };`)).toBe(false);
+  expect(accepts(`${G}let v: G = { m: (x) => { const y: boolean = x; return x; } };`)).toBe(false);
+  // The body of one arm, whichever is written first.
+  expect(accepts(`${V}let v: V = { m(x) { const y: int32 = x; return x; } };`)).toBe(true);
+  expect(accepts(`${V}let v: V = { m(x) { const y: string = x; return x; } };`)).toBe(true);
+  expect(accepts(`${G}let v: G = { m: (x) => { const y: string = x; return x; } };`)).toBe(true);
+  expect(accepts('type R = { m(x: string): string } | { m(x: int32): int32 }; let v: R = { m(x) { const y: int32 = x; return x; } };')).toBe(true);
+  // A body that is fine under every arm stays accepted, with a literal and a call inside it.
+  expect(accepts(`${V}let v: V = { m(x) { const o: { a: int32 } | { a: string } = { a: x }; return x; } };`)).toBe(true);
+  expect(accepts(`function lim(i: uint8) where i < 10 { return i; } ${V}let v: V = { m(x) { lim(5); return x; } };`)).toBe(true);
+  expect(accepts('type W = { m(): int32, n(): int32 } | { m(): string, n(): string }; let w: W = { m() { return this.n(); }, n() { return (1 := int32); } };')).toBe(true);
+});
+
 test("a literal's method member takes the signature its position wants", () => {
   // The member was typed `{ Kind: 'function', Signatures: [] }` - the method-shorthand
   // deliberate stub, right for the member WALK where each member is compared on

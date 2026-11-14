@@ -13,7 +13,7 @@ import {
   parameterArgumentType, restElementType, makePrimitive,
   substituteTypeParameters, substituteFreeTypeParameters, mentionsTypeParameter,
 } from './records.mts';
-import { builtinImplements, libraryExtends, iterationInterfaceRecord, protocolNameOf } from './iteration-types.mts';
+import { builtinImplements, libraryExtends, iterationInterfaceRecord, protocolNameOf, builtinDeclaredProtocols, protocolInterfaceRecord } from './iteration-types.mts';
 import { isTemplateArgumentType, templateMembersType } from './template-argument.mts';
 import { matchesFamilyPattern } from './family-patterns.mts';
 
@@ -409,7 +409,26 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   if (!structuralOnly && protocolNameOf(t) === 'Iterable'
       && ((s.Kind === 'primitive' && s.Name === 'string') || (s.Kind === 'literal' && s.Base.Kind === 'primitive' && s.Base.Name === 'string'))) {
     const element = (t as unknown as { Arguments: readonly (TypeRecord | number)[] }).Arguments[0];
-    return element !== undefined && typeof element !== 'number' && SameType(element, { Kind: 'primitive', Name: 'string', Arguments: [] } as unknown as TypeRecord);
+    return element !== undefined && typeof element !== 'number'
+      && (element.Kind === 'any' || SameType(element, { Kind: 'primitive', Name: 'string', Arguments: [] } as unknown as TypeRecord));
+  }
+  // An argument of `any` asks nothing of its position: `Iterable.<any>`, which
+  // is also what the bare name `Iterable` means in an annotation, is every
+  // iterable. The structural form cannot say that, since `any` sits inside the
+  // result of a method there, so where the target has such an argument the
+  // source is compared by the protocol application it declares instead.
+  if (!structuralOnly && protocolNameOf(t) !== undefined && t.Kind === 'nominal'
+      && t.Arguments.some((argument) => typeof argument !== 'number' && argument.Kind === 'any')) {
+    const stringType = { Kind: 'primitive', Name: 'string', Arguments: [] } as unknown as TypeRecord;
+    const iterableOf = (element: TypeRecord): TypeRecord[] => {
+      const record = protocolInterfaceRecord('Iterable', [element]);
+      return record ? [record] : [];
+    };
+    const declared = s.Kind === 'array' ? iterableOf(s.Element)
+      : s.Kind === 'tuple' ? iterableOf(s.Elements.length === 1 ? s.Elements[0]!.Type : { Kind: 'union', Members: s.Elements.map((element) => element.Type) } as unknown as TypeRecord)
+        : (s.Kind === 'primitive' && s.Name === 'string') || (s.Kind === 'literal' && s.Base.Kind === 'primitive' && s.Base.Name === 'string') ? iterableOf(stringType)
+          : s.Kind === 'nominal' && s.LibraryName !== undefined ? builtinDeclaredProtocols(s.LibraryName, s.Arguments) : [];
+    if (declared.some((application) => IsSubtype(application, t, assumptions))) return true;
   }
   if (!structuralOnly && protocolNameOf(t) !== undefined
       && (s.Kind === 'array' || s.Kind === 'tuple' || (s.Kind === 'nominal' && s.LibraryName !== undefined))) {
