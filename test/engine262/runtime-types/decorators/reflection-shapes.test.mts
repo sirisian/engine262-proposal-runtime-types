@@ -13,8 +13,11 @@ import { evaluated } from '../harness.mts';
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('Reflect.Class reads the class back', () => {
-  // #sec-reflection-shape-class: `Class` reflects `name`, `type`, `abstract` and `metadata`.
-  expect(evaluated('class A {} Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.Class, A>()).join(",");')).toBe('kind,name,type,abstract,metadata');
+  // #sec-reflection-shape-class: `Class` reflects `name`, `type`, `abstract`,
+  // `implements` and `metadata`. `implements` is the interfaces the class
+  // declares, in the order written, and empty where it declares none.
+  expect(evaluated('class A {} Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.Class, A>()).join(",");')).toBe('kind,name,type,abstract,implements,metadata');
+  expect(evaluated('class A {} String(Reflect.getReflection.<Reflect.Class, A>().implements.length);')).toBe('0');
   expect(evaluated('class Named {} String(Reflect.getReflection.<Reflect.Class, Named>().name);')).toBe('Named');
   // `type` is the CONSTRUCTOR, asserted by identity - a fresh function would
   // satisfy a `typeof` check.

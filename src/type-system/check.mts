@@ -64,7 +64,7 @@ import { InferenceResources, type InferenceLimits, type InferenceComponent } fro
 import { BeginTypeEvaluation, EndTypeEvaluation, ConsumeEvaluationSteps, IsBudgetExhausted, BudgetExhaustionKind } from './budget.mts';
 import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
 import { ReusableCheckingContext, SnapshotCheckingContext, SameCheckingContext } from './checking-context.mts';
-import {
+import { displayPropertyKey,
   type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
   type ParameterRecord, type TypeParameterRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
@@ -86,7 +86,7 @@ import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts'
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import { ClassValueOrigins } from './class-value-origins.mts';
 import {
-  iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType,
+  iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType,
 } from './iteration-types.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
@@ -421,6 +421,7 @@ const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
  * satisfied by the class that declared it.
  */
 export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
+registerProtocolReceiver(SelfThisTypeRecord);
 
 /**
  * Constructors whose instance type is the constructor's own name.
@@ -12177,7 +12178,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!own) {
             if (!p.optional && !pendingApplication) {
               // #sec-type-diagnostic-identity (round 5 follow-up, Q12): every member the implements target lists and the class fails is the implements contract's failure, in the wording it had.
-              const completion = CreateTypeDiagnostic('rt-implements-contract', n, diagnosticPhase, '$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-implements-contract', n, diagnosticPhase, '$1 is not assignable to $2', Value(`${className}, which declares no member ${displayPropertyKey(p.key as never)},`), Value(displayType(it))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             continue;
@@ -16221,7 +16222,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!userDeclared && parameterizedName === 'Composite' && !shadowedByProgram('Composite')) checkCompositeArgument(args);
           if (!userDeclared && parameterizedName === 'SoA' && !shadowedByProgram('SoA')) checkSoAElement(args);
           const builtinOrLibrary = userDeclared ? null : builtinTypeRecord(parameterizedName, args)
-            ?? iterationInterfaceRecord(parameterizedName, args)
+            ?? protocolInterfaceRecord(parameterizedName, args)
             ?? libraryTypeRecord(parameterizedName, args);
           if (builtinOrLibrary) {
             if (!requireWellFormedVector(builtinOrLibrary)) {
@@ -16478,7 +16479,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (enumDeclaration) return enumTypeOf(name, enumDeclaration);
         if (lexicalBinding && lexicalBinding.kind !== 'import') return lexicalBinding.kind === 'const'
           ? establishedTypeObjectTarget(node.TypeName.IdentifierReference) : null;
-        return refuseBareGeneric(node, selectedAlias() ?? (shadowedByProgram(name) ? null : builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name)) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
+        return refuseBareGeneric(node, selectedAlias() ?? (shadowedByProgram(name) ? null : builtinTypeRecord(name) ?? protocolInterfaceRecord(name) ?? libraryTypeRecord(name)) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');
@@ -25921,6 +25922,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null, Narrows?: SignatureRecord['Narrows'] } = {
             Parameters, Return, ...methodPredicate(member.TypeAnnotation, Parameters, Return),
             ...(expected?.ThisType ? { ThisType: expected.ThisType } : {}),
+            // A method no position has typed yet is still a METHOD: it has a
+            // receiver, whose type is pending. It is not a function that
+            // declares none, which #sec-this-adoption lets be a method's member.
+            ...((expected?.ThisType ? {} : { PendingReceiver: true }) as object),
             Untyped: !member.TypeAnnotation && annotations.every((type) => !type) && !expected,
             // #sec-annotations-on-the-remaining-function-forms: "a method
             // keeps its declarations; context supplies only positions without

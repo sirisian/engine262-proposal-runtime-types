@@ -46,7 +46,9 @@ test('a builtin family applied to one object type is an application', () => {
   // to get this one builtin past the rule and it failed anyway, which is the
   // clearest sign the rule was wrong rather than incomplete.
   expect(evaluated("type T = Composite.<{ x: int32, y: int32 }>; String(Reflect.getReflection(T).kind !== 'parameterized');")).toBe('true');
-  expect(kind('type T = Iterable.<{ a: uint8 }>;')).toBe('object');
+  // #sec-iteration-types: `Iterable` is an interface type, so its application
+  // reflects as the named leaf #table-reflection-nodes gives an interface.
+  expect(kind('type T = Iterable.<{ a: uint8 }>;')).toBe('primitive');
 });
 
 test('a brand over a type parameter SURVIVES instantiation', () => {

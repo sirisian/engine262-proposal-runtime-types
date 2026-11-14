@@ -67,7 +67,7 @@ import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setL
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
-  iterationInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
+  iterationInterfaceRecord, protocolInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
 } from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
@@ -1545,6 +1545,11 @@ export function* InstantiateGenericInterface(
   names: readonly (string | undefined)[],
 ): PlainEvaluator<TypeRecord> {
   Assert(record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration');
+  // #sec-iteration-types: a built-in protocol is applied by its own rule,
+  // which completes `R` and `N` with their defaults. It has no declaration
+  // context of its own to bind in.
+  const protocol = (record.Declaration as { ProtocolName?: string }).ProtocolName;
+  if (protocol !== undefined) return protocolInterfaceRecord(protocol, argumentsList.length > 0 ? argumentsList : record.Arguments)!;
   const declaration = record.Declaration;
   const captured = InterfaceTypeContextOf(record);
   Assert(captured !== undefined);
@@ -5262,6 +5267,15 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // subtyping too - `relations.mts` at 833 and 837 - and the comment above
         // says why that matters: "Subtyping and membership are different
         // questions of the same record."
+        // #sec-iteration-types: a class that declares a protocol is verified
+        // where it is declared, and its instances are of the protocol by that
+        // declaration afterwards - "checked once at its declaration and by
+        // brand afterwards". Its members are methods, which the member walk
+        // below would compare with the protocol's functions one by one.
+        if ((t.Declaration as { ProtocolName?: string } | undefined)?.ProtocolName !== undefined && value instanceof ObjectValue) {
+          const own = RuntimeTypeOf(value);
+          if (own.Kind === 'nominal' && own.LibraryName === undefined && IsSubtype(own, t, [])) return true;
+        }
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
         const structurallyMatches = Q(yield* isMember(value, substituted, storage, selection));
         if (!structurallyMatches) {
@@ -6968,7 +6982,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
         // remaining fault is in how the two are compared rather than in how
         // either is built.
         if (isIterationInterfaceName(name) && argRecords.length > 0) {
-          const applied = iterationInterfaceRecord(name, argRecords);
+          const applied = protocolInterfaceRecord(name, argRecords);
           if (applied) {
             return applied;
           }
@@ -7066,7 +7080,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
           }
         }
       }
-      const iteration = iterationInterfaceRecord(name, argRecords);
+      const iteration = protocolInterfaceRecord(name, argRecords);
       if (iteration) {
         return iteration;
       }

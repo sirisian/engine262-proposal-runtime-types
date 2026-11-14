@@ -1,7 +1,7 @@
 import { Value } from '../value.mts';
 import { joinTypes } from './logical-types.mts';
 import { CanonicalizeType } from './intern.mts';
-import { iterationInterfaceRecord } from './iteration-types.mts';
+import { iterationInterfaceRecord, protocolNameOf } from './iteration-types.mts';
 import { makePrimitive, substituteTypeParameters, type TypeRecord } from './records.mts';
 import { IsAssignable, SameType } from './relations.mts';
 
@@ -286,6 +286,21 @@ export function unifyTypeParameters(
     // can see it. Recovered by RECONSTRUCTION: for each variable still unbound,
     // rebuild the interface at that variable and ask whether it is the
     // parameter's own type - one `SameType` per candidate, and exact.
+    // #sec-iteration-types: a protocol is an interface type that carries its
+    // arguments, so a variable written as its element binds from the element
+    // the argument iterates, or from the argument's own first argument where
+    // it is a protocol too.
+    if (protocolNameOf(param) !== undefined) {
+      const first = (param as unknown as { Arguments: readonly (TypeRecord | number)[] }).Arguments[0];
+      const sameDeclaration = arg.Kind === 'nominal' && (arg as { Declaration?: unknown }).Declaration === (param as { Declaration?: unknown }).Declaration;
+      if (!sameDeclaration && first && typeof first !== 'number' && first.Kind === 'parameter'
+        && [...names].includes((first as { Name: string }).Name) && !into.has((first as { Name: string }).Name)) {
+        const own = protocolNameOf(arg) !== undefined ? (arg as unknown as { Arguments: readonly (TypeRecord | number)[] }).Arguments[0] : undefined;
+        const element = own !== undefined && typeof own !== 'number' ? own : elementTypeOfIterable(arg);
+        if (element) into.set((first as { Name: string }).Name, widenForBinding(element));
+        return;
+      }
+    }
     if (param.Kind === 'object') {
       for (const candidate of names) {
         if (into.has(candidate)) {

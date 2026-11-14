@@ -132,6 +132,84 @@ export function identityDeclarationRecord(): TypeRecord {
 }
 
 /** Whether a type name is one of the iteration interfaces. */
+/**
+ * #sec-iteration-types: "The protocols are interface types, satisfied
+ * structurally through their structural form." Each is an interface
+ * declaration: a class may name one in `implements`, an interface may extend
+ * one, and `IterableIterator` extends `Iterable` and `Iterator` as the
+ * declaration `interface IterableIterator<T, R, N> extends Iterable.<T>,
+ * Iterator.<T, R, N>` does (#sec-interface-declaration-identity). The record
+ * built by iterationInterfaceRecord is the structural form of that interface.
+ */
+const PROTOCOL_INTERFACES = new Set(['Iterable', 'Iterator', 'IterableIterator', 'AsyncIterable', 'AsyncIterator', 'AsyncIterableIterator']);
+type ProtocolDeclaration = {
+  readonly type: 'InterfaceDeclaration',
+  readonly ProtocolName: string,
+  readonly Parameters: readonly TypeRecord[],
+  Structure?: TypeRecord,
+  Extends?: readonly TypeRecord[],
+};
+const protocolDeclarations = new Map<string, ProtocolDeclaration>();
+/**
+ * The declaration of a protocol, in the shape a parsed generic interface
+ * declaration has: type parameters `T`, or `T`, `R` and `N`, a structural form
+ * stated over them, and for the two iterable-iterator protocols the
+ * applications they extend. An application is then an ordinary generic
+ * application, which every substitution already understands.
+ */
+function protocolDeclaration(name: string): ProtocolDeclaration {
+  const existing = protocolDeclarations.get(name);
+  if (existing) return existing;
+  const names = name === 'Iterable' || name === 'AsyncIterable' ? ['T'] : ['T', 'R', 'N'];
+  const parameterNodes = names.map((each) => ({ type: 'TypeParameter', BindingIdentifier: { type: 'BindingIdentifier', name: each }, ProtocolParameter: true }));
+  const Parameters = parameterNodes.map((node) => ({ Kind: 'parameter', Name: node.BindingIdentifier.name, Declaration: node }) as unknown as TypeRecord);
+  const declaration = {
+    type: 'InterfaceDeclaration' as const,
+    BindingIdentifier: { type: 'BindingIdentifier', name },
+    TypeParameters: { type: 'TypeParameters', ListKind: 'parameters', TypeParameterList: parameterNodes },
+    Heritage: [],
+    InterfaceMemberList: [],
+    Partial: false,
+    ProtocolName: name,
+    Parameters,
+    sourceText: `interface ${name}`,
+    strict: true,
+  } as ProtocolDeclaration;
+  protocolDeclarations.set(name, declaration);
+  const [T, R, N] = [Parameters[0]!, Parameters[1] ?? Parameters[0]!, Parameters[2] ?? Parameters[0]!];
+  declaration.Structure = iterationInterfaceRecord(name, names.length === 1 ? [T] : [T, R, N])!;
+  const application = (base: string, args: readonly TypeRecord[]): TypeRecord => ({
+    Kind: 'nominal', Declaration: protocolDeclaration(base), Arguments: args, Structure: protocolDeclaration(base).Structure,
+  }) as unknown as TypeRecord;
+  if (name === 'IterableIterator') declaration.Extends = [application('Iterable', [T]), application('Iterator', [T, R, N])];
+  if (name === 'AsyncIterableIterator') declaration.Extends = [application('AsyncIterable', [T]), application('AsyncIterator', [T, R, N])];
+  return declaration;
+}
+export function isProtocolInterfaceName(name: string): boolean {
+  return PROTOCOL_INTERFACES.has(name);
+}
+/** The protocol a record's declaration is, or undefined where it is not one. */
+export function protocolNameOf(record: TypeRecord | null | undefined): string | undefined {
+  return record?.Kind === 'nominal' ? (record.Declaration as { ProtocolName?: string } | undefined)?.ProtocolName : undefined;
+}
+/**
+ * The interface type a protocol name denotes at these arguments; any other
+ * built-in interface name keeps its structural record. A bare name takes the
+ * defaults, as `Iterator.<uint8>` is `Iterator.<uint8, void, void>`.
+ */
+export function protocolInterfaceRecord(name: string, args: readonly (TypeRecord | number)[] = []): TypeRecord | null {
+  if (!PROTOCOL_INTERFACES.has(name)) return iterationInterfaceRecord(name, args);
+  const declaration = protocolDeclaration(name);
+  const [T, R, N] = iterationArguments(args);
+  return {
+    Kind: 'nominal',
+    Declaration: declaration,
+    Arguments: declaration.Parameters.length === 1 ? [T] : [T, R, N],
+    Structure: declaration.Structure,
+    ...(declaration.Extends ? { Extends: declaration.Extends, Bases: declaration.Extends } : {}),
+  } as unknown as TypeRecord;
+}
+
 export function isIterationInterfaceName(name: string): boolean {
   return BUILTIN_INTERFACES.has(name);
 }
@@ -161,6 +239,24 @@ function objectType(properties: { key: string | symbol, type: TypeRecord, option
     // IndexSignatures without guarding, where the checker never reaches it.
     IndexSignatures: [],
   } as unknown as TypeRecord;
+}
+
+/**
+ * The receiver a method signature carries. The members of the protocols are
+ * METHODS, as their declarations write them - `next(value?: N)`,
+ * `[Symbol.iterator]()` - so a class's method is one by the ordinary rule
+ * that two methods agree on the self [[ThisType]] (#sec-this-adoption). The
+ * checker registers the record its own method signatures use, since a
+ * receiver is compared by identity.
+ */
+let protocolReceiver: TypeRecord | undefined;
+export function registerProtocolReceiver(record: TypeRecord): void {
+  protocolReceiver = record;
+}
+function methodType(params: TypeRecord[], ret: TypeRecord): TypeRecord {
+  const fn = fnType(params, ret) as unknown as { Signatures: { ThisType?: TypeRecord }[] };
+  if (protocolReceiver) fn.Signatures[0]!.ThisType = protocolReceiver;
+  return fn as unknown as TypeRecord;
 }
 
 function fnType(params: TypeRecord[], ret: TypeRecord): TypeRecord {
@@ -256,29 +352,29 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
       // no annotation naming an iteration type had to move.
       const wrap = (result: TypeRecord) => (name === 'AsyncIterator' ? promiseOf(result) : result);
       return objectType([
-        { key: 'next', type: fnType([N], wrap(iteratorResult(T, R))), readonly: true },
-        { key: 'return', type: fnType([R], wrap(iteratorResult(T, R))), optional: true, readonly: true },
-        { key: 'throw', type: fnType([anyType], wrap(iteratorResult(T, R))), optional: true, readonly: true },
+        { key: 'next', type: methodType([N], wrap(iteratorResult(T, R))), readonly: true },
+        { key: 'return', type: methodType([R], wrap(iteratorResult(T, R))), optional: true, readonly: true },
+        { key: 'throw', type: methodType([anyType], wrap(iteratorResult(T, R))), optional: true, readonly: true },
       ]);
     }
     case 'Iterable':
       return objectType([
-        { key: Symbol.for('iterator'), type: fnType([], iterationInterfaceRecord('Iterator', [T])!), readonly: true },
+        { key: Symbol.for('iterator'), type: methodType([], iterationInterfaceRecord('Iterator', [T])!), readonly: true },
       ]);
     case 'IterableIterator':
       return objectType([
         ...(iterationInterfaceRecord('Iterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
-        { key: Symbol.for('iterator'), type: fnType([], iterationInterfaceRecord('Iterator', [T, R, N])!) },
+        { key: Symbol.for('iterator'), type: methodType([], iterationInterfaceRecord('Iterator', [T, R, N])!) },
       ] as never);
 
     case 'AsyncIterable':
       return objectType([
-        { key: Symbol.for('asyncIterator'), type: fnType([], iterationInterfaceRecord('AsyncIterator', [T])!) },
+        { key: Symbol.for('asyncIterator'), type: methodType([], iterationInterfaceRecord('AsyncIterator', [T])!) },
       ]);
     case 'AsyncIterableIterator':
       return objectType([
         ...(iterationInterfaceRecord('AsyncIterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
-        { key: Symbol.for('asyncIterator'), type: fnType([], iterationInterfaceRecord('AsyncIterator', [T, R, N])!) },
+        { key: Symbol.for('asyncIterator'), type: methodType([], iterationInterfaceRecord('AsyncIterator', [T, R, N])!) },
       ] as never);
     default:
       return null;

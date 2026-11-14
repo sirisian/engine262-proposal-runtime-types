@@ -683,9 +683,9 @@
       }
     },
     {
-      "name": "arrow does not adopt receiver",
+      "name": "arrow declares no receiver and is a method member",
       "modules": {
-        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:()=>source()};if(value is Has.<string>)throw new Error(\"receiver\");if(!(value is {get:()=>string}))throw new Error(\"property\");if(calls!==0)throw new Error(\"called\");"
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:()=>source()};if(!(value is Has.<string>))throw new Error(\"receiver\");if(!(value is {get:()=>string}))throw new Error(\"property\");if(value is Has.<boolean>)throw new Error(\"result\");if(calls!==0)throw new Error(\"called\");"
       },
       "expected": {
         "status": "fulfilled",

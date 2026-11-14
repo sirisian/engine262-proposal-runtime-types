@@ -13,7 +13,7 @@ import {
   parameterArgumentType, restElementType, makePrimitive,
   substituteTypeParameters, substituteFreeTypeParameters, mentionsTypeParameter,
 } from './records.mts';
-import { builtinImplements, libraryExtends, iterationInterfaceRecord } from './iteration-types.mts';
+import { builtinImplements, libraryExtends, iterationInterfaceRecord, protocolNameOf } from './iteration-types.mts';
 import { matchesFamilyPattern } from './family-patterns.mts';
 
 /**
@@ -391,6 +391,16 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // answer "does s satisfy t", a SUBTYPE question, and the intern table asks
   // whether two records ARE the same. A library nominal is not the object type
   // whose members it happens to implement.
+  // #sec-iteration-types: the protocols are interface types, "satisfied
+  // structurally through their structural form". A library type, an array and
+  // a tuple declare nothing and satisfy one through that form, by the two
+  // rules below. A class or interface declared in source reaches one by
+  // declaring it, which the nominal arm decides.
+  if (!structuralOnly && protocolNameOf(t) !== undefined
+      && (s.Kind === 'array' || s.Kind === 'tuple' || (s.Kind === 'nominal' && s.LibraryName !== undefined))) {
+    const protocol = t as unknown as { Structure: TypeRecord, Declaration: unknown, Arguments: readonly (TypeRecord | number)[] };
+    return IsSubtype(s, SubstituteTypeArguments(protocol.Structure, protocol.Declaration, protocol.Arguments), assumptions);
+  }
   if (!structuralOnly && s.Kind === 'nominal' && t.Kind === 'object'
       && builtinImplements(s.LibraryName, s.Arguments, (declared) => IsSubtype(declared, t, [...assumptions, { First: s, Second: t }]))) {
     return true;
@@ -839,7 +849,12 @@ export function InterfaceExtends(s: TypeRecord, interfaceDeclaration: ParseNode,
   for (const extended of (s as { Extends?: readonly TypeRecord[] }).Extends ?? []) {
     const resolved = SubstituteTypeArguments(extended, s.Declaration, s.Arguments);
     if (resolved.Kind !== 'nominal') continue;
-    if (resolved.Declaration === interfaceDeclaration && (!target || IsSubtype(resolved, target, []))) return true;
+    // A base written as a generic application may be resolved without the
+    // declaration identity its interface carries; it is that interface.
+    const targetIdentity = (target as { DeclarationIdentity?: unknown } | undefined)?.DeclarationIdentity;
+    const based = target && targetIdentity !== undefined && (resolved as { DeclarationIdentity?: unknown }).DeclarationIdentity === undefined
+      ? { ...resolved, DeclarationIdentity: targetIdentity } as TypeRecord : resolved;
+    if (resolved.Declaration === interfaceDeclaration && (!target || IsSubtype(based, target, []))) return true;
     if (InterfaceExtends(resolved, interfaceDeclaration, target, seen)) return true;
   }
   return false;
@@ -1391,7 +1406,18 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // caught.
     const declarationOf = (r: TypeRecord): unknown => (r as { Declaration?: unknown }).Declaration;
     if (sourceStructure && targetStructure && declarationOf(s) !== declarationOf(t)) {
-      return IsSubtype(sourceStructure, targetStructure, next);
+      // #sec-issubtype: "a type is a subtype of every type it refines". An
+      // interface refines each interface its declaration extends, at the
+      // arguments it gives, and that is decided before the two structural
+      // forms are compared.
+      if ((declarationOf(t) as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
+        && InterfaceExtends(s, declarationOf(t) as ParseNode, t)) return true;
+      // The structural form of an application has its arguments substituted.
+      // Compared as declared, `interface H extends G.<uint8>` did not reach
+      // `G.<uint8>`, whose form still read `T`.
+      const applied = (r: TypeRecord, structure: TypeRecord): TypeRecord => SubstituteTypeArguments(structure,
+        declarationOf(r), (r as { Arguments?: readonly (TypeRecord | number)[] }).Arguments);
+      return IsSubtype(applied(s, sourceStructure), applied(t, targetStructure), next);
     }
   }
   if (s.Kind !== t.Kind) {
@@ -2181,7 +2207,24 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     const sThis = sg.ThisType ?? null;
     const tThis = tg.ThisType ?? null;
     if ((sThis === null) !== (tThis === null)) {
-      return false;
+      // #sec-this-adoption: a signature that declares no `this` is usable
+      // where the SELF [[ThisType]] is required. The self [[ThisType]] "stands
+      // for the receiver the method is reached through", and a method "is
+      // reached only through an object that has it", so a receiver is always
+      // supplied and a function that declares none does not read it. This is
+      // what lets a hand-written `{ next: () => ... }` have the member an
+      // interface declares as `next()`, beside a class whose `next` is a
+      // method.
+      //
+      // The other crossings stay refused. A method put where no `this` is
+      // supplied is the extraction this clause exists to stop. And an explicit
+      // `this: T` promises its body a `this`, which a signature that declares
+      // none cannot take: "none is an absence rather than a wildcard" there.
+      const selfReceiver = tThis !== null && tThis.Kind === 'nominal'
+        && (tThis.Declaration as { type?: string } | undefined)?.type === 'SelfThisMarker';
+      // A literal's method whose position has not typed it yet has a receiver
+      // too, only an unknown one; it is not a function that declares none.
+      if (!(sThis === null && selfReceiver && !(sg as { PendingReceiver?: boolean }).PendingReceiver)) return false;
     }
     // `this` is contravariant "as a parameter is", so it takes the parameter
     // rule: the same asymmetry reached here too. `this: uint8` was refused where

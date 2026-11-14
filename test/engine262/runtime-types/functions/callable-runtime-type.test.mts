@@ -99,17 +99,25 @@ test('a mismatched callable MEMBER is refused, and `is` answers false', () => {
   expect(evaluated('String(({ f: (x: uint8): uint8 => x }) is { f: (x: uint8) => uint8 });')).toBe('true');
 });
 
-test('this-adoption at the boundary: a non-arrow function at a this-typed member adopts it; an arrow cannot', () => {
-  // #sec-this-adoption: an interface's method member carries a [[ThisType]];
-  // a plain function stored there IS called with that `this`, so it adopts
-  // it at the check, as the checker adopts it for a literal or a reference.
-  // An arrow has no `this` of its own and is refused - statically where the
-  // checker sees it, and at run time where it does not.
+test('this-adoption at the boundary: a non-arrow function at a this-typed member adopts it; an arrow is that member too', () => {
+  // #sec-this-adoption: an interface's method member carries the self
+  // [[ThisType]]; a plain function stored there IS called with that `this`, so
+  // it adopts it at the check, as the checker adopts it for a literal or a
+  // reference. An arrow has no `this` of its own. It declares no receiver, and
+  // a method is reached only through an object that has it, so the arrow is
+  // handed a receiver it does not read: it is the member, statically and at
+  // run time. The design's `drain({ next: () => ... })` is this case.
   const BUS = 'interface Bus { on(name: string): void; } ';
   expect(evaluated(`${BUS} let b: Bus = { on(name: string): void {} }; "ok";`)).toBe('ok');
   expect(evaluated(`${BUS} function on(name: string): void {} const pick: any = [{ on }][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toBe('admitted');
-  expect(ok(`${BUS} let b: Bus = { on: (name: string): void => {} };`)).toBe(false);
-  expect(evaluated(`${BUS} const v = { on: (name: string): void => {} }; const pick: any = [v][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toContain('runtime:');
+  expect(ok(`${BUS} let b: Bus = { on: (name: string): void => {} };`)).toBe(true);
+  expect(evaluated(`${BUS} const v = { on: (name: string): void => {} }; const pick: any = [v][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toBe('admitted');
+  // It is still checked as a function: its parameters and its result.
+  expect(ok(`${BUS} let b: Bus = { on: (name: uint8): void => {} };`)).toBe(false);
+  // The reverse crossing stays refused: a method put where no `this` is supplied.
+  expect(ok(`${BUS} class C { on(name: string): void {} } const f: (name: string) => void = new C().on;`)).toBe(false);
+  // And an explicit `this` type is met only by a signature that declares one.
+  expect(evaluated(`type S = { x: uint8 }; ${caught('const f: (this: S) => uint8 = () => 1; r = "admitted";')}`)).not.toBe('admitted');
 });
 
 test('a rest typed by a fixed tuple is positional in the relation', () => {

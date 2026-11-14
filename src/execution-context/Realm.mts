@@ -79,7 +79,7 @@ import { bindRangeEnumGlobals } from '../intrinsics/RangeEnums.mts';
 import { bindMetadataInterfaceGlobals } from '../intrinsics/MetadataInterfaces.mts';
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
-import { iterationInterfaceRecord, getParsedIdentityDeclaration } from '../type-system/iteration-types.mts';
+import { iterationInterfaceRecord, protocolInterfaceRecord, getParsedIdentityDeclaration } from '../type-system/iteration-types.mts';
 import { bootstrapEnumPrototype } from '../intrinsics/EnumPrototype.mts';
 import { bootstrapTypePrototype } from '../intrinsics/TypePrototype.mts';
 import { bootstrapRegExp } from '../intrinsics/RegExp.mts';
@@ -515,7 +515,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       // realm that gets it.
       const record = name === 'Identity'
         ? getParsedIdentityDeclaration() ?? iterationInterfaceRecord(name)
-        : iterationInterfaceRecord(name);
+        : protocolInterfaceRecord(name);
       if (record) {
         X(global.DefineOwnProperty(Value(name), Descriptor({
           Value: GetTypeObject(record, realmRec),
