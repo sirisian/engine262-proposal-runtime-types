@@ -11,13 +11,13 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ReferenceValue, type Value } from '../value.mts';
 import { GetValue } from '../abstract-ops/reference-operations.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
-import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
+import { isTemplateArgumentType, templateArgumentTypeOf, templateMembersType } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
 import { anyType, mentionsTypeParameter } from './records.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
 import { BindNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, type ArgumentItem } from './named-arguments.mts';
-import { ClassImplements, InterfaceExtends, IsAssignable, IsSubtype, SameType } from './relations.mts';
+import { ArrayWithMembers, ClassImplements, InterfaceExtends, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits, IsOfType } from './runtime.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -325,6 +325,15 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   // Template objects are immutable language-created sequences with exact
   // cooked positions. They may meet an array boundary by checking each value;
   // this is call provenance, not tuple/array storage covariance.
+  // A parameter that is an array type with members - `TemplateStringsArray`,
+  // an array that also has `raw` - is met by the template object, which has
+  // them. It asks for more than a plain array does, so it is the closer match.
+  const withMembers = isTemplateArgumentType(argType) && argType.Kind === 'tuple' ? ArrayWithMembers(paramType) : null;
+  if (withMembers && argType.Kind === 'tuple') {
+    return (withMembers.array.Extent === 'dynamic' || withMembers.array.Extent === argType.Elements.length)
+      && argType.Elements.every((element) => IsAssignable(element.Type, withMembers.array.Element))
+      && withMembers.members.every((member) => IsAssignable(templateMembersType(), member)) ? Tier.StructuralNominal : null;
+  }
   if (isTemplateArgumentType(argType) && argType.Kind === 'tuple' && paramType.Kind === 'array') {
     return (paramType.Extent === 'dynamic' || paramType.Extent === argType.Elements.length)
       && argType.Elements.every((element) => IsAssignable(element.Type, paramType.Element)) ? Tier.Literal : null;

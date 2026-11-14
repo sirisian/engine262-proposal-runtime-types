@@ -14,6 +14,7 @@ import {
   substituteTypeParameters, substituteFreeTypeParameters, mentionsTypeParameter,
 } from './records.mts';
 import { builtinImplements, libraryExtends, iterationInterfaceRecord, protocolNameOf } from './iteration-types.mts';
+import { isTemplateArgumentType, templateMembersType } from './template-argument.mts';
 import { matchesFamilyPattern } from './family-patterns.mts';
 
 /**
@@ -391,6 +392,13 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // answer "does s satisfy t", a SUBTYPE question, and the intern table asks
   // whether two records ARE the same. A library nominal is not the object type
   // whose members it happens to implement.
+  // The strings object of a tagged template is an array that also has `raw`.
+  // Asked for an object type, it answers with that member.
+  if (!structuralOnly && s.Kind === 'tuple' && isTemplateArgumentType(s)) {
+    if (t.Kind === 'object') return IsSubtype(templateMembersType(), t, assumptions);
+    // It is an array of its cooked strings, each a string or undefined.
+    if (t.Kind === 'array') return s.Elements.every((element) => IsSubtype(element.Type, t.Element, assumptions));
+  }
   // #sec-iteration-types: the protocols are interface types, "satisfied
   // structurally through their structural form". A library type, an array and
   // a tuple declare nothing and satisfy one through that form, by the two
@@ -858,6 +866,21 @@ export function InterfaceExtends(s: TypeRecord, interfaceDeclaration: ParseNode,
     if (InterfaceExtends(resolved, interfaceDeclaration, target, seen)) return true;
   }
   return false;
+}
+
+/**
+ * The array part and the member parts of an array type with members: an
+ * interface that extends an array type, or the intersection that spells the
+ * same type (#sec-object-types). Null for any other type.
+ */
+export function ArrayWithMembers(type: TypeRecord): { array: Extract<TypeRecord, { Kind: 'array' }>, members: readonly TypeRecord[] } | null {
+  const form = type.Kind === 'nominal' && (type.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration' && type.Structure
+    ? SubstituteTypeArguments(type.Structure, type.Declaration, type.Arguments) : type;
+  if (form.Kind !== 'intersection') return null;
+  const arrays = form.Members.filter((member) => member.Kind === 'array');
+  const members = form.Members.filter((member) => member.Kind !== 'array');
+  return arrays.length === 1 && members.length > 0 && members.every((member) => member.Kind === 'object')
+    ? { array: arrays[0] as Extract<TypeRecord, { Kind: 'array' }>, members } : null;
 }
 
 /**
@@ -1372,6 +1395,12 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // `interface V { (uint32) }` - was refused, and the interface and object-type
     // spellings of one function type were not interchangeable.
     const targetStructure = InterfaceStructureOf(t);
+    // #sec-object-types: the structural form of an interface that extends an
+    // array or tuple type is the intersection of that base with the record of
+    // its members, and an array or a tuple is compared with that form.
+    if (targetStructure?.Kind === 'intersection' && (s.Kind === 'array' || s.Kind === 'tuple')) {
+      return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
+    }
     if (targetStructure && (s.Kind === 'object' || s.Kind === 'function')) {
       return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
     }

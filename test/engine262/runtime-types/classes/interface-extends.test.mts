@@ -188,3 +188,29 @@ test('an interface may extend the built-in iteration protocols', () => {
     + "function g(m: Mine.<uint8>): Iterator.<uint8> { return m; } 'ok';")).toMatchObject({ completion: { Type: 'normal' } });
   expect(evaluated('function f(x: Iterable.<uint8>) { return 1; } const it: IterableIterator.<uint8> = [1, 2].values(); String(f(it));')).toBe('1');
 });
+
+/**
+ * A tag function's first parameter is an array type with `raw`, declared as
+ * an interface that extends an array type or as the intersection that spells
+ * it. The strings object of a tagged template is such an array.
+ */
+test('a tagged template\'s strings object is a TemplateStringsArray', () => {
+  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  expect(evaluated(`${TSA}function tag(strings: Strings, ...values: [].<uint8>): string { return String(strings.raw.length) + '/' + String(strings.length) + '/' + String(strings[0]); } `
+    + 'const one: uint8 = 1; tag`a${one}b`;')).toBe('2/2/a');
+  expect(evaluated('type Strings = [].<string | undefined> & { raw: [].<string> }; function tag(strings: Strings, ...values: [].<uint8>): string { return String(strings.raw.length); } '
+    + 'const one: uint8 = 1; tag`a${one}b`;')).toBe('2');
+  expect(evaluated(`${TSA}function sql(strings: Strings, ...values: [].<uint32 | string>): string { return strings.join('?'); } const id: uint32 = 5; `
+    + 'sql`select * from t where id = ${id}`;')).toBe('select * from t where id = ?');
+});
+
+test('a tagged template\'s interpolations and a plain array are still checked', () => {
+  const TSA = 'interface Strings extends [].<string | undefined> { raw: [].<string>; } ';
+  refused(`${TSA}function sql(strings: Strings, ...values: [].<uint32 | string>): string { return 'x'; } ` + 'sql`a${true}b`;', 'rt-assignability');
+  refused(`${TSA}function tag(strings: Strings): string { return 'x'; } tag(['a', 'b']);`, 'rt-assignability');
+});
+
+test('a parameter that asks for raw is the closer match for a template', () => {
+  expect(evaluated("interface Strings extends [].<string | undefined> { raw: [].<string>; } function pick(s: Strings): string { return 'template'; } "
+    + "function pick(s: [].<string>): string { return 'array'; } " + "pick`a` + '/' + pick(['a']);")).toBe('template/array');
+});

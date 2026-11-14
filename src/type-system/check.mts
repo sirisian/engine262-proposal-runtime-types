@@ -50,7 +50,7 @@ import { IsPartialDeclaration, PartialClassSelfOf, MergePartialStructures, Parti
 import { VectorMaskMethodSignature } from './vector-signatures.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 import { CompletionPaths, CompletionValues } from './completion-values.mts';
-import { templateArgumentType, isTemplateArgumentType } from './template-argument.mts';
+import { templateArgumentType, isTemplateArgumentType, templateMembersType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
@@ -98,7 +98,7 @@ import {
   typeArgumentNameOf as typeArgumentNameOfShared,
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
-import { InterfaceApplicationOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
+import { ArrayWithMembers, InterfaceApplicationOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { NominalAssignmentEvidence } from './nominal-evidence.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
@@ -19547,6 +19547,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // its final operand, so an index view recorded without one does not hide a
     // final numeric literal, as in `m[(effect(), 2)]`; a literal has no effect
     // to replay.
+    // The strings object of a tagged template against an array type with
+    // members, `TemplateStringsArray`: its cooked strings are checked against
+    // the array part as they are against a plain array parameter, and it has
+    // `raw`, which is what the member part asks for.
+    if (node && contextual && expressionViewTypes.has(node) && isTemplateArgumentType(expressionViewTypes.get(node)!)) {
+      const wanted = ArrayWithMembers(contextual as TypeRecord);
+      if (wanted && wanted.members.every((member) => IsAssignable(templateMembersType(), member))) {
+        const strings = staticType(node, wanted.array as Known);
+        if (strings && IsAssignable(strings as TypeRecord, wanted.array)) return contextual;
+      }
+    }
     if (node && expressionViewTypes.has(node)
         && !(contextual && isTemplateArgumentType(expressionViewTypes.get(node)!))
         && !(contextual && isNumericLiteralNode(commaFinalOperand(node)))) return expressionViewTypes.get(node)!;
