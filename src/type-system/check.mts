@@ -98,7 +98,7 @@ import {
   typeArgumentNameOf as typeArgumentNameOfShared,
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
-import { OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
+import { InterfaceApplicationOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { NominalAssignmentEvidence } from './nominal-evidence.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
@@ -3981,7 +3981,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     alternatives.push(base);
     inheritedWhereAlternatives.set(override, alternatives);
   };
-  const clausesImplied = (base: ParseNode, override: ParseNode): boolean => {
+  /**
+   * The integer each type parameter of the declaration that states `signature`
+   * is bound to, as `from` reaches that declaration: for `Sized.<10>`, `N` is 10.
+   */
+  const statedConstants = (signature: ParseNode, from: TypeRecord | null | undefined): Map<string, bigint> => {
+    const constants = new Map<string, bigint>();
+    const owner = signatureOwners.get(signature);
+    const application = owner && from ? InterfaceApplicationOf(from, owner) : undefined;
+    if (!owner || application?.Kind !== 'nominal') return constants;
+    const parameters = (owner as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+    parameters.forEach((parameter, index) => {
+      const argument = application.Arguments[index];
+      const value = typeof argument === 'number' ? argument
+        : argument?.Kind === 'literal' ? R(argument.Value as never) as unknown : undefined;
+      if (typeof value === 'number' && Number.isInteger(value)) constants.set(parameter.BindingIdentifier.name, BigInt(value));
+    });
+    return constants;
+  };
+  const clausesImplied = (base: ParseNode, override: ParseNode, constants: ReadonlyMap<string, bigint> = new Map()): boolean => {
     const own = (override as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
     if (own.length === 0) return true;
     const inherited = (base as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
@@ -4012,7 +4030,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const subject = rel.RelationalExpression;
       if (subject.type !== 'IdentifierReference') return null;
       const index = names.indexOf((subject as ParseNode.IdentifierReference).name);
-      const bound = foldConstant(rel.ShiftExpression);
+      // A bound may be a type parameter of the stating declaration, read as
+      // the constant the implementing declaration binds it to.
+      const named = rel.ShiftExpression.type === 'IdentifierReference' ? constants.get((rel.ShiftExpression as ParseNode.IdentifierReference).name) : undefined;
+      const bound = named ?? foldConstant(rel.ShiftExpression);
       return index >= 0 && bound !== null ? { index, op: rel.operator, bound } : null;
     };
     const region = (c: { op: string, bound: bigint }): [bigint | null, bigint | null] => (
@@ -4108,13 +4129,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const written = positionalArguments(call.Arguments, names);
     if (written === null) return;
+    // #sec-generic-where: a clause a member inherits reads the type parameters
+    // of the declaration that states it, at the arguments by which the
+    // receiver reaches that declaration. Where the receiver's static type
+    // closes them, a constant call decides such a clause where it is written.
+    const stating = own.length > 0 ? undefined : inheritedWhereDeclarations.get(declaration);
+    const owner = stating ? signatureOwners.get(stating) : undefined;
+    const ownerBindings = new Map<string, TypeRecord>();
+    const ownerBound: ParseNode.TypeParameter[] = [];
+    if (owner && call.CallExpression.type === 'MemberExpression') {
+      const receiver = staticType((call.CallExpression as ParseNode.MemberExpression).MemberExpression as ParseNode);
+      const application = receiver ? InterfaceApplicationOf(receiver as TypeRecord, owner) : undefined;
+      const ownerParameters = (owner as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+      if (application?.Kind === 'nominal') {
+        ownerParameters.forEach((parameter, index) => {
+          const argument = application.Arguments[index];
+          if (argument === undefined) return;
+          const record = typeof argument === 'number' ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as TypeRecord : argument;
+          if (mentionsTypeParameter(record)) return;
+          ownerBindings.set(parameter.BindingIdentifier.name, record);
+          ownerBound.push(parameter);
+        });
+      }
+    }
     const values = new Map<string, TypeRecord>();
     const decided: ParseNode.WhereClause[] = [];
     for (const clause of clauses) {
       const predicate = clause.RefinementPredicate;
       const references = LexicalFreeReferences(predicate);
       if (whereClauseNamesReturn(predicate) || whereClauseNamesThis(predicate)
-        || references.some((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter')) continue;
+        || references.some((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter' && !ownerBindings.has(reference.name))) continue;
       const reads = references.map((reference) => reference.name).filter((name) => names.includes(name));
       if (reads.length === 0) continue;
       let complete = true;
@@ -4135,7 +4179,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const checks = whereChecks.get(call) ?? [];
     if (checks.some((check) => check.declaration === declaration && check.values)) return;
-    checks.push({ declaration: declaration as ParseNode.MethodDefinition, clauses: decided, bindings: new Map(), values, sourceModule: importedDeclarationSourceModule(declaration) });
+    checks.push({
+      declaration: declaration as ParseNode.MethodDefinition, clauses: decided, bindings: ownerBindings, values, sourceModule: importedDeclarationSourceModule(declaration),
+      ...(ownerBound.length > 0 ? { outerParameters: ownerBound } : {}),
+    });
     whereChecks.set(call, checks);
   };
 
@@ -12142,6 +12189,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // resolves the target kind and verifies the registered declarations
         // before publishing a constructor or successful cache entry.
         if (it && it.Kind !== 'any' && mentionsTypeParameter(it)) resolvedInterfaces.push(it);
+        // An application that names the class's own parameters is open until
+        // the class is applied, and the member walk waits for that. Which
+        // signature a member implements is known from the declarations now: a
+        // member that states no clause keeps the signature's contract, and one
+        // that states its own may only repeat or weaken it.
+        if (!it || (it.Kind !== 'any' && mentionsTypeParameter(it))) {
+          const interfaceDeclaration = ref.type === 'TypeReference' && !ref.TypeName.MemberNames.length
+            ? ResolveBindingDeclaration(ref.TypeName.IdentifierReference, ref.TypeName.IdentifierReference.name)?.node : undefined;
+          if (interfaceDeclaration?.type === 'InterfaceDeclaration') {
+            for (const own of effectiveDeclaredProperties) {
+              if (own.type?.Kind !== 'function' || typeof own.key !== 'string') continue;
+              const ownDeclaration = signatureDeclarations.get((own.type as { Signatures: readonly SignatureRecord[] }).Signatures[0] as object);
+              if (!ownDeclaration) continue;
+              const contracts = interfaceMethodSignatures(interfaceDeclaration as ParseNode, own.key);
+              for (const signatureDeclaration of contracts) inheritWhereClauses(signatureDeclaration, ownDeclaration);
+              // Whether a clause implies another is judged between closed
+              // clauses. One that reads a type parameter is compared when the
+              // class is applied, where `N` is known to be the class's `M`.
+              const readsTypeParameter = (declaration: ParseNode): boolean => ((declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [])
+                .some((clause) => LexicalFreeReferences(clause.RefinementPredicate).some((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter'));
+              if (!readsTypeParameter(ownDeclaration)
+                && contracts.some((signatureDeclaration) => !readsTypeParameter(signatureDeclaration) && !clausesImplied(signatureDeclaration, ownDeclaration))) {
+                reportType('rt-implements-contract', n, '$1 states a where clause the signature it implements does not imply; an implementation may only repeat or weaken the contract', Value(own.key));
+              }
+            }
+          }
+        }
         if (it && it.Kind !== 'any' && !mentionsTypeParameter(it)) {
           reportType('rt-implements-contract', n, 'an implements target must denote an interface');
         }
@@ -12213,7 +12287,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             for (const signatureDeclaration of contracts) {
               if (ownDeclaration) inheritWhereClauses(signatureDeclaration, ownDeclaration);
             }
-            if (ownDeclaration && contracts.some((signatureDeclaration) => !clausesImplied(signatureDeclaration, ownDeclaration))) {
+            if (ownDeclaration && contracts.some((signatureDeclaration) => !clausesImplied(signatureDeclaration, ownDeclaration, statedConstants(signatureDeclaration, it as TypeRecord)))) {
               reportType('rt-implements-contract', n, '$1 states a where clause the signature it implements does not imply; an implementation may only repeat or weaken the contract', Value(String(p.key)));
             }
           }

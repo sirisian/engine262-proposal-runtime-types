@@ -121,3 +121,30 @@ test('an override keeps a clause that reads its superclass\'s parameter', () => 
   expect(evaluated('class P<N: uint8> { take(i: uint8): void where i < N {} } class C extends P.<10> { take(i: uint8): void {} } '
     + "function g(v: uint8) { try { new C().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(5) + '/' + g(20);")).toBe('ran/TypeError');
 });
+
+test('a constant call is decided against a clause that reads its declaration\'s parameters', () => {
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const unsatisfied = (source: string): void => {
+    expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-where-unsatisfied' } });
+  };
+  unsatisfied(`${Sized}class T implements Sized.<10> { take(i: uint8): void {} } new T().take(20);`);
+  unsatisfied(`${Sized}interface Ten extends Sized.<10> {} class T implements Ten { take(i: uint8): void {} } new T().take(20);`);
+  unsatisfied('class P<N: uint8> { take(i: uint8): void where i < N {} } class C extends P.<10> { take(i: uint8): void {} } new C().take(20);');
+  expect(observeScript(`${Sized}class T implements Sized.<10> { take(i: uint8): void {} } new T().take(5); 'ok';`)).toMatchObject({ completion: { Type: 'normal' } });
+});
+
+test('a generic class that forwards its parameter keeps the signature\'s contract', () => {
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const g = "function g(v: uint8) { try { new T.<10>().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(5) + '/' + g(20);";
+  expect(evaluated(`${Sized}class T<M: uint8> implements Sized.<M> { take(i: uint8): void {} } ${g}`)).toBe('ran/TypeError');
+  expect(evaluated(`${Sized}class T<M: uint8> implements Sized.<M> { take(i: uint8): void where i < M {} } ${g}`)).toBe('ran/TypeError');
+});
+
+test('a member may restate or weaken a clause whose bound is its declaration\'s parameter', () => {
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const g = "function g(v: uint8) { try { new T().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(5) + '/' + g(20) + '/' + g(120);";
+  expect(evaluated(`${Sized}class T implements Sized.<10> { take(i: uint8): void where i < 10 {} } ${g}`)).toBe('ran/TypeError/TypeError');
+  expect(evaluated(`${Sized}class T implements Sized.<10> { take(i: uint8): void where i < 50 {} } ${g}`)).toBe('ran/ran/TypeError');
+  expect(observeScript(`${Sized}class T implements Sized.<10> { take(i: uint8): void where i < 5 {} }`))
+    .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-implements-contract' } });
+});
