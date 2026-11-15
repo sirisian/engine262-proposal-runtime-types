@@ -54,6 +54,7 @@ import {
   R,
   type FunctionObject,
   Realm,
+  CopyValueClassInstance,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-array.prototype.concat */
@@ -93,6 +94,8 @@ function* ArrayProto_concat(args: Arguments, { thisValue }: FunctionCallContext)
     }
   }
   Q(yield* Set(A, Value('length'), F(n), Value.true));
+  // The receiver's elements are stored into the result, so an inline one is copied.
+  Q(yield* copyInlineElements(O, A));
   return A;
 }
 
@@ -214,6 +217,7 @@ function* ArrayProto_filter([callbackfn = Value.undefined, thisArg = Value.undef
     }
     k += 1;
   }
+  Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
   return A;
 }
@@ -267,6 +271,7 @@ function* ArrayProto_flat([depth = Value.undefined]: Arguments, { thisValue }: F
   }
   const A = Q(yield* ArraySpeciesCreate(O, 0));
   Q(yield* FlattenIntoArray(A, O, sourceLen, 0, depthNum));
+  Q(yield* copyInlineElements(O, A));
   return A;
 }
 
@@ -696,6 +701,7 @@ function* ArrayProto_slice([start = Value.undefined, end = Value.undefined]: Arg
     n += 1;
   }
   Q(yield* Set(A, Value('length'), F(n), Value.true));
+  Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
   // A slice is a WINDOW on the positions, and the indices are known here even
   // where they were not known statically, so the window is exact.
@@ -750,6 +756,7 @@ function* ArrayProto_toSorted([comparator = Value.undefined]: Arguments, { thisV
     X(CreateDataPropertyOrThrow(A, X(ToString(F(j))), sortedList[j]));
     j += 1;
   }
+  Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
   // A sort permutes positions, so the result's shape is knowable only where
   // permuting cannot change it - every position the same type. A heterogeneous
@@ -916,6 +923,7 @@ function* ArrayProto_toSpliced(args: Arguments, { thisValue }: FunctionCallConte
     i += 1;
     r += 1;
   }
+  Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
   return A;
 }
@@ -973,6 +981,7 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
     X(CreateDataPropertyOrThrow(A, Pk, fromValue));
     k += 1;
   }
+  Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
   // `with` replaces one position with a value already checked against that
   // position's type, so the shape is the source's.
@@ -1059,7 +1068,8 @@ function* ArrayProto_at([index = Value.undefined]: Arguments, { thisValue }: Fun
     return Value.undefined;
   }
   // 7. Return ? Get(O, ! ToString(k)).
-  return Q(yield* Get(O, X(ToString(F(k)))));
+  // #sec-value-type-copying: "returning one" copies. The element stays where it is.
+  return Q(yield* CopyValueClassInstance(Q(yield* Get(O, X(ToString(F(k)))))));
 }
 
 /**
@@ -1084,6 +1094,47 @@ function propagateElementType(source: Value, copy: Value): void {
   const element = (source as { TypedElement?: TypeRecord }).TypedElement;
   if (element !== undefined && copy instanceof ObjectValue) {
     StampTypedArray(copy, element);
+  }
+}
+
+/**
+ * #sec-value-type-copying: "storing into a field or an array element of that
+ * type" copies a value of a value type. A member that builds an array from a
+ * typed receiver's elements stores each one, so the result holds copies, and
+ * is the caller's own: writing to an element of `xs.slice()` does not write
+ * `xs`. The members moved the element objects themselves, and no boundary
+ * runs between a built-in and its result to copy them - "an implementation
+ * that copies only where a check runs will alias exactly where a program is
+ * most explicit about its types".
+ *
+ * A plain array is not typed storage: its elements hold references, by the
+ * same clause, and a copy of it holds the same references.
+ */
+function* copyInlineElements(source: Value, copy: Value): PlainEvaluator<void> {
+  if (!surroundingAgent.feature('runtime-types') || !(copy instanceof ObjectValue) || !(source instanceof ObjectValue)) {
+    return;
+  }
+  const typed = (source as { TypedElement?: TypeRecord }).TypedElement !== undefined
+    || (source as { TypedTuple?: unknown }).TypedTuple !== undefined
+    || ArraySpanBackingOf(source as unknown as object) !== undefined
+    || ArrayViewBackingOf(source as unknown as object) !== undefined;
+  if (!typed) {
+    return;
+  }
+  const length = Q(yield* LengthOfArrayLike(copy));
+  for (let index = 0; index < length; index += 1) {
+    const key = X(ToString(F(index)));
+    if (Q(yield* HasProperty(copy, key)) !== Value.true) {
+      continue;
+    }
+    const held = Q(yield* Get(copy, key));
+    if (!(held instanceof ObjectValue)) {
+      continue;
+    }
+    const duplicate = Q(yield* CopyValueClassInstance(held));
+    if (duplicate !== held) {
+      Q(yield* CreateDataPropertyOrThrow(copy, key, duplicate));
+    }
   }
 }
 
@@ -1132,6 +1183,7 @@ function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallCon
     X(CreateDataPropertyOrThrow(A, Pk, fromValue));
     k += 1;
   }
+  Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
   // The reverse of `[uint8, string]` is `[string, uint8]`: the positions are
   // the source's, read backwards.

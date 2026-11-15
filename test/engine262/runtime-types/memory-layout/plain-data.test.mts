@@ -80,3 +80,47 @@ test('value classes copy and reference classes alias', () => {
     const p = new R(); const q = p; q.x = 9;
     a.x + '/' + p.x;`)).toBe('1/9');
 });
+
+/**
+ * #sec-value-type-copying: "Assigning a value of a value type, passing one as
+ * an argument, and returning one each COPY it", the positions including
+ * "storing into a field or an array element of that type". A built-in member
+ * is no exception. One that returns an element returns a copy, and one that
+ * builds an array of the receiver's element type stores, and so copies, each
+ * element it takes. They handed out the element objects themselves, so
+ * writing to `xs.slice()[0]` wrote `xs`.
+ */
+test('a built-in member copies a value-type element it returns or stores', () => {
+  const A = 'class A { a: uint8; b: uint8; } const xs: [2].<A>; ';
+  const untouched = (taken: string): void => {
+    expect(evaluated(`${A}${taken} String(xs[0].a) + String(xs[1].a);`)).toBe('00');
+  };
+  // Returned.
+  untouched('const p = xs.at(0); if (p !== undefined) p.a = 9;');
+  untouched('const p = xs.find((e) => true); if (p !== undefined) p.a = 9;');
+  untouched('const p = xs.findLast((e) => true); if (p !== undefined) p.a = 9;');
+  // Stored into a new array of the element type.
+  untouched('const s = xs.slice(); s[0].a = 9; s[1].a = 9;');
+  untouched('const s = xs.concat(xs); s[0].a = 9; s[3].a = 9;');
+  untouched('const s = xs.filter((e) => true); s[0].a = 9; s[1].a = 9;');
+  untouched('const s = xs.toSorted((p, q) => 0); s[0].a = 9; s[1].a = 9;');
+  untouched('const s = xs.toReversed(); s[0].a = 9; s[1].a = 9;');
+  untouched('const s = xs.toSpliced(0, 0); s[0].a = 9; s[1].a = 9;');
+  untouched('const s = xs.with(1, new A()); s[0].a = 9;');
+  // Through a window too.
+  untouched('const w: Span.<A> = xs; const s = w.slice(); s[0].a = 9; const p = w.at(1); if (p !== undefined) p.a = 9;');
+  // The copy is a whole value, and is the caller's own.
+  expect(evaluated(`${A}xs[0].a = 3; xs[0].b = 4; const s = xs.slice(); s[0].a = 7; String(s[0].a) + String(s[0].b) + String(xs[0].a);`)).toBe('743');
+});
+
+test('a plain object or array still holds a reference to an inline element', () => {
+  // The same clause: "A plain object's property and a plain array's element
+  // ... hold a REFERENCE ... and a program that wants a copy into one writes a
+  // conversion."
+  const A = 'class A { a: uint8; } const xs: [2].<A>; ';
+  expect(evaluated(`${A}const o = { e: xs[0] }; o.e.a = 9; String(xs[0].a);`)).toBe('9');
+  expect(evaluated(`${A}const plain = [xs[0]]; plain[0].a = 9; String(xs[0].a);`)).toBe('9');
+  expect(evaluated(`${A}const all = [...xs]; all[1].a = 9; String(xs[1].a);`)).toBe('9');
+  // At a typed array's annotation the literal stores, and so copies.
+  expect(evaluated(`${A}const c: [].<A> = [...xs]; c[0].a = 9; String(xs[0].a);`)).toBe('0');
+});

@@ -35,6 +35,7 @@ import {
   Realm,
   Throw,
   LengthOfArrayLike, TypedArrayLength,
+  CopyValueClassInstance,
 } from '#self';
 
 // Algorithms and methods shared between %Array.prototype% and
@@ -132,7 +133,8 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
       const kValue = Q(yield* Get(O, Pk));
       const testResult = ToBoolean(Q(yield* Call(predicate, thisArg, [kValue, F(k), O])));
       if (testResult === Value.true) {
-        return kValue;
+        // #sec-value-type-copying: "returning one" copies.
+        return Q(yield* CopyValueClassInstance(kValue));
       }
       k += 1;
     }
@@ -185,7 +187,8 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
       const testResult = ToBoolean(Q(yield* Call(predicate, thisArg, [kValue, F(k), O])));
       // d. If testResult is true, return kValue.
       if (testResult === Value.true) {
-        return kValue;
+        // #sec-value-type-copying: "returning one" copies.
+        return Q(yield* CopyValueClassInstance(kValue));
       }
       // e. Set k to k - 1.
       k -= 1;
