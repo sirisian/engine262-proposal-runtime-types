@@ -997,3 +997,33 @@ test('a window searches at its element type', () => {
   // A needle of another type is still refused where it is written.
   expectStaticTypeError(`${w}w.includes('s');`);
 });
+
+/**
+ * #sec-span-coercion: "obtaining an owned array from one is explicit: a spread
+ * or a `slice` copies the elements into a new array". Every method that
+ * copies the elements answers with an owned array, `filter` and `concat`
+ * among them; they were typed as returning the window.
+ */
+test('a method that copies a window gives an owned array', () => {
+  const w = 'const a: [].<uint8> = [3, 1, 2]; const w: Span.<uint8> = a; ';
+  expect(evaluated(`${w}const f: [].<uint8> = w.filter((v) => v > 1); f.push(9 := uint8); String(f.length) + '/' + String(a.length);`)).toBe('3/3');
+  expect(evaluated(`${w}const c: [].<uint8> = w.concat(a); const d: [].<uint8> = a.concat(w); const e: [].<uint8> = w.concat(9 := uint8); c.join('') + '/' + d.join('') + '/' + e.join('');`))
+    .toBe('312312/312312/3129');
+  expectStaticTypeError(`${w}const s: string = w.filter((v) => true);`);
+  expectStaticTypeError(`${w}const s: Span.<uint8, 3> = w.concat(a);`);
+  // An owned array's own results are unchanged.
+  expect(evaluated('const a: [].<uint8> = [3, 1]; const f: [].<uint8> = a.filter((v) => true); const c: [].<uint8> = a.concat(a); String(f.length) + String(c.length);')).toBe('24');
+});
+
+/**
+ * #sec-span-type: a window iterates the run of elements it names, so it is an
+ * `Iterable` of its element, as the array beneath it is.
+ */
+test('a window is an Iterable of its element', () => {
+  const w = 'const a: [].<uint8> = [3, 1, 2]; const w: Span.<uint8> = a; ';
+  expect(evaluated(`${w}function f(x: Iterable.<uint8>): uint8 { let t: uint8 = 0; for (const v of x) t += v; return t; } String(f(w));`)).toBe('6');
+  expect(evaluated(`${w}function f(x: Iterable) { let n = 0; for (const v of x) n += 1; return n; } String(f(w));`)).toBe('3');
+  expect(evaluated(`${w}function f(v: any) { return v is Iterable.<uint8>; } String(f(w));`)).toBe('true');
+  expect(evaluated('const u = new Uint8Array([5, 6]); const v = Span.<uint8>(u.buffer); function f(x: Iterable.<uint8>): uint8 { let t: uint8 = 0; for (const e of x) t += e; return t; } String(f(v));')).toBe('11');
+  expectStaticTypeError(`${w}function f(x: Iterable.<string>) { return 1; } f(w);`);
+});

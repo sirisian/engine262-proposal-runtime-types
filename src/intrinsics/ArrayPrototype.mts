@@ -1291,5 +1291,12 @@ function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
     ['byteOffset', [ArrayProto_byteOffset]],
     ['byteLength', [ArrayProto_byteLength]],
   ]);
+  // A window is not an Array exotic object, so `concat` would otherwise take it
+  // as ONE element - `w.concat(a)` on a `Span.<uint8>` tried to store the
+  // window itself in a `uint8` slot, and `a.concat(w)` appended it whole. It is
+  // a run of elements and joins as one, which is what IsConcatSpreadable asks.
+  X(spanProto.DefineOwnProperty(wellKnownSymbols.isConcatSpreadable, Descriptor({
+    Value: Value.true, Writable: Value.false, Enumerable: Value.false, Configurable: Value.false,
+  })));
   realmRec.Intrinsics['%Span.prototype%'] = spanProto;
 }

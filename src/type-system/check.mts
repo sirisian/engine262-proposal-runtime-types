@@ -2753,6 +2753,11 @@ function writtenAnnotationAbove(node: object): boolean {
  */
 const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
+  // What a method that copies the receiver's elements returns: the receiver's
+  // own type for an owned array, and an owned array for a window, which owns
+  // nothing and so cannot be what a copy is.
+  const copiedFrom = (source: TypeRecord): TypeRecord => (source.Kind === 'nominal' && (source as { LibraryName?: string }).LibraryName === 'Span'
+    ? { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord : source);
   const numberType = makePrimitive('number');
   // Storage indices and the extension's window bounds use uint64. Existing
   // Array methods retain their ordinary quantity coercion, including signed
@@ -2828,7 +2833,11 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
           Untyped: false,
         }],
       } as unknown as TypeRecord;
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: receiver, Untyped: false }] } as unknown as Known;
+      // #sec-span-coercion: "obtaining an owned array from one is explicit: a
+      // spread or a `slice` copies the elements into a new array". `filter`
+      // copies too, so on a window its result is an owned array and not a
+      // window, as `slice`, `toSorted` and `toReversed` below already say.
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([callback, anyType], 1), Return: copiedFrom(receiver), Untyped: false }] } as unknown as Known;
     }
     case 'shrinkToFit':
       // #sec-array.prototype.shrinktofit: takes nothing and answers nothing.
@@ -2908,7 +2917,7 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
         Kind: 'function',
         // Optional from the FIRST parameter: `a.concat(b)` passes one and
         // `a.concat()` copies, so requiring two refuses both.
-        Signatures: [{ Parameters: shapes([concatArgument, concatArgument], 1), Return: receiver }],
+        Signatures: [{ Parameters: shapes([concatArgument, concatArgument], 1), Return: copiedFrom(receiver) }],
       } as Known;
     }
     case 'slice':
