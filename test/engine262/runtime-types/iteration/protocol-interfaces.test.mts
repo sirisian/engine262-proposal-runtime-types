@@ -130,3 +130,20 @@ test('an instance of a class that declares an interface is of it by that declara
   expect(evaluated('interface Box<T: type> { v: T; } class B8 implements Box.<uint8> { v: uint8 = 1; } function f(v: any) { return v is Box.<uint16>; } function g(v: any) { return v is Box.<uint8>; } String(f(new B8())) + String(g(new B8()));')).toBe('falsetrue');
   expect(evaluated("interface A { a: string; } interface B extends A { b: uint8; } class C implements B { a: string = 'x'; b: uint8 = 1; } function f(v: any) { return v is A; } String(f(new C()));")).toBe('true');
 });
+
+test('a generator written where a protocol is asked for yields that protocol\'s element', () => {
+  // The adopted result is the protocol, not an annotation: read by the
+  // annotation shorthand it made the generator one of iterators, and the
+  // `yield` was refused.
+  const f = 'function f(x: Iterable.<uint8>): uint8 { let t: uint8 = 0; for (const v of x) t += v; return t; } ';
+  expect(evaluated(`${f}String(f({ *[Symbol.iterator]() { yield 1 := uint8; yield 2 := uint8; } }));`)).toBe('3');
+  expect(evaluated(`${f}String(f({ *[Symbol.iterator]() { yield 1; yield 2; } }));`)).toBe('3');
+  expect(evaluated(`${f}String(f({ [Symbol.iterator]: function* () { yield 5; } }));`)).toBe('5');
+  expect(evaluated('function d(it: Iterator.<uint8>): uint8 { const r = it.next(); return r.done ? 0 : r.value; } const o: { make(): Iterator.<uint8> } = { *make() { yield 7; } }; String(d(o.make()));')).toBe('7');
+  // What it yields and returns is still checked against the protocol.
+  refused(`${f}f({ *[Symbol.iterator]() { yield 's'; } });`, 'rt-assignability');
+  refused("function s(x: Iterable.<string>) { return 1; } s({ *[Symbol.iterator]() { yield 1; } });", 'rt-assignability');
+  refused(`${f}f({ *[Symbol.iterator]() { yield 1; return 9; } });`, 'rt-assignability');
+  // A bare annotation is still the yield type: this is a generator of iterators.
+  expect(evaluated('function* g(): Iterator.<uint8> { const a: [].<uint8> = [1]; yield a.values(); } let n: uint8 = 0; for (const it of g()) n += 1; String(n);')).toBe('1');
+});

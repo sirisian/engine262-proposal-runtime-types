@@ -561,6 +561,49 @@ const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]
 };
 
 /**
+ * The generator type a generator takes from an ADOPTED result that is an
+ * iteration protocol: it yields the protocol's element, returns its
+ * completion and receives its input. Null where `wanted` is neither a
+ * generator type, a protocol application nor an object type with a `next`
+ * whose result can be read. A bare ANNOTATION is not read this way: by the
+ * shorthand it is the yield type (#sec-generator-types).
+ */
+export function GeneratorTypeOfProtocol(wanted: TypeRecord | null | undefined, isAsync: boolean): TypeRecord | null {
+  if (!wanted) return null;
+  if (wanted.Kind === 'nominal' && (wanted.LibraryName === 'Generator' || wanted.LibraryName === 'AsyncGenerator')) return wanted;
+  const voidRecord = { Kind: 'void' } as unknown as TypeRecord;
+  const generator = (yielded: TypeRecord, returned: TypeRecord, received: TypeRecord): TypeRecord | null => libraryTypeRecord(isAsync ? 'AsyncGenerator' : 'Generator', [yielded, returned, received]);
+  if (wanted.Kind === 'nominal' && protocolNameOf(wanted) !== undefined) {
+    const at = (index: number, fallback: TypeRecord): TypeRecord => {
+      const argument = wanted.Arguments[index];
+      return typeof argument === 'object' ? argument : fallback;
+    };
+    return generator(at(0, { Kind: 'any' } as TypeRecord), at(1, voidRecord), at(2, voidRecord));
+  }
+  const shape = wanted.Kind === 'nominal' && wanted.Structure ? wanted.Structure : wanted;
+  const next = shape.Kind === 'object' ? shape.Properties.find((property) => property.key === 'next')?.type : undefined;
+  if (next?.Kind !== 'function' || next.Signatures.length !== 1) return null;
+  const stepped = next.Signatures[0]!.Return;
+  const awaited = isAsync && stepped?.Kind === 'nominal' && stepped.LibraryName === 'Promise' ? stepped.Arguments[0] : stepped;
+  const result = typeof awaited === 'object' ? awaited : null;
+  if (!result) return null;
+  const yields: TypeRecord[] = [];
+  const completes: TypeRecord[] = [];
+  for (const variant of result.Kind === 'union' ? result.Members : [result]) {
+    if (variant.Kind !== 'object') return null;
+    const done = variant.Properties.find((property) => property.key === 'done');
+    const value = variant.Properties.find((property) => property.key === 'value')?.type;
+    if (!value) return null;
+    (!done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true ? completes : yields).push(value);
+  }
+  if (yields.length === 0) return null;
+  const join = (types: readonly TypeRecord[]): TypeRecord => (types.length === 1 ? types[0]! : { Kind: 'union', Members: types } as unknown as TypeRecord);
+  // A completion of ~any~ is the discarded ~void~ of the shorthand.
+  const completion = completes.length === 0 || completes.every((type) => type.Kind === 'any') ? voidRecord : join(completes);
+  return generator(join(yields), completion, next.Signatures[0]!.Parameters[0]?.Type ?? voidRecord);
+}
+
+/**
  * The protocol applications a built-in class declares, as interface types:
  * `Set.<T>` declares `Iterable.<T>`. These name WHICH protocols it declares.
  * How it is compared with one is still through the structural form

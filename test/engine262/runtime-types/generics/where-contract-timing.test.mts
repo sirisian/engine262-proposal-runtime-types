@@ -173,3 +173,28 @@ test('a class that reaches one interface at two arguments keeps both contracts',
   expect(evaluated(`${U}function g(v: uint8) { try { new U().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(3) + '/' + g(7) + '/' + g(12);`)).toBe('ran/ran/TypeError');
   expect(observeScript(`${U}new U().take(7); 'ok';`)).toMatchObject({ completion: { Type: 'normal' } });
 });
+
+test('a forwarding generic class compares its own clause with the signature it implements', () => {
+  // For `class T<M: uint8> implements Sized.<M>` the signature's `N` is the
+  // class's `M`, and a member's own clause must be shown to repeat or weaken
+  // the signature's under that reading. What cannot be shown is refused.
+  const Sized = 'interface Sized<N: uint8> { take(i: uint8): void where i < N; } ';
+  const g = "function g(v: uint8) { try { new T.<10>().take(v); return 'ran'; } catch (e) { return e.constructor.name; } } g(5) + '/' + g(10) + '/' + g(20);";
+  const refusedAtClass = (source: string): void => {
+    expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-implements-contract' } });
+  };
+  // Repeats it, and weakens it by its operator against the same bound.
+  expect(evaluated(`${Sized}class T<M: uint8> implements Sized.<M> { take(i: uint8): void where i < M {} } ${g}`)).toBe('ran/TypeError/TypeError');
+  expect(evaluated(`${Sized}class T<M: uint8> implements Sized.<M> { take(i: uint8): void where i <= M {} } ${g}`)).toBe('ran/ran/TypeError');
+  // An unrelated clause, a stricter operator, a constant, and another parameter of the class.
+  refusedAtClass(`${Sized}class T<M: uint8> implements Sized.<M> { take(i: uint8): void where i > 200 {} }`);
+  refusedAtClass('interface AtMost<N: uint8> { take(i: uint8): void where i <= N; } class T<M: uint8> implements AtMost.<M> { take(i: uint8): void where i < M {} }');
+  refusedAtClass(`${Sized}class T<M: uint8> implements Sized.<M> { take(i: uint8): void where i < 10 {} }`);
+  refusedAtClass(`${Sized}class T<M: uint8, K: uint8> implements Sized.<M> { take(i: uint8): void where i < K {} }`);
+  // Two parameters are read by position.
+  const Span = 'interface Span<A: uint8, B: uint8> { at(i: uint8): void where i >= A where i < B; } ';
+  expect(observeScript(`${Span}class T<L: uint8, H: uint8> implements Span.<L, H> { at(i: uint8): void where i >= L where i < H {} } 'ok';`)).toMatchObject({ completion: { Type: 'normal' } });
+  refusedAtClass(`${Span}class T<L: uint8, H: uint8> implements Span.<L, H> { at(i: uint8): void where i >= H where i < L {} }`);
+  // A class that passes a constant is compared as before.
+  expect(observeScript(`${Sized}class T<M: uint8> implements Sized.<10> { take(i: uint8): void where i < 10 {} } 'ok';`)).toMatchObject({ completion: { Type: 'normal' } });
+});

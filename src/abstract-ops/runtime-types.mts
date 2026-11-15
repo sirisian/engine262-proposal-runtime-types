@@ -1,3 +1,4 @@
+import { GeneratorTypeOfProtocol } from '../type-system/iteration-types.mts';
 import { AdmitWherePredicate, EvaluateWherePredicate } from '../type-system/where-predicates.mts';
 import { IsWhereMetaType } from '../intrinsics/Where.mts';
 import { WithoutFreshAccessors } from '../type-system/inferred-binding.mts';
@@ -6451,6 +6452,12 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     if (adopted) {
       Narrows = adopted.Narrows;
       ReturnType = adopted.Return ?? undefined;
+      // A generator literal that adopted an iteration protocol returns a
+      // generator of that protocol's element, not one that yields iterators.
+      const body = (fn as { ECMAScriptCode?: { type?: string } }).ECMAScriptCode?.type;
+      if (ReturnType && (body === 'GeneratorBody' || body === 'AsyncGeneratorBody')) {
+        ReturnType = GeneratorTypeOfProtocol(ReturnType, body === 'AsyncGeneratorBody') ?? ReturnType;
+      }
     }
   }
   const code = (fn as { ECMAScriptCode?: { type?: string } }).ECMAScriptCode;

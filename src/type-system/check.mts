@@ -86,8 +86,7 @@ import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts'
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import { ClassValueOrigins } from './class-value-origins.mts';
 import {
-  iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType,
-} from './iteration-types.mts';
+  iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType, GeneratorTypeOfProtocol } from './iteration-types.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
   ComputeClassLayout, type ClassLayout, IsValueType,
@@ -3999,12 +3998,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
     return constants;
   };
-  const clausesImplied = (base: ParseNode, override: ParseNode, constants: ReadonlyMap<string, bigint> = new Map()): boolean => {
+  /**
+   * `renames` reads a type parameter of the stating declaration as the
+   * parameter of the implementing declaration that is passed for it: for
+   * `class T<M: uint8> implements Sized.<M>`, the signature's `N` is `M`.
+   */
+  const clausesImplied = (base: ParseNode, override: ParseNode, constants: ReadonlyMap<string, bigint> = new Map(), renames: ReadonlyMap<string, string> = new Map()): boolean => {
     const own = (override as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
     if (own.length === 0) return true;
     const inherited = (base as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [];
     if (inherited.length === 0) return false;
     const text = (clause: ParseNode.WhereClause): string => ((clause.RefinementPredicate as { sourceText?: string }).sourceText ?? '').replace(/\s+/g, '');
+    // An inherited clause as the implementing declaration reads it.
+    const inheritedText = (clause: ParseNode.WhereClause): string => [...renames].reduce(
+      (source, [from, to]) => source.replace(new RegExp(`(?<![\\w$])${from}(?![\\w$])`, 'g'), to),
+      (clause.RefinementPredicate as { sourceText?: string }).sourceText ?? '',
+    ).replace(/\s+/g, '');
+    // A bound that is a parameter rather than a constant: `i < M`.
+    const symbolic = (clause: ParseNode.WhereClause, names: readonly string[], rename: boolean): { index: number, op: string, symbol: string } | null => {
+      let t = clause.RefinementPredicate as ParseNode;
+      while (t.type === 'ParenthesizedExpression') t = (t as { Expression: ParseNode }).Expression;
+      if (t.type !== 'RelationalExpression') return null;
+      const rel = t as unknown as { operator: string, RelationalExpression: ParseNode, ShiftExpression: ParseNode };
+      if (!['<', '<=', '>', '>='].includes(rel.operator) || rel.RelationalExpression.type !== 'IdentifierReference' || rel.ShiftExpression.type !== 'IdentifierReference') return null;
+      const index = names.indexOf((rel.RelationalExpression as ParseNode.IdentifierReference).name);
+      const written = (rel.ShiftExpression as ParseNode.IdentifierReference).name;
+      if (index < 0 || names.includes(written)) return null;
+      return { index, op: rel.operator, symbol: rename ? renames.get(written) ?? written : written };
+    };
     // Type parameters, then formal parameters, by position: a signature's
     // formals are its FunctionTypeParameterList.
     const parameterNames = (declaration: ParseNode): string[] => {
@@ -4039,7 +4060,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const region = (c: { op: string, bound: bigint }): [bigint | null, bigint | null] => (
       c.op === '<' ? [null, c.bound - 1n] : c.op === '<=' ? [null, c.bound] : c.op === '>' ? [c.bound + 1n, null] : [c.bound, null]);
     return own.every((clause) => {
-      if (inherited.some((candidate) => text(candidate) === text(clause))) return true;
+      if (inherited.some((candidate) => inheritedText(candidate) === text(clause))) return true;
+      // Against the same parameter as a bound, the operators decide: what is
+      // below `M` is at most `M`, and what is above it is at least it.
+      const bounded = symbolic(clause, ownNames, false);
+      if (bounded) {
+        return inherited.some((candidate) => {
+          const theirs = symbolic(candidate, baseNames, true);
+          return !!theirs && theirs.index === bounded.index && theirs.symbol === bounded.symbol
+            && (theirs.op === bounded.op || (theirs.op === '<' && bounded.op === '<=') || (theirs.op === '>' && bounded.op === '>='));
+        });
+      }
       const mine = comparison(clause, ownNames);
       if (!mine) return false;
       let lo: bigint | null = null;
@@ -12211,13 +12242,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (!ownDeclaration) continue;
               const contracts = interfaceMethodSignatures(interfaceDeclaration as ParseNode, own.key);
               for (const signatureDeclaration of contracts) inheritWhereClauses(signatureDeclaration, ownDeclaration);
-              // Whether a clause implies another is judged between closed
-              // clauses. One that reads a type parameter is compared when the
-              // class is applied, where `N` is known to be the class's `M`.
-              const readsTypeParameter = (declaration: ParseNode): boolean => ((declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses ?? [])
-                .some((clause) => LexicalFreeReferences(clause.RefinementPredicate).some((reference) => ResolveBindingDeclaration(reference, reference.name)?.kind === 'type-parameter'));
-              if (!readsTypeParameter(ownDeclaration)
-                && contracts.some((signatureDeclaration) => !readsTypeParameter(signatureDeclaration) && !clausesImplied(signatureDeclaration, ownDeclaration))) {
+              // The signature's parameters are read as what this class passes
+              // for them: a constant, or one of the class's own parameters, so
+              // that `i < N` is `i < M` for `implements Sized.<M>`. A member's
+              // own clause must be shown to repeat or weaken the signature's
+              // under that reading; what cannot be shown is refused.
+              const passed = (ref as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null }).TypeArguments?.TypeArgumentList ?? [];
+              const declared = (interfaceDeclaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? [];
+              const renames = new Map<string, string>();
+              const constants = new Map<string, bigint>();
+              declared.forEach((parameter, index) => {
+                const argument = passed[index] as { type?: string, TypeName?: { IdentifierReference?: ParseNode.IdentifierReference, MemberNames?: readonly unknown[] }, TypeArguments?: unknown } | undefined;
+                const named = argument?.type === 'TypeReference' && !argument.TypeArguments && !argument.TypeName?.MemberNames?.length ? argument.TypeName?.IdentifierReference : undefined;
+                if (named && ResolveBindingDeclaration(named, named.name)?.kind === 'type-parameter') renames.set(parameter.BindingIdentifier.name, named.name);
+                else if (argument) {
+                  const constant = foldConstant(argument as ParseNode);
+                  if (constant !== null) constants.set(parameter.BindingIdentifier.name, constant);
+                }
+              });
+              if (contracts.some((signatureDeclaration) => !clausesImplied(signatureDeclaration, ownDeclaration, constants, renames))) {
                 reportType('rt-implements-contract', n, '$1 states a where clause the signature it implements does not imply; an implementation may only repeat or weaken the contract', Value(own.key));
               }
             }
@@ -25745,6 +25788,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return found;
   };
 
+  /**
+   * The generator type a generator literal takes from the result its position
+   * gives it. A generator written where an iteration protocol is asked for -
+   * `{ *[Symbol.iterator]() { yield 1; } }` at an `Iterable.<uint8>` - yields
+   * the protocol's element, returns its completion and receives its input. A
+   * bare ANNOTATION is the yield type by the shorthand (#sec-generator-types);
+   * an adopted protocol is not an annotation, and read by that shorthand it
+   * made the generator one of iterators and refused the `yield`.
+   */
+  const adoptedGeneratorType = (wanted: Known, isAsync: boolean): Known => {
+    if (!wanted) return null;
+    // An interface whose members make it an iterator is read through its form.
+    const form = wanted.Kind === 'nominal' && (wanted.Declaration as { ProtocolName?: string } | undefined)?.ProtocolName === undefined
+      && wanted.LibraryName === undefined ? structureOf(wanted) ?? wanted : wanted;
+    return (GeneratorTypeOfProtocol(form as TypeRecord, isAsync) ?? wanted) as Known;
+  };
+
   /** Literals already refused because no arm of their union accepts a member's result. */
   const armlessLiterals = new WeakSet<ParseNode>();
 
@@ -26203,14 +26263,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           signatureDeclarations.set(signature, member);
           if (!Return) {
             const mode = generator ? 'yield' : member.type === 'AsyncMethod' ? 'resolve' : 'return';
-            const context = generator ? generatorParameters(expected?.Return)?.Yield ?? null
+            const adoptedGenerator = generator ? adoptedGeneratorType(expected?.Return ?? null, asyncGenerator) as TypeRecord | null : null;
+            const context = generator ? generatorParameters(adoptedGenerator)?.Yield ?? null
               : member.type === 'AsyncMethod' ? awaitedElementType(expected?.Return ?? null) : expected?.Return ?? null;
             const anchorage = { anchored: false };
             let inferred = inferredReturnType(member, parameterTypes, context, anchorage, mode);
             if (inferred && (annotations.some((type) => type) || expected || anchorage.anchored)) {
               if (declaredAnchor(inferred)) anchored = true;
               if (generator) {
-                const returned = inferredReturnType(member, parameterTypes, generatorParameters(expected?.Return)?.Return ?? null, { anchored: false }, 'generator-return');
+                const returned = inferredReturnType(member, parameterTypes, generatorParameters(adoptedGenerator)?.Return ?? null, { anchored: false }, 'generator-return');
                 inferred = expected?.Return ?? generatorDeclaredType(inferred, asyncGenerator, returned ?? anyTypeRecord);
               } else if (member.type === 'AsyncMethod') {
                 inferred = libraryTypeRecord('Promise', [inferred, anyTypeRecord]);
@@ -26223,7 +26284,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               signature.InferredReturn = inferred;
               // Own and captured binders remain symbolic until this method's
               // runtime application supplies them, as for function declarations.
-              if (inferred) journalSet(publishedReturnTypes, member, inferred);
+              // What the run time reads for a generator is its generator type:
+              // the yield, return and input it checks. Given the adopted
+              // protocol itself it would read it by the annotation shorthand.
+              if (inferred) journalSet(publishedReturnTypes, member, (generator && adoptedGenerator ? adoptedGenerator : inferred) as TypeRecord);
             }
             if (expected) signature.Return = expected.Return;
           }
@@ -46039,7 +46103,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return annotation ? resolveType(annotation.Type) : contextualParameterTypes.get(n)?.[index] ?? null;
           }), null, { anchored: false }, 'generator-return') ?? anyTypeRecord : null;
           const declared = gen
-            ? generatorDeclaredType(ann ? resolveType(ann.Type) : contextualMethodReturns.get(n) ?? contextualReturnTypes.get(n) ?? null, isAsyncGen, inferredGeneratorReturn)
+            ? generatorDeclaredType(ann ? resolveType(ann.Type) : adoptedGeneratorType(contextualMethodReturns.get(n) ?? contextualReturnTypes.get(n) ?? null, isAsyncGen) as TypeRecord | null,
+              isAsyncGen, inferredGeneratorReturn)
             : null;
           enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, contextualParameterTypes.get(n), declared, true, contextualMethodReturns.get(n) ?? contextualReturnTypes.get(n) ?? null);
           } finally {
