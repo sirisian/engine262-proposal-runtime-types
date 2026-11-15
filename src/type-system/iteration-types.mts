@@ -552,6 +552,7 @@ const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]
   // #sec-span-type: a window iterates, so it is an `Iterable` of its element,
   // as the array beneath it is.
   Span: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
+  ReadonlySpan: (a) => [iterationInterfaceRecord('Iterable', [a[0]])!],
   // A tuple's Elements are TupleElementRecords, not bare types - built by hand
   // the entry produced a record nothing matched, and `Map` silently was not
   // iterable while `Set` was.
@@ -623,7 +624,7 @@ export function builtinDeclaredProtocols(libraryName: string | undefined, args: 
   switch (libraryName) {
     case 'Set': return named('Iterable', [element]);
     // #sec-span-type: a window iterates the run of elements it names.
-    case 'Span': return named('Iterable', [element]);
+    case 'Span': case 'ReadonlySpan': return named('Iterable', [element]);
     case 'Map': return named('Iterable', [{
       Kind: 'tuple',
       Elements: [args[0], args[1]].map((type) => ({ Type: type as TypeRecord, Rest: false, Initial: 'none' })),

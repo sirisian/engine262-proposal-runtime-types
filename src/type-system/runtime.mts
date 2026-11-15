@@ -3016,7 +3016,7 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     }
     const spanBacking = ArraySpanBackingOf(value as unknown as object);
     if (spanBacking !== undefined) {
-      return libraryTypeRecord('Span', [spanBacking.Element])!;
+      return libraryTypeRecord(spanBacking.ReadOnly ? 'ReadonlySpan' : 'Span', [spanBacking.Element])!;
     }
     const viewBacking = ArrayViewBackingOf(value as unknown as object);
     if (viewBacking !== undefined) {
@@ -5486,10 +5486,24 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const spanBacking = ArraySpanBackingOf(value as unknown as object);
           const viewBacking = ArrayViewBackingOf(value as unknown as object);
           const backingElement = spanBacking?.Element ?? viewBacking?.Element;
-          if (backingElement === undefined) {
+          // A read-only window is not a `Span`: a `Span` may be written through.
+          if (backingElement === undefined || spanBacking?.ReadOnly) {
             return false;
           }
           return element.Kind === 'any' || SameType(backingElement, element);
+        }
+        // #sec-readonly-span-type: is this value a read-only window, and does it
+        // carry exactly T. A window that carries a narrower type is not a MEMBER
+        // of `ReadonlySpan.<T>`; it COERCES to one, and the coercion makes the
+        // window that carries T - as an array is not a member of `Span.<T>` and
+        // coerces to it.
+        if (t.LibraryName === 'ReadonlySpan') {
+          const element = (t.Arguments.length > 0 ? t.Arguments[0] : { Kind: 'any' as const }) as TypeRecord;
+          const spanBacking = ArraySpanBackingOf(value as unknown as object);
+          if (spanBacking === undefined || !spanBacking.ReadOnly) {
+            return false;
+          }
+          return element.Kind === 'any' || SameType(spanBacking.Element, element);
         }
         let protoValue: Value;
         if (t.LibraryName === 'Generator' || t.LibraryName === 'AsyncGenerator') {

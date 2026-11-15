@@ -335,8 +335,15 @@ export const rangePropertyType = (receiver: Known, key: string | SymbolValue): K
  * and none of the operations that change a length or describe an allocation,
  * because it owns no allocation and its length is fixed.
  */
+/** `Span` and `ReadonlySpan`: the two window types (#sec-span-type, #sec-readonly-span-type). */
+export const WINDOW_LIBRARY_NAMES: ReadonlySet<string> = new Set(['Span', 'ReadonlySpan']);
+
+/** Whether a receiver is the read-only window. */
+export const isReadonlySpanReceiver = (r: TypeRecord | null): boolean => !!r && r.Kind === 'nominal'
+  && (r as { LibraryName?: string }).LibraryName === 'ReadonlySpan';
+
 export const spanElementOfReceiver = (r: TypeRecord | null): TypeRecord | null => {
-  if (!r || r.Kind !== 'nominal' || (r as { LibraryName?: string }).LibraryName !== 'Span') {
+  if (!r || r.Kind !== 'nominal' || !WINDOW_LIBRARY_NAMES.has((r as { LibraryName?: string }).LibraryName ?? '')) {
     return null;
   }
   const args = (r as { Arguments?: readonly TypeRecord[] }).Arguments;
@@ -345,7 +352,7 @@ export const spanElementOfReceiver = (r: TypeRecord | null): TypeRecord | null =
 
 /** The stated length of a `Span.<T, N>` receiver, or ~undefined~ if unstated. */
 export const spanExtentOfReceiver = (r: TypeRecord | null): number | undefined => {
-  if (!r || r.Kind !== 'nominal' || (r as { LibraryName?: string }).LibraryName !== 'Span') {
+  if (!r || r.Kind !== 'nominal' || !WINDOW_LIBRARY_NAMES.has((r as { LibraryName?: string }).LibraryName ?? '')) {
     return undefined;
   }
   const args = (r as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;

@@ -857,6 +857,11 @@ const libraryTypeNames = new Set([
   // ownership is a separate question and this is the type that answers it,
   // which is why it lives in a name rather than inside `[` `]`.
   'Span',
+  // #sec-readonly-span-type: `ReadonlySpan.<T>` is the READ-ONLY window, a
+  // second name beside `Span` and not a modifier on it. A window is a value of
+  // its own, so this one carries the element type it was taken at, which is
+  // what lets it be covariant where `Span` cannot be.
+  'ReadonlySpan',
   // proposal-runtime-types (README Global Objects): global constructors usable as
   // type names. Each is a nominal type whose values are its instances, tested by
   // the prototype chain of the global (see IsOfType). This is what lets

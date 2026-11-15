@@ -722,10 +722,15 @@ function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralSto
     // while `5 is uint8` is *false*. The coercion MATERIALIZES, so this is
     // where the window is built - membership having just answered no is
     // precisely the condition that means one is needed.
-    if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
+    // #sec-readonly-span-type: every array, tuple and window coerces to a
+    // read-only window, a window included - a `Span` lent as read-only, and a
+    // read-only window that carries a narrower type than the one asked for.
+    const readonlyWindow = t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'ReadonlySpan'
+      && value instanceof ObjectValue;
+    if (readonlyWindow || (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span'
         && value instanceof ObjectValue
         && ArraySpanBackingOf(value as unknown as object) === undefined
-        && ArrayViewBackingOf(value as unknown as object) === undefined) {
+        && ArrayViewBackingOf(value as unknown as object) === undefined)) {
       // #sec-span-coercion: a window of T is a window over a run OF T, so the
       // elements have to be checked before one is built. A statically typed
       // source is caught by the checker, but anything reaching here as ~any~ -
@@ -1455,6 +1460,21 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
     const lenValue = Q(yield* Get(value, Value('length')));
     const len = R(Q(yield* ToLength(lenValue)));
     return MakeArraySpan(element as TypeRecord, value, len);
+  }
+  // #sec-readonly-span-type: a coercion to `ReadonlySpan.<T>` materializes a
+  // read-only window that CARRIES T. Over an array, a tuple or a writable
+  // window it is a window onto that value. Over a read-only window it is a
+  // window onto the same run, restated at T: the first carried a narrower
+  // type, or it would have been a member and not reached a conversion.
+  if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'ReadonlySpan' && value instanceof ObjectValue) {
+    const element = ((t as { Arguments?: readonly TypeRecord[] }).Arguments?.[0] ?? { Kind: 'any' as const }) as TypeRecord;
+    const existing = ArraySpanBackingOf(value as unknown as object);
+    if (existing?.ReadOnly) {
+      return MakeArraySpan(element, existing.Source, existing.Length, existing.Offset, existing.TakenAtGeneration, true);
+    }
+    const lenValue = Q(yield* Get(value, Value('length')));
+    const len = R(Q(yield* ToLength(lenValue)));
+    return MakeArraySpan(element, value, len, 0, undefined, true);
   }
   // proposal-runtime-types (simd.md): a vector converts to another vector of the
   // same lane COUNT by converting each lane, which is the target's

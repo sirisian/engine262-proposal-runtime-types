@@ -563,7 +563,8 @@ function* ArrayProto_subarray(args: Arguments, { thisValue }: FunctionCallContex
     // A subarray of a window over an OWNED array is a window over the same
     // source, further along.
     Q(RequireArraySpanLive(existing));
-    return MakeArraySpan(existing.Element, existing.Source, count, existing.Offset + begin, existing.TakenAtGeneration);
+    // A window carved from a read-only window is read-only (#sec-readonly-span-type).
+    return MakeArraySpan(existing.Element, existing.Source, count, existing.Offset + begin, existing.TakenAtGeneration, existing.ReadOnly === true);
   }
   const view = ArrayViewBackingOf(O as unknown as object);
   if (view !== undefined) {
@@ -1313,6 +1314,29 @@ function bootstrapTypedArrayLikePrototype(realmRec: Realm, arrayProto: ObjectVal
  * so they need no window-specific versions - which is the whole reason making
  * the indices visible was the fix and equipping the prototype is only reach.
  */
+/**
+ * The members of a window, sorted by what each does to the elements beneath
+ * (#sec-readonly-span-type). The first three lists are the read-only window's
+ * members; the last two are what `Span` has and it does not. A test holds this
+ * table against the array's prototype, so a member added there fails the test
+ * until someone sorts it.
+ */
+export const WINDOW_MEMBERS_THAT_READ: readonly string[] = [
+  'at', 'includes', 'indexOf', 'lastIndexOf', 'find', 'findIndex', 'findLast', 'findLastIndex', 'every', 'some',
+  'forEach', 'reduce', 'reduceRight', 'join', 'toString', 'toLocaleString', 'keys', 'values', 'entries',
+  'length', 'byteLength', 'byteOffset',
+];
+export const WINDOW_MEMBERS_THAT_COPY: readonly string[] = [
+  'slice', 'concat', 'filter', 'map', 'flat', 'flatMap', 'toSorted', 'toReversed', 'toSpliced', 'with',
+];
+export const WINDOW_MEMBERS_THAT_NARROW: readonly string[] = ['subarray', 'window'];
+export const WINDOW_MEMBERS_THAT_STORE: readonly string[] = ['sort', 'reverse', 'fill', 'copyWithin', 'set'];
+export const WINDOW_MEMBERS_THAT_EXPOSE: readonly string[] = ['buffer'];
+// A list and not a Set: `Set` in this file is the abstract operation.
+const READONLY_WINDOW_MEMBERS: readonly string[] = [
+  ...WINDOW_MEMBERS_THAT_READ, ...WINDOW_MEMBERS_THAT_COPY, ...WINDOW_MEMBERS_THAT_NARROW,
+];
+
 function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
   // `Set` is the abstract operation in this module's scope, so the collection is
   // named explicitly.
@@ -1351,4 +1375,22 @@ function bootstrapSpanPrototype(realmRec: Realm, arrayProto: ObjectValue) {
     Value: Value.true, Writable: Value.false, Enumerable: Value.false, Configurable: Value.false,
   })));
   realmRec.Intrinsics['%Span.prototype%'] = spanProto;
+
+  // #sec-readonly-span-type: a read-only window has each member of `Span` that
+  // neither stores to an element nor yields a value through which one can be
+  // stored. `Span` is built by REMOVAL, so a method added to arrays reaches it
+  // unasked; that is tolerable for a window that may write. This one is built
+  // from a table that names every member it has, so a member nobody has sorted
+  // is not a member - a new in-place method cannot arrive by default.
+  const readonlySpanProto = OrdinaryObjectCreate(realmRec.Intrinsics['%Object.prototype%']);
+  for (const key of X(spanProto.OwnPropertyKeys())) {
+    if (key instanceof JSStringValue && !READONLY_WINDOW_MEMBERS.includes(key.stringValue())) {
+      continue;
+    }
+    const desc = X(spanProto.GetOwnProperty(key));
+    if (!(desc instanceof UndefinedValue)) {
+      X(readonlySpanProto.DefineOwnProperty(key, desc));
+    }
+  }
+  realmRec.Intrinsics['%ReadonlySpan.prototype%'] = readonlySpanProto;
 }

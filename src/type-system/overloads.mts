@@ -231,6 +231,11 @@ const enum Tier {
   // parameter only through its structure, having declared no relation to it.
   // #sec-resolveoverload: a class or interface that declares the relation "is
   // not made to lose to an unrelated structural signature".
+  // #sec-readonly-span-type: an array or a `Span` LENT to a read-only window.
+  // The coercion to `Span` is the nearer match, since it gives up nothing, so
+  // between a `Span.<T>` and a `ReadonlySpan.<T>` parameter those arguments
+  // select `Span`. A `ReadonlySpan` argument can only select the second.
+  Lent = 3.25,
   StructuralWidening = 3.5,
   // #sec-overload-resolution: the parameter is a TYPE PARAMETER of a generic
   // member, which binds from the argument at the call. Viable, and below every
@@ -311,6 +316,12 @@ function literalValueFitsNumeric(argType: TypeRecord, paramType: TypeRecord): bo
  * which is the distinction literal-overload-ranking draws.
  */
 function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
+  // #sec-readonly-span-type: see `Tier.Lent`.
+  if (paramType.Kind === 'nominal' && (paramType as { LibraryName?: string }).LibraryName === 'ReadonlySpan'
+      && !(argType.Kind === 'nominal' && (argType as { LibraryName?: string }).LibraryName === 'ReadonlySpan')
+      && IsAssignable(argType, paramType)) {
+    return Tier.Lent;
+  }
 
   if (paramType.Kind === 'any') {
     return Tier.CatchAll;

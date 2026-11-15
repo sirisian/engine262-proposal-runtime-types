@@ -410,6 +410,13 @@ export interface ArraySpanBacking {
    * already obeys.
    */
   readonly TakenAtGeneration: number;
+  /**
+   * #sec-readonly-span-type: nothing is stored through this window. Its
+   * [[Element]] is the type it was TAKEN AT, which may be wider than the
+   * source's own: a search through it compares at that type and a copy from it
+   * is stored at that type.
+   */
+  readonly ReadOnly?: boolean;
 }
 
 const arraySpans = new WeakMap<object, ArraySpanBacking>();
@@ -428,14 +435,15 @@ function generationOf(source: ObjectValue): number {
  * from the array coerced, and two coercions of one array need not be the same
  * value — which is why this constructs rather than tagging the array.
  */
-export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number, offset = 0, takenAtGeneration = generationOf(source)): ObjectValue {
-  const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
+export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number, offset = 0, takenAtGeneration = generationOf(source), readOnly = false): ObjectValue {
+  const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics[readOnly ? '%ReadonlySpan.prototype%' : '%Span.prototype%']);
   arraySpans.set(span as unknown as object, {
     Element: element,
     Source: source,
     Offset: offset,
     Length: length,
     TakenAtGeneration: takenAtGeneration,
+    ...(readOnly ? { ReadOnly: true } : {}),
   });
   X(span.PreventExtensions());
   return span;
@@ -473,6 +481,11 @@ export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number):
  * a window does not get to choose the type of storage it does not own.
  */
 export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number, value: Value, choices?: ConstructionSelections): PlainEvaluator<boolean> {
+  // #sec-readonly-span-type: the one place a store through a window lands, so
+  // the one place a read-only window refuses it - whoever asks, typed or not.
+  if (backing.ReadOnly) {
+    return Throw.TypeError('a ReadonlySpan is read-only, so an element of it cannot be stored to');
+  }
   const live = RequireArraySpanLive(backing);
   if (live) {
     return live;

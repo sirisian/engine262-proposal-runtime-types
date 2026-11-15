@@ -87,6 +87,7 @@ import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import { ClassValueOrigins } from './class-value-origins.mts';
 import {
   iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType, GeneratorTypeOfProtocol } from './iteration-types.mts';
+import { IsValueTypeClass } from './layout.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
   ComputeClassLayout, type ClassLayout, IsValueType,
@@ -124,7 +125,7 @@ import {
   scopeOfNames, typeParameterNamesOf, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters, bindTypeParametersFromArguments,
 } from './type-parameters.mts';
 import {
-  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, rangeArithmeticResultType, rangeIntersectionResultType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
+  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, rangeArithmeticResultType, rangeIntersectionResultType, boundOrdinalOf, spanElementOfReceiver, isReadonlySpanReceiver, WINDOW_LIBRARY_NAMES, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
   libraryConstructParameters, iteratorHelperType,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
@@ -1733,7 +1734,7 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
     return false;
   }
   const library = (target as { LibraryName?: string }).LibraryName;
-  if (library === 'Span') {
+  if (library === 'Span' || library === 'ReadonlySpan') {
     return true;
   }
   // A boundary at a collection SPECIALIZATION does more than check.
@@ -2756,8 +2757,10 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
   // What a method that copies the receiver's elements returns: the receiver's
   // own type for an owned array, and an owned array for a window, which owns
   // nothing and so cannot be what a copy is.
-  const copiedFrom = (source: TypeRecord): TypeRecord => (source.Kind === 'nominal' && (source as { LibraryName?: string }).LibraryName === 'Span'
+  const copiedFrom = (source: TypeRecord): TypeRecord => (source.Kind === 'nominal' && WINDOW_LIBRARY_NAMES.has((source as { LibraryName?: string }).LibraryName ?? '')
     ? { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord : source);
+  // #sec-readonly-span-type: a window carved from a read-only window is read-only.
+  const windowName = isReadonlySpanReceiver(receiver) ? 'ReadonlySpan' : 'Span';
   const numberType = makePrimitive('number');
   // Storage indices and the extension's window bounds use uint64. Existing
   // Array methods retain their ordinary quantity coercion, including signed
@@ -2769,7 +2772,7 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
     case 'window':
     case 'subarray':
       return { Kind: 'function', Signatures: [{ Parameters: shapes([indexTypeForArray, indexTypeForArray], 0),
-        Return: libraryTypeRecord('Span', [element])! }] };
+        Return: libraryTypeRecord(windowName, [element])! }] };
     case 'includes':
       return { Kind: 'function', Signatures: [{ Parameters: shapes([element, anyType], 1), Return: boolType, Untyped: false }] } as unknown as Known;
     case 'indexOf':
@@ -8895,6 +8898,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (sealedReceiver && compositeReceiver(sealedReceiver) && operator !== '??=') {
       reportType('rt-readonly-store', expression, 'a composite is frozen, so a member of $1 cannot be assigned', Value(displayType(sealedReceiver)));
+      return;
+    }
+    // #sec-readonly-span-type: nothing is stored through a read-only window.
+    // The target may be an element, the window's `length`, or a field or
+    // position INSIDE an element that is stored inline - a value-type class or
+    // a tuple - since those are the array's storage as much as the element is.
+    // An element that is a reference is where the walk stops: the object it
+    // refers to is not the window's.
+    const readonlyWindow = readonlyWindowBeneath(m);
+    if (readonlyWindow) {
+      reportType('rt-readonly-store', expression, '$1 is read-only, so nothing is stored through it', Value(displayType(readonlyWindow)));
       return;
     }
     const access = indexAccess(m, sealedReceiver);
@@ -18557,10 +18571,75 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return returned;
   };
 
+  /**
+   * The read-only window a store's target lies within, if it does.
+   * `xs[0] = v` and `xs.length = v` are stores to the window itself.
+   * `xs[0].a = v`, `xs[0].inner.n = v` and `xs[0][1] = v` are stores into an
+   * element, and reach the window's storage only while each step is into a
+   * value stored inline.
+   */
+  /**
+   * Whether a value of this type is stored INSIDE the array or field that holds
+   * it, so that a store to one of its fields is a store to that holder: a
+   * tuple, a fixed-length array, and a value type class (#sec-typed-classes:
+   * every instance field typed with a value type, and not a `reference`,
+   * `sealed` or `abstract` class). Read from the declaration, since the checker
+   * computes no layout.
+   */
+  const storedInline = (type: Known, seen: Set<ParseNode> = new Set()): boolean => {
+    if (!type) return false;
+    if (type.Kind === 'tuple') return true;
+    if (type.Kind === 'array') return typeof type.Extent === 'number';
+    if (type.Kind !== 'nominal') return false;
+    const declaration = type.Declaration as ParseNode | undefined;
+    if (!declaration || !/^Class/.test(declaration.type)) return false;
+    if (IsValueTypeClass(type as TypeRecord)) return true;
+    if (seen.has(declaration)) return true;
+    seen.add(declaration);
+    const modifiers = (declaration as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
+    if (modifiers.some((modifier) => modifier === 'reference' || modifier === 'sealed' || modifier === 'abstract')) return false;
+    let fields = 0;
+    for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
+      for (const element of classBodyOf(at)) {
+        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+        fields += 1;
+        const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        if (!annotation) return false;
+        const fieldType = resolveType(annotation.Type);
+        const valueField = !!fieldType && ((fieldType.Kind === 'primitive' && !['object', 'symbol', 'function', 'any'].includes((fieldType as { Name?: string }).Name ?? ''))
+          || fieldType.Kind === 'literal' || storedInline(fieldType, seen));
+        if (!valueField) return false;
+      }
+    }
+    return fields > 0;
+  };
+
+  const readonlyWindowBeneath = (target: ParseNode.MemberExpression): TypeRecord | null => {
+    let current: ParseNode = target;
+    for (;;) {
+      if (current.type !== 'MemberExpression' || !(current as ParseNode.MemberExpression).MemberExpression) return null;
+      const base = patternExpression((current as ParseNode.MemberExpression).MemberExpression as ParseNode) ?? (current as ParseNode.MemberExpression).MemberExpression as ParseNode;
+      const baseType = staticType(base);
+      if (isReadonlySpanReceiver(baseType as TypeRecord | null)) return baseType as TypeRecord;
+      const inline = storedInline(baseType);
+      if (!inline) return null;
+      current = base;
+    }
+  };
+
   /** Operations a window does not have: they grow, shrink, or name an allocation. */
   const spanForbiddenMembers = new Set([
     'capacity', 'reserve', 'shrinkToFit',
     'push', 'pop', 'shift', 'unshift', 'splice',
+  ]);
+  /**
+   * #sec-readonly-span-type: what `Span` has and a read-only window does not.
+   * Five store to the elements in place and one hands out the bytes beneath,
+   * over which a writable view could be made.
+   */
+  const readonlySpanWithheld = new Map<string, string | null>([
+    // The value is the member that returns a copy instead, where there is one.
+    ['sort', 'toSorted'], ['reverse', 'toReversed'], ['fill', null], ['copyWithin', null], ['set', null], ['buffer', null],
   ]);
 
   /**
@@ -22606,7 +22685,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const element = receiver?.Kind === 'array' ? receiver.Element : spanElementOfReceiver(receiver);
           if (element && node.TypeArguments.TypeArgumentList.length === 1) {
             const extent = vectorIndexOf(resolveType(node.TypeArguments.TypeArgumentList[0]));
-            const result = libraryTypeRecord('Span', extent === null ? [element] : [element, extent])!;
+            const result = libraryTypeRecord(isReadonlySpanReceiver(receiver as TypeRecord | null) ? 'ReadonlySpan' : 'Span', extent === null ? [element] : [element, extent])!;
             return { Kind: 'function', Signatures: [{ Parameters: [parameter(indexTypeRecord(), { Optional: true })], Return: result }] };
           }
         }
@@ -23901,6 +23980,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const name = (m.IdentifierName as { name: string }).name;
               if (name === 'length') {
                 return indexTypeRecord();
+              }
+              if (isReadonlySpanReceiver(receiver as TypeRecord | null) && readonlySpanWithheld.has(name)) {
+                const copying = readonlySpanWithheld.get(name);
+                const completion = (name === 'buffer'
+                  ? CreateTypeDiagnostic('rt-readonly-store', node, diagnosticPhase, '$1 hands out the storage beneath, and $2 is read-only', Value(name), Value(displayType(receiver!)))
+                  : copying
+                    ? CreateTypeDiagnostic('rt-readonly-store', node, diagnosticPhase, '$1 stores to the elements in place, and $2 is read-only; $3 returns a copy', Value(name), Value(displayType(receiver!)), Value(copying))
+                    : CreateTypeDiagnostic('rt-readonly-store', node, diagnosticPhase, '$1 stores to the elements, and $2 is read-only', Value(name), Value(displayType(receiver!)))) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+                return null;
               }
               if (spanForbiddenMembers.has(name)) {
                 const completion = CreateTypeDiagnostic('rt-undeclared-member', node, diagnosticPhase, '$1 is not declared by $2', Value(name), Value(displayType(receiver!))) as ThrowCompletion;

@@ -812,6 +812,11 @@ function isSpanRecord(t: TypeRecord): boolean {
   return t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Span';
 }
 
+/** #sec-readonly-span-type: the read-only window, a second library nominal beside `Span`. */
+function isReadonlySpanRecord(t: TypeRecord): boolean {
+  return t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'ReadonlySpan';
+}
+
 /**
  * #sec-span-type: the STATED LENGTH of a `Span.<T, N>`, or ~undefined~ where
  * the window's length is not stated.
@@ -1346,6 +1351,31 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // type, since neither the storage nor the right to grow it is the window's to
   // give - and that falls out of this rule being one-directional rather than
   // needing a case of its own.
+  // #sec-readonly-span-type: an array of either extent, a tuple, a `Span` and a
+  // `ReadonlySpan` are each assignable to `ReadonlySpan.<T>` where their element
+  // is a SUBTYPE of T. `Span` is invariant "for the reason the array types
+  // are"; nothing is stored through this window, and the window made by the
+  // coercion carries T, so the wider element is sound here. Nothing is
+  // assignable the other way, which again is this rule being one-directional.
+  if (isReadonlySpanRecord(t)) {
+    const element = spanElementOf(t);
+    if (element === undefined) {
+      return false;
+    }
+    const wantExtent = spanExtentOf(t);
+    const elementOk = (e: TypeRecord) => isAnyElement(element) || IsSubtype(e, element, next);
+    if (s.Kind === 'array') {
+      return (wantExtent === undefined || s.Extent === wantExtent) && elementOk(s.Element);
+    }
+    if (s.Kind === 'tuple') {
+      return (wantExtent === undefined || s.Elements.length === wantExtent) && s.Elements.every((e) => elementOk(e.Type));
+    }
+    if (isSpanRecord(s) || isReadonlySpanRecord(s)) {
+      const source = spanElementOf(s);
+      return source !== undefined && (wantExtent === undefined || spanExtentOf(s) === wantExtent) && elementOk(source);
+    }
+    return false;
+  }
   if (isSpanRecord(t)) {
     const element = spanElementOf(t);
     if (element === undefined) {
