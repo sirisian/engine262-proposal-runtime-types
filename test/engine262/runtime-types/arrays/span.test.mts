@@ -980,3 +980,20 @@ test('a class deriving from an array type keeps its own prototype', () => {
   // one, and the widened condition must not defeat that guard.
   expect(evaluated('class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
 });
+
+/**
+ * #sec-span-type: a window's search methods compare at the element type the
+ * window carries, as the array beneath it would. A literal needle adopts that
+ * type by the ordinary literal rule; left an untyped Number it found nothing.
+ */
+test('a window searches at its element type', () => {
+  const w = 'const owned: [].<uint32> = [3, 1, 3]; const w: Span.<uint32> = owned; ';
+  expect(evaluated(`${w}String(w.includes(3)) + '/' + String(w.indexOf(1)) + '/' + String(w.lastIndexOf(3)) + '/' + String(w.includes(7));`)).toBe('true/1/2/false');
+  expect(evaluated(`${w}const three: uint32 = 3; String(w.includes(three)) + '/' + String(w.indexOf(three));`)).toBe('true/0');
+  // A window carved from a window, and a view over a buffer.
+  expect(evaluated(`${w}const sub = w.subarray(1, 3); String(sub.includes(3)) + '/' + String(sub.indexOf(1));`)).toBe('true/0');
+  expect(evaluated('const u = new Uint8Array([5, 6, 7]); const v = Span.<uint8>(u.buffer); String(v.includes(6)) + String(v.indexOf(7));')).toBe('true2');
+  expect(evaluated("const owned: [].<string> = ['a', 'b']; const s: Span.<string> = owned; String(s.includes('a')) + String(s.indexOf('b'));")).toBe('true1');
+  // A needle of another type is still refused where it is written.
+  expectStaticTypeError(`${w}w.includes('s');`);
+});

@@ -1,3 +1,4 @@
+import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-view.mts';
 import { TupleSearchTypes, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
@@ -285,6 +286,13 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
       if (members.length > 0) {
         element = members.length === 1 ? members[0] : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord);
       }
+    }
+    // #sec-span-type: a window searches at the element type it carries, as the
+    // array beneath it would. Without this a literal needle stayed an untyped
+    // Number and found nothing: `w.includes(3)` on a `Span.<uint32>` over
+    // `[3, 1]` answered *false*.
+    if (element === undefined && O instanceof ObjectValue) {
+      element = ArraySpanBackingOf(O as unknown as object)?.Element ?? ArrayViewBackingOf(O as unknown as object)?.Element;
     }
     if (element === undefined) {
       return needle;
