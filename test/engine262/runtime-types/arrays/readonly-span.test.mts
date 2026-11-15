@@ -119,3 +119,56 @@ test('the table sorts every member of the array prototype', () => {
   const has = JSON.parse(evaluated(`${bytes}const v: ReadonlySpan.<uint8> = bytes; JSON.stringify(Object.getOwnPropertyNames(Object.getPrototypeOf(v)).sort());`) as string) as string[];
   expect(has).toEqual([...WINDOW_MEMBERS_THAT_READ, ...WINDOW_MEMBERS_THAT_COPY, ...WINDOW_MEMBERS_THAT_NARROW].sort());
 });
+
+/**
+ * #sec-readonly-span-type: an element stored inline is read-only wherever it
+ * goes until it is copied. #sec-value-type-copying lets a reference to one be
+ * held - a plain object's property and a plain array's element "hold a
+ * REFERENCE" - and a method's `this` and a `ref` are the element too. None of
+ * those is a store the checking pass can see from the window, so each is
+ * refused when it runs: the window hands out a read-only handle onto the
+ * element, which is live, and of which a copy is the reader's own.
+ */
+const A = 'class A { a: uint8; b: uint8; #p: uint8; bump(): void { this.a += 1; } poke(): void { this.#p += 1; } total(): uint8 { return this.a + this.b + this.#p; } } const as: [2].<A>; ';
+
+test('a method that reads runs on an inline element, and one that stores throws', () => {
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): uint8 { return xs[0].total(); } as[0].a = 2; as[0].b = 3; String(f(as));`)).toBe('5');
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { try { xs[0].bump(); return 'bumped'; } catch (e) { return e.constructor.name; } } f(as) + String(as[0].a);`)).toBe('TypeError0');
+  // A private field is a field of the element.
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { try { xs[0].poke(); return 'poked'; } catch (e) { return e.constructor.name; } } f(as) + String(as[0].total());`)).toBe('TypeError0');
+  // A value type nested inline inside the element.
+  expect(evaluated('class In { n: uint8; } class Out { i: In; grow(): void { this.i.n += 1; } } const os: [1].<Out>; '
+    + "function f(xs: ReadonlySpan.<Out>): string { try { xs[0].grow(); return 'grew'; } catch (e) { return e.constructor.name + String(os[0].i.n); } } f(os);")).toBe('TypeError0');
+});
+
+test('a reference to an inline element is live and read-only, and a ref to it stores nothing', () => {
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const o = { e: xs[0] }; as[0].a = 7; let r = String(o.e.a); `
+    + "try { o.e.a = 9; r += 'wrote'; } catch (e) { r += e.constructor.name; } return r + String(as[0].a); } f(as);")).toBe('7TypeError7');
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const all = [...xs]; try { all[0].a = 9; return 'wrote'; } catch (e) { return e.constructor.name + String(as[0].a); } } f(as);`)).toBe('TypeError0');
+  expect(evaluated(`${A}function set(ref v: A) { v.a = 4; } function f(xs: ReadonlySpan.<A>): string { try { set(ref xs[1]); return 'set'; } catch (e) { return e.constructor.name + String(as[1].a); } } f(as);`))
+    .toBe('TypeError0');
+  expect(evaluated(`${A}const v: ReadonlySpan.<A> = as; const y: any = v; try { y[0].a = 9; 'wrote'; } catch (e) { e.constructor.name + String(as[0].a); }`)).toBe('TypeError0');
+  // It is still an A, and one handle stands for one element.
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const o = { e: xs[0] }; const y: any = o.e; return String(y is A) + String(o.e === xs[0]); } f(as);`)).toBe('truetrue');
+});
+
+test('a copy of an inline element is the reader\'s own', () => {
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const c = xs[0]; c.a = 9; c.bump(); return String(c.a) + String(as[0].a); } f(as);`)).toBe('100');
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const s = xs.slice(); s[0].a = 9; const p = xs.at(1); if (p !== undefined) p.a = 8; return String(s[0].a) + String(as[0].a) + String(as[1].a); } f(as);`)).toBe('900');
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { xs.forEach((e) => { e.a = 9; }); let t: uint8 = 0; for (const e of xs) { e.a = 3; t += e.a; } return String(t) + String(as[0].a); } f(as);`)).toBe('60');
+});
+
+test('the array that owns the elements, a Span, and a reference element are unaffected', () => {
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): uint8 { return xs[0].a; } as[0].a = 5; as[0].bump(); String(f(as));`)).toBe('6');
+  expect(evaluated(`${A}function f(xs: Span.<A>): uint8 { xs[0].bump(); xs[0].a += 1; return xs[0].a; } String(f(as));`)).toBe('2');
+  expect(evaluated('class R { x: uint8 = 1; other; inc(): void { this.x += 1; } } const rs: [].<R> = [new R()]; function f(xs: ReadonlySpan.<R>): uint8 { xs[0].inc(); return xs[0].x; } String(f(rs));')).toBe('2');
+});
+
+test('a tuple stored inline is read-only through the window too', () => {
+  const T = 'const ts: [2].<[uint8, uint8]> = [[1, 2], [3, 4]]; ';
+  expect(evaluated(`${T}const v: ReadonlySpan.<[uint8, uint8]> = ts; const y: any = v; try { y[0][1] = 9; 'wrote'; } catch (e) { e.constructor.name + String(ts[0][1]); }`)).toBe('TypeError2');
+  expect(evaluated(`${T}function f(xs: ReadonlySpan.<[uint8, uint8]>): string { const [a, b] = xs[1]; return String(a) + String(b) + String(xs[0][0]) + String(xs[0].length); } f(ts);`)).toBe('3412');
+  expect(evaluated(`${T}function f(xs: ReadonlySpan.<[uint8, uint8]>): string { const o = { t: xs[0] }; ts[0][0] = 8; let r = String(o.t[0]); `
+    + "try { o.t[0] = 5; r += 'wrote'; } catch (e) { r += e.constructor.name; } return r + String(ts[0][0]); } f(ts);")).toBe('8TypeError8');
+  expect(evaluated(`${T}function f(xs: Span.<[uint8, uint8]>): uint8 { xs[0][1] = 9; return xs[0][1]; } String(f(ts)) + String(ts[0][1]);`)).toBe('99');
+});

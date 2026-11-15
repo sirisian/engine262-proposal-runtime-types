@@ -2,6 +2,7 @@ import type { ConstructionSelections } from '../type-system/result-dependencies.
 import { ObjectValue, PrivateName, Value } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { ClassElementDefinitionRecord, PrivateElementRecord } from '../runtime-semantics/all.mts';
+import { ReadonlyElementTargetOf } from './array-view.mts';
 import {
   Assert, Call, IsExtensible,
 } from './all.mts';
@@ -51,6 +52,10 @@ export function* PrivateSet(O: ObjectValue, P: PrivateName, value: Value, choice
   // 2. If entry is empty, throw a TypeError exception.
   if (entry === undefined) {
     return Throw.TypeError('$1 does not exist on $2', P, O);
+  }
+  // #sec-readonly-span-type: a private field is a field of the element.
+  if (surroundingAgent.feature('runtime-types') && entry.Kind === 'field' && ReadonlyElementTargetOf(O as unknown as object) !== undefined) {
+    return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be stored to', P);
   }
   // 3. If entry.[[Kind]] is field, then
   if (entry.Kind === 'field') {

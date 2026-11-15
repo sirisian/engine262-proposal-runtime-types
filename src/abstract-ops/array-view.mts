@@ -6,8 +6,10 @@ import {
   type PrivateName,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { IsPlainData, LayoutOf } from '../type-system/layout.mts';
+import { IsPlainData, IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { ToIndexType } from './runtime-types.mts';
+import { OrdinaryGetPrototypeOf } from './objects.mts';
 import { BufferElementType, PlacedInstance } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import type { TypedArrayObject } from '../intrinsics/TypedArray.mts';
@@ -463,6 +465,71 @@ export function RequireArraySpanLive(backing: ArraySpanBacking) {
   return undefined;
 }
 
+/**
+ * #sec-readonly-span-type: an element stored inline is the array's storage,
+ * and reached through a read-only window it is read-only wherever it goes
+ * until it is copied - as the `this` of a method called on it, through a
+ * `ref`, and held in a plain object or array, which by #sec-value-type-copying
+ * hold a REFERENCE to it and not a copy.
+ *
+ * The element is one object, writable through the array that owns it. So the
+ * window hands out a HANDLE: a second object that reads the element's fields
+ * and refuses every store. It is the element, read-only - it has the element's
+ * prototype, brand and private fields, it is live, and there is one per
+ * element. A copy of it (#sec-value-type-copying) is a copy of the element and
+ * is the reader's own.
+ */
+const readonlyElementTargets = new WeakMap<object, ObjectValue>();
+const readonlyElementHandles = new WeakMap<object, ObjectValue>();
+
+/** The inline element a read-only handle is onto, or ~undefined~ for any other object. */
+export function ReadonlyElementTargetOf(instance: object): ObjectValue | undefined {
+  return readonlyElementTargets.get(instance);
+}
+
+function readonlyElementHandle(element: ObjectValue): ObjectValue {
+  const existing = readonlyElementHandles.get(element as unknown as object);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const handle = OrdinaryObjectCreate(OrdinaryGetPrototypeOf(element as never) as ObjectValue, []);
+  // What a class instance carries beside its properties is the element's own:
+  // its brand, the types of its fields, and its private fields, shared so that
+  // a method reads them through the handle. A store to any of them is refused
+  // where it is made.
+  const source = element as unknown as Record<string, unknown>;
+  const target = handle as unknown as Record<string, unknown>;
+  for (const slot of ['ConstructedBy', 'TypedProperties', 'ReadonlyFields', 'BrandTypeRecord', 'PrivateElements',
+    'TypedTuple', 'TypedElement', 'TypedExtent', 'TypedCapacity', 'TypedGeneration']) {
+    if (source[slot] !== undefined) {
+      target[slot] = source[slot];
+    }
+  }
+  readonlyElementTargets.set(handle as unknown as object, element);
+  readonlyElementHandles.set(element as unknown as object, handle);
+  return handle;
+}
+
+/**
+ * What a read-only window hands out for a value read from it: a read-only
+ * handle where the value is a value type class instance, which is stored
+ * inline, and the value itself otherwise - a primitive is a copy already, and
+ * a reference type's object is not the window's.
+ */
+export function ReadonlyElementView(value: Value): Value {
+  if (!(value instanceof ObjectValue) || readonlyElementTargets.has(value as unknown as object)) {
+    return value;
+  }
+  // A tuple, and an array of fixed length, are stored inline too: their
+  // positions are the storage of the array that holds them.
+  const sequence = value as unknown as { TypedTuple?: unknown, TypedElement?: unknown, TypedExtent?: unknown };
+  if (sequence.TypedTuple !== undefined || (sequence.TypedElement !== undefined && typeof sequence.TypedExtent === 'number')) {
+    return readonlyElementHandle(value);
+  }
+  const t = RuntimeTypeOf(value);
+  return t.Kind === 'nominal' && t.EnumMembers === undefined && IsValueTypeClass(t) ? readonlyElementHandle(value) : value;
+}
+
 /** An element read through a window: the array's own element, liveness first. */
 export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number): ValueEvaluator {
   const live = RequireArraySpanLive(backing);
@@ -472,7 +539,8 @@ export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number):
   if (!Number.isInteger(index) || index < 0 || index >= backing.Length) {
     return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
-  return Q(yield* Get(backing.Source, Value(String(backing.Offset + index))));
+  const element = Q(yield* Get(backing.Source, Value(String(backing.Offset + index))));
+  return backing.ReadOnly ? ReadonlyElementView(element) : element;
 }
 
 /**

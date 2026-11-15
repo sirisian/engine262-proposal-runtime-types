@@ -5,7 +5,7 @@ import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
 import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField, WriteSoAField } from './intrinsics/SoA.mts';
-import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement, SpanLikeLengthOf } from './abstract-ops/array-view.mts';
+import { ArrayViewBackingOf, ReadonlyElementTargetOf, ReadonlyElementView, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement, SpanLikeLengthOf } from './abstract-ops/array-view.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, EnsureCompletion, type ValueEvaluator, type PlainCompletion,
@@ -1083,6 +1083,18 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   // eslint-disable-next-line require-yield
   * GetOwnProperty(P: PropertyKeyValue): ObjectSlotReturn['GetOwnProperty'] {
+    // #sec-readonly-span-type: a read-only handle onto an inline element has
+    // the element's properties. A field that is itself stored inline is handed
+    // out read-only in turn, so the rule holds at any depth of nesting.
+    const readonlyTarget = ReadonlyElementTargetOf(this as unknown as object);
+    if (readonlyTarget !== undefined) {
+      const own = Q(yield* readonlyTarget.GetOwnProperty(P));
+      if (own instanceof UndefinedValue || own.Value === undefined) {
+        return own;
+      }
+      const viewed = ReadonlyElementView(own.Value);
+      return viewed === own.Value ? own : Descriptor({ ...own, Value: viewed });
+    }
     // proposal-runtime-types #sec-span-type: a WINDOW's elements and its length
     // are answered by its backing, not stored on it, so the object model could
     // not see them: `0 in window` was *false*, `Object.getOwnPropertyNames`
@@ -1122,6 +1134,9 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   * DefineOwnProperty(P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections, admission?: StoreAdmission): ObjectSlotReturn['DefineOwnProperty'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
+    if (ReadonlyElementTargetOf(this as unknown as object) !== undefined) {
+      return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be stored to', P);
+    }
     return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc, choices, admission);
   }
 
@@ -1274,6 +1289,13 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
   * Set(P: PropertyKeyValue, V: Value, Receiver: Value, choices?: ConstructionSelections, admission?: StoreAdmission): ObjectSlotReturn['Set'] {
     // TODO:
     Q(surroundingAgent.debugger_tryTouchDuringPreview(Receiver as ObjectValue));
+    // #sec-readonly-span-type: the one place a store to the element's field
+    // lands, whoever makes it: a method through `this`, a `ref`, or a holder
+    // of the handle that the checking pass never saw.
+    if (ReadonlyElementTargetOf(this as unknown as object) !== undefined
+        || (Receiver instanceof ObjectValue && ReadonlyElementTargetOf(Receiver as unknown as object) !== undefined)) {
+      return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be stored to', P);
+    }
     // proposal-runtime-types (spec sec-typed-classes): a write to a `readonly`
     // field is a TypeError unless the function running is the constructor that
     // declares it. The field's declaring constructor is recorded on the instance
@@ -1408,6 +1430,9 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   * Delete(P: PropertyKeyValue): ObjectSlotReturn['Delete'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
+    if (ReadonlyElementTargetOf(this as unknown as object) !== undefined) {
+      return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be deleted', P);
+    }
     // proposal-runtime-types (spec sec-object-types-semantics): a typed own
     // property cannot be deleted, since a layout with a hole is not the layout the
     // type described. Deleting one is a TypeError.
@@ -1425,6 +1450,10 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   // eslint-disable-next-line require-yield
   * OwnPropertyKeys(): ObjectSlotReturn['OwnPropertyKeys'] {
+    const readonlyTarget = ReadonlyElementTargetOf(this as unknown as object);
+    if (readonlyTarget !== undefined) {
+      return yield* readonlyTarget.OwnPropertyKeys();
+    }
     // The indices in ascending order and then `length`, which is the order an
     // Array reports and the one anything walking a window will expect.
     const windowLength = SpanLikeLengthOf(this as unknown as object);

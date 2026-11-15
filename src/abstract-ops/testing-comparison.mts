@@ -24,6 +24,7 @@ import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, float128SameValue, Float128ToBinary128 } from '../intrinsics/Float128.mts';
 import { compare as float128Compare } from '../intrinsics/Float128Arithmetic.mts';
+import { ReadonlyElementTargetOf } from './array-view.mts';
 import {
   Assert,
   surroundingAgent,
@@ -339,6 +340,17 @@ export function SameValue(x: Value, y: Value): boolean {
 export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   if (!surroundingAgent.feature('runtime-types') || !(v instanceof ObjectValue)) {
     return v;
+  }
+  // #sec-readonly-span-type: a read-only handle is onto an inline element, and
+  // a copy of it is a copy of that element - a value of its own, which the
+  // reader may write.
+  const viewed = ReadonlyElementTargetOf(v as unknown as object);
+  if (viewed !== undefined) {
+    // Only where a copy is made. A value this operation does not copy keeps its
+    // handle: handing back the element itself would hand back the right to
+    // write it.
+    const copied = Q(yield* CopyValueClassInstance(viewed));
+    return copied === viewed ? v : copied;
   }
   // A storage-backed source can be stale even when its layout has no fields.
   // Copying consumes the original borrow; it does not refresh its generation.
