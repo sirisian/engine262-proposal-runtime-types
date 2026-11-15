@@ -44611,6 +44611,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (typeof named !== 'string') return null;
             const index = Number(named);
             const canonicalIndex = Number.isInteger(index) && index >= 0 && index < 0xffffffff && String(index) === named;
+            // #sec-span-type: a window's elements are another array's storage,
+            // and none of them is deleted through it, read-only or not. The
+            // run time refused this; it is now refused where it is written.
+            if (canonicalIndex && spanElementOfReceiver(receiver as TypeRecord | null)) return 'element';
             const arrayPosition = structure?.Kind === 'array' && (structure.Extent === 'dynamic'
               || (typeof structure.Extent === 'number' && index < structure.Extent));
             let tuplePosition = false;

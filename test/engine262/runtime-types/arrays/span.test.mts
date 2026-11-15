@@ -1027,3 +1027,12 @@ test('a window is an Iterable of its element', () => {
   expect(evaluated('const u = new Uint8Array([5, 6]); const v = Span.<uint8>(u.buffer); function f(x: Iterable.<uint8>): uint8 { let t: uint8 = 0; for (const e of x) t += e; return t; } String(f(v));')).toBe('11');
   expectStaticTypeError(`${w}function f(x: Iterable.<string>) { return 1; } f(w);`);
 });
+
+test('an element is not deleted through a window, and that is refused where it is written', () => {
+  // #sec-span-type: a window's elements are another array's storage. The run
+  // time refused the delete; a typed array's own element was already refused
+  // early, and a window's now is too.
+  expectStaticTypeError('const a: [].<uint8> = [1]; function f(w: Span.<uint8>) { delete w[0]; }');
+  expectStaticTypeError('const a: [].<uint8> = [1]; function f(w: ReadonlySpan.<uint8>) { delete w[0]; }');
+  expect(evaluated("const o: any = { a: 1 }; delete o.a; String(o.a);")).toBe('undefined');
+});

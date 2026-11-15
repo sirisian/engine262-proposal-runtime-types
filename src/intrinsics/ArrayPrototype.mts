@@ -1111,7 +1111,7 @@ function propagateElementType(source: Value, copy: Value): void {
  * A plain array is not typed storage: its elements hold references, by the
  * same clause, and a copy of it holds the same references.
  */
-function* copyInlineElements(source: Value, copy: Value): PlainEvaluator<void> {
+export function* copyInlineElements(source: Value, copy: Value): PlainEvaluator<void> {
   if (!surroundingAgent.feature('runtime-types') || !(copy instanceof ObjectValue) || !(source instanceof ObjectValue)) {
     return;
   }

@@ -22,6 +22,7 @@ import {
 } from '../value.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
+import { copyInlineElements } from './ArrayPrototype.mts';
 import {
   surroundingAgent,
   Realm,
@@ -159,6 +160,9 @@ function* Array_from([items = Value.undefined, mapper = Value.undefined, thisArg
       const next = Q(yield* IteratorStepValue(iteratorRecord));
       if (next === 'done') {
         Q(yield* Set(array, Value('length'), F(k), Value.true));
+        // #sec-value-type-copying: the result is an array of the source's element
+        // type, so each element it takes is stored, and copied.
+        if (!mapping) Q(yield* copyInlineElements(items, array));
         stampFromSource(array);
         return array;
       }
@@ -196,6 +200,9 @@ function* Array_from([items = Value.undefined, mapper = Value.undefined, thisArg
     k += 1;
   }
   Q(yield* Set(array, Value('length'), F(len), Value.true));
+  // #sec-value-type-copying: the result is an array of the source's element
+  // type, so each element it takes is stored, and copied.
+  if (!mapping) Q(yield* copyInlineElements(items, array));
   stampFromSource(array);
   return array;
 }

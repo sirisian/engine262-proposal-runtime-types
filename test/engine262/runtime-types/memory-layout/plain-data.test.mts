@@ -124,3 +124,14 @@ test('a plain object or array still holds a reference to an inline element', () 
   // At a typed array's annotation the literal stores, and so copies.
   expect(evaluated(`${A}const c: [].<A> = [...xs]; c[0].a = 9; String(xs[0].a);`)).toBe('0');
 });
+
+test('Array.from copies the value-type elements it takes from a typed source', () => {
+  // Its result carries the source's element type, so each element is stored
+  // into typed storage, and copied (#sec-value-type-copying). It shared them.
+  const A = 'class A { a: uint8; } const xs: [2].<A>; ';
+  expect(evaluated(`${A}const c: [].<A> = Array.from(xs); c[0].a = 9; c[1].a = 9; String(xs[0].a) + String(xs[1].a) + String(c.length);`)).toBe('002');
+  expect(evaluated(`${A}const w: Span.<A> = xs; const c: [].<A> = Array.from(w); c[0].a = 9; String(xs[0].a);`)).toBe('0');
+  // A mapping decides its own elements, and an array of numbers is as before.
+  expect(evaluated(`${A}xs[1].a = 4; const c = Array.from(xs, (e) => e.a); String(c.length) + String(c[1]);`)).toBe('24');
+  expect(evaluated('const a: [].<uint8> = [1, 2]; const c: [].<uint8> = Array.from(a); c.push(3 := uint8); String(c.length) + String(a.length);')).toBe('32');
+});
