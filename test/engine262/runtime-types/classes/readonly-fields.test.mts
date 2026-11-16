@@ -5,8 +5,10 @@ import { evaluated, expectThrown, runFlagOff, expectStaticTypeError, ok } from '
  * The `readonly` class-field modifier (#sec-typed-classes). A field declared `readonly` may be
  * assigned only in its own initializer and in a constructor of the declaring class; every other
  * assignment is a TypeError, including one from a method the constructor calls, from a subclass,
- * through a reference, or through reflection. `readonly` is shallow: the field binding is fixed, not
- * the object it refers to. `Object.freeze` on an instance of a typed class makes every field
+ * through a reference, or through reflection. `readonly` fixes the field's own storage: the
+ * reference where the field holds one, so the object referred to stays writable, and the value
+ * where the field holds a value type (classes/readonly-inline-values.test.mts). `Object.freeze`
+ * on an instance of a typed class makes every field
  * `readonly`, so a write after freezing is a TypeError in every mode. `readonly` is a field modifier
  * written before the field name, after `static` where both appear. It is new syntax under the runtime
  * types feature; with the feature off, `readonly x` does not parse as a modified field.
@@ -54,6 +56,39 @@ test('readonly fixes the binding, not the referent', () => {
 // -- static readonly -----------------------------------------------------------
 test('static readonly parses and reads', () => {
   expect(evaluated('class A { static readonly z = 9; } String(A.z);')).toBe('9');
+});
+
+// #sec-typed-classes: "Every other assignment is a type error: at compile time
+// where the type is known, and at run time otherwise." A static field is no
+// instance's, so no constructor assigns it: its initializer is its one
+// assignment. The store below is through a name typed `any`, which the checking
+// pass does not judge.
+const UNSEEN = "let out = ''; const attempt = (f) => { try { f(); out += 'stored,'; } catch (e) { out += e.name + ','; } }; ";
+test('a static readonly field is assigned by its initializer only, at run time too', () => {
+  expect(evaluated(`class H { static readonly n: uint8 = 1; static m: uint8 = 1; } const o: any = { H }; ${UNSEEN}attempt(() => { o.H.n = 5; }); attempt(() => { o.H.n++; }); attempt(() => { o.H.m = 7; }); out + String(H.n) + String(H.m);`)).toBe('TypeError,TypeError,stored,17');
+  expect(evaluated('class H { static readonly z = 9; } const o: any = { H }; let r = ""; try { o.H.z = 1; r = "stored"; } catch (e) { r = e.message; } r;')).toBe('"z" is a static readonly field and can only be assigned by its initializer');
+  expectStaticTypeError('class H { static readonly n: uint8 = 1; } const checked: uint8 = 0; H.n = 5;');
+  // A static block and the constructor are not the initializer.
+  expectStaticTypeError('class H { static readonly n: uint8; static { H.n = 2; } }');
+  expect(evaluated(`class H { static readonly n: uint8 = 1; constructor() { const o: any = { H }; o.H.n = 2; } } let r = ''; try { new H(); r = 'stored'; } catch (e) { r = e.name; } r + String(H.n);`)).toBe('TypeError1');
+  // Reading, and initializing one from another, are unchanged.
+  expect(evaluated('class H { static readonly a: uint8 = 2; static readonly b: uint8 = H.a + 1; static total: uint8 = 0; static { H.total = H.b + 1; } } String(H.b) + String(H.total);')).toBe('34');
+});
+
+test('a static readonly field is the same member through a subclass', () => {
+  // The store reaches the declaring class on its way up the prototype chain,
+  // and is refused there rather than left to make a property that hides it.
+  expect(evaluated(`class H { static readonly n: uint8 = 4; static m: uint8 = 4; } class K extends H { static readonly k: uint8 = 2; } const o: any = { K }; ${UNSEEN}attempt(() => { o.K.k = 3; }); attempt(() => { o.K.n = 3; }); attempt(() => { o.K.m = 3; }); out + String(H.n) + String(K.n) + String(K.k) + String(H.m) + String(K.m);`)).toBe('TypeError,TypeError,stored,44243');
+  expectStaticTypeError('class H { static readonly n: uint8 = 4; } class K extends H { } const checked: uint8 = 0; K.n = 3;');
+  // A specialization of a generic class has its own static fields.
+  expect(evaluated('class G<T: type> { static readonly z: uint8 = 9; } const S = G.<uint8>; const o: any = { S }; let r = String(S.z); try { o.S.z = 3; r += "stored"; } catch (e) { r += e.name; } r;')).toBe('9TypeError');
+  // An instance field of the same name is another member.
+  expect(evaluated('class H { static readonly n: uint8 = 4; n: uint8 = 1; } const h = new H(); h.n = 2; String(h.n) + String(H.n);')).toBe('24');
+});
+
+test('the value of a static readonly field is read-only where it is a value type', () => {
+  expect(evaluated(`class A { a: uint8; } class H { static readonly origin: A = new A(); } const o: any = { H }; ${UNSEEN}attempt(() => { o.H.origin = new A(); }); attempt(() => { o.H.origin.a = 3; }); const c = H.origin; c.a = 9; out + String(H.origin.a) + String(c.a);`)).toBe('TypeError,TypeError,09');
+  expect(evaluated('reference class R { x: uint8; } class H { static readonly r: R = new R(); } H.r.x = 5; String(H.r.x);')).toBe('5');
 });
 
 // -- readonly as a field name --------------------------------------------------

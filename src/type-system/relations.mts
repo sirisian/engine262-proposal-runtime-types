@@ -6,7 +6,7 @@ import { TupleStorageShapeOf, TupleLengthRange, TupleStorageLengths, TupleStorag
 import { MetadataKeys } from './metadata-keys.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { IsFamilyRecord } from './records.mts';
-import { IsPlainData, IsValueType } from './layout.mts';
+import { IsPlainData, IsValueType, SubclassAddsStorageOver } from './layout.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
@@ -1573,6 +1573,15 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     }
     case 'tuple': {
       const tt = t as Extract<TypeRecord, { Kind: 'tuple' }>;
+      // #sec-issubtype: a tuple's positions are covariant, with one exception.
+      // A position of a value type class is laid out IN the tuple, so a tuple
+      // whose position is of a subclass that adds storage is not a tuple of
+      // the base: it is longer, and a store of the base through the wider type
+      // would be refused where it is made. An array's element and a class
+      // position already refuse such a subclass (SubclassAddsStorageOver); a
+      // subclass that adds nothing has the base's layout and stays a subtype.
+      const position = (source: TypeRecord, target: TypeRecord): boolean => IsSubtype(source, target, next)
+        && !SubclassAddsStorageOver(source, target);
       const sourceShape = TupleStorageShapeOf(s);
       const targetShape = TupleStorageShapeOf(tt);
       if (sourceShape && targetShape) {
@@ -1583,7 +1592,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           for (let i = 0; i < length;) {
             const source = TupleStorageTypeAt(sourceShape, i, length);
             const target = TupleStorageTypeAt(targetShape, i, length);
-            if (!source || !target || !IsSubtype(source, target, next)) return false;
+            if (!source || !target || !position(source, target)) return false;
             i += Math.min(length - i, TupleStorageRun(sourceShape, i, length), TupleStorageRun(targetShape, i, length));
           }
         }
@@ -1610,10 +1619,9 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           return false;
         }
         return s.Elements.every((se, i) => se.Rest === tt.Elements[i].Rest
-          && IsSubtype(
+          && position(
             se.Rest ? restElementType(se.Type) : se.Type,
             tt.Elements[i].Rest ? restElementType(tt.Elements[i].Type) : tt.Elements[i].Type,
-            next,
           ));
       }
       const count = Math.max(s.Elements.length, tt.Elements.length);
@@ -1623,7 +1631,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           continue;
         }
         const ttI = tupleTypeAt(tt.Elements, i);
-        if (ttI !== null && !sourceTypes.every((st) => IsSubtype(st, ttI, next))) {
+        if (ttI !== null && !sourceTypes.every((st) => position(st, ttI))) {
           return false;
         }
       }

@@ -3246,6 +3246,14 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       // `b === a` was the only way to find out which had happened.
       const alreadyTyped = (value as unknown as { TypedElement?: unknown }).TypedElement !== undefined;
       if (isArr === Value.true && alreadyTyped) {
+        // #sec-array-membership: an array of a subclass that adds storage is
+        // not an array of its base, and a copy would not be one either - each
+        // element would be refused in turn - so the advice to spread is left
+        // out of the message.
+        const held = (value as unknown as { TypedElement: TypeRecord }).TypedElement;
+        if (SubclassAddsStorageOver(held, t.Element)) {
+          return Throw.TypeError('$1 is not assignable to $2: its elements are $3, which adds fields to $4', value, Value(displayType(t)), Value(displayType(held)), Value(displayType(t.Element)));
+        }
         return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
       }
       if (isArr === Value.true) {

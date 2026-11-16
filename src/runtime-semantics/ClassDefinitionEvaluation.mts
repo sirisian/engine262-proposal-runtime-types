@@ -609,6 +609,13 @@ const INITIALIZABLE_CONTEXTS: readonly string[] = [
 /** The constructor each class node last evaluated to (#sec-typed-classes). */
 export const classConstructorOfNode = new WeakMap<object, ObjectValue>();
 
+/**
+ * What a `static` `readonly` field is recorded with in its class's
+ * [[ReadonlyFields]] in place of a declaring constructor: no running function
+ * is this object, so no store is the permitted one.
+ */
+const STATIC_READONLY_FIELD = { staticReadonlyField: true };
+
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[], specialization = false, family?: Value, applicationKey?: string): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;
   // 1. Let env be the LexicalEnvironment of the running execution context.
@@ -1569,6 +1576,21 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       if (elementRecord instanceof ClassFieldDefinitionRecord) {
         // a. Let result be DefineField(F, elementRecord).
         result = yield* DefineField(F, elementRecord);
+        // #sec-typed-classes: "A `readonly` field may be assigned only in its
+        // own initializer and in a body of a constructor of the declaring
+        // class... Every other assignment is a type error: at compile time
+        // where the type is known, and at run time otherwise." A `static`
+        // field is no instance's, so no constructor assigns it: its
+        // initializer, which has just run, is the one assignment it has. It is
+        // recorded on the class as an instance's is recorded on the instance,
+        // with a marker that is no function, so every later store is refused -
+        // one through a name the checking pass did not see included.
+        if (!(result instanceof AbruptCompletion) && surroundingAgent.feature('runtime-types')
+            && (elementRecord as { Readonly?: boolean }).Readonly && !(elementRecord.Name instanceof PrivateName)) {
+          const key = elementRecord.Name as PropertyKeyValue;
+          const recorded = ((F as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields ??= new Map());
+          recorded.set(key instanceof JSStringValue ? key.stringValue() : key, STATIC_READONLY_FIELD);
+        }
       } else { // b. Else,
         // i. Assert: elementRecord is a ClassStaticBlockDefinition Record.
         Assert(elementRecord instanceof ClassStaticBlockDefinitionRecord);

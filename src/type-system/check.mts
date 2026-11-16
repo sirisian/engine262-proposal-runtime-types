@@ -18820,9 +18820,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * callee must be a function declaration or a `const` bound to a function
    * the program wrote, a static method of a class named where it is called,
    * or a method or getter of a value type class reached through storage whose
-   * declared type is that class. A value of a reference class may be of a
-   * subclass that declares the member a field (which a store reaches), `this`
-   * may be, and a tuple position may hold a subclass's value; none is judged.
+   * declared type is that class. Such storage holds a value of the class or of
+   * a subclass that adds no storage (SubclassAddsStorageOver), and a subclass
+   * that adds none cannot have declared the member a field. A value of a
+   * reference class may be of a subclass that does (which a store reaches),
+   * and so may `this` and a name narrowed to the class; none is judged.
    */
   const declaredClassMember = (cls: ParseNode, name: string, wantStatic: boolean): { kind: 'field' | 'getter' | 'method', type: Known, node: ParseNode } | null => {
     for (let at: ParseNode | undefined = cls; at;) {
@@ -18862,10 +18864,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * The type an expression was DECLARED with, where the value it denotes is
-   * certain to be of exactly that type: a `new`, a name bound with an
-   * annotation or from such an expression, and a declared field or an array
-   * element of one. Null for everything else - a narrowed name, `this`, a
-   * tuple position, a call.
+   * certain to have been admitted at a position of that type: a `new`, a name
+   * bound with an annotation or from such an expression, and a declared field
+   * or an array element of one. Null for everything else - a narrowed name,
+   * `this`, a call - and for a tuple position, which this does not read.
    */
   const declaredTypeOf = (expression: ParseNode | null | undefined, depth = 0): TypeRecord | null => {
     const node = patternExpression(expression ?? undefined);

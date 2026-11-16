@@ -63,7 +63,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
+import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter, SubclassAddsStorageOver } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -5026,6 +5026,30 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       const retainSequence = () => {
         if (positions) storage!.push({ kind: 'sequence', object: value, length: len, positions });
       };
+
+      // #sec-array-membership: an array or tuple that carries its own element
+      // or position types is laid out as THOSE types. Where one of them is a
+      // value type class that adds storage over the class the target names at
+      // that place, the value is not a member: its elements are longer than the
+      // target's, and a store of the base through the target type would be
+      // refused where it is made. This is the run-time half of the rule
+      // IsSubtype applies to an array's element and a tuple's position, and
+      // the one a field of class type already applies to the value itself. A
+      // subclass that adds nothing has the base's layout and is a member.
+      const laidOut = value as unknown as { TypedElement?: TypeRecord, TypedTuple?: { Positions?: readonly TypeRecord[] } };
+      if (t.Kind === 'array' && laidOut.TypedElement !== undefined && SubclassAddsStorageOver(laidOut.TypedElement, t.Element)) {
+        return false;
+      }
+      if (t.Kind === 'tuple' && laidOut.TypedTuple?.Positions !== undefined) {
+        const held = laidOut.TypedTuple.Positions;
+        const targetShape = TupleStorageShapeOf(t);
+        for (let i = 0; i < len && i < held.length; i += 1) {
+          const target = targetShape ? TupleStorageTypeAt(targetShape, i, len) : t.Elements[i]?.Rest ? undefined : t.Elements[i]?.Type;
+          if (target && SubclassAddsStorageOver(held[i], target)) {
+            return false;
+          }
+        }
+      }
 
       if (t.Kind === 'array') {
         // An extent RECORD: a parameter's is its binding in

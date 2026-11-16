@@ -101,9 +101,12 @@ test('Typed Assignment: expression := Type is an expression that converts', () =
   expect(bool('let a := (300 := uint8); String(a === (44 := uint8));')).toBe(true);
 });
 
-// -- interface extends: no heritage clause in the grammar --------------------------
-test('Interfaces: the extends heritage clause is not in the normative grammar', () => {
-  // `interface B extends A { ... }`: the specification's grammar has no interface heritage clause; inheritance is
-  // expressed by intersection. The extends form does not parse.
-  expectThrown('interface A { a: uint8; } interface B extends A { b: string; } typeof B;');
+// -- interface extends ---------------------------------------------------------
+test('Interfaces: an interface has the members of every type it extends, and is a subtype of each', () => {
+  // README: "Where the base is an interface the relation is declared, so a class that implements `B` is an `A`
+  // without naming it." This test once pinned the opposite, from when the grammar had no interface heritage
+  // clause; the specification's |InterfaceHeritage| and classes/interface-extends.test.mts are the present rule.
+  const AB = "interface A { a: string; } interface B extends A { b: uint8; } class C implements B { a: string = 'x'; b: uint8 = 1; } function f(x: A) { return x.a; } ";
+  expect(evaluated(`${AB}f(new C());`)).toBe('x');
+  expect(evaluated(`${AB}String(Reflect.isAssignable(B, A)) + String(Reflect.isAssignable(A, B));`)).toBe('truefalse');
 });

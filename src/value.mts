@@ -1342,7 +1342,21 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         const declaringConstructor = readonlyFields.get(fieldKey);
         if (declaringConstructor !== undefined
             && surroundingAgent.executionContextStack.at(-1)?.Function !== declaringConstructor) {
+          if ((declaringConstructor as { staticReadonlyField?: boolean }).staticReadonlyField === true) {
+            return Throw.TypeError('$1 is a static readonly field and can only be assigned by its initializer', P);
+          }
           return Throw.TypeError('$1 is a readonly field and can only be assigned in the declaring class constructor', P);
+        }
+      }
+      // A `static` `readonly` field is inherited by a subclass's constructor,
+      // and a store through the subclass reaches this object on its way up the
+      // prototype chain. It is the same member, and the store is refused here
+      // rather than left to make an own property that hides it.
+      if ((this as unknown) !== (Receiver as unknown)) {
+        const inherited = (this as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+        if (inherited !== undefined
+            && (inherited.get(P instanceof JSStringValue ? P.stringValue() : P) as { staticReadonlyField?: boolean } | undefined)?.staticReadonlyField === true) {
+          return Throw.TypeError('$1 is a static readonly field and can only be assigned by its initializer', P);
         }
       }
       // proposal-runtime-types (spec sec-object-types-semantics): a write to a

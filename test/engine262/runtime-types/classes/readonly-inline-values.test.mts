@@ -96,6 +96,19 @@ test('a copy of the value is the reader\'s own, and reading is unchanged', () =>
   expect(evaluated('class H { readonly q: [2].<uint8>; constructor() { this.q[0] = 4; this.q[1] = 3; } } function sum(xs: ReadonlySpan.<uint8>): uint8 { return xs[0] + xs[1]; } const h: H = new H(); String(sum(h.q));')).toBe('7');
 });
 
+test('a readonly member of an interface is judged through that view', () => {
+  const V = `${A}interface V { readonly p: A; } reference class H implements V { p: A; } `;
+  refused(`${V}const h: H = new H(); const v: V = h; v.p.a = 3;`);
+  refused(`${V}const h: H = new H(); const v: V = h; v.p = new A();`);
+  // The class declares the member writable, so its own type stores, and so
+  // does a name the checking pass does not judge: the view is a property of
+  // the type the store is written through, as for the member itself.
+  expect(evaluated(`${V}const h: H = new H(); const v: V = h; h.p.a = 3; String(v.p.a);`)).toBe('3');
+  expect(evaluated(`${V}const h: H = new H(); const v: V = h; const u: any = v; u.p.a = 3; String(h.p.a);`)).toBe('3');
+  // A member that holds a reference is fixed, and the object is not.
+  expect(evaluated('reference class R { x: uint8; } interface V { readonly r: R; } reference class H implements V { r: R = new R(); } const h: H = new H(); const v: V = h; v.r.x = 3; String(h.r.x);')).toBe('3');
+});
+
 test('a member that is not a readonly field is not this rule\'s', () => {
   expect(evaluated(`${A}class H { p: A; } const h: H = new H(); h.p.a = 3; String(h.p.a);`)).toBe('3');
   // A getter with no setter is not storage: a store through one is a store to
