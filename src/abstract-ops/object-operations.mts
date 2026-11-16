@@ -297,6 +297,18 @@ export function* SetIntegrityLevel(O: ObjectValue, level: 'sealed' | 'frozen'): 
     // write is rejected. The `frozen` descriptors above already reject the write
     // in strict mode; this makes the rejection a TypeError in every mode.
     if (surroundingAgent.feature('runtime-types')) {
+      // #sec-typed-classes, for an array: a typed array or a tuple is frozen as
+      // an instance of a typed class is. Its elements are its storage, as an
+      // instance's fields are, so a later store to one is a TypeError in every
+      // mode, and an element stored inline - a value type class instance, an
+      // array of fixed length of a value type, a tuple of value types - is
+      // handed out read-only in every part ([[GetOwnProperty]], [[Set]]).
+      // Marked after the loop above, which reads each element as it is.
+      // An untyped array is frozen as JavaScript freezes it.
+      const sequence = O as { TypedElement?: unknown, TypedTuple?: unknown, FrozenTypedSequence?: boolean };
+      if (sequence.TypedElement !== undefined || sequence.TypedTuple !== undefined) {
+        sequence.FrozenTypedSequence = true;
+      }
       const builtBy = (O as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
       if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
         const map = ((O as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields ??= new Map());

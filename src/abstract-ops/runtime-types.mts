@@ -39,7 +39,7 @@ import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf, InterfaceOfSignature } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
-import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
+import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, TuplePositionsAre, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver, IsValueType } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -1029,11 +1029,14 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
     // The layout already places it - a private typed field is laid out like any
     // other, which is why `hasLayout` is *true* for a class whose only field is
     // private - so the copy was dropping a field the type says it has.
-    if (typeof field.key !== 'string') {
+    // A field with a computed symbol key is a property, and is copied here
+    // with the string-keyed ones (CopyValueClassInstance does the same).
+    const fieldKey = field.key as unknown;
+    if (typeof fieldKey !== 'string' && !(fieldKey instanceof SymbolValue)) {
       // Copied from the value's OWN elements, in the loop after this one.
       continue;
     }
-    const key = Value(field.key);
+    const key = typeof fieldKey === 'string' ? Value(fieldKey) : fieldKey;
     let held = Q(yield* Get(value, key));
     // A nested value type field is itself a value, so it copies too - otherwise
     // the outer copy would share the inner instance and a write through one
@@ -1046,7 +1049,7 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
       held = Q(yield* CopyValueClassInstance(held));
     }
     X(CreateDataPropertyOrThrow(copy, key, held));
-    typed.set(field.key, { TypeRecord: field.type });
+    typed.set(fieldKey, { TypeRecord: field.type });
   }
   // PRIVATE fields, taken from the value's own elements rather than looked up by
   // the layout's Private Name - which for a generic class belongs to a different
@@ -1449,6 +1452,56 @@ export function* ConvertValue(value: Value, t: TypeRecord, observations?: Struct
   return result;
 }
 
+/**
+ * Gives a fresh copy of a value aggregate the position or element types of
+ * _t_, for the written conversion (ConvertValueUnbacked). The copy already
+ * belongs to _t_; this is what makes it OF _t_.
+ *
+ * A position that is itself a tuple or an array of fixed length is storage of
+ * the copy, so it takes its type from the target's position in turn. Where
+ * the target's position is a union, the element takes the one tuple or array
+ * member of its own length, if there is exactly one; otherwise it keeps the
+ * type it has, which is a member of the union as it stands.
+ */
+function CarryAggregateType(copy: ObjectValue, t: TypeRecord): void {
+  const held = copy as unknown as { TypedTuple?: TupleStorageShape, TypedElement?: TypeRecord, TypedExtent?: number };
+  const elementAt = (index: number): Value | undefined => {
+    const own = OrdinaryGetOwnProperty(copy as never, Value(String(index)));
+    return own instanceof UndefinedValue ? undefined : own.Value;
+  };
+  const inner = (element: Value | undefined, target: TypeRecord | undefined): void => {
+    if (!(element instanceof ObjectValue) || target === undefined || ValueAggregateOf(element) === undefined) {
+      return;
+    }
+    const shaped = element as unknown as { TypedTuple?: TupleStorageShape, TypedExtent?: number };
+    const fits = (candidate: TypeRecord): boolean => (candidate.Kind === 'tuple' && shaped.TypedTuple !== undefined
+        && candidate.Elements.length === shaped.TypedTuple.Positions.length && candidate.Elements.every((e) => !e.Rest))
+      || (candidate.Kind === 'array' && shaped.TypedTuple === undefined && candidate.Extent === shaped.TypedExtent);
+    if (target.Kind === 'union') {
+      const members = target.Members.filter(fits);
+      if (members.length === 1) {
+        CarryAggregateType(element, members[0]);
+      }
+    } else if (fits(target)) {
+      CarryAggregateType(element, target);
+    }
+  };
+  if (t.Kind === 'tuple' && held.TypedTuple !== undefined) {
+    const shape = TupleStorageShapeOf(t);
+    if (shape === undefined || shape.Rest !== undefined || shape.Positions.length !== held.TypedTuple.Positions.length) {
+      return;
+    }
+    held.TypedTuple = shape;
+    shape.Positions.forEach((position, index) => inner(elementAt(index), position));
+  } else if (t.Kind === 'array' && held.TypedTuple === undefined && held.TypedElement !== undefined
+      && typeof held.TypedExtent === 'number' && t.Extent === held.TypedExtent) {
+    StampTypedArray(copy, t.Element);
+    for (let index = 0; index < held.TypedExtent; index += 1) {
+      inner(elementAt(index), t.Element);
+    }
+  }
+}
+
 function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: StructuralValueObservations): ValueEvaluator {
   value = Q(yield* MaterializeGenericCallable(value, t));
   // #sec-composite-typeobject-call: the typed creation "is the CONSTRUCTION
@@ -1777,12 +1830,22 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
       const widening = from !== undefined && SubclassAddsStorageOver(from, t);
       return Q(yield* CopyValueTypeInstance(value, t, widening));
     }
-    // #sec-value-type-copying: a fixed-length array of a value type and a tuple
-    // of value types are value types, so a boundary at one copies as a
-    // boundary at a value type class does.
-    if (value instanceof ObjectValue && (t.Kind === 'array' || t.Kind === 'tuple') && IsValueType(t)
-        && ValueAggregateOf(value) !== undefined) {
-      return Q(yield* CopyValueClassInstance(value));
+    // #sec-conversions: this is the WRITTEN conversion, `a := T`, and what it
+    // gives is a value of the type written. A tuple of value types, or an
+    // array of fixed length of them, converted to another tuple or array type
+    // that its elements already belong to is a copy that carries the target's
+    // position or element types - so `(a := [uint8 | string])[0] = "s"`
+    // stores. A boundary does not do this: there the two types must be the
+    // same (#sec-issubtype), which is why the conversion is written.
+    if (value instanceof ObjectValue && (t.Kind === 'array' || t.Kind === 'tuple')) {
+      const aggregate = ValueAggregateOf(value);
+      if (aggregate !== undefined) {
+        const copied = Q(yield* CopyValueClassInstance(value));
+        if (copied instanceof ObjectValue && copied !== value) {
+          CarryAggregateType(copied, t);
+        }
+        return copied;
+      }
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
@@ -2753,6 +2816,27 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       const widening = from !== undefined && SubclassAddsStorageOver(from, t);
       return Q(yield* CopyValueTypeInstance(value, t, widening));
     }
+    // #sec-value-type-copying: a position of a tuple type holds a tuple OF
+    // that type. A tuple of value types is a value, laid out as the positions
+    // it carries, and it belongs to a wider tuple type only in the way a
+    // subclass belongs to its base: it can be read as one, and it does not
+    // fit where one is stored. Admitted, the copy kept its own positions -
+    // `const w: [uint8 | string] = a` bound a `[uint8]`, and `w[0] = "s"`
+    // threw on a tuple nothing else held. The checker refuses it where it
+    // sees the two types; this is the same refusal for a value that arrives
+    // through `any`. The widening is written: `[...a]`, or `a := T`.
+    if (value instanceof ObjectValue && t.Kind === 'tuple') {
+      const held = ValueAggregateOf(value);
+      if (held !== undefined) {
+        // The positions as the storage has them, a run of fixed extent
+        // written out. A shape with no one length is not judged.
+        const shape = (value as { TypedTuple?: TupleStorageShape }).TypedTuple;
+        const positions = shape === undefined ? undefined : TupleFixedPositions(shape);
+        if (!('Positions' in held) || (positions !== undefined && !TuplePositionsAre(positions, t))) {
+          return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
+        }
+      }
+    }
     // #sec-value-type-copying: a fixed-length array of a value type and a tuple
     // of value types are value types, so a boundary at one copies as a
     // boundary at a value type class does.
@@ -3226,6 +3310,16 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // the caller's storage. A tuple literal builds a NEW array, so there is no
   // aliased storage to protect and the array rule applies unchanged.
   if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+    // Conversion is for an array that carries no types of its own. A tuple of
+    // value types, or an array of fixed length of them, is a value of the
+    // type it carries, and membership has just said that is not _t_: a
+    // boundary checks such a value and does not rebuild it as another type
+    // (#sec-issubtype, #sec-array-membership). The array arm below says the
+    // same of an array that already has an element type. The conversion is
+    // written: `[...a]`, or `a := T`.
+    if (ValueAggregateOf(value) !== undefined) {
+      return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
+    }
     return Q(yield* ConvertTupleElementwise(value, t, requireMember, sequenceObservation));
   }
   if (t.Kind === 'array') {

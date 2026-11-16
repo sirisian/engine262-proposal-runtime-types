@@ -108,3 +108,31 @@ test('index coercion is retained and tuple fractional indices truncate', () => {
 test('concat joins element types in its dynamic result', () => {
   expect(evaluated('const a: [2].<uint8> = [1,2]; const b: [].<uint8|string> = a.concat(["s"]); "ok";')).toBe('ok');
 });
+
+// #sec-intrinsic-array-contracts: "The array `map` builds is new and carries no
+// types, as an array literal's does not, so it takes its type where it is
+// bound."
+test('the array map builds binds at an array type of fixed length', () => {
+  // Refused before, in exactly the programs where the checker could establish the built-in, and
+  // accepted in every other: an early error that predicted no failure.
+  expect(evaluated('const a: [3].<uint8> = [3, 1, 2]; const m: [3].<uint8> = a.map((x) => x); m.join();')).toBe('3,1,2');
+  expect(evaluated('const a: [3].<uint8> = [3, 1, 2]; function dbl(x: [3].<uint8>): [3].<uint8> { return x.map((v) => v); } dbl(a).join();')).toBe('3,1,2');
+  expect(evaluated('const a: [3].<uint8> = [3, 1, 2]; function first(x: [3].<uint8>): uint8 { return x[0]; } String(first(a.map((v) => v)));')).toBe('3');
+  expect(evaluated('const v: [3].<float32> = [1, 2, 3]; const d: [3].<float32> = v.map((x) => x * 2); d.join();')).toBe('2,4,6');
+  expect(evaluated('const t: [uint8, uint8] = [1, 2]; const m: [2].<uint8> = t.map((x) => x); m.join();')).toBe('1,2');
+  // What is bound is a value of the type it is bound at.
+  expect(evaluated('const a: [3].<uint8> = [3, 1, 2]; function f(): string { const m: [3].<uint8> = a.map((x) => x); const c = m; c[0] = 9; return m.join() + "|" + c.join(); } f();')).toBe('3,1,2|9,1,2');
+});
+
+test('a map result is refused only where the lengths are known to differ', () => {
+  expectEarlyError('const a: [3].<uint8> = [3, 1, 2]; const m: [2].<uint8> = a.map((x) => x);', 'StaticTypeError');
+  expectEarlyError('const a: [3].<uint8> = [3, 1, 2]; const m: [3].<string> = a.map((x) => x);', 'StaticTypeError');
+  // A receiver with no stated length leaves the length to the check the binding makes when it runs.
+  expect(evaluated('const g: [].<uint8> = [3, 1, 2]; const m: [3].<uint8> = g.map((x) => x); m.join();')).toBe('3,1,2');
+  expectThrown('const g: [].<uint8> = [3, 1]; const m: [3].<uint8> = g.map((x) => x);', 'is not assignable to');
+  // Unbound, the result is a dynamic array as before, and is one where it is later bound.
+  expect(evaluated('const a: [3].<uint8> = [3, 1, 2]; const m = a.map((x) => x); m.push(1); String(m.length);')).toBe('4');
+  expectEarlyError('const a: [3].<uint8> = [3, 1, 2]; const m = a.map((x) => x); const d: [3].<uint8> = m;', 'StaticTypeError');
+  // An operation that chooses its length is unchanged.
+  expectEarlyError('const a: [3].<uint8> = [3, 1, 2]; const m: [3].<uint8> = a.filter((x) => true);', 'StaticTypeError');
+});

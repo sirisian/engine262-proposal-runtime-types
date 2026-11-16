@@ -2,7 +2,7 @@ import { SameValue, R } from '../abstract-ops/all.mts';
 import { NormalizeMetadataRecord } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
-import { TupleStorageShapeOf, TupleLengthRange, TupleStorageLengths, TupleStorageTypeAt, TupleStorageRun } from './tuple-storage.mts';
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageLengths, TupleStorageTypeAt, TupleStorageRun, TupleFixedPositions } from './tuple-storage.mts';
 import { MetadataKeys } from './metadata-keys.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { IsFamilyRecord } from './records.mts';
@@ -319,6 +319,33 @@ function sameMemberSet(a: readonly TypeRecord[], b: readonly TypeRecord[], assum
 
 function sameTupleElements(a: readonly TupleElementRecord[], b: readonly TupleElementRecord[], assumptions: readonly Assumption[]): boolean {
   return a.length === b.length && a.every((e, i) => e.Rest === b[i].Rest && sameDefault(e.Initial, b[i].Initial) && SameTypeWithAssumptions(e.Type, b[i].Type, assumptions));
+}
+
+/**
+ * Whether the positions a tuple of value types CARRIES are the positions of
+ * the tuple type _t_: as many, each of the same type. A rest of fixed extent
+ * is so many positions, so `[uint8, ...[2].<uint8>]` and
+ * `[uint8, uint8, uint8]` are one layout under two spellings. A target with a
+ * rest of no extent has no one layout, and a tuple of fixed length is not one
+ * of it. A target whose length a default leaves open is not judged.
+ */
+export function TuplePositionsAre(held: readonly TypeRecord[], t: TypeRecord & { Kind: 'tuple' }): boolean {
+  const to = TupleStorageShapeOf(t);
+  if (!to) {
+    return true;
+  }
+  const positions = TupleFixedPositions(to);
+  if (positions === undefined) {
+    return to.Rest === undefined && !to.ScalarRuns && !to.Conjuncts;
+  }
+  return positions.length === held.length && held.every((position, index) => SameType(position, positions[index]));
+}
+
+/** Whether two tuple types describe the same storage (TuplePositionsAre). A source with no one length is not judged. */
+export function SameTuplePositions(s: TypeRecord & { Kind: 'tuple' }, t: TypeRecord & { Kind: 'tuple' }): boolean {
+  const from = TupleStorageShapeOf(s);
+  const positions = from ? TupleFixedPositions(from) : undefined;
+  return positions === undefined || TuplePositionsAre(positions, t);
 }
 
 /** #sec-sametypewithassumptions */

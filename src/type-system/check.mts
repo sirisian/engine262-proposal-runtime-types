@@ -98,7 +98,7 @@ import {
   typeArgumentNameOf as typeArgumentNameOfShared,
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
-import { ArrayWithMembers, InterfaceApplicationOf, InterfaceApplicationsOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
+import { ArrayWithMembers, SameTuplePositions, InterfaceApplicationOf, InterfaceApplicationsOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { NominalAssignmentEvidence } from './nominal-evidence.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
@@ -8184,8 +8184,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { kind: 'none' };
   };
 
+  /**
+   * Set while an inferred type argument is judged against its parameter's
+   * bound. That is a question about two TYPES, which the subtype relation
+   * answers, and no value is stored: "a bound `T extends Base` carries the
+   * whole value" (#sec-value-type-copying). The two refusals below are of a
+   * value at a position of another layout, and judged a bound as one:
+   * `function id<T: type extends B>(v: T): T` refused `id(new C())` for a
+   * `C` that adds a field, which `id.<C>(new C())` accepted.
+   */
+  let judgingBound = false;
+
+  /** Whether _source_ is a tuple of value types that _target_ would take as a subtype and cannot store (requireAssignable). */
+  const valueTupleRefusedAt = (source: TypeRecord, target: TypeRecord): boolean => {
+    if (source.Kind !== 'tuple' || target.Kind === 'any' || !IsValueType(source) || !IsAssignable(source, target)) return false;
+    const stores = (t: TypeRecord): boolean => (t.Kind === 'union' ? t.Members.some(stores)
+      : t.Kind === 'tuple' ? SameTuplePositions(source, t) : IsAssignable(source, t));
+    return !stores(target);
+  };
+
+  /**
+   * #sec-intrinsic-array-contracts: the array `map` builds is new and carries
+   * no types, as an array literal's does not, so it takes its type where it is
+   * bound - at an array type of fixed length too. Run, the binding has always
+   * converted it: `const d: [3].<uint8> = a.map(f)` checks the length and each
+   * element. The checker gave the call `[].<U>` where it could establish the
+   * built-in and then refused that very line, for the extent - an early error
+   * that predicted no failure, and one the same line did not get in a program
+   * where the built-in is not established.
+   *
+   * So it is refused only where the lengths are known to differ. A receiver
+   * of fixed length gives as many elements as it has; one without leaves the
+   * length to the check the binding makes when it runs.
+   */
+  const freshMapResultFits = (source: TypeRecord, target: TypeRecord, at: ParseNode): boolean => {
+    if (source.Kind !== 'array' || source.Extent !== 'dynamic' || target.Kind !== 'array' || typeof target.Extent !== 'number') return false;
+    const call = unparenthesized(at);
+    if (call.type !== 'CallExpression') return false;
+    const callee = call.CallExpression as ParseNode;
+    if (callee.type !== 'MemberExpression' || callee.IdentifierName?.name !== 'map') return false;
+    const receiver = staticType(callee.MemberExpression as ParseNode);
+    const length = receiver?.Kind === 'array' ? receiver.Extent
+      : receiver?.Kind === 'tuple' && receiver.Elements.every((element) => !element.Rest) ? receiver.Elements.length : undefined;
+    if (length === undefined || (typeof length === 'number' && length !== target.Extent)) return false;
+    return target.Element.Kind === 'any' || IsAssignable(source.Element, target.Element);
+  };
+
   const requireAssignable = (source: Known, target: Known, at: ParseNode = root) => {
     if (!source || !target) {
+      return;
+    }
+    if (freshMapResultFits(source, target, at)) {
       return;
     }
     // #sec-check-insertion: a constant that meets a refinement anywhere a
@@ -8222,8 +8271,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The run time refuses this where a store happens; a local, a `return` and
     // a parameter have no store to hang it on, and accepting them produced a
     // value whose declared type no store would take.
-    if (SubclassAddsStorageOver(source as TypeRecord, target as TypeRecord)) {
+    if (!judgingBound && SubclassAddsStorageOver(source as TypeRecord, target as TypeRecord)) {
       reportType('rt-assignability', at, '$1 is not assignable to $2', Value(displayType(source as TypeRecord)), Value(displayType(target as TypeRecord)));
+      return;
+    }
+    // A TUPLE OF VALUE TYPES MAY NOT BE STORED WHERE ANOTHER TUPLE TYPE IS
+    // DECLARED, for the reason above. It is a value, laid out as its own
+    // positions, and a position of a wider tuple type would hold a copy that
+    // refuses what the wider type permits: `const w: [uint8 | string] = a`
+    // was accepted for a `[uint8]`, and `w[0] = "s"` threw when it ran. The
+    // type relation is untouched, as it is for a subclass: a bound takes the
+    // tuple whole, and `a := T` is the widening where it is wanted.
+    if (!judgingBound && valueTupleRefusedAt(source as TypeRecord, target as TypeRecord)) {
+      reportType('rt-assignability', at, '$1 is not assignable to $2: a tuple of value types is stored as its own positions; convert it with a spread or `:=`',
+        Value(displayType(source as TypeRecord)), Value(displayType(target as TypeRecord)));
       return;
     }
     if (target.Kind === 'function') {
@@ -18997,11 +19058,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // The declaration the name denotes, and the scope it is visible in.
       let declaration: ParseNode | undefined;
       let scope: ParseNode | undefined;
-      let kind: 'parameter' | 'binding' | 'element' | undefined;
+      let kind: 'parameter' | 'binding' | 'element' | 'member' | undefined;
+      // The name where an OBJECT pattern binds it: `const { p } = h`, `{ p: q }`,
+      // and a pattern within one. The binding is a copy of the member it reads
+      // (#sec-value-type-copying), and the checker has that member's type. An
+      // array pattern is not read here: its element is taken through the
+      // iterator, and no type is established for it. A default is another
+      // source for the value, so a name with one is left alone.
+      const inObjectPattern = (pattern: ParseNode | undefined | null): ParseNode | undefined => {
+        if (!pattern || pattern.type !== 'ObjectBindingPattern') return undefined;
+        for (const property of (pattern as ParseNode.ObjectBindingPattern).BindingPropertyList) {
+          const element: ParseNode = property.type === 'BindingProperty' ? property.BindingElement : property;
+          if (element.type === 'SingleNameBinding') {
+            if (element.BindingIdentifier.name === name) return element.Initializer || element.Ref ? undefined : element;
+          } else if (element.type === 'BindingElement' && !element.Initializer && !element.Ref) {
+            const found = inObjectPattern(element.BindingPattern);
+            if (found) return found;
+          }
+        }
+        return undefined;
+      };
       for (let at = reference.parent; at && !declaration; at = at.parent) {
         if (at.type === 'ForOfStatement') {
           const binding = nodeField<{ ForBinding?: ParseNode }>(at, 'ForDeclaration')?.ForBinding;
           if (nodeField<{ name?: string }>(binding, 'BindingIdentifier')?.name === name) [declaration, scope, kind] = [binding, at, 'element'];
+          else if (!nodeField<boolean>(binding, 'Ref')) {
+            const member = inObjectPattern(nodeField<ParseNode>(binding, 'BindingPattern'));
+            if (member) [declaration, scope, kind] = [member, at, 'member'];
+          }
         }
         if (!declaration && FUNCTION_LIKE.test(at.type)) {
           const parameters = nodeField<unknown>(at, 'FormalParameters') ?? nodeField<unknown>(at, 'UniqueFormalParameters') ?? nodeField<unknown>(at, 'ArrowParameters');
@@ -19012,16 +19096,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!declaration) {
           for (const statement of childNodesOf(at)) {
             if (statement.type !== 'LexicalDeclaration') continue;
-            const binding = (nodeField<ParseNode[]>(statement, 'BindingList') ?? []).find((item) => nodeField<{ name?: string }>(item, 'BindingIdentifier')?.name === name);
+            const list = nodeField<ParseNode[]>(statement, 'BindingList') ?? [];
+            const binding = list.find((item) => nodeField<{ name?: string }>(item, 'BindingIdentifier')?.name === name);
             if (binding) [declaration, scope, kind] = [binding, at, 'binding'];
+            for (const item of binding ? [] : list) {
+              const member = nodeField<boolean>(item, 'Ref') ? undefined : inObjectPattern(nodeField<ParseNode>(item, 'BindingPattern'));
+              if (member) [declaration, scope, kind] = [member, at, 'member'];
+            }
           }
         }
       }
       if (!declaration || !scope || !kind || judged.has(declaration)) continue;
       judged.add(declaration);
       if (nodeField<boolean>(declaration, 'Ref')) continue;
-      if (kind === 'parameter' && (!nodeField<unknown>(declaration, 'TypeAnnotation') || nodeField<unknown>(declaration, 'Initializer')
+      // A parameter is a copy of its argument whether or not it is annotated
+      // (#sec-value-type-copying). One without an annotation reaches here only
+      // where the checker has a type for it all the same: a callback written
+      // where a declared function type gives it, `each(ps, (p) => { ... })`
+      // for `g: (p: P) => void`. A callback written for a `ref` parameter is
+      // not assignable to that function type unless it says `ref` itself.
+      if (kind === 'parameter' && (nodeField<unknown>(declaration, 'Initializer')
         || nodeField<unknown>(declaration, 'TypedInitializer') || nodeField<boolean>(declaration, 'Optional'))) continue;
+      // The top level of a script or module is read from outside it; a `for...of` head is its own scope.
+      if (kind === 'member' && scope.type !== 'ForOfStatement'
+        && (!/^Block$|Body$/.test(scope.type) || scope.type === 'ScriptBody' || scope.type === 'ModuleBody')) continue;
       if (kind === 'binding') {
         // A binding at the top level of a script or module can be read from outside it, and a `for` head carries its value round the loop.
         if (!/^Block$|Body$/.test(scope.type) || scope.type === 'ScriptBody' || scope.type === 'ModuleBody') continue;
@@ -19097,6 +19195,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         reportType('rt-store-to-copy', lost.node, '$1 is a copy of the argument and nothing reads it after this store, so the store is lost; declare the parameter `ref`, or take a `Span`, to store to the caller\'s value', Value(name));
       } else if (kind === 'element') {
         reportType('rt-store-to-copy', lost.node, '$1 is a copy of the element and nothing reads it after this store, so the store is lost; iterate with `const ref` to store to the element', Value(name));
+      } else if (kind === 'member') {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy of the member the pattern reads and nothing reads it after this store, so the store is lost; store through the original\'s path', Value(name));
       } else {
         reportType('rt-store-to-copy', lost.node, '$1 is a copy and nothing reads it after this store, so the store is lost; store through the original\'s path, or bind it with `const ref`', Value(name));
       }
@@ -41407,7 +41507,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   .every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element))
                 : arms.length > 0 && arms.every((arm) => fitsOne(arm, closedRecord));
               if (!everyArmFits) {
-                requireAssignable(bound as Known, closed as Known, n as ParseNode);
+                judgingBound = true;
+                try {
+                  requireAssignable(bound as Known, closed as Known, n as ParseNode);
+                } finally {
+                  judgingBound = false;
+                }
               }
 
             }

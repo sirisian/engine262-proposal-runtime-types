@@ -117,3 +117,15 @@ test('an instance the engine built is equal to one a constructor built, and has 
   expect(evaluated('class A { a: uint8; } let d: A; const c = new A(); String(d === c) + String(new Set([d]).has(c)) + String(Reflect.typeOf(d) === Reflect.typeOf(c)) + JSON.stringify(d) + String(Object.isExtensible(d));'))
     .toBe('truetruetrue{"a":0}false');
 });
+
+test('a field with a symbol key is copied, compared and defaulted with the rest', () => {
+  // A key that is not a string was taken for a private name, so a copy and a default of
+  // `class B { [Symbol.dispose]: uint8; }` had no such property.
+  const S = 'class B { [Symbol.dispose]: uint8 = 5; x: uint8 = 1; } ';
+  expect(evaluated(`${S}function f() { const b = new B(); const c = b; c[Symbol.dispose] = 6; return String(c[Symbol.dispose]) + String(c.x) + String(b[Symbol.dispose]); } f();`)).toBe('615');
+  expect(evaluated(`${S}function g(c: B) { return String(c[Symbol.dispose]) + String(c.x); } g(new B());`)).toBe('51');
+  expect(evaluated(`${S}let d: B; String(d[Symbol.dispose]) + String(d.x);`)).toBe('00');
+  expect(evaluated(`${S}function f() { const a = new B(); const b = new B(); b[Symbol.dispose] = 6; const u: any = { a, b }; return String(u.a === u.b); } f();`)).toBe('false');
+  // The form the member tests pin: a subclass of a generic class with such a field.
+  expect(evaluated('class B<T: type> { [Symbol.dispose]: T; } class C extends B.<uint8> {} let c: C = new C(); let n: uint8 = c[Symbol.dispose]; String(n);')).toBe('0');
+});

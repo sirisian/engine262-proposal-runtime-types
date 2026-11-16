@@ -123,14 +123,57 @@ test('...and is refused when it runs, where the checking pass did not see it', (
   expect(evaluated(`${BC}${TRY}const u: any = new C(); attempt(() => { const b: B = u; return 'bound'; });`)).toBe('TypeError');
 });
 
-test('a subclass that adds nothing, the same class, and a reference class are unchanged', () => {
-  expect(evaluated(`${BC}const qs: [Q] = [new Q()]; const bs: [B] = qs; String(bs[0].x);`)).toBe('0');
+test('a subclass that adds nothing is stored at a position of its base, and a reference class is unchanged', () => {
+  // The VALUE is accepted at a position of the base: an element of a literal, and a spread of one.
+  expect(evaluated(`${BC}const bs: [B] = [new Q()]; String(bs[0].x) + String(bs[0] instanceof Q);`)).toBe('0true');
   expect(evaluated(`${BC}const qs: [1].<Q> = [new Q()]; const u: any = qs; const bs: [1].<B> = [...u]; String(bs[0].x);`)).toBe('0');
+  expect(evaluated(`${BC}const qs: [Q] = [new Q()]; const bs: [B] = [...qs]; bs[0] = new B(); String(bs[0] instanceof Q) + String(qs[0] instanceof Q);`)).toBe('falsetrue');
   expect(evaluated(`${BC}const b1: [B] = [new B()]; const b2: [B] = b1; b2[0].x = 3; String(b1[0].x) + String(b2[0].x);`)).toBe('03');
   // A tuple of reference classes keeps its covariance: it is one object, and
   // a store through the wider type is checked where it is made.
   expect(evaluated('reference class B { x: uint8; } reference class C extends B { y: uint8; } const cs: [C] = [new C()]; const bs: [B] = cs; String(bs[0] instanceof C) + String(bs === cs);')).toBe('truetrue');
-  expect(evaluated('const a: [uint8] = [1]; const w: [uint8 | string] = a; String(w[0]);')).toBe('1');
+});
+
+test('a tuple of value types is not stored at a position of another tuple type', () => {
+  // #sec-value-type-copying. A whole `[Q]` is a value laid out as its own positions, and a `[B]`
+  // position would hold a copy that refuses a `B`. It does not matter that `Q` adds no storage: the
+  // tuple is refused as a `[2].<Q>` is at a `[2].<B>`. The same for a position widened to a union.
+  expectStaticTypeError(`${BC}const qs: [Q] = [new Q()]; const bs: [B] = qs;`);
+  expectStaticTypeError('const a: [uint8] = [1]; const w: [uint8 | string] = a;');
+  expectStaticTypeError('const a: [uint8, uint8] = [1, 2]; const w: [uint8 | null, uint8] = a;');
+  expectStaticTypeError('const a: [[uint8]] = [[1]]; const w: [[uint8 | string]] = a;');
+  expectStaticTypeError('function g(w: [uint8 | string]) { } function f() { const a: [uint8] = [3]; g(a); }');
+  expectStaticTypeError('function g(): [uint8 | string] { const a: [uint8] = [3]; return a; }');
+  expectStaticTypeError('reference class R { x: uint8; } const a: [uint8] = [1]; const w: [uint8 | R] = a;');
+  // The type relation is untouched, as it is for a subclass, so a bound still takes the tuple whole.
+  expect(evaluated('type T1 = [uint8]; type T2 = [uint8 | string]; String(Reflect.isAssignable(T1, T2)) + String(Reflect.isAssignable(T2, T1));')).toBe('truefalse');
+  expect(evaluated('function first<T: type extends [uint8 | string]>(t: T): T { return t; } const a: [uint8] = [3]; const r: [uint8] = first(a); String(r[0]);')).toBe('3');
+  // Where the checker did not see it, the position refuses it when it runs.
+  expect(evaluated(`${TRY}const a: [uint8] = [3]; const u: any = { a }; attempt(() => { const w: [uint8 | string] = u.a; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${BC}${TRY}const qs: [Q] = [new Q()]; const u: any = { qs }; attempt(() => { const bs: [B] = u.qs; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${TRY}const a: [uint8] = [3]; const xs: [].<[uint8 | string]> = []; const u: any = { a }; attempt(() => { xs.push(u.a); return 'pushed'; });`)).toBe('TypeError');
+  // At its own type it is stored, and read as the wider type it still is one.
+  expect(evaluated('const a: [uint8] = [3]; const u: any = { a }; const w: [uint8] = u.a; String(w[0]) + String(u.a is [uint8 | string]);')).toBe('3true');
+});
+
+test('the widening of a tuple of value types is written', () => {
+  // A spread builds a new tuple at the type it is bound at.
+  expect(evaluated("const a: [uint8] = [3]; const w: [uint8 | string] = [...a]; w[0] = 's'; String(w[0]) + String(a[0]);")).toBe('s3');
+  // `a := T` gives a value OF the type written, at every depth, for a tuple and for an array of fixed length.
+  expect(evaluated("const a: [uint8, [uint8]] = [3, [4]]; const w = a := [uint8 | string, [uint8 | null]]; w[0] = 's'; w[1][0] = null; String(w[0]) + String(w[1][0]) + String(a[0]) + String(a[1][0]);")).toBe('snull34');
+  expect(evaluated('const fx: [2].<uint8> = [1, 2]; const wf = fx := [2].<uint8 | null>; wf[0] = null; String(wf[0]) + String(fx[0]);')).toBe('null1');
+  // The result is another value: a tuple of another type is not the tuple it was made from.
+  expect(evaluated('const a: [uint8] = [3]; const w = a := [uint8 | string]; const u: any = { w, a }; String(u.w === u.a) + String(u.w[0] === u.a[0]);')).toBe('falsetrue');
+});
+
+test('an array of fixed length of a value type is of its own type when it runs too', () => {
+  // The checker holds an array invariant in its element. Run, membership looked at each element
+  // and admitted a `[2].<uint8>` at a `[2].<uint8 | string]`, which then refused the string.
+  expect(evaluated(`${TRY}const a: [2].<uint8> = [1, 2]; const u: any = { a }; attempt(() => { const w: [2].<uint8 | string> = u.a; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${TRY}const a: [2].<uint8> = [1, 2]; const u: any = { a }; attempt(() => { const w: [uint8, uint8] = u.a; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated('const a: [2].<uint8> = [1, 2]; const u: any = { a }; const w: [2].<uint8> = u.a; const top: [2].<any> = u.a; String(w[1]) + String(top[1]);')).toBe('22');
+  // An untyped array carries no type, and takes the one it is bound at.
+  expect(evaluated("const u: any = [1, 2]; const x: [2].<uint8 | string> = u; x[0] = 't'; String(x[0]);")).toBe('t');
 });
 
 test('an array or tuple built element by element refuses each element that adds storage', () => {
@@ -158,4 +201,41 @@ test('a read-only window of the base is not taken over an array of a subclass th
   expect(evaluated(`${BC}const bs: [].<B> = [new B()]; const t: [B, B] = [new B(), new B()]; const w1: ReadonlySpan.<B> = bs; const w2: ReadonlySpan.<B> = t; String(w1.length) + String(w2.length);`)).toBe('12');
   expect(evaluated('reference class A { n: uint8; } reference class D extends A { t: uint8; } const ds: [].<D> = [new D()]; const w: ReadonlySpan.<A> = ds; String(w[0].n);')).toBe('0');
   expect(evaluated('const a: [].<uint8> = [1]; const w: ReadonlySpan.<uint8 | string> = a; String(w[0]);')).toBe('1');
+});
+
+test('a bound takes a value whole, whatever its layout', () => {
+  // #sec-value-type-copying: "a bound `T extends Base` carries the whole value". The inferred type
+  // argument was judged against the bound as a value stored at a position of it, and refused.
+  expect(evaluated(`${BC}function id<T: type extends B>(v: T): T { return v; } const c: C = id(new C()); const d: C = id.<C>(new C()); String(c instanceof C) + String(d instanceof C);`)).toBe('truetrue');
+  expect(evaluated(`${BC}function id<T: type extends [B]>(v: T): T { return v; } const qs: [Q] = [new Q()]; const r: [Q] = id(qs); String(r[0].twice);`)).toBe('0');
+  // The position rule is untouched: a `C` is still not stored where a `B` is declared.
+  expectStaticTypeError(`${BC}function take(b: B) { } take(new C());`);
+});
+
+test('a subclass that declares no field is a value as its base is', () => {
+  // #sec-typed-classes: "typed when at least one of its public or private fields, DECLARED OR
+  // INHERITED, carries a type annotation", and a value type class when every field is of a value
+  // type. `class Q extends B` with a getter and no field was given a layout and no value
+  // semantics: a binding of one was another name for it.
+  const QE = 'class B { x: uint8; } class Q extends B { get twice(): uint8 { return this.x * 2; } } class E extends B { } ';
+  expect(evaluated(`${QE}function f() { const q = new Q(); const c = q; c.x = 4; return String(q.x) + String(c.x) + String(c.twice) + String(c instanceof Q); } f();`)).toBe('048true');
+  expect(evaluated(`${QE}function g(e: E) { e.x = 4; return e.x; } function f() { const e = new E(); return String(g(e)) + String(e.x); } f();`)).toBe('40');
+  expect(evaluated(`${QE}function f() { const qs: [2].<Q> = [new Q(), new Q()]; const cs = qs; cs[0].x = 4; return String(qs[0].x) + String(cs[0].x); } f();`)).toBe('04');
+  // Equal by value, as two of the base are.
+  expect(evaluated(`${QE}function f() { const a = new E(); const b = new E(); const u: any = { a, b }; return String(u.a === u.b) + String(new Set([a]).has(b)); } f();`)).toBe('truetrue');
+  // A default of it has the base's fields.
+  expect(evaluated(`${QE}function f() { let e: E; return String(e.x) + String(e instanceof E) + String(E.byteLength); } f();`)).toBe('0true1');
+});
+
+test('a subclass of a class with no layout has none, and keeps every field', () => {
+  // #table-layout-qualification. A `string` field has no size, so the base has no layout; the
+  // absent base layout read as "no base", and the subclass was laid out as its own fields alone.
+  // A copy, which walks the layout, then had those and none of the base's.
+  const SB = "class B { x: uint8 = 7; s: string = 'ok'; } class S extends B { y: uint8 = 1; } class E extends B { } ";
+  expect(evaluated(`${SB}String(B.hasLayout) + String(S.hasLayout) + String(E.hasLayout);`)).toBe('falsefalsefalse');
+  expect(evaluated(`${SB}function f() { const b = new S(); const c = b; return String(c.x) + c.s + String(c.y); } f();`)).toBe('7ok1');
+  expect(evaluated(`${SB}function f() { const e = new E(); const c = e; const u: any = c; return String(u.x) + u.s; } f();`)).toBe('7ok');
+  expect(evaluated(`${SB}function g(c: S) { return String(c.x) + c.s + String(c.y); } g(new S());`)).toBe('7ok1');
+  // The control: a base that is laid out gives its subclass its fields.
+  expect(evaluated('class N { x: uint8 = 7; } class P extends N { y: uint8 = 1; } class M extends N { } [N.byteLength, P.byteLength, M.byteLength].join();')).toBe('1,2,1');
 });

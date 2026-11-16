@@ -1629,6 +1629,14 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const baseLayout = (baseCtor && typeof baseCtor === 'object' && 'InstanceLayout' in baseCtor)
         ? baseCtor.InstanceLayout ?? null
         : null;
+      // A base that is a typed class and has NO layout - one of its fields has
+      // no size, a `string` - leaves its subclass with none either
+      // (#table-layout-qualification). The absent base layout read as "no
+      // base", so `class S extends B { y: uint8; }` was laid out as `y` alone:
+      // `S.byteLength` was 1, and a copy of an `S`, which walks the layout,
+      // had `y` and neither of `B`'s fields.
+      const baseUnlaid = baseLayout === null
+        && (constructorParent as { SealInstances?: boolean } | undefined | null)?.SealInstances === true;
       const classDecorators = (ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators;
       const unreadableClass = firstUnreadableControl(classDecorators);
       if (unreadableClass !== null) {
@@ -1694,7 +1702,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           Q(yield* MaterializeSpecialization(applied.Declaration as never, applied.Arguments!, applied.Constructor));
         }
       }
-      const computed = complete ? ComputeClassLayout(baseLayout, laidOut, classControls, (ClassTail as { parent?: unknown }).parent) : null;
+      const computed = complete && !baseUnlaid ? ComputeClassLayout(baseLayout, laidOut, classControls, (ClassTail as { parent?: unknown }).parent) : null;
       if (computed !== null && 'cycle' in computed) {
         // #sec-layout-finiteness, reported at the declaration that closes the
         // cycle rather than where a size is later asked for.
@@ -1717,7 +1725,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // application (LayoutOf's nominal arm). The answer computed here has the
       // parameters unbound and is the layout of no instantiation.
       (F as { LayoutInputs?: unknown }).LayoutInputs = {
-        baseLayout, fields: laidOutUnbound, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
+        baseLayout, baseUnlaid, fields: laidOutUnbound, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
       };
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {

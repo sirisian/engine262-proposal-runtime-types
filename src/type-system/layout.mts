@@ -421,7 +421,17 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
     typedFields += 1;
   }
   if (typedFields === 0) {
-    return false;
+    // #sec-typed-classes: "A class is typed when at least one of its public or
+    // private fields, DECLARED OR INHERITED, carries a type annotation", and a
+    // typed class every field of which has a value type is a value type
+    // class. A subclass that declares no field of its own has its base's
+    // fields and its base's layout, so it is a value type exactly when its
+    // base is. Answering *false* here left `class Q extends B {}` with a
+    // layout and no value semantics: `const c = q; c.x = 4` wrote `q`, and a
+    // `[Q]` bound as a `[B]` - which is accepted, since `Q` adds no storage -
+    // was the same tuple under two names.
+    const base = (t as { Base?: TypeRecord }).Base;
+    return base !== undefined && valueTypeWalk(base, depth + 1);
   }
   // The field TYPES are walked, which an earlier revision declined to do for want
   // of a resolver and called a case "a class is unlikely to reach by accident".
@@ -668,6 +678,9 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     if (!args || args.length === 0 || !inputs || substituteForLayout === null) {
       return declared;
     }
+    if (inputs.baseUnlaid) {
+      return null;
+    }
     // The INPUTS rather than the placements. A FieldPlacement carries a type and
     // an offset but not its `controls`, so recomputing from the placements alone
     // would silently drop `@offset`, `@align` and the bit-field widths.
@@ -889,6 +902,8 @@ export interface ClassLayout extends Layout {
 
 export interface LayoutInputs {
   readonly baseLayout: ClassLayout | null;
+  /** The base is a typed class with no layout, so this class has none whatever it declares. */
+  readonly baseUnlaid?: boolean;
   readonly fields: readonly { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[];
   readonly controls: ClassControls;
   readonly parent: unknown;

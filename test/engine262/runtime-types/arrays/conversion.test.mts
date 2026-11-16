@@ -44,14 +44,19 @@ test('the length and the position types are still enforced', () => {
   expectThrown('const a: [uint8] = { 0: 1 };');
 });
 
-test('the array form is unaffected, and covariance is now testable', () => {
+test('the array form is unaffected, and a tuple type is covariant where nothing is stored', () => {
   expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; String(a.length);')).toBe('4');
-  // the spec states a tuple is covariant position-wise; before this fix the
-  // source binding could not be constructed to test it
+  // The spec states a tuple TYPE is covariant position-wise, and it is: the relation a bound and
+  // `Reflect.isAssignable` read.
   expect(evaluated('type T1 = [uint8]; type T2 = [uint8 | string];'
-    + ' const a: T1 = [1]; const b: T2 = a; String(b.length);')).toBe('1');
+    + ' String(Reflect.isAssignable(T1, T2)) + String(Reflect.isAssignable(T2, T1));')).toBe('truefalse');
+  // A tuple of value types is a value, though, and a position of the wider type does not store
+  // one of the narrower (memory-layout/subclass-layout.test.mts). A spread is the conversion.
+  expectThrown('type T1 = [uint8]; type T2 = [uint8 | string]; const a: T1 = [1]; const b: T2 = a;');
+  expect(evaluated('type T1 = [uint8]; type T2 = [uint8 | string];'
+    + ' const a: T1 = [1]; const b: T2 = [...a]; String(b.length);')).toBe('1');
   expect(evaluated('type T1 = [uint8, string]; type T2 = [uint8 | number, string];'
-    + " const a: T1 = [1, 'x']; const b: T2 = a; String(b.length);")).toBe('2');
+    + " const a: T1 = [1, 'x']; const b: T2 = [...a]; String(b.length);")).toBe('2');
   // and it is covariance, not equivalence
   expectThrown('type T1 = [uint8 | string]; type T2 = [uint8]; const a: T1 = [1]; const b: T2 = a;');
 });

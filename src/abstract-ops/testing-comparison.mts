@@ -478,10 +478,14 @@ export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   }
   for (const field of layout.fields) {
     // A private field's storage was copied above; it has no property to read.
-    if (typeof field.key !== 'string') {
+    // A field with a computed SYMBOL key is a property like any other, and is
+    // copied with the rest: `class B { [Symbol.dispose]: uint8; }` lost it at
+    // every copy, since a key that is not a string was taken for a private one.
+    const fieldKey = field.key as unknown;
+    if (typeof fieldKey !== 'string' && !(fieldKey instanceof SymbolValue)) {
       continue;
     }
-    const key = Value(field.key);
+    const key = typeof fieldKey === 'string' ? Value(fieldKey) : fieldKey;
     X(copy.DefineOwnProperty(key, Descriptor({
       Value: Q(yield* CopyValueClassInstance(Q(yield* Get(v, key)))),
       Writable: Value.true,
@@ -644,10 +648,12 @@ function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefine
     return false;
   }
   for (const field of layout.fields) {
-    if (typeof field.key !== 'string') {
+    // A symbol-keyed field is a field of the value, and is compared.
+    const fieldKey = field.key as unknown;
+    if (typeof fieldKey !== 'string' && !(fieldKey instanceof SymbolValue)) {
       continue;
     }
-    const key = Value(field.key);
+    const key = typeof fieldKey === 'string' ? Value(fieldKey) : fieldKey;
     const xv = X(Get(x, key));
     const yv = X(Get(y, key));
     if (!fieldEquals(xv, yv, field.type, zero)) {

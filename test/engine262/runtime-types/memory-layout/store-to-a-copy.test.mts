@@ -206,3 +206,48 @@ test('a binding of a value type or undefined that is used is not judged', () => 
   // A union of two value types is not one copy type, and is not judged.
   expect(evaluated(`${P}class Q { x: float32; } function poke(g: P | Q): void { g.x = 9; } poke(new P()); 'ok';`)).toBe('ok');
 });
+
+test('a store to a copy an object pattern binds is refused', () => {
+  // #sec-store-to-a-copy: the binding is a copy of the member the pattern reads, and the checker
+  // has that member's type.
+  const H = `${P}class H { p: P; } class O { h: H; } const h: H = new H(); const o: O = new O(); const hs: [].<H> = [new H()]; `;
+  lost(`${H}function f() { const { p } = h; p.x = 9; }`);
+  lost(`${H}function f() { const { p: q } = h; q.x = 9; }`);
+  lost(`${H}function f() { const { h: { p } } = o; p.x = 9; }`);
+  lost(`${H}function f() { for (const { p } of hs) { p.x = 9; } }`);
+  // It runs as the rule says: the store changes nothing the program reads.
+  expect(evaluated(`${H}function f() { const u: any = h; const { p } = u; p.x = 9; } f(); String(h.p.x);`)).toBe('0');
+});
+
+test('a pattern\'s binding that is used, defaulted or not a copy is not judged', () => {
+  const H = `${P}class H { p: P; } const h: H = new H(); `;
+  expect(evaluated(`${H}function f(): float32 { const { p } = h; p.x = 9; return p.x; } String(f()) + String(h.p.x);`)).toBe('90');
+  expect(evaluated(`${H}function f(): P { const { p } = h; p.x = 9; return p; } String(f().x) + String(h.p.x);`)).toBe('90');
+  // A default is another source for the value.
+  expect(evaluated(`${H}function f() { const { p = new P() } = h; p.x = 9; } f(); String(h.p.x);`)).toBe('0');
+  // A rest collects references into a plain object, and the store lands.
+  expect(evaluated(`${H}function f() { const { ...rest } = h; rest.p.x = 9; } f(); String(h.p.x);`)).toBe('9');
+  // A member of a reference type is a reference.
+  expect(evaluated('reference class R { x: uint8; } class H { r: R = new R(); } const h: H = new H(); function f() { const { r } = h; r.x = 9; } f(); String(h.r.x);')).toBe('9');
+  // An array pattern takes its element through the iterator, and no type is established for it:
+  // the store is lost, and is not judged.
+  expect(evaluated(`${P}const ps: [].<P> = [new P()]; function f() { const [first] = ps; first.x = 9; } f(); String(ps[0].x);`)).toBe('0');
+  // The top level of a script is read from outside it.
+  expect(evaluated(`${H}const { p } = h; p.x = 9; String(h.p.x);`)).toBe('0');
+});
+
+test('a store to a callback\'s parameter typed by a declared function type is refused', () => {
+  // The parameter is a copy of its argument whether or not it is annotated, and here the checker
+  // has its type from the function type the callback is written for.
+  const E = `${P}const ps: [].<P> = [new P()]; function each(xs: [].<P>, g: (p: P) => void) { for (const x of xs) g(x); } `;
+  lost(`${E}function f() { each(ps, (p) => { p.x = 9; }); }`);
+  lost(`${P}function f() { const g: (p: P) => void = (p) => { p.x = 9; }; g(new P()); }`);
+  // With the annotation written, as before.
+  lost(`${E}function f() { each(ps, (p: P) => { p.x = 9; }); }`);
+  // A callback that reads what it changed is using its copy.
+  expect(evaluated(`${P}const ps: [].<P> = [new P()]; function total(xs: [].<P>, g: (p: P) => float32): float32 { let n: float32 = 0; for (const x of xs) n += g(x); return n; } function f() { return total(ps, (p) => { p.x = 9; return p.x; }); } String(f()) + String(ps[0].x);`)).toBe('90');
+  // A callback for a `ref` parameter says `ref`, and its store lands.
+  expect(evaluated(`${P}const ps: [].<P> = [new P()]; function each(xs: [].<P>, g: (ref p: P) => void) { for (const ref x of xs) g(ref x); } function f() { each(ps, (ref p: P) => { p.x = 9; }); } f(); String(ps[0].x);`)).toBe('9');
+  // A built-in's callback is given no type unless the built-in is established, and is not judged.
+  expect(evaluated(`${P}const ps: [].<P> = [new P()]; function f() { ps.forEach((p) => { p.x = 9; }); } f(); String(ps[0].x);`)).toBe('0');
+});

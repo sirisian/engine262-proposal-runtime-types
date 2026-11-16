@@ -34,7 +34,7 @@ import { CallEvaluator } from '../evaluator-trampoline.mts';
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { CopyValueClassInstance } from '../abstract-ops/testing-comparison.mts';
+import { CopyValueClassInstance, ValueAggregateOf } from '../abstract-ops/testing-comparison.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, functionTypeParameters, AdoptedTypeParametersOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
@@ -4087,6 +4087,18 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         if (value === undefined) {
           return undefined;
         }
+        // A field with a computed SYMBOL key is a property, defaulted as one.
+        // It fell to the private arm below, which gave the instance a private
+        // element under the symbol and no property: `d[Symbol.dispose]` on a
+        // default read *undefined*.
+        if (field.Name instanceof SymbolValue) {
+          X(CreateDataPropertyOrThrow(instance, field.Name, value));
+          typed.set(field.Name, { TypeRecord: record });
+          if ((field as { Readonly?: boolean }).Readonly === true) {
+            declaredReadonly.set(field.Name, declaring);
+          }
+          continue;
+        }
         const name = field.Name as { stringValue?: () => string } | undefined;
         if (typeof name?.stringValue === 'function') {
           X(CreateDataPropertyOrThrow(instance, Value(name.stringValue()), value));
@@ -5067,15 +5079,19 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       if (t.Kind === 'array' && laidOut.TypedElement !== undefined && SubclassAddsStorageOver(laidOut.TypedElement, t.Element)) {
         return false;
       }
-      if (t.Kind === 'tuple' && laidOut.TypedTuple?.Positions !== undefined) {
-        const held = laidOut.TypedTuple.Positions;
-        const targetShape = TupleStorageShapeOf(t);
-        for (let i = 0; i < len && i < held.length; i += 1) {
-          const target = targetShape ? TupleStorageTypeAt(targetShape, i, len) : t.Elements[i]?.Rest ? undefined : t.Elements[i]?.Type;
-          if (target && SubclassAddsStorageOver(held[i], target)) {
-            return false;
-          }
-        }
+      // #sec-array-membership: an array of fixed length of a value type is a
+      // VALUE of the type it carries, and IsSubtype holds an array invariant
+      // in its element. So such an array is of an array type _t_ only where
+      // its element type is _t_'s: a `[2].<uint8>` that reaches a
+      // `[2].<uint8 | string]` through `any` is refused there as it is where
+      // the checker sees it, and `u is [2].<uint8 | string]` answers what the
+      // checker answers. An array whose element is `any` is the family's top.
+      // A tuple is not judged here: its positions are covariant in the type
+      // relation, and the position that RECEIVES one judges it (RequireType).
+      const aggregate = ValueAggregateOf(value);
+      if (aggregate !== undefined && t.Kind === 'array' && t.Element.Kind !== 'any'
+          && ('Positions' in aggregate || !SameType(aggregate.Element, t.Element))) {
+        return false;
       }
 
       if (t.Kind === 'array') {

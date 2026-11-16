@@ -1114,6 +1114,18 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         return viewed === own.Value ? own : Descriptor({ ...own, Value: viewed });
       }
     }
+    // #sec-typed-classes, for an array: a frozen typed array or tuple hands
+    // out an element that is stored inline read-only, as a frozen instance
+    // hands out a field. `Object.freeze(xs); xs[0].a = 4` stored to a frozen
+    // value, which then no longer equalled a copy taken before the store.
+    if ((this as { FrozenTypedSequence?: boolean }).FrozenTypedSequence === true && isArrayIndex(P)) {
+      const own = OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
+      if (own instanceof UndefinedValue || own.Value === undefined) {
+        return own;
+      }
+      const viewed = ReadonlyMemberView(own.Value, 'frozen');
+      return viewed === own.Value ? own : Descriptor({ ...own, Value: viewed });
+    }
     // proposal-runtime-types #sec-span-type: a WINDOW's elements and its length
     // are answered by its backing, not stored on it, so the object model could
     // not see them: `0 in window` was *false*, `Object.getOwnPropertyNames`
@@ -1361,6 +1373,13 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     // and is rejected. The check is skipped for the vast majority of objects,
     // which carry no readonly fields.
     if (surroundingAgent.feature('runtime-types')) {
+      // A store to a frozen typed array or tuple is a TypeError in every mode,
+      // as a store to a field of a frozen instance of a typed class is: the
+      // silent failure a non-writable property gives outside strict mode is
+      // not how typed storage refuses.
+      if ((Receiver as { FrozenTypedSequence?: boolean }).FrozenTypedSequence === true) {
+        return Throw.TypeError('this array is frozen, so $1 cannot be stored to', P);
+      }
       const readonlyFields = (Receiver as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
       if (readonlyFields !== undefined) {
         const fieldKey = P instanceof JSStringValue ? P.stringValue() : P;
