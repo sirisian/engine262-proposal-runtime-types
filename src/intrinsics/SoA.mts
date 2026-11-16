@@ -8,6 +8,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf, type SoAColumn } from '../type-system/layout.mts';
 import { BufferElementType, SetPlacementBacking, WritePlacedField } from '../abstract-ops/placement.mts';
+import { RecordClassConstructors } from '../abstract-ops/function-operations.mts';
 import { SubclassAddsStorageOver } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { displayType } from '../type-system/records.mts';
@@ -316,6 +317,7 @@ function* readColumnElement(storage: SoAStorage, columnIndex: number, index: num
     if (layout) {
       const proto = Q(yield* Get(ctor as unknown as ObjectValue, Value('prototype')));
       const nested = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+      RecordClassConstructors(nested, ctor);
       SetPlacementBacking(nested as unknown as object, {
         Buffer: storage.Buffer, ByteOffset: at, ByteLength: column.layout.byteLength, Layout: layout,
         CheckLive: borrow === undefined ? undefined : () => requireUnmoved(borrow),
@@ -429,6 +431,9 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
   }
   const proto = Q(yield* Get(ctor, Value('prototype')));
   const instance = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  // A gathered element is a value of its class, built here and by no
+  // constructor (RecordClassConstructors).
+  RecordClassConstructors(instance, ctor);
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (let i = 0; i < storage.Columns.length; i += 1) {
     const column = storage.Columns[i]!;
@@ -732,6 +737,7 @@ export function* SoAElementReference(storage: SoAStorage, index: number): ValueE
   const ctor = element.Kind === 'nominal' ? (element as { Constructor?: ObjectValue }).Constructor : undefined;
   const proto = ctor ? Q(yield* Get(ctor, Value('prototype'))) : Value.null;
   const view = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  RecordClassConstructors(view, ctor);
   elementBackings.set(view as unknown as object, {
     Storage: storage, Index: index, Generation: storage.Generation,
     ElementIdentity: elementIdentity(storage, index),

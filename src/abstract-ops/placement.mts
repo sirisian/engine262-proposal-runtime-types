@@ -7,6 +7,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, type ClassLayout, type FieldPlacement } from '../type-system/layout.mts';
 import type { TypedArrayTypes } from '../intrinsics/TypedArray.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
+import { RecordClassConstructors } from './function-operations.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, Throw, surroundingAgent, ToIndex,
   Get, OrdinaryObjectCreate, Set as SetProperty,
@@ -100,6 +101,9 @@ export function* PlacedInstance(
   }
   const proto = Q(yield* Get(ctor as unknown as ObjectValue, Value('prototype')));
   const instance = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  // An instance onto storage is an instance of its class: it is no more to be
+  // held weakly or proxied than one a constructor built (RecordClassConstructors).
+  RecordClassConstructors(instance, ctor);
   SetPlacementBacking(instance as unknown as object, {
     Buffer: buffer, ByteOffset: byteOffset, ByteLength: byteLength, Layout: layout, CheckLive: checkLive,
   });

@@ -38,6 +38,7 @@ import {
   RequireType,
   PrepareScalarRestStore,
   isArrayIndex,
+  SameValue,
   surroundingAgent,
 } from '#self';
 
@@ -1161,6 +1162,30 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     }
     if (definedThrough !== undefined) {
       return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be stored to', P);
+    }
+    // #sec-typed-classes: "Every other assignment is a type error... through
+    // reflection is a *TypeError*." `Reflect.set` reaches [[Set]], which
+    // refuses. `Object.defineProperty` reaches this method without it, and
+    // gave a `readonly` field a new value. A definition that gives the field
+    // another value, or makes it an accessor, is such an assignment, and is
+    // refused wherever [[Set]] refuses one: outside the constructor that
+    // declares the field, and everywhere for a `static` one. A definition that
+    // only restates the value or changes an attribute is not, which is what
+    // `Object.freeze` performs.
+    const recorded = (this as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+    if (recorded !== undefined && recorded.size > 0 && surroundingAgent.feature('runtime-types')) {
+      const declaring = recorded.get(P instanceof JSStringValue ? P.stringValue() : P);
+      if (declaring !== undefined && surroundingAgent.executionContextStack.at(-1)?.Function !== declaring) {
+        const current = OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
+        const rewrites = !(current instanceof UndefinedValue) && (Desc.Get !== undefined || Desc.Set !== undefined
+          || (Desc.Value !== undefined && (current.Value === undefined || !SameValue(Desc.Value, current.Value))));
+        if (rewrites) {
+          if ((declaring as { staticReadonlyField?: boolean }).staticReadonlyField === true) {
+            return Throw.TypeError('$1 is a static readonly field and can only be assigned by its initializer', P);
+          }
+          return Throw.TypeError('$1 is a readonly field and can only be assigned in the declaring class constructor', P);
+        }
+      }
     }
     return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc, choices, admission);
   }

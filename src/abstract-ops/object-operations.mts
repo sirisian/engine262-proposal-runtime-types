@@ -304,7 +304,13 @@ export function* SetIntegrityLevel(O: ObjectValue, level: 'sealed' | 'frozen'): 
           if (k instanceof JSStringValue) {
             const currentDesc = Q(yield* O.GetOwnProperty(k));
             if (!(currentDesc instanceof UndefinedValue) && IsDataDescriptor(currentDesc)) {
-              map.set(k.stringValue(), FROZEN_FIELD_SENTINEL);
+              // A field its class declares `readonly` keeps the constructor
+              // that may assign it beside the marker: a COPY of a frozen
+              // value is a new value and is not frozen, but its declared
+              // `readonly` fields are still `readonly` (CopyValueClassInstance).
+              const declared = map.get(k.stringValue()) as { frozenReadonlyField?: boolean } | undefined;
+              map.set(k.stringValue(), declared === undefined ? FROZEN_FIELD_SENTINEL
+                : declared.frozenReadonlyField === true ? declared : { frozenReadonlyField: true, declaredBy: declared });
             }
           }
         }

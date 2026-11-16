@@ -319,6 +319,40 @@ export function SameValue(x: Value, y: Value): boolean {
  * pairs with one holding `+0`, exactly as a bare NaN or `-0` key does.
  */
 /**
+ * The `readonly` record a COPY of a value carries, given its source's.
+ *
+ * #sec-value-type-copying preserves the fields the class declares `readonly`,
+ * each with the constructor that may assign it.
+ *
+ * It does not preserve a FREEZE. Freezing is an act on one object
+ * (#sec-typed-classes: "makes every field of the instance `readonly` at run
+ * time"), and a copy is another value, the reader's own: `const c = frozen;
+ * c.n = 4` is a store to the copy. Carried over, the marker left a copy that
+ * `Object.isFrozen` called unfrozen and that refused every store. So a frozen
+ * field is copied as what its class declared it: `readonly` with its
+ * constructor, or writable.
+ *
+ * One operation for both copies - the one a read or a bind takes
+ * (CopyValueClassInstance) and the one a typed boundary takes
+ * (CopyValueTypeInstance) - so the two cannot disagree about a frozen source.
+ */
+export function DeclaredReadonlyFieldsOf(recorded: Map<unknown, unknown> | undefined): Map<unknown, unknown> | undefined {
+  if (recorded === undefined) {
+    return undefined;
+  }
+  const kept = new Map<unknown, unknown>();
+  for (const [key, by] of recorded) {
+    const marker = by as { frozenReadonlyField?: boolean, declaredBy?: unknown };
+    if (marker.frozenReadonlyField !== true) {
+      kept.set(key, by);
+    } else if (marker.declaredBy !== undefined) {
+      kept.set(key, marker.declaredBy);
+    }
+  }
+  return kept.size > 0 ? kept : undefined;
+}
+
+/**
  * A copy of _v_ where _v_ is an instance of a VALUE TYPE CLASS, or _v_ itself.
  *
  * #sec-typed-classes: "A typed class is a value type class when every one of its
@@ -405,9 +439,11 @@ export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   if (source.TypedProperties !== undefined) {
     target.TypedProperties = new Map(source.TypedProperties);
   }
-  // #sec-value-type-copying preserves the declaring constructor's readonly fields.
-  if (source.ReadonlyFields !== undefined) {
-    target.ReadonlyFields = new Map(source.ReadonlyFields);
+  // #sec-value-type-copying preserves the declaring constructor's readonly
+  // fields, and not a freeze: see DeclaredReadonlyFieldsOf.
+  const kept = DeclaredReadonlyFieldsOf(source.ReadonlyFields);
+  if (kept !== undefined) {
+    target.ReadonlyFields = kept;
   }
   if (source.BrandTypeRecord !== undefined) {
     Object.defineProperty(copy, 'BrandTypeRecord', {

@@ -1363,7 +1363,13 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       return false;
     }
     const wantExtent = spanExtentOf(t);
-    const elementOk = (e: TypeRecord) => isAnyElement(element) || IsSubtype(e, element, next);
+    // The wider element is sound because nothing is stored through the window.
+    // It is not sound for a subclass that ADDS STORAGE to a value type class:
+    // the run is laid out as the subclass, each element read through the
+    // window is the subclass's value, and a copy of one into a position of the
+    // base is refused when it runs (#sec-value-type-copying). An array of such
+    // a subclass is not an array of its base, and is not a window of it either.
+    const elementOk = (e: TypeRecord) => isAnyElement(element) || (IsSubtype(e, element, next) && !SubclassAddsStorageOver(e, element));
     if (s.Kind === 'array') {
       return (wantExtent === undefined || s.Extent === wantExtent) && elementOk(s.Element);
     }

@@ -1,4 +1,4 @@
-import { CreateBuiltinFunction } from '../abstract-ops/function-operations.mts';
+import { CreateBuiltinFunction, RecordClassConstructors } from '../abstract-ops/function-operations.mts';
 import { RegisterSourceWherePredicate, BeginWhereDefaultObservation, EndWhereDefaultObservation, IsAdmittedWherePredicate, AdmitWherePredicate } from './where-predicates.mts';
 import { PreferredConstructionAlternative, type ConstructionSelections } from './result-dependencies.mts';
 import type { ExecutionContext } from '../execution-context/ExecutionContext.mts';
@@ -4060,8 +4060,21 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         chain.unshift(asCtor);
         c = OrdinaryGetPrototypeOf(c as never) as unknown;
       }
-      const allFields = chain.flatMap((c) => (c.Fields ?? []) as typeof constructor.Fields);
-      for (const field of allFields) {
+      // The instance is its class's, though no constructor ran: recorded so
+      // that what recognises an instance of a typed class recognises a default
+      // (RecordClassConstructors).
+      RecordClassConstructors(instance, constructor);
+      // A field the class declares `readonly` is `readonly` in a default too,
+      // recorded with the constructor that declares it, as
+      // InitializeInstanceElements records it for an instance a constructor
+      // builds (#sec-typed-classes: "Every other assignment is a type error...
+      // through reflection is a *TypeError*"). No constructor ran, so the
+      // record was never made, and a default's `readonly` field was written by
+      // any store the checking pass did not see: `let d: B; u.k = 9` through a
+      // name typed `any`, and `Reflect.set`.
+      const declaredReadonly = new Map<unknown, unknown>();
+      const allFields = chain.flatMap((c) => ((c.Fields ?? []) as typeof constructor.Fields).map((field) => ({ field, declaring: c })));
+      for (const { field, declaring } of allFields) {
         let record = field.TypeObject?.TypeRecord;
         if (record && applied.length > 0 && declaration !== undefined) {
           record = CanonicalizeType(SubstituteTypeArguments(record, declaration, applied));
@@ -4078,6 +4091,9 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         if (typeof name?.stringValue === 'function') {
           X(CreateDataPropertyOrThrow(instance, Value(name.stringValue()), value));
           typed.set(name.stringValue(), { TypeRecord: record });
+          if ((field as { Readonly?: boolean }).Readonly === true) {
+            declaredReadonly.set(name.stringValue(), declaring);
+          }
           continue;
         }
         // A PRIVATE field is filled too. Its [[Name]] is a Private Name rather
@@ -4101,6 +4117,9 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // The instance carries its field types, so a store into a defaulted
       // instance is checked exactly as one into a constructed instance is.
       (instance as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+      if (declaredReadonly.size > 0) {
+        (instance as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields = declaredReadonly;
+      }
       X(instance.PreventExtensions());
       return instance;
     }
@@ -5036,6 +5055,14 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // IsSubtype applies to an array's element and a tuple's position, and
       // the one a field of class type already applies to the value itself. A
       // subclass that adds nothing has the base's layout and is a member.
+      // The same judgment of each element of an array or tuple that carries
+      // no types of its own, a literal with a spread among them: `[...cs]` at
+      // a `[].<Base>` is a store of each element of `cs`, and one of a
+      // subclass that adds storage is refused as `[c]` is. Membership looked
+      // at each element, found a `Base`, and admitted the array with a
+      // subclass's value in base storage.
+      const addsStorageAt = (element: Value, at: TypeRecord): boolean => element instanceof ObjectValue && at.Kind === 'nominal'
+        && SubclassAddsStorageOver(RuntimeTypeOf(element), at);
       const laidOut = value as unknown as { TypedElement?: TypeRecord, TypedTuple?: { Positions?: readonly TypeRecord[] } };
       if (t.Kind === 'array' && laidOut.TypedElement !== undefined && SubclassAddsStorageOver(laidOut.TypedElement, t.Element)) {
         return false;
@@ -5096,7 +5123,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const el = Q(yield* observe(i));
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
           const childStart = storage?.length;
-          if (!Q(yield* isMember(el, t.Element, storage, admitted))) {
+          if (addsStorageAt(el, t.Element) || !Q(yield* isMember(el, t.Element, storage, admitted))) {
             return false;
           }
           storage?.push({ kind: 'element', object: value, key: String(i), type: t.Element,
@@ -5134,7 +5161,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const type = TupleStorageTypeAt(tupleShape, i, len)!;
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
           const childStart = storage?.length;
-          if (!Q(yield* isMember(el, type, storage, admitted))) return false;
+          if (addsStorageAt(el, type) || !Q(yield* isMember(el, type, storage, admitted))) return false;
           storage?.push({ kind: 'element', object: value, key: String(i), type,
             value: el, admittedType: admitted?.member ?? type, construction: admitted?.construction, descendants: storage.slice(childStart) });
         }
@@ -5167,7 +5194,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const admitted: UnionMemberAdmission | undefined = storage && tupleShape ? {} : undefined;
           const type = i < fixed.length ? fixed[i].Type : tupleShape!.Rest!;
           const childStart = storage?.length;
-          if (!Q(yield* isMember(el, type, storage, admitted))) {
+          if (addsStorageAt(el, type) || !Q(yield* isMember(el, type, storage, admitted))) {
             return false;
           }
           if (tupleShape) storage?.push({ kind: 'element', object: value, key: String(i), type,

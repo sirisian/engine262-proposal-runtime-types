@@ -822,10 +822,24 @@
     {
       "name": "mutable-tuple-iterator-replacement",
       "modules": {
-        "main": "function make(){const a:[string]=[\"s\"];function replace(o:any){o[Symbol.iterator]=function*(){yield 1;yield 2;};}replace(a);return [...a];}const a=make();if(a.length!==2||a[0]!==1||a[1]!==2)throw new Error(\"iterator\");"
+        "main": "function make(){const a:[string]=[\"s\"];function replace(ref o:any){o[Symbol.iterator]=function*(){yield 1;yield 2;};}replace(ref a);return [...a];}const a=make();if(a.length!==2||a[0]!==1||a[1]!==2)throw new Error(\"iterator\");"
       },
       "script": true,
-      "requirement": "Tuple storage extent does not constrain iteration count or yielded values.",
+      "requirement": "Tuple storage extent does not constrain iteration count or yielded values. A tuple of value types is a value, so the replacement reaches it through a ref.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-tuple-argument-is-a-copy",
+      "modules": {
+        "main": "function make(){const a:[string]=[\"s\"];function replace(o:any){o[Symbol.iterator]=function*(){yield 1;yield 2;};}replace(a);return [...a];}const a=make();if(a.length!==1||a[0]!==\"s\")throw new Error(\"copy\");"
+      },
+      "script": true,
+      "requirement": "A tuple of value types is passed by value, so an iterator replaced on the argument does not reach the caller's tuple.",
       "expected": {
         "status": "fulfilled",
         "bodyEntries": [

@@ -37767,10 +37767,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ObjectLiteral':
       case 'ArrayLiteral':
         return literalContractAnchors.has(t);
-      case 'ConditionalExpression':
+      case 'ConditionalExpression': {
         // A typed condition does not type the values supplied by its arms.
-        return constInitializerParticipates(expr.AssignmentExpression_a)
-          || constInitializerParticipates(expr.AssignmentExpression_b);
+        //
+        // Each arm is read in the environment its test leaves for it
+        // (#sec-narrowing-flow), as its type is. Read outside it, an arm that
+        // depends on the test - `s !== undefined ? s.length : 0` - is typed
+        // against the unnarrowed receiver, and the read is refused: every
+        // `const` initialised by such a conditional was an error, where the
+        // same initializer of a `let`, or of a `const` with an annotation,
+        // was accepted.
+        const conditional = expr;
+        const [yes, no] = conditionalArmTypes(conditional.ShortCircuitExpression,
+          () => constInitializerParticipates(conditional.AssignmentExpression_a),
+          () => constInitializerParticipates(conditional.AssignmentExpression_b));
+        return yes || no;
+      }
       default:
         // Operators and aggregate expressions participate when an operand or
         // member supplies a type. Ordinary literal-only expressions do not.

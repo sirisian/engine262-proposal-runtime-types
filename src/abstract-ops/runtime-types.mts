@@ -24,10 +24,10 @@ import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletio
 // already decline: moved there it forms a cycle through `array-view.mts` and
 // `CopyValueClassInstance` is undefined at its use. The ordering rule and the
 // module graph disagree, and the graph wins.
-import { CopyValueClassInstance, ValueAggregateOf, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
+import { CopyValueClassInstance, DeclaredReadonlyFieldsOf, ValueAggregateOf, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { SoAStorageOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterTypeComputation, ExitTypeComputation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
-import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, RecordClassConstructors, ToLength, SameValue } from './all.mts';
 import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, UndefinedValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
@@ -1006,6 +1006,17 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
     proto = Q(yield* Get(ctor, Value('prototype')));
   }
   const copy = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  // [[ConstructedBy]], which CopyValueClassInstance lists first among what a
+  // copy must carry and this copy left empty (RecordClassConstructors says
+  // what that cost). A copy of a value is built by what built the value. A
+  // WIDENING is a genuine instance of the target, so it takes the target's
+  // constructors, as it takes the target's prototype; so does a copy of a
+  // value that has none of its own, a view onto storage.
+  if (!useTargetPrototype && value.ConstructedBy.length > 0) {
+    (copy.ConstructedBy as unknown[]).push(...value.ConstructedBy);
+  } else {
+    RecordClassConstructors(copy, ctor);
+  }
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (const field of layout.fields) {
     // A PRIVATE field is copied too. Its key is a Private Name rather than a
@@ -1061,11 +1072,15 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
   // Typed-boundary copies preserve each retained field's declaring constructor.
   // Widening copies keep only the target layout; discarded derived fields must
   // not leave permission metadata on the base value.
-  const readonly = (value as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+  //
+  // The declared fields only, and not a freeze: a copy of a frozen value is
+  // another value (DeclaredReadonlyFieldsOf).
+  const readonly = DeclaredReadonlyFieldsOf((value as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields);
   if (readonly) {
-    (copy as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields = new Map(
-      [...readonly].filter(([key]) => typed.has(key) || layout.fields!.some((field) => field.key === key)),
-    );
+    const retained = [...readonly].filter(([key]) => typed.has(key) || layout.fields!.some((field) => field.key === key));
+    if (retained.length > 0) {
+      (copy as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields = new Map(retained);
+    }
   }
 
   // Sealed, as the original is. A value type class has a layout with no room for
@@ -7141,6 +7156,24 @@ function Float128FromTypedNumber(value: TypedNumberValue): Value {
 /** A conversion of one element to its element or position type - the implicit or the explicit one. */
 type ElementConversion = (v: Value, t: TypeRecord) => ValueEvaluator;
 
+/**
+ * #sec-value-type-copying: "a value of _Sub_ may not be placed in a position
+ * whose declared type is _Base_: not a field, an array element, a tuple
+ * position...". A conversion of an element finds a subclass's value to be of
+ * the base and answers it unchanged, so the element is asked here as the store
+ * `arr[0] = c` asks it: an array or tuple built from a literal, a spread or an
+ * untyped array is built by storing each element.
+ */
+function RefuseAddedStorage(element: Value, at: TypeRecord): ThrowCompletion | undefined {
+  if (element instanceof ObjectValue && at.Kind === 'nominal') {
+    const held = RuntimeTypeOf(element);
+    if (SubclassAddsStorageOver(held, at)) {
+      return Throw.TypeError('$1 is not assignable to $2', Value(displayType(held)), Value(displayType(at)));
+    }
+  }
+  return undefined;
+}
+
 /** Convert the retained length once, including an observable coercion. */
 function* SequenceConversionLength(value: ObjectValue, observation?: SequenceObservation): PlainEvaluator<number> {
   if (observation?.object === value && observation.conversionLength !== undefined) return observation.conversionLength;
@@ -7167,6 +7200,8 @@ function* ConvertArrayElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'a
   for (let i = 0; i < len; i += 1) {
     const el = Q(yield* ObserveSequenceElement(value, i, observation)).value;
     const converted = Q(yield* convertElement(el, t.Element));
+    const refused = RefuseAddedStorage(converted, t.Element);
+    if (refused) return refused;
     X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
   }
   // #table-check-sites, row "a value stored to an element of an array of
@@ -7256,6 +7291,8 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
       : (rest !== undefined ? restElementType(rest.Type) : undefined);
     const el = Q(yield* ObserveSequenceElement(value, i, observation)).value;
     const converted = declared === undefined ? el : Q(yield* convertElement(el, declared));
+    const refused = declared === undefined ? undefined : RefuseAddedStorage(converted, declared);
+    if (refused) return refused;
     X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
   }
   // #sec-array-defaults-and-stores: "A store to an element of an array of

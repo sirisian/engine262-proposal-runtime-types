@@ -812,11 +812,19 @@
     },
     {
       "name": "unavailable composite layout keeps its native runtime failure",
-      "source": "class C {x:uint8;} function F<T:type>():void where T.byteLength > 0 {} F.<[C]>();",
+      "source": "class C {x:uint8;} function F<T:type>():void where T.byteLength > 0 {} F.<[].<C>>();",
       "expected": {
         "completion": "throw",
         "bodyEntered": true,
         "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "a tuple of value types has a layout for a where clause to read",
+      "source": "class C {x:uint8;} function F<T:type>():void where T.byteLength > 0 {} F.<[C]>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
       }
     },
     {

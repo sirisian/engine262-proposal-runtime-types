@@ -132,3 +132,30 @@ test('a subclass that adds nothing, the same class, and a reference class are un
   expect(evaluated('reference class B { x: uint8; } reference class C extends B { y: uint8; } const cs: [C] = [new C()]; const bs: [B] = cs; String(bs[0] instanceof C) + String(bs === cs);')).toBe('truetrue');
   expect(evaluated('const a: [uint8] = [1]; const w: [uint8 | string] = a; String(w[0]);')).toBe('1');
 });
+
+test('an array or tuple built element by element refuses each element that adds storage', () => {
+  // A literal, a spread among its elements, and an untyped array each store
+  // their elements, and each store is the one `arr[0] = c` makes.
+  const CS = `${BC}${TRY}const cs: [].<C> = [new C()]; `;
+  expect(evaluated(`${CS}attempt(() => { const bs: [].<B> = [...cs]; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${CS}attempt(() => { const bs: [1].<B> = [...cs]; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${CS}attempt(() => { const bs: [B] = [...cs]; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${CS}const u: any = new C(); attempt(() => { const bs: [].<B> = [u]; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${CS}const u: any = [new C()]; attempt(() => { const bs: [].<B> = u; return 'bound'; });`)).toBe('TypeError');
+  expect(evaluated(`${CS}const b0: [].<B> = [new B()]; const r = b0.concat(cs); attempt(() => { const typed: [].<B> = r; return 'bound'; });`)).toBe('TypeError');
+  expectStaticTypeError(`${BC}const c: C = new C(); const bs: [].<B> = [c];`);
+  // The same forms with the base itself, and with a subclass that adds nothing.
+  expect(evaluated(`${BC}const b1: [].<B> = [new B()]; const b2: [].<B> = [...b1, new B()]; String(b2.length);`)).toBe('2');
+  expect(evaluated(`${BC}const qs: [].<Q> = [new Q()]; const bs: [].<B> = [...qs]; String(bs.length);`)).toBe('1');
+});
+
+test('a read-only window of the base is not taken over an array of a subclass that adds storage', () => {
+  expectStaticTypeError(`${BC}const cs: [].<C> = [new C()]; const w: ReadonlySpan.<B> = cs;`);
+  expectStaticTypeError(`${BC}function total(xs: ReadonlySpan.<B>): uint8 { return xs[0].x; } function g() { const cs: [].<C> = [new C()]; return total(cs); }`);
+  expectStaticTypeError(`${BC}const cs: [].<C> = [new C()]; const w: Span.<B> = cs;`);
+  // A subclass that adds nothing, the base, a reference class and a primitive widen as before.
+  expect(evaluated(`${BC}const qs: [].<Q> = [new Q()]; const w: ReadonlySpan.<B> = qs; String(w[0].x);`)).toBe('0');
+  expect(evaluated(`${BC}const bs: [].<B> = [new B()]; const t: [B, B] = [new B(), new B()]; const w1: ReadonlySpan.<B> = bs; const w2: ReadonlySpan.<B> = t; String(w1.length) + String(w2.length);`)).toBe('12');
+  expect(evaluated('reference class A { n: uint8; } reference class D extends A { t: uint8; } const ds: [].<D> = [new D()]; const w: ReadonlySpan.<A> = ds; String(w[0].n);')).toBe('0');
+  expect(evaluated('const a: [].<uint8> = [1]; const w: ReadonlySpan.<uint8 | string> = a; String(w[0]);')).toBe('1');
+});

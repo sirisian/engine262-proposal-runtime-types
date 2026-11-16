@@ -59,6 +59,7 @@ import {
   IsExtensible,
   MakeBasicObject,
   OrdinaryObjectCreate,
+  OrdinaryGetPrototypeOf,
   OrdinaryCreateFromConstructor,
   ToObject,
   PrivateMethodOrAccessorAdd,
@@ -498,6 +499,41 @@ export function* InitializeInstanceElements(O: ObjectValue, constructor: ECMAScr
   // https://tc39.es/proposal-pattern-matching/#sec-initializeinstance
   // 5. Append constructor to O.[[ConstructedBy]].
   O.ConstructedBy.push(constructor);
+}
+
+/**
+ * proposal-runtime-types #sec-typed-classes: an instance the ENGINE builds is
+ * an instance of its class as much as one a constructor built.
+ *
+ * A value type class "defaults field by field, without running its field
+ * initializers or its constructor" (#sec-default-values), and a copy at a typed
+ * boundary is assembled from the layout (#sec-value-type-copying), so neither
+ * passes through InitializeInstanceElements and neither had a
+ * [[ConstructedBy]]. That list is how `Object.freeze`, `Proxy`, a typed
+ * `defineProperty` and CanBeHeldWeakly recognise an instance of a typed class,
+ * so each took a default or a copy for an ordinary object:
+ *
+ *   - `function f(x: B) { Object.freeze(x); x.p.a = 4; }` stored to a frozen
+ *     value, where the same on `new B()` is a TypeError;
+ *   - `new WeakRef(x)` and `new Proxy(x, {})`, reached through `any`, were
+ *     accepted for a parameter's copy and for `let x: A;`, and refused for
+ *     `new A()`.
+ *
+ * The constructors are the class's own and its superclasses', base first, the
+ * order InitializeInstanceElements appends them in. The walk is over the
+ * ENGINE's [[Prototype]] of each constructor, and stops at the first that is
+ * not a class constructor with fields of its own to initialise.
+ */
+export function RecordClassConstructors(O: ObjectValue, constructor: unknown): void {
+  const chain: unknown[] = [];
+  for (let c: unknown = constructor; c !== undefined && c !== null && chain.length < 1000;) {
+    if (!Array.isArray((c as { Fields?: unknown }).Fields)) {
+      break;
+    }
+    chain.unshift(c);
+    c = OrdinaryGetPrototypeOf(c as never) as unknown;
+  }
+  (O.ConstructedBy as unknown[]).push(...chain);
 }
 
 /** https://arai-a.github.io/ecma262-compare/snapshot.html?pr=2417#sec-initializefieldoraccessor */

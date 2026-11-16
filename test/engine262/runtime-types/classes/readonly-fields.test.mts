@@ -333,3 +333,27 @@ test('the exemption is only about writability, not about the type', () => {
   // ...and the constructor's own store is still checked against the type.
   expectStaticTypeError('class C { v: uint8; constructor() { this.v = "s"; } }');
 });
+
+// #sec-typed-classes: "an assignment... through reflection is a *TypeError*".
+// `Reflect.set` reaches [[Set]]; `Object.defineProperty` does not, and gave a
+// readonly field a new value.
+test('a definition that gives a readonly field another value is refused', () => {
+  const TRY = "const at = (f) => { try { return f(); } catch (e) { return e.name; } }; ";
+  expect(evaluated(`${TRY}class H { readonly n: uint8 = 1; m: uint8 = 1; } const h = new H(); [at(() => { Object.defineProperty(h, 'n', { value: 5 }); return 'value'; }), at(() => { Object.defineProperty(h, 'n', { get() { return 9; } }); return 'getter'; }), at(() => { Object.defineProperties(h, { n: { value: 7 } }); return 'properties'; }), at(() => { Object.defineProperty(h, 'm', { value: 6 }); return 'writable'; })].join() + String(h.n) + String(h.m);`)).toBe('TypeError,TypeError,TypeError,writable16');
+  // Restating the value, and changing an attribute, are not assignments.
+  expect(evaluated('class H { readonly n: uint8 = 1; } const h = new H(); Object.defineProperty(h, "n", { value: h.n }); Object.freeze(h); String(h.n) + String(Object.isFrozen(h));')).toBe('1true');
+  // The declaring constructor assigns as before, and a static field is covered.
+  expect(evaluated('class H { readonly n: uint8; constructor(n: uint8) { this.n = n; } } String(new H(4).n);')).toBe('4');
+  expect(evaluated(`${TRY}class H { static readonly n: uint8 = 1; } at(() => { Object.defineProperty(H, 'n', { value: 5 }); return 'defined'; }) + String(H.n);`)).toBe('TypeError1');
+});
+
+// Freezing is an act on one object. A copy is another value, the reader's own.
+test('a copy of a frozen value is not frozen, and keeps its declared readonly fields', () => {
+  const B = 'class A { a: uint8; } class B { p: A; q: [2].<uint8>; n: uint8; readonly k: uint8 = 3; readonly r: A; } ';
+  const TRY = "let out = ''; const at = (f) => { try { f(); out += 'ok,'; } catch (e) { out += e.name + ','; } }; ";
+  expect(evaluated(`${B}${TRY}const b = new B(); Object.freeze(b); const c = b; const u: any = { c }; out += String(Object.isFrozen(b)) + String(Object.isFrozen(c)) + ','; at(() => { c.n = 4; }); at(() => { c.p.a = 4; }); at(() => { c.q[0] = 4; }); at(() => { u.c.k = 9; }); at(() => { u.c.r.a = 9; }); at(() => { b.n = 5; }); out + String(c.n) + String(c.p.a) + String(c.q[0]) + String(c.k) + String(c.r.a) + String(b.n) + String(b.p.a);`)).toBe('truefalse,ok,ok,ok,TypeError,TypeError,TypeError,4443000');
+  // Every place a value is copied to: a field, an element, a parameter and a return.
+  expect(evaluated(`${B}class H { b: B; } const b = new B(); Object.freeze(b); const h = new H(); h.b = b; h.b.n = 2; const arr: [1].<B> = [b]; arr[0].n = 3; function same(x: B): B { x.n = 4; return x; } const d = same(b); String(h.b.n) + String(arr[0].n) + String(d.n) + String(b.n);`)).toBe('2340');
+  // The original stays frozen, and is still equal to a copy that was not changed.
+  expect(evaluated(`${B}const b = new B(); Object.freeze(b); const c = b; let r = ''; try { b.n = 1; } catch (e) { r = e.name; } r + String(c === b);`)).toBe('TypeErrortrue');
+});
