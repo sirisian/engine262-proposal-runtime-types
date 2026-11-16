@@ -27,8 +27,17 @@ test('operator overload resolution uses the contextual return type at runtime to
 });
 
 test('a declared compound can act through a readonly field without replacing it', () => {
-  const declarations = 'class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { readonly m: M = new M(); }';
+  // The member holds a reference, so the operator updates the object it refers to.
+  const declarations = 'reference class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { readonly m: M = new M(); }';
   expect(evaluated(`${declarations} const h: H = new H(); const result: string = (h.m += 2); result + ":" + String(h.m.n);`)).toBe('ok:3');
+  // #sec-readonly-inline-values: where the member holds a value, the value is
+  // the member's storage, and the operator's store to `this` is refused.
+  const inline = 'class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { readonly m: M = new M(); }';
+  expect(evaluated(`${inline} const h: H = new H(); let result = ''; try { result = (h.m += 2); } catch (e) { result = e.name; } result + ":" + String(h.m.n);`)).toBe('TypeError:1');
+  // An operator that stores nothing is still invoked through the member.
+  expect(evaluated('class M { n: uint8 = 1; operator+=(v: uint8): string { return "ok" + String(this.n + v); } } class H { readonly m: M = new M(); } const h: H = new H(); const result: string = (h.m += 2); result;')).toBe('ok3');
+  // A value that is not held in a readonly member is updated in place, as before.
+  expect(evaluated('class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { m: M = new M(); } const h: H = new H(); const result: string = (h.m += 2); result + ":" + String(h.m.n);')).toBe('ok:3');
   expectStaticTypeError(`${declarations} function unused(h: H) { h.m += "s"; }`);
   expectStaticTypeError('class M { operator+(v: uint8): M { return this; } } class H { readonly m: M = new M(); } function unused(h: H) { h.m += 1; }');
 });

@@ -6,7 +6,7 @@ import {
   type PrivateName,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { IsPlainData, IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
+import { IsPlainData, IsValueType, IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { ToIndexType } from './runtime-types.mts';
 import { OrdinaryGetPrototypeOf } from './objects.mts';
@@ -482,12 +482,27 @@ export function RequireArraySpanLive(backing: ArraySpanBacking) {
 const readonlyElementTargets = new WeakMap<object, ObjectValue>();
 const readonlyElementHandles = new WeakMap<object, ObjectValue>();
 
+/**
+ * Why a handle is read-only, for the message a refused store gives: it was
+ * reached through a read-only window, it is the value of a `readonly` field
+ * (#sec-readonly-inline-values), or it is the value of a field of a frozen
+ * instance. An element has one handle, and keeps the reason it was first
+ * handed out for.
+ */
+export type ReadonlyReason = 'window' | 'field' | 'frozen';
+const readonlyElementReasons = new WeakMap<object, ReadonlyReason>();
+
+/** The reason a read-only handle refuses a store, or ~undefined~ for any other object. */
+export function ReadonlyReasonOf(instance: object): ReadonlyReason | undefined {
+  return readonlyElementTargets.has(instance) ? readonlyElementReasons.get(instance) ?? 'window' : undefined;
+}
+
 /** The inline element a read-only handle is onto, or ~undefined~ for any other object. */
 export function ReadonlyElementTargetOf(instance: object): ObjectValue | undefined {
   return readonlyElementTargets.get(instance);
 }
 
-function readonlyElementHandle(element: ObjectValue): ObjectValue {
+function readonlyElementHandle(element: ObjectValue, reason: ReadonlyReason = 'window'): ObjectValue {
   const existing = readonlyElementHandles.get(element as unknown as object);
   if (existing !== undefined) {
     return existing;
@@ -507,6 +522,7 @@ function readonlyElementHandle(element: ObjectValue): ObjectValue {
   }
   readonlyElementTargets.set(handle as unknown as object, element);
   readonlyElementHandles.set(element as unknown as object, handle);
+  readonlyElementReasons.set(handle as unknown as object, reason);
   return handle;
 }
 
@@ -516,7 +532,7 @@ function readonlyElementHandle(element: ObjectValue): ObjectValue {
  * inline, and the value itself otherwise - a primitive is a copy already, and
  * a reference type's object is not the window's.
  */
-export function ReadonlyElementView(value: Value): Value {
+export function ReadonlyElementView(value: Value, reason: ReadonlyReason = 'window'): Value {
   if (!(value instanceof ObjectValue) || readonlyElementTargets.has(value as unknown as object)) {
     return value;
   }
@@ -524,10 +540,43 @@ export function ReadonlyElementView(value: Value): Value {
   // positions are the storage of the array that holds them.
   const sequence = value as unknown as { TypedTuple?: unknown, TypedElement?: unknown, TypedExtent?: unknown };
   if (sequence.TypedTuple !== undefined || (sequence.TypedElement !== undefined && typeof sequence.TypedExtent === 'number')) {
-    return readonlyElementHandle(value);
+    return readonlyElementHandle(value, reason);
   }
   const t = RuntimeTypeOf(value);
-  return t.Kind === 'nominal' && t.EnumMembers === undefined && IsValueTypeClass(t) ? readonlyElementHandle(value) : value;
+  return t.Kind === 'nominal' && t.EnumMembers === undefined && IsValueTypeClass(t) ? readonlyElementHandle(value, reason) : value;
+}
+
+/**
+ * #sec-readonly-inline-values: what a `readonly` field, or a field of a frozen
+ * instance, hands out for the value it holds. A value of a value type - a
+ * value type class instance, an array of fixed length of a value type, a
+ * tuple of value types - is stored IN the instance, so its fields and
+ * positions are the instance's storage and the field's `readonly` covers
+ * them: it is handed out through a read-only handle, as a read-only window
+ * hands out an inline element. Anything else is handed out as it is. A
+ * primitive is a copy already, and an object of a reference type is not the
+ * instance's: the field fixes which object it refers to, and no more.
+ */
+export function ReadonlyMemberView(value: Value, reason: 'field' | 'frozen'): Value {
+  if (!(value instanceof ObjectValue) || readonlyElementTargets.has(value as unknown as object)) {
+    return value;
+  }
+  const sequence = value as unknown as {
+    TypedTuple?: { Positions: readonly TypeRecord[], Rest?: unknown, Suffix?: readonly unknown[], Conjuncts?: unknown },
+    TypedElement?: TypeRecord,
+    TypedExtent?: unknown,
+  };
+  const shape = sequence.TypedTuple;
+  if (shape !== undefined) {
+    const value_ = shape.Rest === undefined && shape.Conjuncts === undefined && (shape.Suffix?.length ?? 0) === 0
+      && shape.Positions.length > 0 && shape.Positions.every((position) => IsValueType(position));
+    return value_ ? readonlyElementHandle(value, reason) : value;
+  }
+  if (sequence.TypedElement !== undefined) {
+    return typeof sequence.TypedExtent === 'number' && IsValueType(sequence.TypedElement) ? readonlyElementHandle(value, reason) : value;
+  }
+  const t = RuntimeTypeOf(value);
+  return t.Kind === 'nominal' && t.EnumMembers === undefined && IsValueTypeClass(t) ? readonlyElementHandle(value, reason) : value;
 }
 
 /** An element read through a window: the array's own element, liveness first. */

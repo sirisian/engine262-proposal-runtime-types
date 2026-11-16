@@ -5,7 +5,7 @@ import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
 import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField, WriteSoAField } from './intrinsics/SoA.mts';
-import { ArrayViewBackingOf, ReadonlyElementTargetOf, ReadonlyElementView, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement, SpanLikeLengthOf } from './abstract-ops/array-view.mts';
+import { ArrayViewBackingOf, ReadonlyElementTargetOf, ReadonlyElementView, ReadonlyMemberView, ReadonlyReasonOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement, SpanLikeLengthOf } from './abstract-ops/array-view.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
   Q, X, EnsureCompletion, type ValueEvaluator, type PlainCompletion,
@@ -1092,8 +1092,26 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       if (own instanceof UndefinedValue || own.Value === undefined) {
         return own;
       }
-      const viewed = ReadonlyElementView(own.Value);
+      const viewed = ReadonlyElementView(own.Value, ReadonlyReasonOf(this as unknown as object));
       return viewed === own.Value ? own : Descriptor({ ...own, Value: viewed });
+    }
+    // #sec-readonly-inline-values: a `readonly` field's value that is stored
+    // inline is the instance's storage, so it is handed out read-only wherever
+    // the field itself could not be assigned: everywhere but the constructor
+    // that declares it, and everywhere once the instance is frozen. The
+    // constructor reads the value itself, and builds it field by field.
+    const readonlyFields = (this as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+    if (readonlyFields !== undefined && readonlyFields.size > 0 && surroundingAgent.feature('runtime-types')) {
+      const declaring = readonlyFields.get(P instanceof JSStringValue ? P.stringValue() : P);
+      if (declaring !== undefined && surroundingAgent.executionContextStack.at(-1)?.Function !== declaring) {
+        const own = OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
+        if (own instanceof UndefinedValue || own.Value === undefined) {
+          return own;
+        }
+        const frozen = (declaring as { frozenReadonlyField?: boolean }).frozenReadonlyField === true;
+        const viewed = ReadonlyMemberView(own.Value, frozen ? 'frozen' : 'field');
+        return viewed === own.Value ? own : Descriptor({ ...own, Value: viewed });
+      }
     }
     // proposal-runtime-types #sec-span-type: a WINDOW's elements and its length
     // are answered by its backing, not stored on it, so the object model could
@@ -1134,7 +1152,14 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   * DefineOwnProperty(P: PropertyKeyValue, Desc: Descriptor, choices?: ConstructionSelections, admission?: StoreAdmission): ObjectSlotReturn['DefineOwnProperty'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
-    if (ReadonlyElementTargetOf(this as unknown as object) !== undefined) {
+    const definedThrough = ReadonlyReasonOf(this as unknown as object);
+    if (definedThrough === 'field') {
+      return Throw.TypeError('this value is stored in a readonly field and is read-only, so $1 cannot be stored to', P);
+    }
+    if (definedThrough === 'frozen') {
+      return Throw.TypeError('this value is stored in a frozen object and is read-only, so $1 cannot be stored to', P);
+    }
+    if (definedThrough !== undefined) {
       return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be stored to', P);
     }
     return yield* OrdinaryDefineOwnProperty(this as unknown as OrdinaryObject, P, Desc, choices, admission);
@@ -1292,8 +1317,15 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
     // #sec-readonly-span-type: the one place a store to the element's field
     // lands, whoever makes it: a method through `this`, a `ref`, or a holder
     // of the handle that the checking pass never saw.
-    if (ReadonlyElementTargetOf(this as unknown as object) !== undefined
-        || (Receiver instanceof ObjectValue && ReadonlyElementTargetOf(Receiver as unknown as object) !== undefined)) {
+    const storedThrough = ReadonlyReasonOf(this as unknown as object)
+      ?? (Receiver instanceof ObjectValue ? ReadonlyReasonOf(Receiver as unknown as object) : undefined);
+    if (storedThrough === 'field') {
+      return Throw.TypeError('this value is stored in a readonly field and is read-only, so $1 cannot be stored to', P);
+    }
+    if (storedThrough === 'frozen') {
+      return Throw.TypeError('this value is stored in a frozen object and is read-only, so $1 cannot be stored to', P);
+    }
+    if (storedThrough !== undefined) {
       return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be stored to', P);
     }
     // proposal-runtime-types (spec sec-typed-classes): a write to a `readonly`
@@ -1430,7 +1462,14 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
 
   * Delete(P: PropertyKeyValue): ObjectSlotReturn['Delete'] {
     Q(surroundingAgent.debugger_tryTouchDuringPreview(this));
-    if (ReadonlyElementTargetOf(this as unknown as object) !== undefined) {
+    const deletedThrough = ReadonlyReasonOf(this as unknown as object);
+    if (deletedThrough === 'field') {
+      return Throw.TypeError('this value is stored in a readonly field and is read-only, so $1 cannot be deleted', P);
+    }
+    if (deletedThrough === 'frozen') {
+      return Throw.TypeError('this value is stored in a frozen object and is read-only, so $1 cannot be deleted', P);
+    }
+    if (deletedThrough !== undefined) {
       return Throw.TypeError('this element was reached through a ReadonlySpan and is read-only, so $1 cannot be deleted', P);
     }
     // proposal-runtime-types (spec sec-object-types-semantics): a typed own

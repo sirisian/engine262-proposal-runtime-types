@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: d73e0c848443627bc33d5fc6c5e6ce3c3a55d04d79df33c19706c6ecc6fc6454
+// Catalog SHA-256: eaeadfa5d1d1cf158dd049880db15c9ae438a53b29e67a13717c1588c0005131
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -539,9 +539,10 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-typed-storage"
+      "sec-typed-storage",
+      "sec-readonly-inline-values"
     ],
-    "explanation": "The operation writes a declared readonly member.",
+    "explanation": "The operation writes a declared readonly member, or a part of the value of a value type that such a member holds.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2896,7 +2897,7 @@ export const TypeDiagnosticCatalog = [
     "specification": [
       "sec-store-to-a-copy"
     ],
-    "explanation": "The store is to a binding that holds a copy, and no read of the binding can follow it.",
+    "explanation": "The store is to a copy that nothing reads afterwards: a binding that holds one, or the result of a call or of a getter.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2911,4 +2912,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = 'd73e0c848443627bc33d5fc6c5e6ce3c3a55d04d79df33c19706c6ecc6fc6454';
+export const TypeDiagnosticCatalogHash = 'eaeadfa5d1d1cf158dd049880db15c9ae438a53b29e67a13717c1588c0005131';

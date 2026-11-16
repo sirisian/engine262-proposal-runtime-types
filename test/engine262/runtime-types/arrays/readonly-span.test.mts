@@ -154,7 +154,7 @@ test('a reference to an inline element is live and read-only, and a ref to it st
 
 test('a copy of an inline element is the reader\'s own', () => {
   expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const c = xs[0]; c.a = 9; c.bump(); return String(c.a) + String(as[0].a); } f(as);`)).toBe('100');
-  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const s = xs.slice(); s[0].a = 9; const p = xs.at(1); if (p !== undefined) p.a = 8; return String(s[0].a) + String(as[0].a) + String(as[1].a); } f(as);`)).toBe('900');
+  expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { const s = xs.slice(); s[0].a = 9; const p = xs.at(1); let q: uint8 = 0; if (p !== undefined) { p.a = 8; q = p.a; } return String(s[0].a) + String(as[0].a) + String(as[1].a) + String(q); } f(as);`)).toBe('9008');
   expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { xs.forEach((e) => { e.a = 9; }); let t: uint8 = 0; for (const e of xs) { e.a = 3; t += e.a; } return String(t) + String(as[0].a); } f(as);`)).toBe('60');
 });
 

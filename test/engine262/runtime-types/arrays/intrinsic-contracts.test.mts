@@ -17,13 +17,55 @@ test("proven comparators and reducers must accept their actual arguments", () =>
 test("fresh copies have dynamic storage extent", () => {
   expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [2].<uint8> = a.slice(0,1);", "StaticTypeError");
   expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [2].<uint8> = a.filter(x => false);", "StaticTypeError");
-  expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [2].<uint8> = a.toReversed();", "StaticTypeError");
+  expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [2].<uint8> = a.toSpliced(0, 1, 3);", "StaticTypeError");
+});
+
+// #sec-intrinsic-array-contracts: "`toSorted`, `toReversed` and `with` give as
+// many elements as the receiver holds. On an array of fixed extent each gives a
+// new array of that extent, whose type is the receiver's."
+test("toSorted, toReversed and with keep a fixed extent", () => {
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const b: [3].<uint8> = a.toSorted(); b.join() + '|' + a.join();")).toBe("1,2,3|3,1,2");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const b: [3].<uint8> = a.toReversed(); b.join() + '|' + a.join();")).toBe("2,1,3|3,1,2");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const b: [3].<uint8> = a.with(0, 9); b.join() + '|' + a.join();")).toBe("9,1,2|3,1,2");
+  expect(evaluated("let v: [3].<float32> = [3,1,2]; v = v.toSorted(); v.join();")).toBe("1,2,3");
+  // The result is of the fixed type to the checker, and is a fixed array when it runs.
+  expectEarlyError("const a: [3].<uint8> = [3,1,2]; const n: string = a.toSorted();", "StaticTypeError");
+  expectEarlyError("const a: [3].<uint8> = [3,1,2]; const n: string = a.toReversed();", "StaticTypeError");
+  expectEarlyError("const a: [3].<uint8> = [3,1,2]; const n: string = a.with(0, 1);", "StaticTypeError");
+  expectEarlyError("const a: [3].<uint8> = [3,1,2]; const b: [2].<uint8> = a.toSorted();", "StaticTypeError");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const b: any = a.toSorted(); try { b.push(1); 'grew'; } catch (e) { e.name; }")).toBe("TypeError");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const b: any = a.toReversed(); try { b.push(1); 'grew'; } catch (e) { e.name; }")).toBe("TypeError");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const b: any = a.with(0, 1); try { b.push(1); 'grew'; } catch (e) { e.name; }")).toBe("TypeError");
+});
+
+test("a fixed-extent copy is not a dynamic array, and a spread of it is", () => {
+  expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.toSorted();", "StaticTypeError");
+  expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.toReversed();", "StaticTypeError");
+  expectEarlyError("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.with(0, 1);", "StaticTypeError");
+  expect(evaluated("const a: [2].<uint8> = [2,1]; const b: [].<uint8> = [...a.toSorted()]; b.push(3); b.join();")).toBe("1,2,3");
+  expect(evaluated("const a: [2].<uint8> = [2,1]; const b = a.slice().sort(); b.push(3); b.join();")).toBe("1,2,3");
+});
+
+test("a dynamic array's and a window's copies stay dynamic", () => {
+  expect(evaluated("const a: [].<uint8> = [3,1,2]; const b = a.toSorted(); b.push(4); b.join();")).toBe("1,2,3,4");
+  expect(evaluated("const a: [].<uint8> = [3,1,2]; const b = a.toReversed(); b.push(4); b.join();")).toBe("2,1,3,4");
+  expect(evaluated("const a: [].<uint8> = [3,1,2]; const b = a.with(0, 9); b.push(4); b.join();")).toBe("9,1,2,4");
+  // A window over a fixed array, with and without a stated length.
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const w: Span.<uint8> = a; const b = w.toSorted(); b.push(4); b.join() + '|' + a.join();")).toBe("1,2,3,4|3,1,2");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const w: Span.<uint8, 3> = a; const b: [].<uint8> = w.toSorted(); b.push(4); b.join();")).toBe("1,2,3,4");
+  expect(evaluated("const a: [3].<uint8> = [3,1,2]; const w: Span.<uint8, 3> = a; const b: [].<uint8> = w.toReversed(); b.push(4); b.join();")).toBe("2,1,3,4");
+  expectEarlyError("const a: [3].<uint8> = [3,1,2]; const w: Span.<uint8, 3> = a; const b: [3].<uint8> = w.toSorted();", "StaticTypeError");
+});
+
+test("a fixed-extent copy of value elements is the caller's own", () => {
+  expect(evaluated("class P { x: uint8; } const a: [2].<P> = [new P(), new P()]; a[0].x = 5; const b: [2].<P> = a.toReversed(); b[1].x = 9; b[1].x + '|' + a[0].x;")).toBe("9|5");
+  expect(evaluated("const a: [3].<uint8> = [1,2,3]; (a.toSorted() === a) + '|' + (a.toReversed() === a) + '|' + (a.with(0, 1) === a);")).toBe("true|false|true");
 });
 
 test("copy boundaries accept the created dynamic container", () => {
   expect(evaluated("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.slice(0,1);; \"ok\";")).toBe("ok");
   expect(evaluated("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.filter(x => true);; \"ok\";")).toBe("ok");
-  expect(evaluated("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.toSorted();; \"ok\";")).toBe("ok");
+  expect(evaluated("const a: [2].<uint8> = [1,2]; const b: [].<uint8> = a.toSpliced(0, 1);; \"ok\";")).toBe("ok");
 });
 
 test("tuple positions negative indices and distinct accumulator types work", () => {

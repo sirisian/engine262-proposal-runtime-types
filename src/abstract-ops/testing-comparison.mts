@@ -66,6 +66,12 @@ export function IsArray(argument: Value) {
   if (isArrayExoticObject(argument)) {
     return Value.true;
   }
+  // #sec-readonly-span-type: a read-only handle IS the inline value it is
+  // onto, read-only, so it is an array where that value is one.
+  const viewedArray = surroundingAgent.feature('runtime-types') ? ReadonlyElementTargetOf(argument as unknown as object) : undefined;
+  if (viewedArray !== undefined) {
+    return IsArray(viewedArray);
+  }
   if (isProxyExoticObject(argument)) {
     if (argument.ProxyHandler === Value.null) {
       return Throw.TypeError("Cannot perform '$1' on a proxy that has been revoked", 'IsArray');

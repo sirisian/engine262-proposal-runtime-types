@@ -759,6 +759,7 @@ function* ArrayProto_toSorted([comparator = Value.undefined]: Arguments, { thisV
   }
   Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
+  propagateFixedExtent(O, A);
   // A sort permutes positions, so the result's shape is knowable only where
   // permuting cannot change it - every position the same type. A heterogeneous
   // tuple sorted by an arbitrary comparator has no position types this
@@ -984,6 +985,7 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
   }
   Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
+  propagateFixedExtent(O, A);
   // `with` replaces one position with a value already checked against that
   // position's type, so the shape is the source's.
   const withShape = tupleShapeOf(O);
@@ -1099,6 +1101,28 @@ function propagateElementType(source: Value, copy: Value): void {
 }
 
 /**
+ * #sec-intrinsic-array-contracts: "`toSorted`, `toReversed` and `with` on an
+ * array of fixed length give an array of that length." Each of the three
+ * answers as many elements as the receiver holds, and an array of fixed length
+ * is a value (#sec-value-type-copying), so the copy is a value of the same
+ * type and binds to `[N].<T>` without a spread.
+ *
+ * Only an array carries a fixed extent. A window does not: the same window is
+ * a `Span.<T, N>` and a `Span.<T>`, so its copy has no one length to keep, and
+ * it stays a dynamic array.
+ */
+function propagateFixedExtent(source: Value, copy: Value): void {
+  if (!surroundingAgent.feature('runtime-types') || !(copy instanceof ObjectValue)) {
+    return;
+  }
+  const from = source as { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: unknown };
+  if (from.TypedElement !== undefined && from.TypedTuple === undefined && typeof from.TypedExtent === 'number'
+      && (copy as { TypedElement?: TypeRecord }).TypedElement !== undefined) {
+    (copy as { TypedExtent?: number }).TypedExtent = from.TypedExtent;
+  }
+}
+
+/**
  * #sec-value-type-copying: "storing into a field or an array element of that
  * type" copies a value of a value type. A member that builds an array from a
  * typed receiver's elements stores each one, so the result holds copies, and
@@ -1186,6 +1210,7 @@ function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallCon
   }
   Q(yield* copyInlineElements(O, A));
   propagateElementType(O, A);
+  propagateFixedExtent(O, A);
   // The reverse of `[uint8, string]` is `[string, uint8]`: the positions are
   // the source's, read backwards.
   const reversedShape = tupleShapeOf(O);
