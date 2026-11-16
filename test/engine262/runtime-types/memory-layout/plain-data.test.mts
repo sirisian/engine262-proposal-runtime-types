@@ -135,3 +135,22 @@ test('Array.from copies the value-type elements it takes from a typed source', (
   expect(evaluated(`${A}xs[1].a = 4; const c = Array.from(xs, (e) => e.a); String(c.length) + String(c[1]);`)).toBe('24');
   expect(evaluated('const a: [].<uint8> = [1, 2]; const c: [].<uint8> = Array.from(a); c.push(3 := uint8); String(c.length) + String(a.length);')).toBe('32');
 });
+
+test('a Map with a declared value type returns a copy of a value it stores', () => {
+  // #sec-value-type-copying: "returning one" copies, and a built-in member is
+  // "a case of this and not an exception to it". `set` already stored a copy;
+  // `get` handed out the stored value itself, so a store through its result
+  // wrote the Map.
+  const P = 'class P { x: uint8; } ';
+  const read = "const k = m.get('k'); String(k !== undefined ? k.x : -1);";
+  expect(evaluated(`${P}const m = new Map.<string, P>(); const p = new P(); m.set('k', p); p.x = 5; const g = m.get('k'); if (g !== undefined) g.x = 9; ${read}`)).toBe('0');
+  expect(evaluated(`${P}const m = new Map.<string, P>(); const a = m.getOrInsert('k', new P()); a.x = 9; const c = m.getOrInsert('k', new P()); c.x = 7; ${read}`)).toBe('0');
+  expect(evaluated(`${P}const m = new Map.<string, P>(); const b = m.getOrInsertComputed('k', () => new P()); b.x = 8; ${read}`)).toBe('0');
+  // A fixed-length array and a tuple of value types are values too.
+  expect(evaluated("const m = new Map.<string, [uint8, uint8]>(); const t: [uint8, uint8] = [1, 2]; m.set('k', t); t[0] = 5; const g = m.get('k'); if (g !== undefined) g[1] = 9; "
+    + "const again = m.get('k'); String(again !== undefined ? again[0] : -1) + String(again !== undefined ? again[1] : -1);")).toBe('12');
+  // A reference class is stored by reference, and an untyped Map is a plain
+  // holder whose value is a reference, as a plain object's property is.
+  expect(evaluated("reference class R { x: uint8; } const m = new Map.<string, R>(); const r = new R(); m.set('k', r); const g = m.get('k'); if (g !== undefined) g.x = 9; String(r.x);")).toBe('9');
+  expect(evaluated(`${P}const m = new Map(); const p = new P(); m.set('k', p); const g: any = m.get('k'); g.x = 9; String(p.x);`)).toBe('9');
+});

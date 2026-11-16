@@ -20,6 +20,7 @@ import {
   SameValue, SameValueZero, Throw,
   RequireType,
   RequireIdentityType,
+  CopyValueClassInstance,
 } from '#self';
 import type {
   Arguments, Descriptor, ValueEvaluator, FunctionCallContext, Realm,
@@ -74,6 +75,24 @@ function* mapValueAtType(O: Value, value: Value, index: number): PlainEvaluator<
     return Q(yield* RequireIdentityType(value, t));
   }
   return Q(yield* RequireType(value, t));
+}
+
+/**
+ * #sec-value-type-copying: "returning one" copies a value of a value type, and
+ * a built-in member "is a case of this and not an exception to it". A Map with
+ * a declared value type stores a copy and handed out the stored value itself,
+ * so `const g = m.get(k); g.x = 9` wrote the Map. An untyped Map is a plain
+ * holder: its value is a reference, as a plain object's property is.
+ */
+function* mapValueOut(M: Value, value: Value): ValueEvaluator {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return value;
+  }
+  const declared = (M as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection?.[1];
+  if (declared === undefined || typeof declared === 'number') {
+    return value;
+  }
+  return Q(yield* CopyValueClassInstance(value));
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.delete */
@@ -147,7 +166,7 @@ function* MapProto_get([key = Value.undefined]: Arguments, { thisValue }: Functi
     // a. If p.[[Key]] is not empty and SameValueZero(p.[[Key]], key) is true, return p.[[Value]].
     if (p.Key !== undefined && SameValueZero(p.Key, key)) {
       // i. Return p.[[Value]].
-      return p.Value!;
+      return yield* mapValueOut(M, p.Value!);
     }
   }
   // 5. Return undefined.
@@ -175,7 +194,7 @@ function* MapProto_getOrInsert([key = Value.undefined, value = Value.undefined]:
   for (const p of entries) {
     // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
     if (p.Key !== undefined && SameValue(p.Key, key)) {
-      return p.Value!;
+      return yield* mapValueOut(M, p.Value!);
     }
   }
   // 5. Let p be the Record { [[Key]]: key, [[Value]]: value }.
@@ -183,7 +202,7 @@ function* MapProto_getOrInsert([key = Value.undefined, value = Value.undefined]:
   // 6. Append p to M.[[MapData]].
   entries.push(p);
   // 7. Return value.
-  return value;
+  return yield* mapValueOut(M, value);
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.getorinsertcomputed */
@@ -204,7 +223,7 @@ function* MapProto_getOrInsertComputed([key = Value.undefined, callbackfn = Valu
   for (const p of entries) {
     // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
     if (p.Key !== undefined && SameValueZero(p.Key, key)) {
-      return p.Value!;
+      return yield* mapValueOut(M, p.Value!);
     }
   }
   // 6. Let value be ? Call(callbackfn, undefined, « key »).
@@ -222,7 +241,7 @@ function* MapProto_getOrInsertComputed([key = Value.undefined, callbackfn = Valu
       // i. Set p.[[Value]] to value.
       p.Value = value;
       // ii. Return value.
-      return value;
+      return yield* mapValueOut(M, value);
     }
   }
   // 9. Let p be the Record { [[Key]]: key, [[Value]]: value }.
@@ -230,7 +249,7 @@ function* MapProto_getOrInsertComputed([key = Value.undefined, callbackfn = Valu
   // 10. Append p to M.[[MapData]].
   entries.push(p);
   // 11. Return value.
-  return value;
+  return yield* mapValueOut(M, value);
 }
 
 /** https://tc39.es/ecma262/#sec-map.prototype.has */
