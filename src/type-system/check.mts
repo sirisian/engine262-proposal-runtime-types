@@ -18786,8 +18786,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!/^Block$|Body$/.test(scope.type) || scope.type === 'ScriptBody' || scope.type === 'ModuleBody') continue;
         let source = nodeField<ParseNode | null>(declaration, 'Initializer') ?? undefined;
         while (source?.type === 'ParenthesizedExpression') source = nodeField<ParseNode>(source, 'Expression');
-        // Only a name, a field read and an element read denote a value that already exists; a call or a construction builds in place.
-        if (!source || (source.type !== 'IdentifierReference' && source.type !== 'MemberExpression')) continue;
+        // Binding copies every value but one a `new` or a literal constructs in place (`copiesOnBinding`), and a
+        // constructor may have kept its `this`, so a constructed value is not known to be unnamed elsewhere.
+        if (!source || source.type === 'NewExpression' || source.type === 'ObjectLiteral' || source.type === 'ArrayLiteral') continue;
       }
       // Every use of the name in its scope.
       const uses: ParseNode[] = [];

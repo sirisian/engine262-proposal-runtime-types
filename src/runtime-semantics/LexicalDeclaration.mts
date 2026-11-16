@@ -343,18 +343,30 @@ function* Evaluate_LexicalBinding_BindingPattern(LexicalBinding: ParseNode.Lexic
 }
 
 /**
- * Whether an initializer NAMES an existing value, so binding it copies.
+ * Whether binding the value of this expression copies it.
  *
- * #sec-value-type-copying: a construction "builds its result directly in the
- * destination", while a name or a read denotes a value that already exists.
+ * #sec-value-type-copying: "initializing a binding from a value of such a
+ * type" copies, and a construction "builds its result directly in the
+ * destination". So every expression copies but the two that construct: a
+ * `new` and a literal.
+ *
+ * This is the earlier rule turned round. It copied only for a name, a field
+ * read and an element read, and treated every other form as a construction.
+ * So `const q = c ? p : r` and `const q = p ?? r` bound the value `p` names
+ * itself, and so did a call that returned what it was given: `a.reverse()`,
+ * `a.sort()`, `a.fill(0)`, `Object.seal(p)`, `Object.assign(p, o)`,
+ * `p.valueOf()`, `Reflect.get(o, k)`. Each made a second name for a value.
+ *
+ * A call is copied here and not where a built-in returns, so that a chain is
+ * in place: `a.sort().reverse()` acts on `a`, there being no binding in it.
+ * For a function that copied what it returned this copy is of a value nothing
+ * else names, and cannot be told from none.
  */
 export function copiesOnBinding(node: ParseNode | null | undefined): boolean {
   if (!node) {
     return false;
   }
-  return node.type === 'IdentifierReference'
-    || node.type === 'MemberExpression'
-    || node.type === 'ParenthesizedExpression';
+  return node.type !== 'NewExpression' && node.type !== 'ObjectLiteral' && node.type !== 'ArrayLiteral';
 }
 
 export function* Evaluate_LexicalBinding(LexicalBinding: ParseNode.LexicalBinding) {

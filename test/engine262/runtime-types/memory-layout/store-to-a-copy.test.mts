@@ -85,3 +85,16 @@ test('a binding with a second name, or one the pass cannot see whole, is not jud
   // The top level of a script: a later script may read the binding.
   expect(evaluated('const m: [2].<[2].<uint8>> = [[1, 2], [3, 4]]; const r = m[0]; r[0] = 9; String(m[0][0]);')).toBe('1');
 });
+
+test('a binding initialized from any expression but a construction holds a copy', () => {
+  // Binding copies every value but one a `new` or a literal constructs
+  // (#sec-value-type-copying), so the result of a call and of a conditional
+  // are copies too, and a store to one that nothing reads is as lost.
+  lost(`${P}const ps: [2].<P>; function pick(i: uint8): P { return ps[i]; } function f() { const p: P = pick(0); p.x = 1; }`);
+  lost(`${P}const ps: [2].<P>; function f(first: boolean) { const p = first ? ps[0] : ps[1]; p.x = 1; }`);
+  lost(`${P}class Q { n: uint8; grow(): void { const self = this; self.n = 5; } }`);
+  // Where the binding has no type of its own to judge by, it is not judged.
+  expect(evaluated(`${P}const ps: [2].<P>; function pick(i: uint8): P { return ps[i]; } function f() { const p = pick(0); p.x = 1; } f(); String(ps[0].x);`)).toBe('0');
+  // A constructor may have kept its `this`, so a constructed value is not judged.
+  expect(evaluated(`${P}function make(): void { const p = new P(); p.x = 1; } make(); 'ok';`)).toBe('ok');
+});

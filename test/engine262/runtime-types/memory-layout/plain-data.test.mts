@@ -152,5 +152,8 @@ test('a Map with a declared value type returns a copy of a value it stores', () 
   // A reference class is stored by reference, and an untyped Map is a plain
   // holder whose value is a reference, as a plain object's property is.
   expect(evaluated("reference class R { x: uint8; } const m = new Map.<string, R>(); const r = new R(); m.set('k', r); const g = m.get('k'); if (g !== undefined) g.x = 9; String(r.x);")).toBe('9');
-  expect(evaluated(`${P}const m = new Map(); const p = new P(); m.set('k', p); const g: any = m.get('k'); g.x = 9; String(p.x);`)).toBe('9');
+  // A store through the call writes the value the holder refers to; a binding
+  // from the call copies it, as a binding from `o.k` does.
+  expect(evaluated(`${P}const m = new Map(); const p = new P(); m.set('k', p); m.get('k').x = 9; String(p.x);`)).toBe('9');
+  expect(evaluated(`${P}const m = new Map(); const p = new P(); m.set('k', p); const g: any = m.get('k'); g.x = 9; String(p.x);`)).toBe('0');
 });

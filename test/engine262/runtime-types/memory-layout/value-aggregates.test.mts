@@ -112,3 +112,35 @@ test('what is not a value type is as it was', () => {
   // A plain object's property holds a reference to one (#sec-value-type-copying).
   expect(evaluated(`${fixed}const o = { a }; o.a[1] = 8; String(a[1]);`)).toBe('8');
 });
+
+test('a binding copies every value but one a new or a literal constructs', () => {
+  // #sec-value-type-copying: the binding is the position that copies. It
+  // copied only for a name, a field read and an element read, and took every
+  // other form for a construction, so each of these made a second name for a
+  // value: a store through the new binding wrote the old one.
+  const P = 'class P { x: uint8; } const p = new P(); const other = new P(); ';
+  const untouched = (taken: string): void => {
+    expect(evaluated(`${P}${taken} String(p.x);`)).toBe('0');
+  };
+  untouched('const q = true ? p : other; q.x = 9;');
+  untouched('const q = p ?? other; q.x = 9;');
+  untouched('const q = p || other; q.x = 9;');
+  untouched('var q = true ? p : other; q.x = 9;');
+  // A built-in that returns the value it was given.
+  untouched('const q = Object.seal(p); q.x = 9;');
+  untouched('const q = Object.assign(p, {}); q.x = 9;');
+  untouched('const q = p.valueOf(); q.x = 9;');
+  untouched("const o = { p }; const q = Reflect.get(o, 'p'); q.x = 9;");
+  const a = 'const a: [3].<uint8> = [3, 1, 2]; ';
+  expect(evaluated(`${a}const b = a.reverse(); b[0] = 9; a.join('') + String(a === b);`)).toBe('213false');
+  expect(evaluated(`${a}const b = a.sort(); b[0] = 9; const c = a.fill(1, 2); c[0] = 8; a.join('');`)).toBe('121');
+  // `this` names the value the method was called on, so binding it copies too.
+  expect(evaluated(`${P}class Q { n: uint8; grow(): uint8 { const self = this; self.n = 5; this.n += 1; return self.n; } } const q = new Q(); String(q.grow()) + String(q.n);`)).toBe('51');
+});
+
+test('a chain on a value is in place: no position of the clause lies between a call and its result', () => {
+  expect(evaluated("const a: [3].<uint8> = [3, 1, 2]; a.sort().reverse(); a.join('');")).toBe('321');
+  expect(evaluated("const m: [2].<[2].<uint8>> = [[1, 2], [3, 4]]; m[0].reverse().fill(7, 1); m[0].join('') + m[1].join('');")).toBe('2734');
+  // A plain holder holds a reference to the value a call returns, as it does to any.
+  expect(evaluated("const a: [3].<uint8> = [3, 1, 2]; const o = { s: a.sort() }; o.s[0] = 9; a.join('');")).toBe('923');
+});
