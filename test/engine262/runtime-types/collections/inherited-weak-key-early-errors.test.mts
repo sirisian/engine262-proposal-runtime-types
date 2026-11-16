@@ -37,7 +37,14 @@ test('reference class identity is inherited and remains weakly observable', () =
 test('dynamic roots, ordinary classes and typed arrays retain weak identity', () => {
   expect(ok('dynamic class Base { x: uint8; } class Derived extends Base {} new WeakRef(new Derived());')).toBe(true);
   expect(ok('class Base { x = 1; } class Derived extends Base {} new WeakRef(new Derived());')).toBe(true);
-  expect(ok('let value: [2].<uint8> = [1, 2]; new WeakRef(value);')).toBe(true);
+  // A dynamic array owns storage reached by reference, and has an identity.
+  expect(ok('let value: [].<uint8> = [1, 2]; new WeakRef(value);')).toBe(true);
+  // A fixed-length array of a value type is a value type, as a tuple of value
+  // types is: "the value cannot be held weakly" is one of the four channels
+  // the memory layout document closes for a type laid out inline. This
+  // asserted the opposite for `[2].<uint8>` while that array was an object.
+  expect(ok('let value: [2].<uint8> = [1, 2]; new WeakRef(value);')).toBe(false);
+  expect(ok('class R { x; } let value: [2].<R | null> = [null, null]; new WeakRef(value);')).toBe(true);
 });
 
 test('unknown values and ancestry defer to runtime weak eligibility', () => {

@@ -76,8 +76,12 @@ test('a typed (sealed) class is refused, its nullable union with it, as the clau
   // reference class; a `dynamic` typed class is not sealed. Both hold.
   expect(ok('class R { x = 1; } new WeakRef(new R());')).toBe(true);
   expect(ok('dynamic class D { a: uint8 = 0; } new WeakRef(new D());')).toBe(true);
-  // A typed ARRAY is an object, and so may be held weakly.
-  expect(ok('const d: [10].<uint8> = new [10].<uint8>(); new WeakRef(d);')).toBe(true);
+  // A DYNAMIC typed array owns storage reached by reference, and may be held
+  // weakly. A fixed-length array of a value type is a value type, as a tuple
+  // of value types is, and a value has no identity to be held by; this
+  // asserted the opposite for `[10].<uint8>` while that array was an object.
+  expect(ok('const d: [].<uint8> = [1, 2]; new WeakRef(d);')).toBe(true);
+  expect(ok('const d: [10].<uint8> = new [10].<uint8>(); new WeakRef(d);')).toBe(false);
   // And the run time agrees where the type was not known statically.
   expectThrownKind(`${A} function f(x) { return new WeakRef(x); } f(new A());`, 'TypeError');
 });

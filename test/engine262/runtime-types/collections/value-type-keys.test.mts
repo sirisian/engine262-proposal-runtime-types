@@ -89,7 +89,10 @@ test('an UNANNOTATED assignment copies', () => {
 });
 
 test('a value type copies when passed to a function', () => {
-  expect(evaluated(`${V} function f(v: V) { v.x = (9 := uint32); } const a = new V(); f(a); String(a.x);`)).toBe('0');
+  // The copy is read after the store. A store to it that nothing reads is
+  // refused where it is written (#sec-store-to-a-copy), which is the form this
+  // asserted before that rule.
+  expect(evaluated(`${V} function f(v: V) { v.x = (9 := uint32); return v.x; } const a = new V(); String(f(a)) + String(a.x);`)).toBe('90');
 });
 
 test('reading an element out of a typed array copies it', () => {

@@ -1609,6 +1609,7 @@ test('an unannotated field declares a member and does not constrain stores', () 
   expect(accepts('interface A { a: uint32; } class C implements A { a = (1 := uint8); }')).toBe(false);
 
   // An ANNOTATED field is unaffected - the annotation is what it means.
-  expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = 7; }')).toBe(true);
+  // (The copy is read after the store; a store nothing reads is #sec-store-to-a-copy's.)
+  expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = 7; return c.y; }')).toBe(true);
   expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = "s"; }')).toBe(false);
 });

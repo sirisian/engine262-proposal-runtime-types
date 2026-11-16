@@ -28,7 +28,8 @@ import { AssignRuntimeArguments, DeclaredReferenceLocationType } from '../abstra
 import type { TypeRecord } from '../type-system/records.mts';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
-import { EvaluateResultValue, RetainBindingResult } from '#self';
+import { EvaluateResultValue, RetainBindingResult, ValueAggregateOf,
+} from '#self';
 import {
   Assert,
   GetValue,
@@ -195,6 +196,17 @@ function isPatternElement(node: ParseNode): boolean {
 }
 
 // SingleNameBinding : BindingIdentifier Initializer?
+
+/** Whether an annotation names a window type, `Span` or `ReadonlySpan`. An annotation that does not resolve here is not one. */
+function* annotationIsWindow(annotation: ParseNode.TypeAnnotation): PlainEvaluator<boolean> {
+  const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+  if (resolved.Type !== 'normal') {
+    return false;
+  }
+  const record = resolved.Value as { Kind?: string, LibraryName?: string };
+  return record.Kind === 'nominal' && (record.LibraryName === 'Span' || record.LibraryName === 'ReadonlySpan');
+}
+
 function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.SingleNameBinding, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator {
   const { BindingIdentifier, Initializer } = node;
   // 1. Let bindingId be StringValue of BindingIdentifier.
@@ -325,7 +337,16 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // default, and a read into a binding is a copy position. `const [_q_] = _arr_`
   // and `function f(p: P = _a_)` copy for the reason `const _b_ = _a_` does.
   // 7. Return InitializeReferencedBinding(lhs, v).
-  const initialized = Q(yield* InitializeReferencedBinding(lhs, Q(yield* CopyValueClassInstance(X(v)))));
+  // A parameter that is a WINDOW is the exception, and the reason a window
+  // exists: `Span.<T>` and `ReadonlySpan.<T>` name a run of elements in storage
+  // the callee does not own (#sec-span-type), so the coercion that follows is
+  // over the caller's array. Copying first would hand the callee a window onto
+  // a copy, and every store through it would be lost.
+  let bound = X(v);
+  if (!(node.TypeAnnotation && ValueAggregateOf(bound) !== undefined && (yield* annotationIsWindow(node.TypeAnnotation)))) {
+    bound = Q(yield* CopyValueClassInstance(bound));
+  }
+  const initialized = Q(yield* InitializeReferencedBinding(lhs, bound));
   if (inferred.type) recordDeclaredType(lhs, inferred.type);
   if (node.TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
   if (!isPatternElement(node)) RetainParameterConstruction(lhs, valueResult);

@@ -24,7 +24,7 @@ import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletio
 // already decline: moved there it forms a cycle through `array-view.mts` and
 // `CopyValueClassInstance` is undefined at its use. The ordering rule and the
 // module graph disagree, and the graph wins.
-import { CopyValueClassInstance, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
+import { CopyValueClassInstance, ValueAggregateOf, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { SoAStorageOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterTypeComputation, ExitTypeComputation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
@@ -33,14 +33,14 @@ import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBi
 import { VectorValue } from '../value.mts';
 import { ReferenceValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
-import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
+import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray, ReadonlyElementTargetOf } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf, InterfaceOfSignature } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
-import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
+import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver, IsValueType } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
@@ -1030,6 +1030,9 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
     // prevent one level down.
     if (held instanceof ObjectValue && IsValueTypeClass(field.type)) {
       held = Q(yield* CopyValueTypeInstance(held, field.type));
+    } else if (held instanceof ObjectValue) {
+      // A fixed array or a tuple laid out inside the instance is part of it.
+      held = Q(yield* CopyValueClassInstance(held));
     }
     X(CreateDataPropertyOrThrow(copy, key, held));
     typed.set(field.key, { TypeRecord: field.type });
@@ -1049,6 +1052,8 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
     const declared = layout.fields.find((f) => f.key === element.Key);
     if (held instanceof ObjectValue && declared && IsValueTypeClass(declared.type)) {
       held = Q(yield* CopyValueTypeInstance(held, declared.type));
+    } else if (held instanceof ObjectValue) {
+      held = Q(yield* CopyValueClassInstance(held));
     }
     Q(yield* PrivateFieldAdd(copy, element.Key, held));
   }
@@ -1757,6 +1762,13 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
       const widening = from !== undefined && SubclassAddsStorageOver(from, t);
       return Q(yield* CopyValueTypeInstance(value, t, widening));
     }
+    // #sec-value-type-copying: a fixed-length array of a value type and a tuple
+    // of value types are value types, so a boundary at one copies as a
+    // boundary at a value type class does.
+    if (value instanceof ObjectValue && (t.Kind === 'array' || t.Kind === 'tuple') && IsValueType(t)
+        && ValueAggregateOf(value) !== undefined) {
+      return Q(yield* CopyValueClassInstance(value));
+    }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
@@ -2184,8 +2196,24 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // not a new rule, only the existing one said on the path that skipped it.
     // An ORDINARY class instance has no layout and is untouched, keeping the
     // identity a return must preserve.
-    if (value instanceof ObjectValue && IsValueTypeClass(elided)) {
-      value = Q(yield* CopyValueClassInstance(value));
+    // A fixed-length array of a value type and a tuple of value types are
+    // value types too, and `returning` copies one as it copies an instance.
+    if (value instanceof ObjectValue && (IsValueTypeClass(elided)
+        || ((elided.Kind === 'array' || elided.Kind === 'tuple') && IsValueType(elided)))) {
+      const copied = Q(yield* CopyValueClassInstance(value));
+      // Nothing was copied, so the value is not of a value type: an instance of
+      // a `reference` or `sealed` subclass, which the checking pass admits as
+      // its base. A position of a value type holds a copy or refuses the
+      // value; it never aliases one. The parameter, field and element
+      // boundaries already refuse it, and this one bound the object itself, so
+      // `const b: Base = d; b.x = 9` wrote `d`. The unelided check decides it,
+      // as it does there.
+      if (copied === value && IsValueTypeClass(elided) && ReadonlyElementTargetOf(value as unknown as object) === undefined) {
+        const result = Q(yield* RequireType(value, elided));
+        RetainCheckedResult(completion, elided);
+        return result;
+      }
+      value = copied;
     }
     Q(AcquireNominalPrototype(value, elided));
     RetainCheckedResult(completion, elided);
@@ -2709,6 +2737,13 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       const from = RuntimeTypeOf(value);
       const widening = from !== undefined && SubclassAddsStorageOver(from, t);
       return Q(yield* CopyValueTypeInstance(value, t, widening));
+    }
+    // #sec-value-type-copying: a fixed-length array of a value type and a tuple
+    // of value types are value types, so a boundary at one copies as a
+    // boundary at a value type class does.
+    if (value instanceof ObjectValue && (t.Kind === 'array' || t.Kind === 'tuple') && IsValueType(t)
+        && ValueAggregateOf(value) !== undefined) {
+      return Q(yield* CopyValueClassInstance(value));
     }
     // A bare BigInt admitted at an explicit default requirement stays bare.
     // Its carrier helper is also used by explicit brand construction, which

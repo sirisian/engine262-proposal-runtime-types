@@ -2688,7 +2688,10 @@ function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
   }
   switch (t.Kind) {
     case 'any': return true;
-    case 'object': case 'array': case 'tuple': case 'function': return true;
+    case 'object': case 'function': return true;
+    // #sec-value-types: a fixed-length array of a value type, and a tuple of
+    // value types, are values, and a value has no identity to be held by.
+    case 'array': case 'tuple': return !IsValueType(t);
     case 'primitive': {
       const name = (t as { Name?: string }).Name;
       if (name === 'object' || name === 'symbol') {
@@ -8826,6 +8829,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const requireWritableMember = (expression: ParseNode | null | undefined, operator = '=') => {
     const lhs = patternExpression(expression ?? undefined);
+    if (lhs?.type === 'MemberExpression') noteStoreForCopyRule(lhs);
     if (lhs?.type === 'IdentifierReference') {
       // A generic parameter is an immutable binding: a write to one is an
       // error where it is written, in a clause or a body (#sec-type-parameters).
@@ -18612,6 +18616,248 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     return fields > 0;
+  };
+
+  /**
+   * #sec-store-to-a-copy. A binding HOLDS A COPY when its type is a value type
+   * class, a fixed-length array of a value type or a tuple of value types, and
+   * it was bound from a value that already existed: a parameter, a binding
+   * whose initializer is a name, a field read or an element read, or the
+   * binding of a `for`-`of` head. A store to a field or element of one, with
+   * no read of the binding able to follow, is certain to have no effect, and is
+   * an early error in checked code.
+   *
+   * The rule must have no false instance, so every step below answers "not
+   * judged" where it cannot see the whole: a type it cannot show is laid out,
+   * a use that is not a plain store or a read of a primitive, a second
+   * declaration of the name, a capture, a `ref`, a window.
+   */
+  const valueClassFieldTypes = new Map<ParseNode, ReadonlyMap<string, TypeRecord> | null>();
+  const copyStoreRoots = new Map<ParseNode, TypeRecord>();
+  const nodeField = <T,>(node: ParseNode | undefined, key: string): T | undefined => (node as unknown as Record<string, T | undefined> | undefined)?.[key];
+
+  /** A type whose values are laid out inline: a sized scalar, an enum, or an aggregate of them. */
+  const laidOutValueType = (type: Known, resolving: Set<ParseNode>): boolean => {
+    if (!type) return false;
+    if (type.Kind === 'primitive') {
+      try {
+        return LayoutOf(type as TypeRecord) !== null;
+      } catch {
+        return false;
+      }
+    }
+    if (type.Kind === 'nominal' && (type as { EnumMembers?: unknown }).EnumMembers !== undefined) return true;
+    return holdsCopyType(type, resolving);
+  };
+
+  /**
+   * The fields of a value type class by name, or null where the class is not
+   * certainly one: it has a modifier or type parameters, a field without a
+   * laid-out value type, or a base that is not such a class. Asked where a
+   * store is checked, with the scopes of that place, and kept, so the pass at
+   * the end resolves no type of its own.
+   */
+  const valueClassFieldsOf = (type: Known, resolving: Set<ParseNode> = new Set(), compute = true): ReadonlyMap<string, TypeRecord> | null => {
+    if (!type || type.Kind !== 'nominal' || (type as { EnumMembers?: unknown }).EnumMembers !== undefined
+        || (type as { LibraryName?: string }).LibraryName !== undefined) return null;
+    const declaration = (type as { Declaration?: ParseNode }).Declaration;
+    if (!declaration || (declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression')) return null;
+    if (valueClassFieldTypes.has(declaration)) return valueClassFieldTypes.get(declaration)!;
+    if (!compute || resolving.has(declaration)) return null;
+    resolving.add(declaration);
+    const answer = ((): ReadonlyMap<string, TypeRecord> | null => {
+      const fields = new Map<string, TypeRecord>();
+      for (let at: ParseNode | undefined = declaration; at;) {
+        if ((nodeField<readonly string[] | null>(at, 'ClassModifiers') ?? []).length > 0 || nodeField<unknown>(at, 'TypeParameters')) return null;
+        // A where clause or a decorator can run code of the program's at a store, which is then not without effect.
+        if ((nodeField<{ WhereClauses?: readonly unknown[] | null }>(at, 'ClassTail')?.WhereClauses ?? []).length > 0
+          || (nodeField<readonly unknown[] | null>(at, 'Decorators') ?? []).length > 0) return null;
+        for (const element of classBodyOf(at)) {
+          if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+          if ((nodeField<readonly unknown[] | null>(element, 'Decorators') ?? []).length > 0) return null;
+          const annotation = nodeField<ParseNode.TypeAnnotation | null>(element, 'TypeAnnotation');
+          const fieldType = annotation ? resolveType(annotation.Type) : null;
+          if (!fieldType || !laidOutValueType(fieldType, resolving)) return null;
+          const name = nodeField<{ type?: string, name?: string }>(element, 'ClassElementName');
+          // A private or computed field is storage of the instance; it is counted and not addressed by a path.
+          fields.set(name?.type === 'IdentifierName' && typeof name.name === 'string' ? name.name : `#${fields.size}`, fieldType as TypeRecord);
+        }
+        const base: ParseNode | undefined = heritageClassOf(at);
+        if (nodeField<{ ClassHeritage?: unknown } | null>(at, 'ClassTail')?.ClassHeritage && !base) return null;
+        at = base;
+      }
+      return fields.size > 0 ? fields : null;
+    })();
+    resolving.delete(declaration);
+    valueClassFieldTypes.set(declaration, answer);
+    return answer;
+  };
+
+  /** A value type class, a fixed-length array of a value type, or a tuple of value types: what binding copies. */
+  const holdsCopyType = (type: Known, resolving: Set<ParseNode> = new Set(), compute = true): boolean => {
+    if (!type) return false;
+    if (type.Kind === 'array') return typeof type.Extent === 'number' && (compute ? laidOutValueType(type.Element, resolving) : scalarOrKnownCopyType(type.Element));
+    if (type.Kind === 'tuple') {
+      return type.Elements.length > 0 && type.Elements.every((element) => !element.Rest
+        && (compute ? laidOutValueType(element.Type, resolving) : scalarOrKnownCopyType(element.Type)));
+    }
+    return valueClassFieldsOf(type, resolving, compute) !== null;
+  };
+  const scalarLaidOut = (type: Known): boolean => !!type && ((type.Kind === 'primitive' && laidOutValueType(type, new Set()))
+    || (type.Kind === 'nominal' && (type as { EnumMembers?: unknown }).EnumMembers !== undefined));
+  const scalarOrKnownCopyType = (type: Known): boolean => scalarLaidOut(type) || holdsCopyType(type, new Set(), false);
+
+  /** Recorded where a store to a member is checked: the declared type of the name at the root of its path. */
+  const noteStoreForCopyRule = (target: ParseNode.MemberExpression): void => {
+    let root: ParseNode = target;
+    while (root.type === 'MemberExpression') root = (root as ParseNode.MemberExpression).MemberExpression as ParseNode;
+    if (root.type !== 'IdentifierReference') return;
+    const declared = lookupDeclared((root as ParseNode.IdentifierReference).name);
+    if (declared && holdsCopyType(declared)) copyStoreRoots.set(target, declared as TypeRecord);
+  };
+
+  const FUNCTION_LIKE = /^(?:Async)?(?:Generator)?(?:Function(?:Declaration|Expression)|ArrowFunction|Method)$|^MethodDefinition$/;
+  const CAPTURING = /^(?:Async)?(?:Generator)?(?:Function(?:Declaration|Expression)|ArrowFunction|Method)$|^MethodDefinition$|^Class(?:Declaration|Expression|StaticBlock)$|^FieldDefinition$/;
+  const LOOPS = /^(?:While|DoWhile|For|ForIn|ForOf|ForAwait)Statement$/;
+  const childNodesOf = (node: ParseNode): ParseNode[] => {
+    const out: ParseNode[] = [];
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') continue;
+      const value = (node as unknown as Record<string, unknown>)[key];
+      for (const item of Array.isArray(value) ? value : [value]) {
+        if (item && typeof item === 'object' && typeof (item as { type?: unknown }).type === 'string' && (item as { location?: unknown }).location) out.push(item as ParseNode);
+      }
+    }
+    return out;
+  };
+
+  /** The type one step along a path, `'length'` for a length, or null where the step is not into known inline storage. */
+  const stepIntoCopy = (type: TypeRecord, member: ParseNode.MemberExpression): TypeRecord | 'length' | null => {
+    if (member.PrivateIdentifier || !holdsCopyType(type, new Set(), false)) return null;
+    if (type.Kind === 'array' || type.Kind === 'tuple') {
+      if (member.IdentifierName) return member.IdentifierName.name === 'length' ? 'length' : null;
+      if (!member.Expression) return null;
+      if (type.Kind === 'array') return type.Element;
+      const index = member.Expression.type === 'NumericLiteral' ? Number((member.Expression as { value: number | bigint }).value) : NaN;
+      if (Number.isInteger(index) && index >= 0 && index < type.Elements.length) return type.Elements[index].Type;
+      return type.Elements.every((element) => element.Type === type.Elements[0].Type) ? type.Elements[0].Type : null;
+    }
+    if (!member.IdentifierName) return null;
+    return valueClassFieldsOf(type, new Set(), false)?.get(member.IdentifierName.name) ?? null;
+  };
+
+  const checkStoresToCopies = (): void => {
+    if (copyStoreRoots.size === 0 || hasDirectEval) return;
+    const judged = new Set<ParseNode>();
+    for (const [target, rootType] of copyStoreRoots) {
+      let reference: ParseNode = target;
+      while (reference.type === 'MemberExpression') reference = (reference as ParseNode.MemberExpression).MemberExpression as ParseNode;
+      const name = (reference as ParseNode.IdentifierReference).name;
+      // The declaration the name denotes, and the scope it is visible in.
+      let declaration: ParseNode | undefined;
+      let scope: ParseNode | undefined;
+      let kind: 'parameter' | 'binding' | 'element' | undefined;
+      for (let at = reference.parent; at && !declaration; at = at.parent) {
+        if (at.type === 'ForOfStatement') {
+          const binding = nodeField<{ ForBinding?: ParseNode }>(at, 'ForDeclaration')?.ForBinding;
+          if (nodeField<{ name?: string }>(binding, 'BindingIdentifier')?.name === name) [declaration, scope, kind] = [binding, at, 'element'];
+        }
+        if (!declaration && FUNCTION_LIKE.test(at.type)) {
+          const parameters = nodeField<unknown>(at, 'FormalParameters') ?? nodeField<unknown>(at, 'UniqueFormalParameters') ?? nodeField<unknown>(at, 'ArrowParameters');
+          const own = (Array.isArray(parameters) ? parameters as ParseNode[] : []).find((parameter) => parameter.type === 'SingleNameBinding'
+            && (parameter as ParseNode.SingleNameBinding).BindingIdentifier.name === name);
+          if (own) [declaration, scope, kind] = [own, at, 'parameter'];
+        }
+        if (!declaration) {
+          for (const statement of childNodesOf(at)) {
+            if (statement.type !== 'LexicalDeclaration') continue;
+            const binding = (nodeField<ParseNode[]>(statement, 'BindingList') ?? []).find((item) => nodeField<{ name?: string }>(item, 'BindingIdentifier')?.name === name);
+            if (binding) [declaration, scope, kind] = [binding, at, 'binding'];
+          }
+        }
+      }
+      if (!declaration || !scope || !kind || judged.has(declaration)) continue;
+      judged.add(declaration);
+      if (nodeField<boolean>(declaration, 'Ref')) continue;
+      if (kind === 'parameter' && (!nodeField<unknown>(declaration, 'TypeAnnotation') || nodeField<unknown>(declaration, 'Initializer')
+        || nodeField<unknown>(declaration, 'TypedInitializer') || nodeField<boolean>(declaration, 'Optional'))) continue;
+      if (kind === 'binding') {
+        // A binding at the top level of a script or module can be read from outside it, and a `for` head carries its value round the loop.
+        if (!/^Block$|Body$/.test(scope.type) || scope.type === 'ScriptBody' || scope.type === 'ModuleBody') continue;
+        let source = nodeField<ParseNode | null>(declaration, 'Initializer') ?? undefined;
+        while (source?.type === 'ParenthesizedExpression') source = nodeField<ParseNode>(source, 'Expression');
+        // Only a name, a field read and an element read denote a value that already exists; a call or a construction builds in place.
+        if (!source || (source.type !== 'IdentifierReference' && source.type !== 'MemberExpression')) continue;
+      }
+      // Every use of the name in its scope.
+      const uses: ParseNode[] = [];
+      let declarations = 0;
+      let opaque = false;
+      const pending: ParseNode[] = [scope];
+      const seen = new Set<ParseNode>();
+      while (pending.length > 0) {
+        const node = pending.pop()!;
+        if (seen.has(node)) continue;
+        seen.add(node);
+        if (node.type === 'IdentifierReference') {
+          const written = (node as ParseNode.IdentifierReference).name;
+          if (written === name) uses.push(node);
+          if (written === 'eval' || written === 'arguments') opaque = true;
+        } else if (node.type === 'BindingIdentifier' && (node as ParseNode.BindingIdentifier).name === name) {
+          declarations += 1;
+        }
+        pending.push(...childNodesOf(node));
+      }
+      if (opaque || declarations !== 1) continue;
+      const loopsOf = (node: ParseNode): ParseNode[] => {
+        const loops: ParseNode[] = [];
+        for (let at = node.parent; at && at !== scope; at = at.parent) if (LOOPS.test(at.type)) loops.push(at);
+        return loops;
+      };
+      const stores: { node: ParseNode, end: number, loops: ParseNode[] }[] = [];
+      const reads: { start: number, loops: ParseNode[] }[] = [];
+      let whole = true;
+      for (const use of uses) {
+        for (let at = use.parent; at && at !== scope; at = at.parent) if (CAPTURING.test(at.type)) whole = false;
+        let top: ParseNode = use;
+        const path: ParseNode.MemberExpression[] = [];
+        while (top.parent?.type === 'MemberExpression' && (top.parent as ParseNode.MemberExpression).MemberExpression === top) {
+          top = top.parent;
+          path.push(top as ParseNode.MemberExpression);
+        }
+        const user = top.parent;
+        let reached: TypeRecord | 'length' | null = path.length > 0 ? rootType : null;
+        for (const member of path) reached = reached && reached !== 'length' ? stepIntoCopy(reached, member) : null;
+        const plainStore = !!user && ((user.type === 'AssignmentExpression' && (user as ParseNode.AssignmentExpression).LeftHandSideExpression === top)
+          || (user.type === 'UpdateExpression' && (nodeField<ParseNode>(user, 'LeftHandSideExpression') === top || nodeField<ParseNode>(user, 'UnaryExpression') === top)));
+        if (!whole || !user || reached === null) {
+          whole = false;
+        } else if (plainStore) {
+          if (reached === 'length' || !copyStoreRoots.has(top)) whole = false;
+          else stores.push({ node: user, end: user.location.endIndex, loops: loopsOf(user) });
+        } else if (copyStoreRoots.has(top) || user.type === 'RefExpression' || nodeField<boolean>(user, 'Ref')
+            || (user.type === 'UnaryExpression' && nodeField<string>(user, 'operator') === 'delete')
+            || ((user.type === 'ForOfStatement' || user.type === 'ForInStatement') && nodeField<ParseNode>(user, 'LeftHandSideExpression') === top)
+            || !(reached === 'length' || scalarLaidOut(reached))) {
+          // A store that is not a plain one, a reference taken, or a read of something that is not a primitive: a second name may exist.
+          whole = false;
+        } else {
+          reads.push({ start: top.location.startIndex, loops: loopsOf(top) });
+        }
+        if (!whole) break;
+      }
+      if (!whole || stores.length === 0) continue;
+      stores.sort((a, b) => a.end - b.end);
+      const lost = stores.find((store) => !reads.some((read) => read.start >= store.end || read.loops.some((loop) => store.loops.includes(loop))));
+      if (!lost) continue;
+      if (kind === 'parameter') {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy of the argument and nothing reads it after this store, so the store is lost; declare the parameter `ref`, or take a `Span`, to store to the caller\'s value', Value(name));
+      } else if (kind === 'element') {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy of the element and nothing reads it after this store, so the store is lost; iterate with `const ref` to store to the element', Value(name));
+      } else {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy and nothing reads it after this store, so the store is lost; store through the original\'s path, or bind it with `const ref`', Value(name));
+      }
+    }
   };
 
   const readonlyWindowBeneath = (target: ParseNode.MemberExpression): TypeRecord | null => {
@@ -46818,5 +47064,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   for (const { supplied, bound } of pendingRecursiveConstraints) {
     if (!IsAssignable(supplied, bound)) report(supplied, bound);
   }
+  checkStoresToCopies();
   return errors;
 }

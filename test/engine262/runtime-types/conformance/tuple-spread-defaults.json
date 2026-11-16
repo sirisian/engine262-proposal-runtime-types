@@ -654,12 +654,12 @@
       "name": "array of defaulted tuple spreads",
       "steps": [
         {
-          "source": "const raw:any=[[],[]];const t:[].<[...[number=7]]>=raw;String(t===raw)+\"/\"+raw[0].join(\",\")+\"/\"+raw[1].join(\",\")+\"/\"+String(raw[0]!==raw[1]);",
+          "source": "const raw:any=[[],[]];const t:[].<[...[number=7]]>=raw;const filled=String(t===raw)+\"/\"+raw[0].join(\",\")+\"/\"+raw[1].join(\",\");raw[0][0]=1;filled+\"/\"+raw[0].join(\",\")+\"/\"+raw[1].join(\",\");",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "true/7/7/true"
+            "value": "true/7/7/1/7"
           }
         }
       ]

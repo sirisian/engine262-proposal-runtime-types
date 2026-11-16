@@ -22,7 +22,8 @@ test.each([
 test.each([
   'function f(x: uint8) {}',
   'function f<T: type>(x: T): T { return x; }',
-  'const N = 2; function f(x: [N].<uint8>) { x[0] = 1; }',
+  // The store is read afterwards: `x` is a copy, and a store to a copy that nothing reads is refused (#sec-store-to-a-copy).
+  'const N = 2; function f(x: [N].<uint8>) { x[0] = 1; return x[0]; }',
   'function f() { let values: [1 + 1].<uint8> = [1, 2]; values[0] = 1; }',
   'function builder(): type { return type uint8; } function f(x: builder()) { x = 1; }',
   'enum E: uint8 { A = 1, B }',

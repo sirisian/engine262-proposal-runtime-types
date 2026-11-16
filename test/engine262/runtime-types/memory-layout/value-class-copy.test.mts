@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, expectStaticTypeError } from '../harness.mts';
 
 /**
  * #sec-value-type-copying, over a VALUE TYPE CLASS.
@@ -33,7 +33,11 @@ test('a NAME or a READ copies', () => {
   expect(evaluated(`${V} class N { p: P = new P(); } const n = new N(); n.p.x = 1; const e = n.p; e.x = 9; String(n.p.x);`)).toBe('1');
   // A field store and an argument, which already copied.
   expect(evaluated(`${V} class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; a.x = 5; String(h.p.x);`)).toBe('1');
-  expect(evaluated(`${V} function f(p: P) { p.x = 9; } const a = new P(); a.x = 1; f(a); String(a.x);`)).toBe('1');
+  // The callee's parameter is a copy, and it is read after the store. A store
+  // to it that nothing reads is refused where it is written, since it can have
+  // no effect (#sec-store-to-a-copy); this asserted that form while it ran.
+  expect(evaluated(`${V} function f(p: P) { p.x = 9; return p.x; } const a = new P(); a.x = 1; String(f(a)) + String(a.x);`)).toBe('91');
+  expectStaticTypeError(`${V} function f(p: P) { p.x = 9; } const a = new P(); a.x = 1; f(a); String(a.x);`);
 });
 
 test('CONSTRUCTION does not copy', () => {
@@ -252,4 +256,20 @@ test('a GENERIC class has a default, per application', () => {
     + ' let f: F.<4>; String(Number(f.len));')).toBe('4');
   // A generic whose fields do not mention the parameter always worked, and still does.
   expect(evaluated('class G2<N: uint32> { x: uint8 = 0; } let g: G2.<4>; String(Number(g.x));')).toBe('0');
+});
+
+test('a position of a value type holds a copy or refuses the value, and never aliases it', () => {
+  // The checking pass admits an instance of a `reference` subclass as its
+  // value type base, and the parameter, field and element boundaries refuse it
+  // when it arrives. An annotated binding and a `return` whose check was
+  // elided bound the object itself instead, so `const b: Base = d; b.x = 9`
+  // wrote `d`: a binding of a value type that was a second name for an
+  // object. They now decide it as the other boundaries do.
+  const classes = 'class Base { x: uint8; } reference class Derived extends Base {} const d = new Derived(); ';
+  expectThrown(`${classes}function f(p: Base): uint8 { p.x = 9; return p.x; } f(d);`, 'is not assignable');
+  expectThrown(`${classes}function f(): uint8 { const b: Base = d; b.x = 9; return b.x; } f();`, 'is not assignable');
+  expectThrown(`${classes}function g(): Base { return d; } g();`, 'is not assignable');
+  // A subclass with no storage of its own is stored as its base, and copied.
+  expect(evaluated('class Base { x: uint8; } class Derived extends Base {} const d = new Derived(); function f(): uint8 { const b: Base = d; b.x = 9; return b.x; } String(f()) + String(d.x);')).toBe('90');
+  expect(evaluated('class Base { x: uint8; } const a = new Base(); function f(): uint8 { const b: Base = a; b.x = 9; return b.x; } String(f()) + String(a.x);')).toBe('90');
 });

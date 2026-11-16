@@ -1,4 +1,5 @@
 import { IsComposite } from '../intrinsics/Composite.mts';
+import { ValueAggregateOf } from '../abstract-ops/testing-comparison.mts';
 import {
   type FinalizationRegistryObject, Q, NormalCompletion, ObjectValue, SymbolValue, Assert, HostCallJobCallback, type JobCallbackRecord, UndefinedValue, Value, type ValueEvaluator, KeyForSymbol,
   GetActiveScriptOrModule,
@@ -99,6 +100,11 @@ export function CanBeHeldWeakly(v: Value): v is ObjectValue | SymbolValue {
       // identity-based lifetime for a weak reference to observe either. Both
       // merge into this one predicate, which is what the clause asks for.
       if (IsComposite(v)) {
+        return false;
+      }
+      // #sec-value-types: a fixed-length array of a value type and a tuple of
+      // value types are values, and a value has no identity to be held by.
+      if (ValueAggregateOf(v) !== undefined) {
         return false;
       }
     }

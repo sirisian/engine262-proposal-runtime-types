@@ -179,7 +179,9 @@ test('the checker reports what the static types settle, at the store rows', () =
   // separate from identity.
   expectStatic('class C { x: uint8 = 1; } function nc(c: C) { c.x = 300; }');
   expectStatic('class C { x: uint8 = 1; } function nc(c: C) { c.x = "s"; }');
-  expect(evaluated('class C { x: uint8 = 1; } function nc(c: C) { c.x = 7; } "ok";')).toBe('ok');
+  // The stored-to copy is read afterwards: a store to a copy that nothing
+  // reads is refused for its own reason (#sec-store-to-a-copy).
+  expect(evaluated('class C { x: uint8 = 1; } function nc(c: C) { c.x = 7; return c.x; } "ok";')).toBe('ok');
   expect(evaluated('class C { y = 1; } function nc(c: C) { c.y = "anything"; } "ok";')).toBe('ok');
   expectStatic('class A { x: uint8 = 1; } class B { x: uint8 = 1; } function nc(a: A) { let b: B = a; }');
 });

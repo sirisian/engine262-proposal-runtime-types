@@ -372,6 +372,15 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
       // its container; a dynamic-length one owns storage reached by reference.
       return typeof (t as { Extent?: unknown }).Extent === 'number'
         && valueTypeWalk((t as { Element: TypeRecord }).Element, depth + 1);
+    case 'tuple': {
+      // "A tuple of value types is itself a value type laid out contiguously,
+      // and a tuple containing a reference position is a reference type." A
+      // rest has no one length, so a tuple with one has no layout and is no
+      // value: it is an array that owns storage, as a dynamic one is.
+      const elements = (t as { Elements?: readonly { Type: TypeRecord, Rest?: boolean }[] }).Elements;
+      return !!elements && elements.length > 0
+        && elements.every((element) => !element.Rest && valueTypeWalk(element.Type, depth + 1));
+    }
     case 'nominal':
       break;
     default:
@@ -497,6 +506,27 @@ function plainDataWalk(t: TypeRecord, depth: number): boolean {
 }
 
 export function LayoutOf(t: TypeRecord): Layout | null {
+  if (t.Kind === 'tuple') {
+    // A tuple of value types lays out as a class's fields do: each position at
+    // the next offset its alignment allows, and the whole padded to the widest
+    // alignment among them (#table-layout-by-type).
+    const elements = (t as { Elements?: readonly { Type: TypeRecord, Rest?: boolean }[] }).Elements;
+    if (!elements || elements.length === 0 || elements.some((element) => element.Rest)) {
+      return null;
+    }
+    let offset = 0;
+    let alignment = 1;
+    for (const element of elements) {
+      const layout = LayoutOf(element.Type);
+      if (!layout || !IsValueType(element.Type)) {
+        return null;
+      }
+      offset = Math.ceil(offset / layout.alignment) * layout.alignment + layout.byteLength;
+      alignment = Math.max(alignment, layout.alignment);
+    }
+    const byteLength = Math.ceil(offset / alignment) * alignment;
+    return { bitLength: byteLength * 8, byteLength, alignment };
+  }
   if (t.Kind === 'array') {
     // A fixed-length array lays out as its element repeated; one with no length is
     // not a laid-out type, though its instances have a byteLength.

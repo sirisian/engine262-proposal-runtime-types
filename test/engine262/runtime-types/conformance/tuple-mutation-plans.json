@@ -746,7 +746,7 @@
       "name": "same-contract movement preserves reference location",
       "steps": [
         {
-          "source": "const t:[uint8,uint8]=[1,2];let ref r=t[0];function run(a:any){a.reverse();}run(t);String(r);",
+          "source": "const t:[uint8,uint8]=[1,2];let ref r=t[0];Reflect.apply(Array.prototype.reverse,t,[]);String(r);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

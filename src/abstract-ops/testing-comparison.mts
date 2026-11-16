@@ -15,7 +15,7 @@ import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { OrdinaryObjectCreate, OrdinaryGetPrototypeOf } from './all.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { IsValueTypeClass, LayoutOf, type ClassLayout } from '../type-system/layout.mts';
+import { IsValueType, IsValueTypeClass, LayoutOf, type ClassLayout } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { PlacementBackingOf, RequirePlacementLive } from './placement.mts';
@@ -24,7 +24,7 @@ import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, float128SameValue, Float128ToBinary128 } from '../intrinsics/Float128.mts';
 import { compare as float128Compare } from '../intrinsics/Float128Arithmetic.mts';
-import { ReadonlyElementTargetOf } from './array-view.mts';
+import { ReadonlyElementTargetOf, StampTypedArray } from './array-view.mts';
 import {
   Assert,
   surroundingAgent,
@@ -41,6 +41,7 @@ import {
   type PropertyKeyValue,
   Throw,
   type PlainEvaluator,
+  ArrayCreate, LengthOfArrayLike, CreateDataProperty, OrdinaryDefineOwnProperty,
 } from '#self';
 
 // This file covers abstract operations defined in
@@ -359,6 +360,12 @@ export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   if (placed !== undefined) {
     Q(RequirePlacementLive(placed));
   }
+  // A fixed-length array of a value type, and a tuple of value types, are
+  // value types (#sec-value-type-copying): the copy is of every element.
+  const aggregate = Q(yield* copyValueAggregate(v));
+  if (aggregate !== undefined) {
+    return aggregate;
+  }
   const t = RuntimeTypeOf(v);
   if (t.Kind !== 'nominal' || t.EnumMembers !== undefined || !IsValueTypeClass(t)) {
     return v;
@@ -444,10 +451,128 @@ export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   return copy;
 }
 
+/**
+ * A value AGGREGATE: a fixed-length array whose element is a value type, or a
+ * tuple each of whose positions is one. Such an array is a value type - "a
+ * fixed-length array of a value type" is named where the specification lists
+ * the value types, and the design says "a tuple of value types is itself a
+ * value type laid out contiguously" - so it is copied where a value type is
+ * copied, compared as one is, and cannot be held weakly.
+ *
+ * ~undefined~ for every other object: a dynamic array, which owns storage
+ * reached by reference, and an array or tuple with a position that is a
+ * reference.
+ */
+type AggregateStorage = {
+  TypedElement?: TypeRecord,
+  TypedExtent?: number,
+  TypedTuple?: {
+    Positions: readonly TypeRecord[], Rest: TypeRecord | undefined, Suffix?: readonly TypeRecord[], Conjuncts?: readonly unknown[],
+  },
+};
+
+/** What a value aggregate is made of: a tuple's positions, or a fixed array's element and extent. */
+export type ValueAggregate = { readonly Positions: readonly TypeRecord[] } | { readonly Element: TypeRecord, readonly Extent: number };
+
+export function ValueAggregateOf(v: Value): ValueAggregate | undefined {
+  if (!surroundingAgent.feature('runtime-types') || !(v instanceof ObjectValue)) {
+    return undefined;
+  }
+  const slots = v as unknown as AggregateStorage;
+  // Read from the storage the array carries, and not from its reported type:
+  // a tuple's positions are in [[TypedTuple]].
+  const shape = slots.TypedTuple;
+  if (shape !== undefined) {
+    if (shape.Rest !== undefined || shape.Conjuncts !== undefined || (shape.Suffix?.length ?? 0) > 0 || shape.Positions.length === 0) {
+      return undefined;
+    }
+    return shape.Positions.every((position) => IsValueType(position)) ? { Positions: shape.Positions } : undefined;
+  }
+  if (slots.TypedElement !== undefined && typeof slots.TypedExtent === 'number') {
+    return IsValueType(slots.TypedElement) ? { Element: slots.TypedElement, Extent: slots.TypedExtent } : undefined;
+  }
+  return undefined;
+}
+
+function* copyValueAggregate(v: ObjectValue): PlainEvaluator<ObjectValue | undefined> {
+  if (ValueAggregateOf(v) === undefined) {
+    return undefined;
+  }
+  const slots = v as unknown as AggregateStorage;
+  const length = Q(yield* LengthOfArrayLike(v));
+  const copy = X(ArrayCreate(length, OrdinaryGetPrototypeOf(v as never) as ObjectValue));
+  for (let index = 0; index < length; index += 1) {
+    const key = Value(String(index));
+    // "The copy is of the value's layout ...; it runs no constructor and no
+    // field initializer" - and no accessor. An element is read from its own
+    // data property, so copying runs no code of the program's. A position
+    // that is not a data property is storage already damaged from outside the
+    // language; it is carried over as it stands and not read.
+    const own = Q(yield* v.GetOwnProperty(key));
+    if (own instanceof UndefinedValue) {
+      continue;
+    }
+    if (own.Value === undefined) {
+      X(OrdinaryDefineOwnProperty(copy as never, key, own));
+      continue;
+    }
+    X(CreateDataProperty(copy, key, Q(yield* CopyValueClassInstance(own.Value))));
+  }
+  // The copy is storage of the same type: it keeps the element type, the
+  // extent and the positions, and is the holder's own.
+  const target = copy as unknown as AggregateStorage;
+  if (slots.TypedTuple !== undefined) {
+    target.TypedTuple = slots.TypedTuple;
+  }
+  if (slots.TypedElement !== undefined) {
+    StampTypedArray(copy, slots.TypedElement);
+  }
+  if (slots.TypedExtent !== undefined) {
+    target.TypedExtent = slots.TypedExtent;
+  }
+  return copy;
+}
+
+/** Two value aggregates are the same value when they are one type and their elements are, position by position. */
+function valueAggregateEquals(x: ObjectValue, y: ObjectValue, zero: boolean): boolean | undefined {
+  const xa = ValueAggregateOf(x);
+  if (xa === undefined) {
+    return undefined;
+  }
+  const ya = ValueAggregateOf(y);
+  if (ya === undefined) {
+    return undefined;
+  }
+  // Distinct types are distinct values: a `[2].<uint8>` is not a `[uint8, uint8]`.
+  if ('Positions' in xa) {
+    if (!('Positions' in ya) || xa.Positions.length !== ya.Positions.length
+        || !xa.Positions.every((position, index) => SameTypeRecord(position, ya.Positions[index]))) {
+      return false;
+    }
+  } else if ('Positions' in ya || xa.Extent !== ya.Extent || !SameTypeRecord(xa.Element, ya.Element)) {
+    return false;
+  }
+  const length = 'Positions' in xa ? xa.Positions.length : xa.Extent;
+  for (let index = 0; index < length; index += 1) {
+    const key = Value(String(index));
+    const element = 'Positions' in xa ? xa.Positions[index] : xa.Element;
+    if (!fieldEquals(X(Get(x, key)), X(Get(y, key)), element, zero)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefined {
   if (!surroundingAgent.feature('runtime-types')
       || !(x instanceof ObjectValue) || !(y instanceof ObjectValue)) {
     return undefined;
+  }
+  // #sec-value-types: "the identity of a value type is its value". A fixed
+  // array or tuple of value types is compared as a value type class is.
+  const asAggregate = valueAggregateEquals(x, y, zero);
+  if (asAggregate !== undefined) {
+    return asAggregate;
   }
   // A callable is never a value-class instance, and RuntimeTypeOf of one now
   // derives its signature - not a cost to pay on every
@@ -518,6 +643,16 @@ function fieldEquals(xv: Value, yv: Value, t: TypeRecord, zero: boolean): boolea
     for (let i = 0; i < extent; i += 1) {
       const k = Value(String(i));
       if (!fieldEquals(X(Get(xv, k)), X(Get(yv, k)), element, zero)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (t.Kind === 'tuple' && xv instanceof ObjectValue && yv instanceof ObjectValue) {
+    const elements = (t as unknown as { Elements: readonly { Type: TypeRecord }[] }).Elements;
+    for (let i = 0; i < elements.length; i += 1) {
+      const k = Value(String(i));
+      if (!fieldEquals(X(Get(xv, k)), X(Get(yv, k)), elements[i].Type, zero)) {
         return false;
       }
     }

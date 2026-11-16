@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: 1136ce66c9303ba0c6fcf0a801cb4f112c6de1224fa38f5356c3ebe249d0e2fc
+// Catalog SHA-256: d73e0c848443627bc33d5fc6c5e6ce3c3a55d04d79df33c19706c6ecc6fc6454
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -2882,8 +2882,33 @@ export const TypeDiagnosticCatalog = [
       "declaration",
       "origin"
     ]
+  },
+  {
+    "code": "RT_STORE_TO_COPY",
+    "rule": "rt-store-to-copy",
+    "status": "provisional",
+    "applicability": "checked",
+    "phases": [
+      "static",
+      "pre-evaluation"
+    ],
+    "errorClass": "StaticTypeError",
+    "specification": [
+      "sec-store-to-a-copy"
+    ],
+    "explanation": "The store is to a binding that holds a copy, and no read of the binding can follow it.",
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relatedLocations": [
+      "declaration",
+      "origin"
+    ]
   }
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = '1136ce66c9303ba0c6fcf0a801cb4f112c6de1224fa38f5356c3ebe249d0e2fc';
+export const TypeDiagnosticCatalogHash = 'd73e0c848443627bc33d5fc6c5e6ce3c3a55d04d79df33c19706c6ecc6fc6454';

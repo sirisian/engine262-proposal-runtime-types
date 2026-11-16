@@ -175,7 +175,9 @@ test.each(['2', '(2)', '((2))'])('grouping preserves the fixed array and Span bo
   for (const type of ['[2].<uint8>', 'Span.<uint8, 2>']) {
     expectStaticTypeError(`function unused(a: ${type}) { a[${index}]; }`);
     expectStaticTypeError(`function unused(a: ${type}) { a[${index}] = 1; }`);
-    expect(ok(`function unused(a: ${type}) { a[((1))]; a[((1))] = 1; }`)).toBe(true);
+    // The store comes first and is read: a store to a copy that nothing reads
+    // is refused for its own reason (#sec-store-to-a-copy), and `[2].<uint8>` is copied.
+    expect(ok(`function unused(a: ${type}) { a[((1))] = 1; a[((1))]; }`)).toBe(true);
   }
 });
 
