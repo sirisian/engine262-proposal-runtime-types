@@ -10,6 +10,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { RebindRefBinding, RefBindingHolder, EnvironmentRecord, TypeParameterEnvironmentRecord } from '../execution-context/Environment.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import { ArrayElementIdentity } from '../type-system/array-borrow.mts';
+import { LayoutOf } from '../type-system/layout.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { Get, surroundingAgent } from '#self';
 import {
   ScalarRestOwner,
@@ -74,8 +76,17 @@ export function* RequireBorrowableReference(expr: ParseNode.LeftHandSideExpressi
       // that implements ObjectValue and carries no layout.
       const owner = Q(yield* Get(ref.Base, Value('constructor')));
       const layout = (owner as { InstanceLayout?: { fields: readonly { key: string, isBitField: boolean }[] } })?.InstanceLayout;
-      const placement = layout?.fields.find((f) => f.key === (ref.ReferencedName as JSStringValue).stringValue());
-      if (placement?.isBitField) {
+      const name = (ref.ReferencedName as JSStringValue).stringValue();
+      const placement = layout?.fields.find((f) => f.key === name);
+      // A value class with no layout - one holding a `string` - still declares its narrow
+      // fields, and what makes one a bit-field is that declaration: a field of a value class
+      // whose type is narrower than a byte (#sec-natural-alignment). The checking pass refused
+      // the borrow by that reading, and this allowed it, there being no placement to find.
+      const unlaid = !layout && (owner as { ValueClass?: boolean })?.ValueClass === true
+        ? (owner as { DeclaredValueFields?: readonly { key: unknown, type: TypeRecord }[] | null }).DeclaredValueFields?.find((f) => f.key === name)
+        : undefined;
+      const narrow = unlaid ? LayoutOf(unlaid.type) : null;
+      if (placement?.isBitField || (narrow !== null && narrow.bitLength < 8)) {
         return Throw.TypeError('cannot take a ref of $1, which is a bit-field and has no byte address', ref.ReferencedName);
       }
     }

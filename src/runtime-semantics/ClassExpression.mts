@@ -11,6 +11,7 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import { ResolveImplementedInterfaces, RuntimeClassBaseOf } from './RuntimeTypesDeclarations.mts';
 import { ClassDefinitionEvaluation, DecoratorListEvaluation } from './all.mts';
+import { ApplyDecorators, ClassDecoratorContext } from './ClassDefinitionEvaluation.mts';
 import { ClassFamilyIdentityOf, surroundingAgent } from '#self';
 
 /** https://tc39.es/ecma262/#sec-class-definitions-runtime-semantics-evaluation */
@@ -20,7 +21,14 @@ import { ClassFamilyIdentityOf, surroundingAgent } from '#self';
 export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpression): ValueEvaluator {
   const { BindingIdentifier, ClassTail, Decorators } = ClassExpression;
   const sourceText = ClassExpression.sourceText;
-  const decorators = Decorators ? Q(yield* DecoratorListEvaluation(Decorators)) : [];
+  // Runtime-types decorators apply to the completed class, as they do for a declaration
+  // (decorators.md "Order"), and the reserved layout controls among them are read by the class
+  // definition and never evaluated. The separate TC39 decorators feature evaluates its list
+  // before the class is formed. A decorator written on a class expression never reached here,
+  // the parser having dropped the list; now that it does, evaluating it the second way read
+  // `@packed` as a reference to a binding named `packed`.
+  const runtimeTypes = surroundingAgent.feature('runtime-types');
+  const decorators = Decorators && !runtimeTypes ? Q(yield* DecoratorListEvaluation(Decorators)) : [];
   let value;
   if (!BindingIdentifier) {
     // 1. Let value be ? ClassDefinitionEvaluation of ClassTail with arguments undefined and ''
@@ -56,6 +64,13 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
       RegisterStampedClass(ClassExpression, value);
     } else {
       AssociateClassType(value, typeObject);
+    }
+    if (Decorators?.length) {
+      const name = BindingIdentifier ? StringValue(BindingIdentifier) : Value.undefined;
+      const replacement = Q(yield* ApplyDecorators(Decorators, Q(yield* ClassDecoratorContext(name, value)), true));
+      if (replacement !== undefined) {
+        return replacement;
+      }
     }
   }
   return value;

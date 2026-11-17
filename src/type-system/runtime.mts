@@ -3846,6 +3846,14 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       };
       return out;
     }
+    case 'shared':
+      // #sec-defaultvalueof: "If _t_.[[Kind]] is ~shared~, return
+      // ? DefaultValueOf(_t_.[[Target]])." The modifier decides where the
+      // storage lives and nothing about the value (#sec-shared-storage), so
+      // `let a: shared [4].<uint8>;` begins as four zeros the way the unmarked
+      // declaration does. Without the arm every `shared` declaration needed an
+      // initializer, which the design's own samples do not write.
+      return yield* DefaultValueOf(t.Target);
     case 'parameterized': {
       // #sec-defaultvalueof, the ~parameterized~ step: "Let _d_ be
       // DefaultValueOf(_t_.[[Base]]) ... Let _e_ be a new empty Object, which is
@@ -3958,6 +3966,19 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         if (specialized !== undefined) {
           ctorValue = specialized;
         }
+      }
+      // A value class over a fixed-length array (#sec-value-classes) declares no field: its
+      // default is its base's, each element the default of the element type, as an instance
+      // of the class. The field-wise rule below made an ordinary object with no element.
+      const arrayBase = (ctorValue as unknown as { ValueArrayBase?: TypeRecord | null } | undefined)?.ValueArrayBase;
+      if (arrayBase) {
+        const elements = Q(yield* DefaultValueOf(arrayBase));
+        const classPrototype = (ctorValue as unknown as { properties?: Map<unknown, { Value?: Value }> })
+          .properties?.get(Value('prototype'))?.Value;
+        if (elements instanceof ObjectValue && classPrototype instanceof ObjectValue) {
+          X(elements.SetPrototypeOf(classPrototype));
+        }
+        return elements;
       }
       const constructor = ctorValue as unknown as {
         Fields?: readonly { Name?: unknown, TypeObject?: { TypeRecord?: TypeRecord } }[],
@@ -6117,6 +6138,12 @@ export function TypeNodeToTypeRecord(node: ParseNode.Type, asDeclaration?: boole
 }
 
 function* TypeNodeToTypeRecordScoped(node: ParseNode.Type, asDeclaration?: boolean): PlainEvaluator<TypeRecord> {
+  // #sec-value-classes: the bound a value class implies for a type parameter that a field's type
+  // mentions. It is the type `value` itself and not the name, so no binding called `value` in
+  // scope of the class can stand in for it.
+  if ((node as { ImpliedValueBound?: boolean }).ImpliedValueBound === true) {
+    return makePrimitive('value', []);
+  }
   const context = surroundingAgent.runningExecutionContext;
   const enclosing = typeResolutionPaths.get(context);
   const path = enclosing ?? { nodes: [], region: {} };
@@ -7593,7 +7620,14 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       if (Target.Kind === 'reference') {
         return Throw.TypeError('$1 is not a valid type', Value('shared of a reference type'));
       }
-      if (!IsSharableValueType(Target)) {
+      // #sec-threading-shared-modifier: "An open operand retains this formation
+      // obligation ... An unresolved generic operand or class layout retains the
+      // existing deferral." A field `s: shared [N].<T>` of a generic class is
+      // formed here once for the class, with `T` and `N` still open, and the
+      // operand cannot be judged until an application closes it - which the
+      // checking pass does, for every application it sees. Judging the open
+      // operand here refused every generic class that holds shared storage.
+      if (!mentionsTypeParameter(Target) && !IsSharableValueType(Target)) {
         return Throw.TypeError('$1 is not a valid type', Value(`shared ${displayType(Target)}, which is not a value type`));
       }
       return { Kind: 'shared', Target };

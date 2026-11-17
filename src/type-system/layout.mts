@@ -442,15 +442,48 @@ export function ValueFieldsOf(t: TypeRecord): readonly { readonly key: string | 
  * the Type Object properties; `LayoutOf` stays the storage answer.
  */
 export function ReportedLayoutOf(t: TypeRecord): Layout | null {
+  return reportsLayout(t, 0) ? LayoutOf(t) : null;
+}
+
+/**
+ * Whether #table-layout-by-type gives _t_ a layout at all, read row by row; `LayoutOf` then
+ * says what it is.
+ *
+ * - "A reference type, and a nullable union of one: No."
+ * - "`T | null` where T is a value type with a layout: Yes, the inline optional."
+ * - "A value type class, a fixed-length array or a tuple with a field, an element or a position
+ *   of no layout: No."
+ *
+ * This stopped at the outermost type. So `[2].<Node | null>` reported the 16 bytes of two
+ * references, a reference inside an array being as much the implementation's business as one
+ * outside it; and `P | null` over a value class, and `uint8 | null`, reported no layout, every
+ * union having been answered as the nullable reference, while `[2].<P | null>` reported the
+ * inline optional's.
+ */
+function reportsLayout(t: TypeRecord, depth: number): boolean {
+  if (depth > 1000) {
+    return false;
+  }
+  if (t.Kind === 'parameterized') {
+    return reportsLayout(t.Base, depth + 1);
+  }
   if (IsReferenceClass(t)) {
-    return null;
+    return false;
   }
   if (t.Kind === 'union') {
-    // The only union with a layout is the nullable one, and that layout is a
-    // reference's - the row this clause is about.
-    return null;
+    const payload = t.Members.length === 2 && t.Members.some((m) => isNullOrUndefinedPrimitive(m))
+      ? t.Members.find((m) => !isNullOrUndefinedPrimitive(m))
+      : undefined;
+    return payload !== undefined && IsValueType(payload) && reportsLayout(payload, depth + 1);
   }
-  return LayoutOf(t);
+  if (t.Kind === 'array') {
+    return typeof t.Extent === 'number' && reportsLayout(t.Element, depth + 1);
+  }
+  if (t.Kind === 'tuple') {
+    const elements = (t as { Elements?: readonly { Type: TypeRecord, Rest?: boolean }[] }).Elements ?? [];
+    return elements.length > 0 && elements.every((element) => !element.Rest && reportsLayout(element.Type, depth + 1));
+  }
+  return true;
 }
 
 /**
@@ -560,6 +593,11 @@ function plainDataWalk(t: TypeRecord, depth: number): boolean {
     }
     if (t.EnumMembers !== undefined) {
       return t.Underlying ? plainDataWalk(t.Underlying, depth + 1) : false;
+    }
+    // A value class over a fixed-length array is plain exactly when its base is.
+    const arrayBase = (t.Constructor as { ValueArrayBase?: TypeRecord | null } | undefined)?.ValueArrayBase;
+    if (arrayBase) {
+      return plainDataWalk(arrayBase, depth + 1);
     }
     const layout = LayoutOf(t) as ClassLayout | null;
     if (layout !== null && layout.fields !== undefined) {
@@ -692,13 +730,10 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // which is not a value class. This mirrors the nullable-union arm at the end of this
     // function, which already answers a reference's width for the same reason.
     //
-    // The RELFECTIVE reading of this is wrong and knowingly so:
-    // `table-layout-by-type` gives a reference type NO layout, so
-    // `Node.hasLayout` ought to be *false* while a field of `Node` still costs
-    // eight bytes. One function cannot answer both, which is the conflation the
-    // predicate split (`hasLayout` / `value` / `isPlainData`) exists to undo;
-    // until it lands this follows the precedent the nullable union already set
-    // rather than inventing a second, different inconsistency.
+    // This is the STORAGE answer: a field of `Node` costs eight bytes here.
+    // `table-layout-by-type` gives a reference type no layout to REPORT, and
+    // that answer is `ReportedLayoutOf`'s, which reads the table's rows through
+    // an array, a tuple and an optional as well as at the type itself.
     if (IsReferenceClass(t)) {
       return referenceLayout;
     }
@@ -715,7 +750,11 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // generator's work, and #sec-layout-properties calls these compile-time
     // constants - so the walk runs once, where the field types are already
     // resolved, and this reads the answer.
-    const constructor = t.Constructor as { InstanceLayout?: ClassLayout | null, LayoutInputs?: LayoutInputs } | undefined;
+    const constructor = t.Constructor as { InstanceLayout?: ClassLayout | null, LayoutInputs?: LayoutInputs, ValueArrayBase?: TypeRecord | null } | undefined;
+    // A value class over a fixed-length array declares no field, so its layout is its base's.
+    if (constructor?.ValueArrayBase) {
+      return LayoutOf(constructor.ValueArrayBase);
+    }
     const declared = constructor?.InstanceLayout ?? null;
     // A GENERIC class's layout depends on its ARGUMENTS: `G.<8>` and `G.<2>` are
     // different sizes, and the layout computed at the declaration - with the

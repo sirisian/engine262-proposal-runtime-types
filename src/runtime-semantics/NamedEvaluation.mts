@@ -20,6 +20,7 @@ import {
   InstantiateAsyncArrowFunctionExpression,
   DecoratorListEvaluation,
 } from './all.mts';
+import { ApplyDecorators, ClassDecoratorContext } from './ClassDefinitionEvaluation.mts';
 import { ClassFamilyIdentityOf, surroundingAgent } from '#self';
 import type {
   FunctionDeclaration, FunctionObject, PrivateName, PropertyKeyValue,
@@ -72,7 +73,10 @@ function NamedEvaluation_AsyncArrowFunction(AsyncArrowFunction: ParseNode.AsyncA
 //   ClassExpression : `class` ClassTail
 function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpression, name: PropertyKeyValue | PrivateName) {
   const { ClassTail, Decorators } = ClassExpression;
-  const decorators = Decorators ? Q(yield* DecoratorListEvaluation(Decorators)) : [];
+  // As Evaluate_ClassExpression: runtime-types decorators apply to the completed class, below,
+  // and the reserved layout controls among them are never evaluated.
+  const runtimeTypes = surroundingAgent.feature('runtime-types');
+  const decorators = Decorators && !runtimeTypes ? Q(yield* DecoratorListEvaluation(Decorators)) : [];
   const sourceText = ClassExpression.sourceText;
   // 1. Let value be the result of ClassDefinitionEvaluation of ClassTail with arguments undefined and name.
   const value = yield* ClassDefinitionEvaluation(ClassTail, Value.undefined, name, sourceText, decorators);
@@ -121,6 +125,13 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       RegisterStampedClass((typeObject as unknown as { TypeRecord: { Declaration: object } }).TypeRecord.Declaration, value as unknown as ObjectValue);
     } else {
       AssociateClassType(value, typeObject);
+    }
+    if (Decorators?.length) {
+      const className = typeof name === 'object' && name !== null && 'stringValue' in name ? name as unknown as Value : Value.undefined;
+      const replacement = Q(yield* ApplyDecorators(Decorators, Q(yield* ClassDecoratorContext(className, value)), true));
+      if (replacement !== undefined) {
+        return replacement as typeof value;
+      }
     }
   }
   // 4. Return value.

@@ -309,9 +309,8 @@ test('what the static merge does not claim', () => {
   expect(evaluated('function mixin(x) { return x; } class B5 { static b: uint8 = 1; } class D5 extends mixin(B5) { } "ok";')).toBe('ok');
   // `dynamic` does NOT inherit: a typed subclass of a dynamic base is sealed,
   // because the derivation reads the class's OWN declaration.
-  // The store `d.nope = 1` was refused before the program ran, while a class of value-typed fields
-  // was a value and so could be no subclass. D6 is held by reference (#sec-value-classes), where a
-  // subclass may declare the member, so the sealed instance is what refuses the store.
+  // The store `d.nope = 1` is left to the seal: the base is `dynamic`, and its constructor may
+  // have given the instance a property that no declaration names (#sec-typed-storage).
   expect(evaluated('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } const d = new D6(); String(Object.isExtensible(d)) + String(Object.isExtensible(new B6()));')).toBe('falsetrue');
   expectThrown('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } function f() { "use strict"; const d = new D6(); d.nope = 1; } f();', 'Cannot set property');
   // The INSTANCE path is a separate merge and is untouched.

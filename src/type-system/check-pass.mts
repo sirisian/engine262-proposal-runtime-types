@@ -156,6 +156,11 @@ function defaultNeedsEvaluatedClass(t: TypeRecord, seen: Set<TypeRecord> = new S
   if (t.Kind === 'union' || t.Kind === 'intersection') {
     return t.Members.some((m) => defaultNeedsEvaluatedClass(m, seen));
   }
+  if (t.Kind === 'shared' || t.Kind === 'parameterized') {
+    // A wrapper's default is its target's or its base's (#sec-defaultvalueof),
+    // so it waits for the class the way the bare type does.
+    return defaultNeedsEvaluatedClass(t.Kind === 'shared' ? t.Target : t.Base, seen);
+  }
   return false;
 }
 

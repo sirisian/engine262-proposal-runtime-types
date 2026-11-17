@@ -2039,9 +2039,12 @@ export abstract class ExpressionParser extends FunctionParser {
             node.Expression = this.parseAssignmentExpression();
             return this.finishNode(node, 'DecoratedExpression') as unknown as ParseNode.PrimaryExpression;
           }
-          // parseClassExpression takes no decorator list; the class path
-          // re-reads them from the token stream.
-          return this.parseClassExpression();
+          // The list was read above, to see what it decorates, so it is handed to the class.
+          // This called `parseClassExpression`, on the ground that "the class path re-reads
+          // them from the token stream" - which it cannot, the tokens being consumed - so
+          // every decorator written on a class expression was dropped: `const A = @packed
+          // value class { ... }` was laid out with its padding, and `@f class { }` never ran `f`.
+          return this.parseClass(decorators, true) as unknown as ParseNode.PrimaryExpression;
         }
         return this.parseClassExpression();
       }
@@ -2436,8 +2439,70 @@ export abstract class ExpressionParser extends FunctionParser {
       }
     });
     node.Decorators = decorators;
+    if (surroundingAgent.feature('runtime-types') && ClassModifiers?.includes('value')) {
+      this.implyValueBounds(node);
+    }
 
     return this.finishNode(node, isExpression ? 'ClassExpression' : 'ClassDeclaration');
+  }
+
+  /**
+   * proposal-runtime-types #sec-value-classes: "A type parameter of a value class that the type
+   * of an instance field, or the class's heritage, mentions is bounded by `value` where it is
+   * written with no bound."
+   *
+   * Every field of a value class has a value type, so a parameter a field's type is written in
+   * can be bound only to a value type, and the head of the class has already said so. The bound
+   * had to be written again on each such parameter, `value class Box<T: type extends value>`,
+   * and it was written as a name, which a binding called `value` in scope of the class hid.
+   *
+   * The bound is given to the parameter here, as a constraint node that denotes the type itself
+   * (`ImpliedValueBound`), so every reader of a parameter's constraint - the checking pass, the
+   * application of the class, the selection of a specialization - sees a bounded parameter
+   * without asking how the bound came to be there. A parameter no field mentions, a phantom one
+   * as in `value class Handle<T: type> { index: uint32; }`, is left unbounded, and so is one
+   * written with a bound of its own, `extends any` included.
+   */
+  private implyValueBounds(node: ParseNode.Unfinished<ParseNode.ClassLike>): void {
+    const list = (node as { TypeParameters?: { ListKind?: string, TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters;
+    const parameters = list && (list.ListKind === undefined || list.ListKind === 'parameters') ? list.TypeParameterList ?? [] : [];
+    const open = parameters.filter((parameter) => !parameter.IsValueParameter && !parameter.IsVariadic && !parameter.Arity && !parameter.TypeParameterConstraint);
+    if (open.length === 0) return;
+    const mentioned = new Set<string>();
+    const visit = (value: unknown, depth: number): void => {
+      if (!value || typeof value !== 'object' || depth > 64) return;
+      if (Array.isArray(value)) {
+        value.forEach((item) => visit(item, depth + 1));
+        return;
+      }
+      const at = value as { type?: string, name?: unknown };
+      if ((at.type === 'IdentifierReference' || at.type === 'IdentifierName' || at.type === 'BindingIdentifier') && typeof at.name === 'string') {
+        mentioned.add(at.name);
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key !== 'parent' && key !== 'location') visit(child, depth + 1);
+      }
+    };
+    const tail = (node as { ClassTail?: { ClassHeritage?: unknown, ClassBody?: readonly { type?: string, static?: boolean, TypeAnnotation?: unknown }[] | null } }).ClassTail;
+    // The heritage's type arguments, and not the name of the base: `extends Base.<T>`, `extends [N].<T>`.
+    visit((tail?.ClassHeritage as { TypeArguments?: unknown } | null | undefined)?.TypeArguments, 0);
+    for (const element of tail?.ClassBody ?? []) {
+      if (element.type === 'FieldDefinition' && !element.static) visit(element.TypeAnnotation, 0);
+    }
+    for (const parameter of open) {
+      if (!mentioned.has(parameter.BindingIdentifier.name)) continue;
+      const bound = {
+        type: 'TypeReference',
+        TypeName: { type: 'TypeName', IdentifierReference: { type: 'IdentifierReference', name: 'value', location: parameter.location }, MemberNames: [], location: parameter.location },
+        TypeArguments: null,
+        ImpliedValueBound: true,
+        sourceText: 'value',
+        location: parameter.location,
+        parent: parameter,
+      };
+      (parameter as { TypeParameterConstraint: unknown }).TypeParameterConstraint = bound;
+      (parameter as { ImpliedConstraint?: boolean }).ImpliedConstraint = true;
+    }
   }
 
   // ClassTail : ClassHeritage? `{` ClassBody? `}`

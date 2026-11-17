@@ -405,6 +405,23 @@ export function firstUnreadableControl(decorators: readonly ParseNode.Decorator[
 const CLASS_CONTROLS: readonly string[] = ['packed', 'alignAll', 'size'];
 const FIELD_CONTROLS: readonly string[] = ['align', 'offset', 'offsetBit', 'endian'];
 
+/**
+ * The reserved layout controls written in a decorator list, by name and by what each applies to
+ * (#table-layout-controls): `'class'` for `packed`, `alignAll` and `size`, `'field'` for `align`,
+ * `offset`, `offsetBit` and `endian`. For the judgment that a control is written where it has
+ * something to place.
+ */
+export function layoutControlsIn(decorators: readonly ParseNode.Decorator[] | null | undefined): readonly { name: string, appliesTo: 'class' | 'field' }[] {
+  const out: { name: string, appliesTo: 'class' | 'field' }[] = [];
+  for (const d of decorators ?? []) {
+    const control = reservedLayoutControl(d);
+    if (!control) continue;
+    if (CLASS_CONTROLS.includes(control.name)) out.push({ name: control.name, appliesTo: 'class' });
+    else if (FIELD_CONTROLS.includes(control.name)) out.push({ name: control.name, appliesTo: 'field' });
+  }
+  return out;
+}
+
 export function readClassControls(decorators: readonly ParseNode.Decorator[] | null | undefined): ClassControls {
   const out: { packed?: boolean, alignAll?: number, size?: number } = {};
   for (const d of decorators ?? []) {
@@ -1510,14 +1527,27 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // below where the fields' types are known. A value class is typed by being one, whether
       // or not it declares a field.
       const isValue = modifiers.includes('value');
-      const baseIsValue = (constructorParent as { ValueClass?: boolean } | undefined | null)?.ValueClass === true;
+      // A fixed-length array of a value type is a value type (#sec-value-types), and a class may
+      // extend one: `value class Grid extends [16].<uint8> { }`. Its instances are copied and
+      // compared as their base is, so the class is a value, and its declaration says so as the
+      // declaration of a class over a value class does. It was copied without the word, the one
+      // class whose head did not say its kind. A dynamic array and an array of references are
+      // reference types, and a class over one is held by reference.
+      const parentRecord = (constructorParent as { TypeRecord?: TypeRecord } | undefined | null)?.TypeRecord;
+      const baseIsValueArray = parentRecord?.Kind === 'array' && IsValueType(parentRecord);
+      const baseIsValue = (constructorParent as { ValueClass?: boolean } | undefined | null)?.ValueClass === true || baseIsValueArray;
       if (isValue && constructorParent !== surroundingAgent.intrinsic('%Function.prototype%') && !baseIsValue) {
-        return Throw.TypeError('$1 is declared a value class and its base is not one; a value class extends nothing or a value class', className as Value);
+        return Throw.TypeError('$1 is declared a value class and its base is not one; a value class extends nothing, a value class, or a fixed-length array of a value type', className as Value);
       }
       if (!isValue && baseIsValue) {
-        return Throw.TypeError('$1 extends a value class, so it is one, and is written `value class`', className as Value);
+        return Throw.TypeError(baseIsValueArray
+          ? '$1 extends a fixed-length array of a value type, so it is a value, and is written `value class`'
+          : '$1 extends a value class, so it is one, and is written `value class`', className as Value);
       }
       (F as { ValueClass?: boolean }).ValueClass = isValue;
+      (F as { ValueArrayBase?: TypeRecord | null }).ValueArrayBase = baseIsValueArray
+        ? parentRecord!
+        : (constructorParent as { ValueArrayBase?: TypeRecord | null } | undefined | null)?.ValueArrayBase ?? null;
       (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped || isValue) && !isDynamic;
       // proposal-runtime-types #sec-value-classes: a typed class that is not a value type
       // class is a REFERENCE TYPE, and so is a `sealed` or an `abstract` one, so its
@@ -1633,6 +1663,23 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // #sec-typed-storage's prototype freeze, on this branch too. The evaluation
     // has two exits and only one of them was taken by an ordinary declaration,
     // which is why the first placement of this appeared to do nothing.
+    // #sec-layout-control: "It is a type error to write a layout control where it has nothing
+    // to place." A control was accepted on any class and placed nothing unless the class had a
+    // layout, so `@packed class Header { ... }` with `value` forgotten was an object held by
+    // reference, with no layout, and nothing said so. The checking pass reports what a
+    // declaration shows; this is the judgment for a class it could not read - one a mixin
+    // returns - and, below, for a value class that turns out to have no layout.
+    const classControls = layoutControlsIn((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators).map((control) => control.name);
+    const writtenControls = [
+      ...classControls,
+      ...instanceFields.flatMap((field) => Object.keys((field as { LayoutControls?: FieldControls }).LayoutControls ?? {})),
+    ];
+    if (writtenControls.length > 0 && (F as { ValueClass?: boolean }).ValueClass !== true
+        && surroundingAgent.feature('runtime-types')) {
+      return classControls.length > 0
+        ? Throw.TypeError('$1 is not a value class and has no layout, so $2 places nothing; declare it `value class`', className as Value, Value(`@${writtenControls[0]}`))
+        : Throw.TypeError('$1 is not a value class and has no layout, so $2 places nothing; declare it `value class`, or hold the field in a value class that places it', className as Value, Value(`@${writtenControls[0]}`));
+    }
     // #sec-memory-layout: the value type class row of the layout table. Computed
     // HERE, at declaration, because every field's type is already resolved into
     // its ClassFieldDefinition Record's [[TypeObject]] - resolving them again at
@@ -1726,6 +1773,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // applied; a generic class is evaluated once with its parameters unbound.
       if ((F as { ValueClass?: boolean }).ValueClass === true) {
         const fieldName = (key: string | PrivateName): Value => Value(typeof key === 'string' ? key : `#${String((key as { Description?: { stringValue?(): string } }).Description?.stringValue?.() ?? '').replace(/^#/, '')}`);
+        // A value class over a fixed-length array is its elements: they are what a copy copies,
+        // what `===` compares and what the layout places. A field beside them was dropped by
+        // every copy and ignored by every comparison, so the class declares none; a class
+        // that needs both holds the array in a field.
+        if ((F as { ValueArrayBase?: TypeRecord | null }).ValueArrayBase && (!complete || laidOut.length > 0)) {
+          return Throw.TypeError('$1 is a value class over a fixed-length array, whose elements are the whole of its value, so it declares no instance field', className as Value);
+        }
         if (!complete) {
           return Throw.TypeError('$1 is a value class, and one of its fields has no type', className as Value);
         }
@@ -1762,6 +1816,15 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           Value(String(computed.overflow.size)),
           Value(String(computed.overflow.need)),
         );
+      }
+      // #sec-layout-control: "It is a type error to write a layout control where it has nothing
+      // to place." A control was accepted on any class and placed nothing unless the class had
+      // a layout, so `@packed class Header { ... }` with `value` forgotten was an object, held
+      // by reference, with no layout, and nothing said so. The checking pass reports what a
+      // declaration shows; this is the judgment for a class it could not read - one a mixin
+      // returns - and for an application of a generic class at an argument that has no layout.
+      if (!unspecializedGeneric && writtenControls.length > 0 && computed === null) {
+        return Throw.TypeError('$1 has no layout, since a field of it has a type with none, so $2 places nothing', className as Value, Value(`@${writtenControls[0]}`));
       }
       // #sec-value-classes and #table-layout-by-type: a class that is not a value class is a
       // reference type and has no layout. The walk above still runs for it, so a cycle and a

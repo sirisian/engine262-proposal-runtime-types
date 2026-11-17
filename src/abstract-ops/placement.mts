@@ -319,6 +319,11 @@ export { X, surroundingAgent };
 export function* ValidatePlacement(constructor: ObjectValue, args: readonly Value[]): PlainEvaluator<PlacementBacking> {
   const layout = (constructor as { InstanceLayout?: ClassLayout | null }).InstanceLayout;
   if (!layout) {
+    // A value class over a fixed-length array has its base's layout and no field for this
+    // operation to place: placing its elements on a buffer is specified and not built here.
+    if ((constructor as { ValueArrayBase?: unknown }).ValueArrayBase) {
+      return Throw.TypeError('a placement allocation of a value class over an array is specified but not implemented in this engine');
+    }
     return Throw.TypeError('a placement allocation needs a type with a layout');
   }
   const buffer = args[0];

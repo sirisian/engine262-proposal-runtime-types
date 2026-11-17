@@ -23,7 +23,7 @@ import { LexicallyDeclaredNames } from '../static-semantics/LexicallyDeclaredNam
 import { VarDeclaredNames } from '../static-semantics/VarDeclaredNames.mts';
 import { PropName } from '../static-semantics/PropName.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
-import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
+import { firstUnreadableControl, readClassControls, readFieldControls, layoutControlsIn } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
@@ -2661,6 +2661,43 @@ function classHasOwnSealedStorage(t: TypeRecord): boolean {
   return !decl.ClassModifiers?.includes('dynamic')
     && (decl.ClassTail.ClassBody ?? []).some((element) => element.type === 'FieldDefinition'
       && !element.static && element.TypeAnnotation !== undefined && element.TypeAnnotation !== null);
+}
+
+/**
+ * Whether the instances of this class are sealed AND every member one can have is written in a
+ * declaration this pass can read (#sec-typed-storage).
+ *
+ * A store to a member such a class does not declare cannot add it, so it is judged by the
+ * receiver's static type. The answer is no where the instances are extensible - a `dynamic`
+ * class, or a chain with no typed class in it - and where a member may exist that no
+ * declaration names: a base this pass cannot see (a call, a built-in, a function), and a base
+ * that is not a typed class and declares a constructor, which may give `this` any property
+ * before the seal is applied at the end of construction.
+ */
+function sealedWithDeclaredMembers(t: TypeRecord): boolean {
+  let sealed = false;
+  const seen = new Set<TypeRecord>();
+  let current: TypeRecord | undefined = t;
+  while (current) {
+    if (current.Kind !== 'nominal' || seen.has(current)) return false;
+    seen.add(current);
+    const decl = current.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+    if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) return false;
+    if (decl.ClassModifiers?.includes('dynamic')) return false;
+    const typed = classHasOwnSealedStorage(current) || !!decl.ClassModifiers?.includes('value');
+    sealed ||= typed;
+    if (!typed && (decl.ClassTail.ClassBody ?? []).some((element) => {
+      if (element.type !== 'MethodDefinition' || (element as { static?: boolean }).static) return false;
+      const name = (element as { ClassElementName?: { type?: string, name?: string, value?: string } }).ClassElementName;
+      return (name?.type === 'IdentifierName' && name.name === 'constructor') || (name?.type === 'StringLiteral' && name.value === 'constructor');
+    })) {
+      return false;
+    }
+    const base = (current as { Base?: TypeRecord }).Base;
+    if (decl.ClassTail.ClassHeritage && !base) return false;
+    current = base;
+  }
+  return sealed;
 }
 
 /**
@@ -9094,7 +9131,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         receiver.Members.forEach((arm) => requireDeclaredMember(arm, named));
         return;
       }
-      if (receiver?.Kind !== 'nominal' || !classHasOwnSealedStorage(receiver) || IsReferenceClass(receiver) || indexAccess(m, receiver)) return;
+      // #sec-typed-storage: the rule is the same for every class whose instances are sealed. It
+      // was asked only of a value class, so the misspelled member of an ordinary typed class - the
+      // class a counter or a model is - was left to the seal, which is silent in sloppy code.
+      if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver) || indexAccess(m, receiver)) return;
       const sealedStructure = structureOf(receiver);
       const declaresName = (type: Known, seen = new Set<object>()): boolean => {
         if (type?.Kind !== 'nominal' || seen.has(type)) return false;
@@ -10794,6 +10834,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     checkedDeclaredSizes.add(cls);
     const decorators = (cls as unknown as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
     if (readClassControls(decorators).size === undefined || firstUnreadableControl(decorators)) return;
+    // A class that is not a value class has no layout for a `size` to bound: that the control
+    // is written there at all is what is reported (`checkLayoutControls`).
+    if (!(cls as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers?.includes('value')) return;
     for (const element of classBodyOf(cls)) {
       if (element.type === 'FieldDefinition' && firstUnreadableControl((element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators)) return;
     }
@@ -11855,18 +11898,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const isValue = modifiers.includes('value');
     const className = declaration.BindingIdentifier?.name ?? '(anonymous class)';
     const base = heritageClassOf(declaration) as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+    const baseNotOne = '$1 is declared a value class and its base is not one; a value class extends nothing, a value class, or a fixed-length array of a value type';
     if (base) {
       const baseIsValue = !!base.ClassModifiers?.includes('value');
       if (isValue && !baseIsValue) {
-        reportType('rt-value-class', declaration, '$1 is declared a value class and its base is not one; a value class extends nothing or a value class', Value(className));
+        reportType('rt-value-class', declaration, baseNotOne, Value(className));
       } else if (!isValue && baseIsValue) {
         reportType('rt-value-class', declaration, '$1 extends a value class, so it is one, and is written `value class`', Value(className));
       }
+    }
+    // A class over an array type, `class G extends [16].<uint8> { }`. A fixed-length array of a
+    // value type is a value type and a class over one is a value, so its head says so; a
+    // dynamic array and an array of references are reference types. Judged here where the
+    // extent's form and the element's type say which, and at class evaluation otherwise.
+    const heritage = declaration.ClassTail?.ClassHeritage as unknown as {
+      type?: string, Expression?: { type?: string, ElementList?: readonly unknown[] }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+    } | null | undefined;
+    let overValueArray = false;
+    if (!base && heritage?.type === 'TypeArgumentsExpression' && heritage.Expression?.type === 'ArrayLiteral') {
+      const fixed = (heritage.Expression.ElementList ?? []).length === 1;
+      const elementNode = heritage.TypeArguments?.TypeArgumentList?.[0];
+      const scopedHeritage = declaration.TypeParameters ? pushTypeParameterScopeOf(declaration) : false;
+      let element: Known = null;
+      try {
+        element = elementNode ? resolveType(elementNode as never) as Known : null;
+      } finally {
+        if (scopedHeritage) typeParameterScopes.pop();
+      }
+      const elementIsValue = !!element && IsValueType(element as TypeRecord);
+      const elementIsNotValue = !!element && certainlyNoValue(element as TypeRecord);
+      if (isValue && (!fixed || elementIsNotValue)) {
+        reportType('rt-value-class', declaration, baseNotOne, Value(className));
+      } else if (!isValue && fixed && elementIsValue) {
+        reportType('rt-value-class', declaration, '$1 extends a fixed-length array of a value type, so it is a value, and is written `value class`', Value(className));
+      }
+      overValueArray = isValue && fixed && !elementIsNotValue;
     }
     if (!isValue) return;
     const scoped = declaration.TypeParameters ? pushTypeParameterScopeOf(declaration) : false;
     const typedNames = new Set<string>();
     try {
+      if (overValueArray) {
+        const field = classBodyOf(declaration).find((element) => element.type === 'FieldDefinition' && !(element as { static?: boolean }).static);
+        if (field) {
+          reportType('rt-value-class', field, '$1 is a value class over a fixed-length array, whose elements are the whole of its value, so it declares no instance field', Value(className));
+          return;
+        }
+      }
       for (const element of classBodyOf(declaration)) {
         if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
         const key = (element as { ClassElementName?: { name?: string, value?: unknown, type?: string } }).ClassElementName;
@@ -11900,12 +11978,110 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             continue;
           }
-          reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type parameter $3, which is not bounded by a value type; bound it with `extends value`',
-            Value(className), Value(fieldName), Value(parameterName));
+          // A parameter a field's type mentions is bounded by `value` where no bound is written
+          // (the parser's `implyValueBounds`), so what reaches here is a bound that was written
+          // and is not a value type: an interface, or `any`.
+          if (written && writtenBound) {
+            reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type parameter $3, whose bound $4 is not a value type',
+              Value(className), Value(fieldName), Value(parameterName), Value(writtenBound));
+          } else {
+            reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type parameter $3, which is not bounded by a value type; bound it with `extends value`',
+              Value(className), Value(fieldName), Value(parameterName));
+          }
         } else if (certainlyNoValue(fieldType)) {
           reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type $3, which is not a value type', Value(className), Value(fieldName), Value(displayType(fieldType as TypeRecord)));
         }
       }
+    } finally {
+      if (scoped) typeParameterScopes.pop();
+    }
+  };
+  /**
+   * #sec-layout-control: "It is a type error to write a layout control where it has nothing to
+   * place": `packed`, `alignAll` and `size` on anything but a value class, `align`, `offset`,
+   * `offsetBit` and `endian` on anything but an instance field of one, and any of them where
+   * the value class has no layout.
+   *
+   * The seven names are reserved and never evaluated, so a control was accepted wherever a
+   * decorator may be written, and placed nothing unless the class had a layout. A class whose
+   * author forgot `value` kept its `@packed`, was held by reference, and reported no layout.
+   */
+  const checkLayoutControls = (node: ParseNode): void => {
+    const declaration = node as ParseNode.ClassDeclaration | ParseNode.ClassExpression;
+    const modifiers = declaration.ClassModifiers ?? [];
+    const className = declaration.BindingIdentifier?.name ?? '(anonymous class)';
+    const isValue = modifiers.includes('value');
+    const decoratorsOf = (element: unknown): readonly ParseNode.Decorator[] | null | undefined => (element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+    // A field control names a second remedy. An object that wants some of its fields placed -
+    // two counters on two cache lines, a tagged word - is not thereby a value: it holds those
+    // fields in a value class, whose layout is where the control is written.
+    const notValue = (at: ParseNode, control: string, onField = false): void => reportType('rt-layout', at,
+      onField
+        ? '$1 is not a value class and has no layout, so $2 places nothing; declare it `value class`, or hold the field in a value class that places it'
+        : '$1 is not a value class and has no layout, so $2 places nothing; declare it `value class`', Value(className), Value(`@${control}`));
+    let written: string | undefined;
+    for (const control of layoutControlsIn(classDecorators(declaration))) {
+      if (control.appliesTo === 'field') {
+        reportType('rt-layout', declaration, '$1 places an instance field of a value class, and is written on a class', Value(`@${control.name}`));
+      } else if (!isValue) {
+        notValue(declaration, control.name);
+      } else {
+        written ??= control.name;
+      }
+    }
+    for (const element of classBodyOf(declaration)) {
+      for (const control of layoutControlsIn(decoratorsOf(element))) {
+        if (control.appliesTo === 'class') {
+          reportType('rt-layout', element, '$1 lays out a value class, and is written on a member of one', Value(`@${control.name}`));
+        } else if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) {
+          reportType('rt-layout', element, '$1 places an instance field of a value class, and this member is not one', Value(`@${control.name}`));
+        } else if (!isValue) {
+          notValue(element, control.name, true);
+        } else {
+          written ??= control.name;
+        }
+      }
+    }
+    if (!isValue || written === undefined) return;
+    // A value class with a control and no layout: a field whose type certainly has none. A
+    // type this pass cannot place - a class not yet evaluated, a type parameter - is left to
+    // the evaluation of the class, which has the layout.
+    const certainlyUnlaid = (type: Known): boolean => !!type && !mentionsTypeParameter(type)
+      && (type.Kind === 'primitive' || type.Kind === 'object' || type.Kind === 'function' || type.Kind === 'any'
+        || (type.Kind === 'array' && type.Extent === 'dynamic'))
+      && LayoutOf(type as TypeRecord) === null;
+    const scoped = declaration.TypeParameters ? pushTypeParameterScopeOf(declaration) : false;
+    try {
+      for (const element of classBodyOf(declaration)) {
+        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+        const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        const fieldType = annotation ? resolveType(annotation.Type) as Known : null;
+        if (!certainlyUnlaid(fieldType)) continue;
+        const key = (element as { ClassElementName?: { name?: string, value?: unknown, type?: string } }).ClassElementName;
+        const fieldName = key?.type === 'PrivateIdentifier' ? `#${key.name}` : (key?.name ?? (key?.value !== undefined ? String(key.value) : '[computed]'));
+        reportType('rt-layout', element, '$1 has no layout, since its field $2 has the type $3, which has none, so $4 places nothing',
+          Value(className), Value(fieldName), Value(displayType(fieldType as TypeRecord)), Value(`@${written}`));
+        return;
+      }
+    } finally {
+      if (scoped) typeParameterScopes.pop();
+    }
+  };
+
+  /** The array type a class extends, `[4].<uint8>`, where its extent is a literal and its element type resolves. */
+  const heritageArrayTypeOf = (declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression): TypeRecord | undefined => {
+    const heritage = declaration.ClassTail?.ClassHeritage as unknown as {
+      type?: string, Expression?: { type?: string, ElementList?: readonly { type?: string, value?: unknown }[] }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+    } | null | undefined;
+    if (heritage?.type !== 'TypeArgumentsExpression' || heritage.Expression?.type !== 'ArrayLiteral') return undefined;
+    const extents = heritage.Expression.ElementList ?? [];
+    const elementNode = heritage.TypeArguments?.TypeArgumentList?.[0];
+    if (extents.length > 1 || !elementNode) return undefined;
+    if (extents.length === 1 && (extents[0].type !== 'NumericLiteral' || typeof extents[0].value !== 'number')) return undefined;
+    const scoped = declaration.TypeParameters ? pushTypeParameterScopeOf(declaration) : false;
+    try {
+      const element = resolveType(elementNode as never) as Known;
+      return element ? CanonicalizeType({ Kind: 'array', Element: element, Extent: extents.length === 1 ? extents[0].value as number : 'dynamic' } as never) : undefined;
     } finally {
       if (scoped) typeParameterScopes.pop();
     }
@@ -11936,7 +12112,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? CanonicalizeType(SubstituteTypeArguments(written, declaration, applied)) : written);
     const fields: InlineField[] = [];
     if (declaration.ClassTail.ClassHeritage) {
-      const base = (type as { Base?: TypeRecord }).Base;
+      // A value class over a fixed-length array (#sec-value-classes) has its base's elements
+      // for its storage. The base is written as an array type and is no class record, so it is
+      // read from the heritage: an extent that is a literal, and an element type resolved here.
+      const base = (type as { Base?: TypeRecord }).Base ?? heritageArrayTypeOf(declaration);
       if (!base) return null;
       const boundBase = bound(base);
       if (mentionsTypeParameter(boundBase)) return null;
@@ -15646,6 +15825,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'nominal':
         return classDefaultOf(type, seen);
+      case 'shared':
+        // #sec-defaultvalueof: a ~shared~ type's default is its target's.
+        return staticDefaultOf(type.Target, seen);
       default:
         return 'unknown';
     }
@@ -15881,6 +16063,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const resolveType = (node: ParseNode.Type): Known => {
+    // #sec-value-classes: the bound a value class implies, which is the type `value` and not the name.
+    if ((node as { ImpliedValueBound?: boolean }).ImpliedValueBound === true) return makePrimitive('value', []);
     const isConstraint = node.parent?.type === 'TypeParameter' && node.parent.TypeParameterConstraint === node;
     if (isConstraint) {
       if (describingGenericConstraints.has(node)) return null;
@@ -37594,6 +37778,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const cycle = FirstClassInlineCycle(layoutRoots.map((node) => instanceTypeOf(node)).filter((type): type is TypeRecord => type !== null), inlineFieldsOf);
     layoutRoots.forEach((node) => classLayoutsChecked.add(node));
     layoutRoots.forEach(checkValueClassDeclaration);
+    layoutRoots.forEach(checkLayoutControls);
     if (cycle) reportType('rt-layout', cycle.type.Kind === 'nominal' ? cycle.type.Declaration : root, '$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field));
     // #sec-type-alias-declarations states the same rule for an ALIAS: "It is a
     // type error if a cycle never [passes through a reference position], since
@@ -40978,8 +41163,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const walkDecorators = (node: ParseNode): void => {
-    for (const decorator of (node as ParseNode & { Decorators?: readonly ParseNode.Decorator[] }).Decorators ?? []) {
+    const decorators = (node as ParseNode & { Decorators?: readonly ParseNode.Decorator[] }).Decorators ?? [];
+    for (const decorator of decorators) {
       walkDecorator(decorator);
+    }
+    // #sec-layout-control: a layout control is a reserved name, never evaluated, so one written
+    // on a function, an enum, a parameter or an object literal was accepted and did nothing.
+    // A class and its members are judged with the class (`checkLayoutControls`).
+    if (decorators.length > 0 && !['ClassDeclaration', 'ClassExpression', 'FieldDefinition', 'MethodDefinition', 'OperatorDefinition', 'ClassStaticBlock'].includes(node.type)
+        && !(node.type === 'ExportDeclaration' && ['ClassDeclaration', 'ClassExpression'].includes((node as { Declaration?: ParseNode, default?: unknown, ClassDeclaration?: ParseNode }).ClassDeclaration?.type ?? ''))) {
+      const exported = node.type === 'ExportDeclaration' ? Object.values(node as unknown as Record<string, unknown>).some((child) => !!child && typeof child === 'object'
+        && ['ClassDeclaration', 'ClassExpression'].includes((child as { type?: string }).type ?? '')) : false;
+      if (!exported) {
+        for (const control of layoutControlsIn(decorators)) {
+          reportType('rt-layout', node, control.appliesTo === 'class'
+            ? '$1 lays out a value class, and is not written on one'
+            : '$1 places an instance field of a value class, and is not written on one', Value(`@${control.name}`));
+        }
+      }
     }
   };
 
@@ -45139,7 +45340,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A ~deferred~ record is exempt as a parameter is, and for the same
           // reason: `v: keyof T` names a type the specialization will bind, so
           // its default is the specialization's question.
-          if (declared && declared.Kind !== 'parameter' && declared.Kind !== 'deferred' && !n.Initializer && !n.TypedInitializer) {
+          // `shared T` is exempt where `T` is: the modifier's default is its
+          // target's (#sec-defaultvalueof).
+          const defaulted = declared && declared.Kind === 'shared' ? declared.Target : declared;
+          if (declared && defaulted && defaulted.Kind !== 'parameter' && defaulted.Kind !== 'deferred' && !n.Initializer && !n.TypedInitializer) {
             checkDefaultInitialization(declared);
             refuseClassWithoutDefault(declared as TypeRecord);
             const written = (n.TypeAnnotation?.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } | undefined);
@@ -46799,6 +47003,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // is needed.
         if (n.type === 'ClassExpression') {
           classExpressionNodes.add(n);
+          // The declaration checks run over the class nodes known when a statement list is
+          // entered, and a class expression is known only once the walk reaches it: one in the
+          // last statement, or in a function body, was judged when it was evaluated or not at
+          // all. Judged here, where it is seen.
+          if (!classLayoutsChecked.has(n)) {
+            classLayoutsChecked.add(n);
+            checkValueClassDeclaration(n);
+            checkLayoutControls(n);
+          }
         }
         // The class's own name is in context for its whole body, so a method
         // reading a protected member is INSIDE and a program outside is not.

@@ -266,13 +266,12 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // and a separate allocation.
   expect(evaluated('value class B { x: uint8; } value class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('2/1');
   expect(evaluated('value class B { x: uint8; } value class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, R>("r").offset);')).toBe('8/4');
-  // An optional over a REFERENCE type still spends a reference's width. A
-  // value class has no such field (#sec-value-classes) and a class held by
-  // reference reports no layout, so a fixed-length array is where it shows.
-  // That it shows at all is the conflation `LayoutOf` records and keeps:
-  // #table-layout-by-type gives a reference no layout, and so gives an array
-  // of them none, where this engine reports the references' widths.
-  expect(evaluated('class B { x: uint8; } type T = [1].<B | null>; String((type T).byteLength) + "/" + String((type T).alignment);')).toBe('8/8');
+  // An optional over a REFERENCE type is a reference, and a reference has no
+  // layout to report wherever it is held (#table-layout-by-type): not in a
+  // class, which is then not a value class, and not in a fixed-length array,
+  // which reported its references' widths until the table was read through it.
+  expect(evaluated('class B { x: uint8; } type T = [1].<B | null>; String((type T).hasLayout);')).toBe('false');
+  expectThrown('class B { x: uint8; } type T = [1].<B | null>; (type T).byteLength;', 'has no layout');
   expectThrown('class B { x: uint8; } value class R { r: B | null; } "ok";', 'which is not a value type');
   expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).hasLayout);')).toBe('false');
   // KNOWN LIMIT, recorded rather than asserted away: a SELF-referential class
@@ -294,11 +293,10 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // record built from the declaration and the finished Type Object intern as
   // one, so the class lays out at its declaration rather than being handed a
   // stale record back.
-  // Asked of a fixed-length array holding the reference: the list is a
-  // reference type and has no layout to report, and a value class has no field
-  // of a reference type (#sec-value-classes), so an array of the reference is
-  // what has a size to read. What this pins is unchanged.
-  expect(evaluated('class L { value: uint32; next: L | null; } type T = [2].<L | null>; String((type T).byteLength) + "/" + String((type T).alignment);')).toBe('16/8');
+  // The list is a reference type, so neither it nor anything that holds it
+  // reports a layout; what this pins is that the class is formed at all, the
+  // record built from its declaration and its finished Type Object being one.
+  expect(evaluated('class L { value: uint32; next: L | null; } type T = [2].<L | null>; String((type L).hasLayout) + String((type T).hasLayout);')).toBe('falsefalse');
   expect(evaluated('class L { value: uint32; next: L | null; } String(Reflect.typeOf(new L()) === (type L));')).toBe('true');
   // A class held by reference reports no placement for a field, as it reports
   // no layout: `hasLayout` and the field's placement answer one question.

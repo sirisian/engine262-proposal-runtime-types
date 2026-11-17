@@ -187,17 +187,17 @@ test('an instance carries its element type', () => {
 });
 
 test('a class may derive from an array type', () => {
-  expect(evaluated('class C extends [4].<uint8> {} const c = new C(); String(c.length);')).toBe('4');
-  expect(evaluated('class C extends [4].<uint8> {} const c = new C();'
+  expect(evaluated('value class C extends [4].<uint8> {} const c = new C(); String(c.length);')).toBe('4');
+  expect(evaluated('value class C extends [4].<uint8> {} const c = new C();'
     + ' String(Array.isArray(c)) + "," + String(c instanceof C);')).toBe('true,true');
   // the subclass's own methods are reachable
-  expect(evaluated('class C extends [4].<uint8> { first() { return this[0]; } }'
+  expect(evaluated('value class C extends [4].<uint8> { first() { return this[0]; } }'
     + ' const c = new C(); c[0] = 7; String(c.first());')).toBe('7');
   // and so are the inherited array methods
-  expect(evaluated('class C extends [4].<uint8> {} const c = new C(); c[0] = 3;'
+  expect(evaluated('value class C extends [4].<uint8> {} const c = new C(); c[0] = 3;'
     + ' String(c.map((v) => Number(v) * 2)[0]);')).toBe('6');
   // an element store through the subclass is checked the same way
-  expectThrown('class C extends [4].<uint8> {} const c = new C(); c[0] = 300;');
+  expectThrown('value class C extends [4].<uint8> {} const c = new C(); c[0] = 300;');
   // a dynamic extent derives too
   expect(evaluated('class C extends [].<uint8> {} const c = new C(); c.push(1); String(c.length);')).toBe('1');
 });
@@ -226,10 +226,10 @@ test('an ordinary array literal is untouched', () => {
 test('the grid shape composes with the index accessor forms', () => {
   // an array-typed base, a two-index accessor, and a `ref` read direction serving the write - a grid
   // array without its generic parameters
-  expect(evaluated('class G extends [16].<uint8> {'
+  expect(evaluated('value class G extends [16].<uint8> {'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * 4 + x]; } }'
     + ' const g = new G(); g[2, 1] = 10; String(g[2, 1]);')).toBe('10');
-  expect(evaluated('class G extends [16].<uint8> {'
+  expect(evaluated('value class G extends [16].<uint8> {'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * 4 + x]; } }'
     + ' const g = new G(); g[2, 1] = 10; String(g[6]);')).toBe('10');
 });

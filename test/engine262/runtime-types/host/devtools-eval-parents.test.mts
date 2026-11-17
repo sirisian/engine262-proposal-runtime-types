@@ -37,7 +37,7 @@ function stringOf(realm: ManagedRealm, source: string): string {
 test('a generic class with a parameter-reading heritage declares in the console', () => {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
-  const grid = 'class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
+  const grid = 'value class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * W + x]; } }';
 
   expect(evaluate(realm, grid).Type).toBe('normal');

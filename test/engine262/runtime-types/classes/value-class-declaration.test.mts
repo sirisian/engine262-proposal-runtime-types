@@ -96,8 +96,14 @@ test('a mixin says its kind, and its base is judged when it is applied', () => {
 });
 
 test('a type parameter that is a field type is bounded by value, so a generic class is one kind', () => {
-  expect(observeScript('value class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }')).toMatchObject(refused);
-  expectThrown('value class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }', 'bound it with `extends value`');
+  // The bound is implied where a field's type mentions the parameter (value-class-bounds.test.mts),
+  // and may be written. Either way `Box` is a value at every argument it accepts.
+  expect(observeScript('value class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }').errorClass).toBeUndefined();
+  // A bound that is written and is not a value type is refused.
+  expect(observeScript('value class Box<T: type extends any> { v: T; constructor(v: T) { this.v = v; } }')).toMatchObject(refused);
+  expectThrown('value class Box<T: type extends any> { v: T; constructor(v: T) { this.v = v; } }', 'whose bound "any" is not a value type');
+  // A parameter of an enclosing function is not the class's to bound.
+  expectThrown('function make<T: type>(saved: T) { return value class { v: T = saved; }; }', 'bound it with `extends value`');
   const B = 'value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } } ';
   expect(evaluated(`${B}function f() { const a = new Box.<uint8>(1); const b = a; b.v = 2; const s = new Box.<string>('s'); const t = s; t.v = 't'; return String(a.v) + String(b.v) + s.v + t.v; } f();`)).toBe('12st');
   expect(observeScript(`class Conn { id: uint8 = 1; } ${B}new Box.<Conn>(new Conn());`))

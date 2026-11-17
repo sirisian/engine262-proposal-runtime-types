@@ -102,7 +102,7 @@
       "name": "field initializer keeps captured type",
       "steps": [
         {
-          "source": "function make<T:type>(saved:T){return value class C<U:type>{value:T=saved;};}const A=make.<string>(\"s\");new A.<number>().value;",
+          "source": "function make<T:type extends value>(saved:T){return value class C<U:type>{value:T=saved;};}const A=make.<string>(\"s\");new A.<number>().value;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

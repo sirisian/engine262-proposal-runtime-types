@@ -21,10 +21,20 @@ test('layout and plainness diverge in both directions', () => {
      S.hasLayout, S.isPlainData,
      C.hasLayout, C.isPlainData].join(',');`)).toBe('true,true,false,false,false,false');
   // A class that holds a reference is not a value class (#sec-value-classes), so it reports no
-  // layout either. It did, a pointer's width, while a class was a value or not by its fields; what
-  // still has a layout and is not plain data is a fixed-length array of references.
-  expect(evaluated(`dynamic class D { x = 1; }
-    [(type [2].<D | null>).hasLayout, (type [2].<D | null>).isPlainData].join(',');`)).toBe('true,false');
+  // layout either. It did, a pointer's width, while a class was a value or not by its fields. A
+  // fixed-length array of references reported one too, its elements' widths, until the table's
+  // rows were read through an array as they are through a class (#table-layout-by-type): a
+  // reference has no layout to report wherever it is held. So nothing that reports a layout
+  // holds a reference, and the two properties now part only where a type has no layout.
+  expect(evaluated(`dynamic class D { x = 1; } class R { v: uint8 = 0; }
+    [(type [2].<D | null>).hasLayout, (type [2].<D | null>).isPlainData,
+     (type [2].<R>).hasLayout, (type [R | null, uint8]).hasLayout].join(',');`)).toBe('false,false,false,false');
+  // The inline optional over a value type with a layout has one, as a type and inside an array.
+  expect(evaluated(`value class A { x: uint32 = 1; }
+    [(type A | null).hasLayout, (type A | null).byteLength, (type uint8 | null).byteLength,
+     (type [2].<A | null>).byteLength, (type A | null).isPlainData].join(',');`)).toBe('true,8,2,16,true');
+  // ...and over one with none has none.
+  expect(evaluated("[(type string | null).hasLayout, (type [2].<string | null>).hasLayout].join(',');")).toBe('false,false');
 });
 
 test('plainness descends through fields, arrays, enums and brands', () => {

@@ -43,7 +43,7 @@ test('valid source still parses with no context on the stack', () => {
   setSurroundingAgent(agent);
   const realm = new ManagedRealm();
 
-  const script = ParseScript('class G<W: uint32> extends [W].<uint8> { }', realm, {});
+  const script = ParseScript('value class G<W: uint32> extends [W].<uint8> { }', realm, {});
   expect(Array.isArray(script)).toBe(false);
   expect(agent.executionContextStack.length).toBe(0);
 });

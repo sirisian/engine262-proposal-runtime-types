@@ -26,22 +26,22 @@ import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.m
  */
 
 test('a class control whose argument is not a literal is refused', () => {
-  expectThrownKind('const N = 2; @size(N) class A { x: float64 = 0; }', 'TypeError');
-  expectThrownKind('const N = 16; @size(N) class A { x: float64 = 0; }', 'TypeError');
-  expectThrownKind('@size(8 * 2) class A { x: float64 = 0; }', 'TypeError');
-  expectThrownKind('const A8 = 8; @alignAll(A8) class A { x: uint8 = 0; }', 'TypeError');
+  expectThrownKind('const N = 2; @size(N) value class A { x: float64 = 0; }', 'TypeError');
+  expectThrownKind('const N = 16; @size(N) value class A { x: float64 = 0; }', 'TypeError');
+  expectThrownKind('@size(8 * 2) value class A { x: float64 = 0; }', 'TypeError');
+  expectThrownKind('const A8 = 8; @alignAll(A8) value class A { x: uint8 = 0; }', 'TypeError');
 });
 
 test('a field control whose argument is not a literal is refused', () => {
-  expectThrownKind('const A4 = 4; class A { @align(A4) x: uint8 = 0; y: uint8 = 0; }', 'TypeError');
-  expectThrownKind('const O = 4; class A { @offset(O) x: uint8 = 0; }', 'TypeError');
-  expectThrownKind("const E = 'big'; class A { @endian(E) x: uint32 = 0; }", 'TypeError');
+  expectThrownKind('const A4 = 4; value class A { @align(A4) x: uint8 = 0; y: uint8 = 0; }', 'TypeError');
+  expectThrownKind('const O = 4; value class A { @offset(O) x: uint8 = 0; }', 'TypeError');
+  expectThrownKind("const E = 'big'; value class A { @endian(E) x: uint32 = 0; }", 'TypeError');
 });
 
 test('the refusal names the control', () => {
-  expect(evaluated('try { eval("const N = 2; @size(N) class A { x: float64 = 0; }"); "no error"; } '
+  expect(evaluated('try { eval("const N = 2; @size(N) value class A { x: float64 = 0; }"); "no error"; } '
     + 'catch (e) { e.message; }')).toContain('@size');
-  expect(evaluated('try { eval("const O = 4; class A { @offset(O) x: uint8 = 0; }"); "no error"; } '
+  expect(evaluated('try { eval("const O = 4; value class A { @offset(O) x: uint8 = 0; }"); "no error"; } '
     + 'catch (e) { e.message; }')).toContain('@offset');
 });
 
@@ -62,8 +62,8 @@ test('the size a literal fixes is still enforced', () => {
   // to be placed outside the size a `size` fixes" (#sec-natural-alignment). A
   // literal control is read where the class is written, so the checker reports
   // it before the program runs (size-overflow-early-errors.test.mts).
-  expectStaticTypeError('@size(2) class A { x: float64 = 0; }');
+  expectStaticTypeError('@size(2) value class A { x: float64 = 0; }');
   // And it now fires for the named-constant spelling too, by refusing earlier -
   // where before, the control vanished and the class was silently accepted.
-  expectThrownKind('const N = 2; @size(N) class A { x: float64 = 0; }', 'TypeError');
+  expectThrownKind('const N = 2; @size(N) value class A { x: float64 = 0; }', 'TypeError');
 });

@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: fe418f4a2a9fe31021dca7ad9a7ccf85d0042da9f527bb1fc8d43d43a44c5d80
+// Catalog SHA-256: 3aa7481bc89b6a68cc47f82cdb1b4aa9c72a99961bda16edd64d390026df4607
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -841,9 +841,10 @@ export const TypeDiagnosticCatalog = [
     "errorClass": "StaticTypeError",
     "specification": [
       "sec-memory-layout",
-      "sec-recursive-declaration-validation"
+      "sec-recursive-declaration-validation",
+      "sec-layout-control"
     ],
-    "explanation": "The declared storage cannot have the required finite layout.",
+    "explanation": "The declared storage cannot have the required finite layout, or a layout control is written where it has nothing to place.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2937,4 +2938,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = 'fe418f4a2a9fe31021dca7ad9a7ccf85d0042da9f527bb1fc8d43d43a44c5d80';
+export const TypeDiagnosticCatalogHash = '3aa7481bc89b6a68cc47f82cdb1b4aa9c72a99961bda16edd64d390026df4607';

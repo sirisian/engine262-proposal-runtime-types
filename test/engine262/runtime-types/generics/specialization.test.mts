@@ -64,10 +64,10 @@ test('specializations are distinct and interned', () => {
 });
 
 test('a heritage clause reading a parameter is evaluated per application', () => {
-  expect(evaluated('class C<W: uint32> extends [W].<uint8> { } String(new C.<4>().length);')).toBe('4');
-  expect(evaluated('class C<W: uint32, H: uint32> extends [W * H].<uint8> { }'
+  expect(evaluated('value class C<W: uint32> extends [W].<uint8> { } String(new C.<4>().length);')).toBe('4');
+  expect(evaluated('value class C<W: uint32, H: uint32> extends [W * H].<uint8> { }'
     + ' String(new C.<4, 4>().length);')).toBe('16');
-  expect(evaluated('class C<W: uint32, H: uint32> extends [W * H].<uint8> { }'
+  expect(evaluated('value class C<W: uint32, H: uint32> extends [W * H].<uint8> { }'
     + ' String(new C.<4, 4>().length) + "," + String(new C.<2, 2>().length);')).toBe('16,4');
 });
 
@@ -79,14 +79,14 @@ test('a higher-kinded parameter keeps the nominal path', () => {
 });
 
 test('the GridArray example runs as written', () => {
-  const GRID = 'class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
+  const GRID = 'value class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * W + x]; } } ';
   expect(evaluated(`${GRID}const g = new GridArray.<4, 4>(); g[2, 1] = 10; String(g[2, 1]);`)).toBe('10');
   expect(evaluated(`${GRID}String(new GridArray.<4, 4>().length);`)).toBe('16');
   // the write reached the slot the accessor computed
   expect(evaluated(`${GRID}const g = new GridArray.<4, 4>(); g[2, 1] = 10; String(g[6]);`)).toBe('10');
   // The two-overload form of a grid's index operator.
-  expect(evaluated('class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
+  expect(evaluated('value class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
     + ' get operator[](i: uint32) { return ref this[i]; }'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * W + x]; } }'
     + ' const g = new GridArray.<4, 4>(); g[0] = 10; g[2, 1] = 20;'
@@ -177,7 +177,7 @@ test('heritage that does not read a parameter is unaffected', () => {
 test('a specialization may itself be extended', () => {
   expect(evaluated('class C<W: uint32> { m() { return W; } } class D extends C.<4> { }'
     + ' String(new D().m());')).toBe('4');
-  expect(evaluated('class C<W: uint32> extends [W].<uint8> { } class D extends C.<4> { }'
+  expect(evaluated('value class C<W: uint32> extends [W].<uint8> { } value class D extends C.<4> { }'
     + ' String(new D().length);')).toBe('4');
 });
 
@@ -313,7 +313,7 @@ test('a declaration whose parameters all have defaults needs no arguments', () =
   // are built rather than waiting for an application that never comes
   expect(evaluated('class C<T: type = uint8> { m() { return (1 := T) is uint8; } } String(new C().m());')).toBe('true');
   expect(evaluated('class C<T: type = uint8> { f = (1 := T); } String(new C().f is uint8);')).toBe('true');
-  expect(evaluated('class C<W: uint32 = 4> extends [W].<uint8> { } String(new C().length);')).toBe('4');
+  expect(evaluated('value class C<W: uint32 = 4> extends [W].<uint8> { } String(new C().length);')).toBe('4');
   // and a bare `A` is a type for an alias whose parameters all have defaults
   expect(evaluated('type A<T: type = uint8> = [].<T>; let a: A = []; a.push((1 := uint8)); String(a.length);')).toBe('1');
   expect(evaluated('type A<T: type = uint8, U: type = [].<T>> = U; let a: A = []; String(a.length);')).toBe('0');

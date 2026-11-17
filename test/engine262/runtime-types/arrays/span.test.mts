@@ -941,7 +941,7 @@ test('a constructed array carries the allocation members, not just the element t
 test('a class deriving from an array type keeps its own prototype', () => {
   // The guard the reorder relies on: the stamp declines to swap where the
   // prototype is not the ordinary one, which is the subclass case.
-  expect(evaluated('class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
+  expect(evaluated('value class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
 });
 
 // ---------------------------------------------------------------------------
@@ -978,7 +978,7 @@ test('an elided boundary leaves a typed array fully usable', () => {
 test('a class deriving from an array type keeps its own prototype', () => {
   // `StampTypedArray` declines to swap where the prototype is not the ordinary
   // one, and the widened condition must not defeat that guard.
-  expect(evaluated('class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
+  expect(evaluated('value class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
 });
 
 /**

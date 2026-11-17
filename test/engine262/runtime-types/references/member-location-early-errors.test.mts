@@ -95,9 +95,16 @@ test('the declaring constructor may initialize every selected own readonly field
 });
 
 test.each([
-  'class A { x: uint8; } class B { y: uint8; } function f(a: A | B) { a.z = 1; }',
   'value class A { x: uint8; set operator[](i: uint32, v: uint8) {} } value class B { x: uint8; set operator[](i: uint32, v: uint8) {} } function f(a: A | B) { a[0] = 1; }',
-])('preserves reference-class and index-operator exemptions: %s', (source) => expect(ok(source)).toBe(true));
+])('preserves the index-operator exemption: %s', (source) => expect(ok(source)).toBe(true));
+
+test('a class held by reference is judged as a value class is', () => {
+  // This was an exemption: a member that neither class of the union declares was left to the
+  // seal where the classes were held by reference. The seal is the same for both kinds, and
+  // so is the judgment (#sec-typed-storage).
+  expectStaticTypeError('class A { x: uint8; } class B { y: uint8; } function f(a: A | B) { a.z = 1; }');
+  expectStaticTypeError('value class A { x: uint8; } value class B { y: uint8; } function f(a: A | B) { a.z = 1; }');
+});
 
 test('a substituted reference retains runtime liveness checks', () => {
   expectThrownKind('function first<T: type>(a: [].<T>): ref T { return ref a[0]; } let a: [].<uint8> = [1]; let ref r = first.<uint8>(a); a.pop(); String(r);', 'TypeError');

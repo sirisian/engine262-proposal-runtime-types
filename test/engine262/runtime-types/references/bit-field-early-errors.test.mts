@@ -42,6 +42,24 @@ test.each(referenceClasses)('a small field of a class held by reference is a loc
   }
 });
 
+test('a narrow field of a value class is a bit-field whether or not the class has a layout', () => {
+  // A value class holding a `string` reports no layout, so the borrow found no placement and went
+  // ahead, while the checking pass refused the same borrow by the field's declaration. The
+  // declaration decides for both (#sec-requireborrowablereference): whether `ref p.x` is allowed
+  // then does not change when `name` is given a type with a layout, nor from one application of a
+  // generic class to the next.
+  const U = "value class P { name: string = ''; x: uint.<4> = 1; y: uint8 = 0; } ";
+  expectStaticTypeError(`${U}function f(p: P) { let ref r = p.x; }`);
+  expectThrownKind(`${U}function f(p: any) { let ref r = p.x; } f(new P());`, 'TypeError');
+  expectThrownKind('value class P { x: uint.<4> = 1; } function f(p: any) { let ref r = p.x; } f(new P());', 'TypeError');
+  // An inherited one, and one of a generic class applied at a type with no layout.
+  expectThrownKind("value class B { x: uint.<4> = 1; } value class D extends B { s: string = ''; } function f(p: any) { let ref r = p.x; } f(new D());", 'TypeError');
+  expectThrownKind("value class F<T: type> { v: T; ready: uint.<1> = 0; constructor(v: T) { this.v = v; } } function f(p: any) { let ref r = p.ready; } f(new F.<string>('s'));", 'TypeError');
+  // A field of a byte or more is a location in either class.
+  expect(evaluated(`${U}function f(p: any) { let ref r = p.y; r = 2; return String(p.y); } f(new P());`)).toBe('2');
+  expect(evaluated(`${U}function f() { let p = new P(); let ref r = p.y; r = 3; return String(p.y); } f();`)).toBe('3');
+});
+
 test('computed names retain the same storage field', () => {
   expectStaticTypeError('value class Base { x: uint.<4>; } value class C extends Base {} function unused(c: C) { let ref r = c[("x")]; }');
   expect(ok('class Base { x: uint.<4>; } class C extends Base {} function valid(c: C) { let ref r = c[("x")]; }')).toBe(true);
