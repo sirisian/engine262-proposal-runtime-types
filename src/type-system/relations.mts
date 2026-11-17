@@ -2590,6 +2590,13 @@ export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
       // `plain` is the narrower of the two: everything plain is a value.
       return t.Name === 'value' || s.Name === 'plain';
     }
+    // A type parameter is known to be at least its constraint (IsSubtype: "if _s_ is a parameter
+    // with a constraint, IsSubtype(constraint, _t_)"), and the predicates below see only a
+    // parameter. So `T: type extends value` satisfies a bound of `value` wherever it is forwarded,
+    // and one with no constraint, or with a wider one, does not.
+    if (s.Kind === 'parameter') {
+      return s.Constraint !== undefined && s.Constraint !== null && IsAssignable(s.Constraint, t);
+    }
     return t.Name === 'plain' ? IsPlainData(s) : IsValueType(s);
   }
   return IsSubtype(s, t, []);

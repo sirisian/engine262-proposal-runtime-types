@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError, observeScript } from '../harness.mts';
 
 /**
  * `value` and `plain` are the two BOUND types of #sec-layout-properties: `value` is the type every value
@@ -60,4 +60,31 @@ test('the static bound and the reflective question agree', () => {
     [Reflect.isAssignable(Enemy, value), Reflect.isAssignable(Enemy, plain),
      Reflect.isAssignable(S, value), Reflect.isAssignable(S, plain)].join(',');`))
     .toBe('true,true,true,false');
+});
+
+test('a type parameter bounded by one of them satisfies that bound where it is forwarded', () => {
+  // "If _s_ is a parameter with a constraint, IsSubtype(constraint, _t_)": a parameter is known to be at
+  // least its constraint. The two bounds are answered by predicates over a type's structure, which see
+  // only a parameter, so `T: type extends value` was refused as an argument to `Box<T: type extends
+  // value>` - "T: value is not assignable to value" - and no generic function could build, take or
+  // return an application of a class bounded this way.
+  const B = 'class Box<T: type extends value> { value: T; constructor(v: T) { this.value = v; } } ';
+  const P = 'class Pool<T: type extends plain> { n: uint8 = 0; } ';
+  expect(evaluated(`${B}function wrap<T: type extends value>(v: T): Box.<T> { return new Box.<T>(v); } String(wrap.<uint8>(9).value) + wrap.<string>('s').value;`)).toBe('9s');
+  expect(evaluated(`${B}class Pair<T: type extends value> { a: Box.<T>; constructor(v: T) { this.a = new Box.<T>(v); } } String(new Pair.<uint8>(3).a.value);`)).toBe('3');
+  expect(evaluated(`${P}function mk<T: type extends plain>(): Pool.<T> { return new Pool.<T>(); } String(mk.<uint8>().n);`)).toBe('0');
+  // `plain` is the narrower bound, so it satisfies `value`, and a bound that is itself a value type does.
+  expect(evaluated(`${B}function wrap<T: type extends plain>(v: T): Box.<T> { return new Box.<T>(v); } String(wrap.<uint8>(9).value);`)).toBe('9');
+  expect(evaluated(`${B}function wrap<T: type extends uint8 | uint16>(v: T): Box.<T> { return new Box.<T>(v); } String(wrap.<uint8>(9).value);`)).toBe('9');
+});
+
+test('a parameter with no bound, or a wider one, does not', () => {
+  const B = 'class Box<T: type extends value> { value: T; constructor(v: T) { this.value = v; } } ';
+  const P = 'class Pool<T: type extends plain> { n: uint8 = 0; } ';
+  const refused = { bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-generic-constraint' } };
+  expect(observeScript(`${B}function wrap<T: type>(v: T): Box.<T> { return new Box.<T>(v); } 1;`)).toMatchObject(refused);
+  expect(observeScript(`${P}function mk<T: type extends value>(): Pool.<T> { return new Pool.<T>(); } 1;`)).toMatchObject(refused);
+  expect(observeScript(`${B}interface Named { name: string; } function wrap<T: type extends Named>(v: T): Box.<T> { return new Box.<T>(v); } 1;`)).toMatchObject(refused);
+  // And the argument at each call is still judged against the function's own bound.
+  expectStaticTypeError(`reference class Conn { id: uint8 = 1; } ${B}function wrap<T: type extends value>(v: T): Box.<T> { return new Box.<T>(v); } wrap.<Conn>(new Conn());`);
 });
