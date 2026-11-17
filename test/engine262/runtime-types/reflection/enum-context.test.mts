@@ -37,7 +37,7 @@ test('a non-enum target is refused', () => {
 test('the routes that already worked still do', () => {
   // The class family, which was the only family implemented.
   expect(evaluated('class K { } String(Reflect.getReflection.<Reflect.Class, K>().kind);')).toBe('Class');
-  expect(evaluated('class K { x: uint8 = 1; } String(typeof Reflect.getReflection.<Reflect.ClassField, K>("x"));')).toBe('object');
+  expect(evaluated('value class K { x: uint8 = 1; } String(typeof Reflect.getReflection.<Reflect.ClassField, K>("x"));')).toBe('object');
   // And the type-level node, whose workaround IS now removed: it reflects as the
   // `primitive` leaf #table-reflection-nodes assigns every named type, and the
   // enum-ness a walker needs is `family` on the same node. The declaration

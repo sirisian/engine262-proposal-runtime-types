@@ -7,6 +7,6 @@ test.each(['f', '#f', 'static f', 'static #f'])('field %s requires a possible de
 });
 
 test('generic field defaults are decided at specialization', () => {
-  expect(ok('class C<T: type> { f: T; }')).toBe(true);
-  expect(ok('class C { n: uint8; } new C();')).toBe(true);
+  expect(ok('value class C<T: type extends value> { f: T; }')).toBe(true);
+  expect(ok('value class C { n: uint8; } new C();')).toBe(true);
 });

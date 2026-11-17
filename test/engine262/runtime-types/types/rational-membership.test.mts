@@ -32,7 +32,7 @@ test('a literal in a rational position is its exact value', () => {
 });
 
 test('every position a type appears in', () => {
-  expect(evaluated('class C { r: rational64 = 0.1; } String(new C().r);')).toBe('1/10');
+  expect(evaluated('value class C { r: rational64 = 0.1; } String(new C().r);')).toBe('1/10');
   expect(evaluated('function f(x: rational64) { return x; } String(f(0.1));')).toBe('1/10');
   // The return position already worked before this fix and must keep working: it
   // is the one path that never consulted membership.

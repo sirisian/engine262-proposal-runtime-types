@@ -106,7 +106,7 @@
       "name": "source conversion sees concrete parameter",
       "steps": [
         {
-          "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}operator T(){return this.value;}}const raw:any=new C.<string>(\"s\");const s:string=raw;s;",
+          "source": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}operator T(){return this.value;}}const raw:any=new C.<string>(\"s\");const s:string=raw;s;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -389,7 +389,7 @@
       "name": "generic source two specializations",
       "steps": [
         {
-          "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}operator T(){return this.value;}}const a:any=new C.<string>(\"s\");const b:any=new C.<number>(2);const s:string=a;const n:number=b;s+\"/\"+n;",
+          "source": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}operator T(){return this.value;}}const a:any=new C.<string>(\"s\");const b:any=new C.<number>(2);const s:string=a;const n:number=b;s+\"/\"+n;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -524,7 +524,7 @@
       "name": "outer private scope reaches specialized conversion",
       "steps": [
         {
-          "source": "let seen=\"\";class Outer{#value:string=\"private\";run(){const self=this;class C<T:type>{operator C(v:any){seen=self.#value;return new C.<T>();}}const raw:any=1;const c:C.<string>=raw;}}new Outer().run();seen;",
+          "source": "let seen=\"\";value class Outer{#value:string=\"private\";run(){const self=this;class C<T:type>{operator C(v:any){seen=self.#value;return new C.<T>();}}const raw:any=1;const c:C.<string>=raw;}}new Outer().run();seen;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

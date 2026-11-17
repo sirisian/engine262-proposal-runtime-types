@@ -387,7 +387,7 @@
     {
       "name": "field-boundary",
       "modules": {
-        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);class Box{x:float32.<{a:1,b:2}>=source;}if(!(String(new Box().x)===\"4\"))throw new Error(\"result\");if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
+        "main": "type A={a:int32};meta A{default={a:0};subtype(x,y){return x.a===y.a;}}type B={b:int32};meta B{default={b:0};subtype(x,y){return x.b===y.b;}}globalThis.calls=[];primitive float32{operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)+1;}}const source=(3:=float32.<{a:1}>);value class Box{x:float32.<{a:1,b:2}>=source;}if(!(String(new Box().x)===\"4\"))throw new Error(\"result\");if(!(globalThis.calls.join(\",\")===\"B\"))throw new Error(\"result\");"
       },
       "expected": {
         "status": "fulfilled",

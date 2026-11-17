@@ -21,18 +21,18 @@ test('memory layout: the reserved layout controls place a class and its fields',
   // The seven controls are not decorators in that semantic sense at all: they
   // name no function and take no context, they set property-descriptor keys.
   // So they are recognized syntactically and never evaluated.
-  expect(evaluated('@packed class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('3/1');
-  expect(evaluated('@packed class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('1');
+  expect(evaluated('@packed value class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('3/1');
+  expect(evaluated('@packed value class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('1');
   // The design's four-control example, which exercises `alignAll`, `size`,
   // `offset`, and `align` in one declaration. `align` REPLACES a field's
   // alignment rather than strengthening it, so `y` lands at byte 8 and not at
   // 16 - taking the max is the obvious wrong implementation.
-  const four = '@alignAll(16) @size(32) class A { @offset(2) x: float32; @align(4) y: float32x4; } ';
+  const four = '@alignAll(16) @size(32) value class A { @offset(2) x: float32; @align(4) y: float32x4; } ';
   expect(evaluated(`${four} String((type A).byteLength) + "/" + String((type A).alignment);`)).toBe('32/16');
   expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("x").offset);`)).toBe('2');
   expect(evaluated(`${four} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("y").offset);`)).toBe('8');
   // A class with no controls is unaffected.
-  expect(evaluated('class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
+  expect(evaluated('value class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
   // ANY OTHER DECORATOR IS REFUSED. This proposal's decorators extension -
   // context types, overload resolution, replacement by return value - is a
   // separate feature and is not implemented, and a declaration that is accepted
@@ -41,7 +41,7 @@ test('memory layout: the reserved layout controls place a class and its fields',
   // finished one. The layout controls are
   // unaffected - they are recognized syntactically and never evaluated, so a
   // class can carry both.
-  expect(evaluated('const l = []; function f(c) { l.push(c.kind); } @f @packed class Z { a: uint8; b: uint16; } l.join(",") + "/" + String((type Z).byteLength);')).toBe('Class/3');
+  expect(evaluated('const l = []; function f(c) { l.push(c.kind); } @f @packed value class Z { a: uint8; b: uint16; } l.join(",") + "/" + String((type Z).byteLength);')).toBe('Class/3');
 });
 
 test('memory layout: a type reports its own byteLength', () => {
@@ -118,7 +118,7 @@ test('memory layout: sub-byte fields pack into shared bytes', () => {
   // share one cursor.
   //
   // The design's RGB565, exactly.
-  const rgb = '@packed class RGB565 { r: uint.<5>; g: uint.<6>; b: uint.<5>; } ';
+  const rgb = '@packed value class RGB565 { r: uint.<5>; g: uint.<6>; b: uint.<5>; } ';
   expect(evaluated(`${rgb} String((type RGB565).byteLength) + "/" + String((type RGB565).bitLength);`)).toBe('2/16');
   expect(evaluated(`${rgb} const R = (n) => Reflect.getReflection.<Reflect.ClassFieldLayout, RGB565>(n); String(R("r").offsetBit) + "/" + String(R("g").offsetBit) + "/" + String(R("b").offsetBit);`)).toBe('0/5/11');
   expect(evaluated(`${rgb} String(Reflect.getReflection.<Reflect.ClassFieldLayout, RGB565>("g").isBitField);`)).toBe('true');
@@ -126,17 +126,17 @@ test('memory layout: sub-byte fields pack into shared bytes', () => {
   // "Automatic packing reaches only a field under 8 bits, so a `uint.<12>`
   // occupies 2 bytes unless an `offsetBit` places it." The BYTE BOUNDARY is the
   // line, not the type's name.
-  expect(evaluated('class W { a: uint.<12>; } String((type W).byteLength) + "/" + String((type W).bitLength);')).toBe('2/12');
+  expect(evaluated('value class W { a: uint.<12>; } String((type W).byteLength) + "/" + String((type W).bitLength);')).toBe('2/12');
   // `offsetBit` places one explicitly, which is what fixes bit order exactly.
-  expect(evaluated('@packed class E { a: uint.<3>; @offsetBit(8) b: uint.<4>; } const R = (n) => Reflect.getReflection.<Reflect.ClassFieldLayout, E>(n); String(R("a").offsetBit) + "/" + String(R("b").offsetBit) + "/" + String((type E).bitLength);')).toBe('0/8/12');
+  expect(evaluated('@packed value class E { a: uint.<3>; @offsetBit(8) b: uint.<4>; } const R = (n) => Reflect.getReflection.<Reflect.ClassFieldLayout, E>(n); String(R("a").offsetBit) + "/" + String(R("b").offsetBit) + "/" + String((type E).bitLength);')).toBe('0/8/12');
 
   // bitLength is now the UNROUNDED extent: a class of one `uint.<5>` is 5 bits
   // in 1 byte, where the walk previously reported 8 because it derived
   // bitLength from byteLength.
-  expect(evaluated('class B { r: uint.<5>; } String((type B).bitLength) + "/" + String((type B).byteLength);')).toBe('5/1');
+  expect(evaluated('value class B { r: uint.<5>; } String((type B).bitLength) + "/" + String((type B).byteLength);')).toBe('5/1');
   // Byte-sized classes are unchanged by the rewrite.
-  expect(evaluated('class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
-  expect(evaluated('class V { x: float32; y: float32; z: float32; } String((type V).byteLength) + "/" + String((type V).alignment);')).toBe('12/4');
+  expect(evaluated('value class N { a: uint8; b: uint16; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('4/2');
+  expect(evaluated('value class V { x: float32; y: float32; z: float32; } String((type V).byteLength) + "/" + String((type V).alignment);')).toBe('12/4');
 });
 
 test('memory layout: a bit-field has no byte address to refer to', () => {
@@ -144,7 +144,7 @@ test('memory layout: a bit-field has no byte address to refer to', () => {
   // reference to one is a type error, since it has no byte address to refer
   // to." A reference borrows a storage LOCATION, and a field packed into part
   // of a byte is not one.
-  const c = '@packed class C { r: uint.<5>; n: uint8; } const c = new C(); ';
+  const c = '@packed value class C { r: uint.<5>; n: uint8; } const c = new C(); ';
   expectThrown(`${c} function f(ref p: uint.<5>) { return 1; } f(ref c.r);`);
   // A byte-addressable field of the same class is still borrowable, which is
   // what keeps this a rule about bit-fields rather than about typed classes.
@@ -164,7 +164,7 @@ test('memory layout: a placement allocation lands an instance on existing bytes'
   // instance: every typed class before it stored its fields as ordinary
   // properties, which is why four stages could compute a layout that nothing
   // read.
-  const V = 'class V { x: float32; y: float32; constructor(a, b) { this.x = a; this.y = b; } } ';
+  const V = 'value class V { x: float32; y: float32; constructor(a, b) { this.x = a; this.y = b; } } ';
   const setup = `${V} const buf = new ArrayBuffer(32); const v = new(buf, 0) V(1.5, 2.5); const view = new Float32Array(buf); `;
   expect(evaluated(`${setup} String(view[0]) + "/" + String(view[1]);`)).toBe('1.5/2.5');
   // ALIASING, in both directions, which is the whole point: the instance's
@@ -181,18 +181,18 @@ test('memory layout: a placement allocation lands an instance on existing bytes'
   // The extent is validated BEFORE the constructor runs: it depends only on
   // the arguments and the layout, and checking afterwards would let a
   // constructor with side effects run for a placement that can never happen.
-  expectThrownKind('class P { x: float32; y: float32; } new(new ArrayBuffer(4), 0) P();', 'RangeError');
-  expect(evaluated('let ran = false; class P { x: float32; y: float32; constructor() { ran = true; } } try { new(new ArrayBuffer(4), 0) P(); } catch (e) {} String(ran);')).toBe('false');
+  expectThrownKind('value class P { x: float32; y: float32; } new(new ArrayBuffer(4), 0) P();', 'RangeError');
+  expect(evaluated('let ran = false; value class P { x: float32; y: float32; constructor() { ran = true; } } try { new(new ArrayBuffer(4), 0) P(); } catch (e) {} String(ran);')).toBe('false');
   // "Bytes the layout does not assign keep the buffer's contents, since reusing
   // storage is what the form is for and the zero-fill rule of fresh allocation
   // does not apply."
-  expect(evaluated('class P { x: float32; y: float32; } const b = new ArrayBuffer(32); const u = new Uint8Array(b); u[12] = 0xAB; new(b, 0) P(); String(u[12]);')).toBe('171');
+  expect(evaluated('value class P { x: float32; y: float32; } const b = new ArrayBuffer(32); const u = new Uint8Array(b); u[12] = 0xAB; new(b, 0) P(); String(u[12]);')).toBe('171');
 });
 
 test('memory layout: a placed bit-field is a shift and a mask', () => {
   // "Reading or writing a bit-field is a shift and a mask." That sentence needs
   // an instance with bytes to shift within, which a placement supplies.
-  const rgb = '@packed class RGB { r: uint.<5>; g: uint.<6>; b: uint.<5>; } const cb = new ArrayBuffer(4); const c = new(cb, 0) RGB(); ';
+  const rgb = '@packed value class RGB { r: uint.<5>; g: uint.<6>; b: uint.<5>; } const cb = new ArrayBuffer(4); const c = new(cb, 0) RGB(); ';
   expect(evaluated(`${rgb} c.r = 31; c.g = 0; c.b = 1; String(Number(c.r)) + "/" + String(Number(c.g)) + "/" + String(Number(c.b));`)).toBe('31/0/1');
   // And the bytes are packed as the layout says: `r` fills bits 0..4 of byte 0,
   // and `b` at bit 11 is bit 3 of byte 1.
@@ -203,7 +203,7 @@ test('memory layout: a placement over a resizable buffer records its extent', ()
   // "Over a resizable buffer the extent is recorded: shrinking the buffer below
   // a live allocation's extent detaches those instances, touching a detached
   // instance throws a *TypeError* exception, and growing never invalidates."
-  const rz = 'class V { x: float32; y: float32; } const rb = new ArrayBuffer(32, { maxByteLength: 64 }); const v = new(rb, 16) V(); v.x = 1.5; ';
+  const rz = 'value class V { x: float32; y: float32; } const rb = new ArrayBuffer(32, { maxByteLength: 64 }); const v = new(rb, 16) V(); v.x = 1.5; ';
   expect(evaluated(`${rz} String(Number(v.x));`)).toBe('1.5');
   expect(evaluated(`${rz} rb.resize(64); String(Number(v.x));`)).toBe('1.5');
   expectThrownKind(`${rz} rb.resize(8); v.x;`, 'TypeError');
@@ -215,7 +215,7 @@ test('memory layout: overlapping fields reinterpret, and the store check is per 
   // value the type system did not construct, and the specification permits it
   // knowingly: the store check applies PER FIELD against the type that field
   // declares, and neither field knows the other shares its bytes.
-  const u = '@packed class U { value: float32; @offset(0) bits: uint32; } const b = new ArrayBuffer(8); const u = new(b, 0) U(); ';
+  const u = '@packed value class U { value: float32; @offset(0) bits: uint32; } const b = new ArrayBuffer(8); const u = new(b, 0) U(); ';
   // Both fields are placed at byte 0.
   expect(evaluated(`${u} String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("value").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("bits").offset);`)).toBe('0/0');
   // A float written through one field is read as its BIT PATTERN through the
@@ -240,22 +240,23 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // null` closes a cycle because it is a reference ... which is why a LINKED
   // LIST IS EXPRESSIBLE and a class containing itself by value is not."
   // Was legal while `T | null` was the indirection; the optional is inline now,
-  // so `reference` is what makes a self-referential class declarable.
-  expectThrown('class N { value: uint32; next: N | null; } "ok";', 'contains itself');
-  expect(evaluated('reference class N { value: uint32; next: N | null; } "ok";')).toBe('ok');
+  // so a self-referential class is declarable only where it is held by
+  // reference, which is every class not declared `value` (#sec-value-classes).
+  expectThrown('value class N { value: uint32; next: N | null; } "ok";', 'contains itself');
+  expect(evaluated('class N { value: uint32; next: N | null; } "ok";')).toBe('ok');
   // The refusal was never only about self-reference: a forward reference and
   // mutual recursion went with it, while a METHOD signature naming the same
   // class always worked - which is the diagnostic, since a signature is not
   // resolved at declaration and a field's type is.
-  expect(evaluated('class A { b: B | null; } class B { x: uint8; } "ok";')).toBe('ok');
+  expect(evaluated('value class A { b: B | null; } value class B { x: uint8; } "ok";')).toBe('ok');
   // A cycle through `T | null` is no longer closed by it: the optional is laid
   // out INLINE (#sec-optional-values), so a class reaching itself through one
-  // has no finite layout. Declaring it `reference` is what closes it now.
-  expectThrown('class P { q: Q | null; } class Q { p: P | null; } "ok";', 'contains itself');
-  expect(evaluated('reference class P { q: Q | null; } reference class Q { p: P | null; } "ok";')).toBe('ok');
+  // has no finite layout. A class held by reference is what closes it now.
+  expectThrown('value class P { q: Q | null; } value class Q { p: P | null; } "ok";', 'contains itself');
+  expect(evaluated('class P { q: Q | null; } class Q { p: P | null; } "ok";')).toBe('ok');
   expect(evaluated('class M { m(): M | null { return null; } } "ok";')).toBe('ok');
   // The list is usable, not merely declarable.
-  const list = 'reference class N { value: uint32; next: N | null; } const a = new N(); a.value = 5; const b = new N(); b.value = 7; a.next = b; ';
+  const list = 'class N { value: uint32; next: N | null; } const a = new N(); a.value = 5; const b = new N(); b.value = 7; a.next = b; ';
   expect(evaluated(`${list} String(Number(a.next?.value));`)).toBe('7');
   expect(evaluated(`${list} String(b.next);`)).toBe('null');
 
@@ -263,10 +264,17 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // discriminant placed so the payload starts at the payload's alignment. A
   // one-byte payload therefore costs two bytes rather than a reference's eight
   // and a separate allocation.
-  expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('2/1');
-  expect(evaluated('class B { x: uint8; } class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, R>("r").offset);')).toBe('8/4');
-  // An optional over a REFERENCE type still spends a reference's width.
-  expect(evaluated('reference class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('8/8');
+  expect(evaluated('value class B { x: uint8; } value class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('2/1');
+  expect(evaluated('value class B { x: uint8; } value class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, R>("r").offset);')).toBe('8/4');
+  // An optional over a REFERENCE type still spends a reference's width. A
+  // value class has no such field (#sec-value-classes) and a class held by
+  // reference reports no layout, so a fixed-length array is where it shows.
+  // That it shows at all is the conflation `LayoutOf` records and keeps:
+  // #table-layout-by-type gives a reference no layout, and so gives an array
+  // of them none, where this engine reports the references' widths.
+  expect(evaluated('class B { x: uint8; } type T = [1].<B | null>; String((type T).byteLength) + "/" + String((type T).alignment);')).toBe('8/8');
+  expectThrown('class B { x: uint8; } value class R { r: B | null; } "ok";', 'which is not a value type');
+  expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).hasLayout);')).toBe('false');
   // KNOWN LIMIT, recorded rather than asserted away: a SELF-referential class
   // declares, constructs, and links, but its own layout is not computed at its
   // declaration. The self-reference resolves to a type built from the
@@ -286,10 +294,17 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // record built from the declaration and the finished Type Object intern as
   // one, so the class lays out at its declaration rather than being handed a
   // stale record back.
-  // Asked of a VALUE class holding the reference, `N` itself being a reference
-  // type now and so having no layout to report. What this pins is unchanged.
-  expect(evaluated('reference class L { value: uint32; next: L | null; } class N { value: uint32; next: L | null; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('16/8');
-  expect(evaluated('reference class L { value: uint32; } class N { value: uint32; next: L | null; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, N>("next").offset);')).toBe('8');
+  // Asked of a fixed-length array holding the reference: the list is a
+  // reference type and has no layout to report, and a value class has no field
+  // of a reference type (#sec-value-classes), so an array of the reference is
+  // what has a size to read. What this pins is unchanged.
+  expect(evaluated('class L { value: uint32; next: L | null; } type T = [2].<L | null>; String((type T).byteLength) + "/" + String((type T).alignment);')).toBe('16/8');
+  expect(evaluated('class L { value: uint32; next: L | null; } String(Reflect.typeOf(new L()) === (type L));')).toBe('true');
+  // A class held by reference reports no placement for a field, as it reports
+  // no layout: `hasLayout` and the field's placement answer one question.
+  expect(evaluated('class L { value: uint32; } class N { value: uint32; next: L | null; } String((type N).hasLayout);')).toBe('false');
+  expectThrown('class L { value: uint32; } class N { value: uint32; next: L | null; } Reflect.getReflection.<Reflect.ClassFieldLayout, N>("next");', 'has no layout, so its field "next" has no placement');
+  expect(evaluated('value class L { value: uint32; } value class N { value: uint32; next: L | null; } String((type N).hasLayout) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, N>("next").offset);')).toBe('true/4');
 });
 
 test('memory layout: a class may not contain itself by value', () => {
@@ -304,13 +319,13 @@ test('memory layout: a class may not contain itself by value', () => {
   // The distinction the clause draws: a REFERENCE to the same class closes the
   // cycle and is fine, because the recursion stops at a type with no layout of
   // its own rather than descending.
-  expectThrown('class D { self: D | null; } "ok";', 'contains itself');
-  expect(evaluated('reference class D { self: D | null; } "ok";')).toBe('ok');
+  expectThrown('value class D { self: D | null; } "ok";', 'contains itself');
+  expect(evaluated('class D { self: D | null; } "ok";')).toBe('ok');
   // A FORWARD reference by value is not a cycle. Its layout is simply not
   // computable at that declaration, so the class reports none rather than
   // being refused - being wrong in that direction costs precision, being wrong
   // in the other would refuse a program the clause admits.
-  expect(evaluated('class P2 { q: Q2; } class Q2 { x: uint8; } "ok";')).toBe('ok');
+  expect(evaluated('value class P2 { q: Q2; } value class Q2 { x: uint8; } "ok";')).toBe('ok');
 });
 
 test('memory layout: a placement binds before construction, so no property is created', () => {
@@ -322,22 +337,22 @@ test('memory layout: a placement binds before construction, so no property is cr
   // fields being initialized removes the intermediate state rather than
   // cleaning up after it, which is what C++ placement `new` does: the object is
   // constructed directly in the supplied storage.
-  const V = 'class V { x: float32; y: float32; constructor(a, b) { this.x = a; this.y = b; } } const b = new ArrayBuffer(32); const v = new(b, 0) V(1.5, 2.5); ';
+  const V = 'value class V { x: float32; y: float32; constructor(a, b) { this.x = a; this.y = b; } } const b = new ArrayBuffer(32); const v = new(b, 0) V(1.5, 2.5); ';
   expect(evaluated(`${V} String(Object.getOwnPropertyNames(v).length);`)).toBe('0');
   expect(evaluated(`${V} String(Number(v.x)) + "/" + String(new Float32Array(b)[1]);`)).toBe('1.5/2.5');
   // A class with NO constructor is created on a different path - inside the
   // default constructor builtin rather than in [[Construct]] - and a placement
   // has to be taken on both. Missing the second left such a class placed in
   // name only: its fields became properties and its buffer stayed zero.
-  const D = 'class D { x: float32; } const b2 = new ArrayBuffer(8); const d = new(b2, 0) D(); d.x = 1.5; ';
+  const D = 'value class D { x: float32; } const b2 = new ArrayBuffer(8); const d = new(b2, 0) D(); d.x = 1.5; ';
   expect(evaluated(`${D} String(Object.getOwnPropertyNames(d).length);`)).toBe('0');
   expect(evaluated(`${D} String(new Float32Array(b2)[0]);`)).toBe('1.5');
   // A constructor now reads back through the BUFFER, which is what a placed
   // instance should do for the whole of its life rather than from the end of
   // construction onwards.
-  expect(evaluated('let seen = 0; class W { p: uint8; constructor() { this.p = 3; seen = Number(this.p); } } const b3 = new ArrayBuffer(8); new(b3, 0) W(); String(seen);')).toBe('3');
+  expect(evaluated('let seen = 0; value class W { p: uint8; constructor() { this.p = 3; seen = Number(this.p); } } const b3 = new ArrayBuffer(8); new(b3, 0) W(); String(seen);')).toBe('3');
   // An unplaced instance is untouched.
-  expect(evaluated('class U { x: float32; } String(Object.getOwnPropertyNames(new U()).join(","));')).toBe('x');
+  expect(evaluated('value class U { x: float32; } String(Object.getOwnPropertyNames(new U()).join(","));')).toBe('x');
 });
 
 test('`hasLayout` answers the question the other three assert', () => {
@@ -359,7 +374,7 @@ test('`hasLayout` answers the question the other three assert', () => {
   expect(evaluated('String(uint8.hasLayout);')).toBe('true');
   expect(evaluated('String(boolean.hasLayout);')).toBe('true');
   expect(evaluated('enum E: uint8 { A = 1 } String(E.hasLayout);')).toBe('true');
-  expect(evaluated('class V { x: float32 = 0; } String((type V).hasLayout);')).toBe('true');
+  expect(evaluated('value class V { x: float32 = 0; } String((type V).hasLayout);')).toBe('true');
   expect(evaluated('String((type [4].<uint8>).hasLayout);')).toBe('true');
   expect(evaluated('String(bigint.hasLayout);')).toBe('false');
   expect(evaluated('String(any.hasLayout);')).toBe('false');
@@ -368,7 +383,7 @@ test('`hasLayout` answers the question the other three assert', () => {
   // "A class with an untyped field: No."
   expect(evaluated('class U { x; } String((type U).hasLayout);')).toBe('false');
   // "A union of value types: No. It has no single layout."
-  expect(evaluated('class A { x: uint8 = 0; } class B { y: uint8 = 0; }'
+  expect(evaluated('value class A { x: uint8 = 0; } value class B { y: uint8 = 0; }'
     + ' String((type A | B).hasLayout);')).toBe('false');
 });
 
@@ -377,7 +392,7 @@ test('`hasLayout` and the three it guards agree', () => {
   // `hasLayout` is *true* the other three answer, and wherever it is *false*
   // they throw. Asserted together rather than separately, since a divergence
   // between them is the failure this property exists to prevent.
-  expect(evaluated('class V { x: float32 = 0; y: float32 = 0; z: float32 = 0; }'
+  expect(evaluated('value class V { x: float32 = 0; y: float32 = 0; z: float32 = 0; }'
     + ' String((type V).hasLayout) + "/" + String((type V).byteLength)'
     + ' + "/" + String((type V).alignment);')).toBe('true/12/4');
   expectThrown('any.byteLength;', 'this type has no layout');
@@ -396,7 +411,7 @@ test('a generic class is laid out PER APPLICATION', () => {
   //
   // Before this the declaration itself was refused, the extent being evaluated
   // while the parameter was still unbound.
-  const G = 'class G<N: uint32> { b: [N].<uint8>; id: uint32 = 0; } ';
+  const G = 'value class G<N: uint32> { b: [N].<uint8>; id: uint32 = 0; } ';
   expect(evaluated(`${G} String((type G.<8>).byteLength);`)).toBe('12');
   expect(evaluated(`${G} String((type G.<2>).byteLength);`)).toBe('8');
   // Not the same type, and not the same size - which is the pair the bug made
@@ -418,7 +433,7 @@ test('a DEFAULT does not consume its parameter', () => {
   //
   // The field is therefore resolved twice at the declaration - once bound, for
   // the field itself, and once UNBOUND, for the layout to substitute into.
-  const F = 'class F<N: uint32 = 4> { b: [N].<uint8>; } ';
+  const F = 'value class F<N: uint32 = 4> { b: [N].<uint8>; } ';
   expect(evaluated(`${F} String((type F.<8>).byteLength);`)).toBe('8');
   expect(evaluated(`${F} String((type F.<2>).byteLength);`)).toBe('2');
   // ...and with no argument the default still applies, which is what the
@@ -431,9 +446,9 @@ test('the per-application layout keeps the layout controls', () => {
   // carries a type and an offset but not its `controls`, so recomputing from
   // placements alone would silently drop `@offset`, `@align` and bit-field
   // widths - a layout that looks plausible and is wrong.
-  expect(evaluated('class P { @offset(2) x: float32 = 0; } String((type P).byteLength);')).toBe('8');
+  expect(evaluated('value class P { @offset(2) x: float32 = 0; } String((type P).byteLength);')).toBe('8');
   // A non-generic class is untouched by any of this.
-  expect(evaluated('class V { x: float32 = 0; y: float32 = 0; z: float32 = 0; }'
+  expect(evaluated('value class V { x: float32 = 0; y: float32 = 0; z: float32 = 0; }'
     + ' String((type V).byteLength);')).toBe('12');
   // ...and so is a specialization whose extent is a bound parameter, which
   // evaluates as it always did rather than being carried.

@@ -1018,7 +1018,7 @@
       "name": "structural left class operator",
       "steps": [
         {
-          "source": "class C{a:uint8=1;operator +(s:string):uint8{return 7;}}function f(x:{a:uint8},s:\"a\"):uint8{return x+s;}String(f(new C(),\"a\"));",
+          "source": "value class C{a:uint8=1;operator +(s:string):uint8{return 7;}}function f(x:{a:uint8},s:\"a\"):uint8{return x+s;}String(f(new C(),\"a\"));",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

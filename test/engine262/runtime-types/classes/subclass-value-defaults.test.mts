@@ -19,7 +19,7 @@ import { evaluated } from '../harness.mts';
  * constructor - and not the host object's, which finds nothing.
  */
 
-const AB = 'class A { x: uint32 = 1; } class B extends A { y: uint32 = 2; } ';
+const AB = 'value class A { x: uint32 = 1; } value class B extends A { y: uint32 = 2; } ';
 
 test('an array of a field-adding subclass can be created and used', () => {
   expect(evaluated(`${AB}const p: [4].<B>; String(p.length);`)).toBe('4');
@@ -28,7 +28,7 @@ test('an array of a field-adding subclass can be created and used', () => {
 });
 
 test('a multi-level hierarchy works, base fields first', () => {
-  expect(evaluated(`${AB}class C extends B { z: uint32 = 3; }
+  expect(evaluated(`${AB}value class C extends B { z: uint32 = 3; }
     const p: [2].<C>; p[0].z = 5;
     String(p[0].x) + '/' + String(p[0].y) + '/' + String(p[0].z);`)).toBe('0/0/5');
 });
@@ -36,7 +36,7 @@ test('a multi-level hierarchy works, base fields first', () => {
 test('a bare field of a subclass gets ALL its fields', () => {
   // The same defect without an array: `h.b.x` read *undefined* before, because
   // the inherited field was never defaulted.
-  expect(evaluated(`${AB}class H { b: B; } const h = new H();
+  expect(evaluated(`${AB}value class H { b: B; } const h = new H();
     String(h.b.x) + '/' + String(h.b.y);`)).toBe('0/0');
 });
 
@@ -50,5 +50,5 @@ test('a default is the field TYPE\u2019s zero, not the declared initializer', ()
 test('the cases that already worked are unchanged', () => {
   expect(evaluated(`${AB}const p: [4].<A>; p[0].x = 3; String(p[0].x);`)).toBe('3');
   expect(evaluated(`${AB}const b = new B(); String(b.x) + '/' + String(b.y);`)).toBe('1/2');
-  expect(evaluated('class P { x: uint32 = 0; y: uint32 = 0; } const p: [4].<P>; String(p.length);')).toBe('4');
+  expect(evaluated('value class P { x: uint32 = 0; y: uint32 = 0; } const p: [4].<P>; String(p.length);')).toBe('4');
 });

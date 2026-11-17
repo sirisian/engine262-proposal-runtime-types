@@ -56,11 +56,11 @@ test('Abstract Classes: a concrete subclass can be instantiated and implement ab
 // A class expression takes the same annotations; a mixin is a function taking a
 // constructor and returning a class expression that extends it.
 test('Class Expressions: a class expression takes annotations', () => {
-  expect(evaluated('let A = class { x: uint32 = (0 := uint32); }; let a = new A(); typeof a;')).toBe('object');
+  expect(evaluated('let A = value class { x: uint32 = (0 := uint32); }; let a = new A(); typeof a;')).toBe('object');
   // a named class expression's name is a type inside it
   expect(evaluated('const A = class Named {}; let a = new A(); String(a instanceof A);')).toBe('true');
   // a typed field in a class expression still seals and defaults
-  expect(bool('let A = class { x: uint32; }; let a = new A(); String(a.x === (0 := uint32) && !Object.isExtensible(a));')).toBe(true);
+  expect(bool('let A = value class { x: uint32; }; let a = new A(); String(a.x === (0 := uint32) && !Object.isExtensible(a));')).toBe(true);
 });
 
 test('Mixins: a mixin is a function returning a class expression that extends its base', () => {

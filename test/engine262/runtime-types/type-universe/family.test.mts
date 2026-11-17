@@ -47,7 +47,7 @@ test('family: the remaining families', () => {
 test('family: a class names the family and nothing further', () => {
   // a nominal type never exposes its declaration, and this exposes none of its
   // fields, its name, or its shape
-  expect(evaluated('class C { x: uint8 = 1; } const c = new C(); String(Reflect.typeOf(c).family);')).toBe('class');
+  expect(evaluated('value class C { x: uint8 = 1; } const c = new C(); String(Reflect.typeOf(c).family);')).toBe('class');
   // asking a value rather than a type answers nothing
   expect(evaluated('String((5).family);')).toBe('undefined');
 });

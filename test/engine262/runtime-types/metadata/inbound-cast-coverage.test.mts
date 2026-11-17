@@ -50,9 +50,9 @@ test('the documented cast form gives the type a zero', () => {
 
 test('the documented cast form makes an aggregate zero-fillable', () => {
   // The zero-fill case: `let d: [10].<Vector3>;` holds ten zero-filled instances.
-  expect(evaluated(`${DIM}${META_CAST}class V3 { x: Meter; y: Meter; z: Meter; }
+  expect(evaluated(`${DIM}${META_CAST}value class V3 { x: Meter; y: Meter; z: Meter; }
     const f: [10].<V3>; String(f.length);`)).toBe('10');
-  expect(evaluated(`${DIM}${META_CAST}class V3 { x: Meter; y: Meter; z: Meter; }
+  expect(evaluated(`${DIM}${META_CAST}value class V3 { x: Meter; y: Meter; z: Meter; }
     const f: [10].<V3>; String(f[0].x);`)).toBe('0');
 });
 

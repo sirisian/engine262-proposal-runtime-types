@@ -319,7 +319,7 @@
       "name": "unused class alias default",
       "steps": [
         {
-          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}\"ok\";",
+          "source": "type R<T:type=R.<> >=T;value class C<T:type extends value=R.<> >{x:T;}\"ok\";",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -375,7 +375,7 @@
       "name": "class explicit bypass",
       "steps": [
         {
-          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}function f(c:C.<string>){return c.x;}\"ok\";",
+          "source": "type R<T:type=R.<> >=T;value class C<T:type extends value=R.<> >{x:T;}function f(c:C.<string>){return c.x;}\"ok\";",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

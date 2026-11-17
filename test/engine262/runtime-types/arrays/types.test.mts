@@ -64,7 +64,7 @@ test('the bound composes with the rest of the array work', () => {
   expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; let ref b = a[0]; b = 9; String(a[0]);')).toBe('9');
   // an SoA is not an array and is still refused (#sec-structure-of-arrays) - STATICALLY, so there is no
   // run-time throw for a `catch` to name.
-  expectStaticTypeError('class P { x: uint8; } const s = new SoA.<P>();'
+  expectStaticTypeError('value class P { x: uint8; } const s = new SoA.<P>();'
     + " function p(v: [].<any>): string { return 'ok'; } p(s);");
 });
 
@@ -291,7 +291,7 @@ test('the covariance of a tuple is closed at the store', () => {
 });
 
 test('the rule reaches a tuple wherever it is held', () => {
-  expectThrown('class H { t: [uint8, string] = [1, "s"]; } const h = new H(); h.t[0] = "wrong";');
+  expectThrown('value class H { t: [uint8, string] = [1, "s"]; } const h = new H(); h.t[0] = "wrong";');
   expectThrown('type O = { t: [uint8, string] }; let o: O = { t: [1, "s"] }; o.t[0] = "wrong";');
 });
 

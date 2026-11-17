@@ -1181,9 +1181,8 @@ export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObs
   // `g<T extends A>` at `B`, the bounded generic that replaces the base-typed
   // parameter, so the two must stay separate.
   //
-  // A REFERENCE TYPE target is unaffected: a `reference`, `sealed` or
-  // `abstract` class holds a subclass by pointer, which is the documented way
-  // to be polymorphic.
+  // A REFERENCE TYPE target is unaffected: a class that is not a value class
+  // holds a subclass by pointer, which is the documented way to be polymorphic.
   if (t.Kind === 'nominal' && t.EnumMembers === undefined && !IsReferenceClass(t)) {
     const targetDeclaration = (t as { Declaration?: unknown }).Declaration;
     const sourceType = value instanceof ObjectValue ? RuntimeTypeOf(value) : undefined;
@@ -2290,8 +2289,8 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
         || ((elided.Kind === 'array' || elided.Kind === 'tuple') && IsValueType(elided)))) {
       const copied = Q(yield* CopyValueClassInstance(value));
       // Nothing was copied, so the value is not of a value type: an instance of
-      // a `reference` or `sealed` subclass, which the checking pass admits as
-      // its base. A position of a value type holds a copy or refuses the
+      // a class that is not a value class, which the checking pass admitted
+      // here. A position of a value type holds a copy or refuses the
       // value; it never aliases one. The parameter, field and element
       // boundaries already refuse it, and this one bound the object itself, so
       // `const b: Base = d; b.x = 9` wrote `d`. The unelided check decides it,

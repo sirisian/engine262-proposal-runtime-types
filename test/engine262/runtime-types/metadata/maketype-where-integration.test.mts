@@ -121,13 +121,13 @@ test('import immutability does not hide a mutable exporting capture', async () =
 });
 
 test('nominal artifact traversal does not serialize private refinement-bearing structure', async () => {
-  const result=await artifact('type P=number where this>0;class A{p:P=1;}export {A};');
+  const result=await artifact('type P=number where this>0;value class A{p:P=1;}export {A};');
   expect(Object.keys(result!.table.exports)).toEqual(['A']);
   expect(result!.skipped).toEqual({});
 });
 
 test('a refinement in a nominal argument requires artifact omission', async () => {
-  const result=await artifact('type P=number where this>0;class Box<T:type>{v:T;}type A=Box.<P>;export {A};');
+  const result=await artifact('type P=number where this>0;value class Box<T:type extends value>{v:T;}type A=Box.<P>;export {A};');
   expect(result!.table.exports).toEqual({});
   expect(result!.skipped.A).toContain('where predicate');
 });

@@ -3,7 +3,7 @@
   "cases": [
     {
       "name": "field before method: compatible",
-      "source": "class C{x:string=\"s\";m(a:number){return this.x;}}function unused(){const q:string=new C().m(1);}",
+      "source": "value class C{x:string=\"s\";m(a:number){return this.x;}}function unused(){const q:string=new C().m(1);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -11,7 +11,7 @@
     },
     {
       "name": "field before method: incompatible",
-      "source": "class C{x:string=\"s\";m(a:number){return this.x;}}function unused(){const q:number=new C().m(1);}",
+      "source": "value class C{x:string=\"s\";m(a:number){return this.x;}}function unused(){const q:number=new C().m(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -26,7 +26,7 @@
     },
     {
       "name": "field after method: compatible",
-      "source": "class C{m(){return this.x;}x:string=\"s\";}function unused(){const q:string=new C().m();}",
+      "source": "value class C{m(){return this.x;}x:string=\"s\";}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -34,7 +34,7 @@
     },
     {
       "name": "field after method: incompatible",
-      "source": "class C{m(){return this.x;}x:string=\"s\";}function unused(){const q:number=new C().m();}",
+      "source": "value class C{m(){return this.x;}x:string=\"s\";}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -49,7 +49,7 @@
     },
     {
       "name": "forward sibling: compatible",
-      "source": "class C{m(){return this.f();}f(){return this.x;}x:string=\"s\";}function unused(){const q:string=new C().m();}",
+      "source": "value class C{m(){return this.f();}f(){return this.x;}x:string=\"s\";}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -57,7 +57,7 @@
     },
     {
       "name": "forward sibling: incompatible",
-      "source": "class C{m(){return this.f();}f(){return this.x;}x:string=\"s\";}function unused(){const q:number=new C().m();}",
+      "source": "value class C{m(){return this.f();}f(){return this.x;}x:string=\"s\";}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -72,7 +72,7 @@
     },
     {
       "name": "backward sibling: compatible",
-      "source": "class C{x:string=\"s\";f(){return this.x;}m(){return this.f();}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{x:string=\"s\";f(){return this.x;}m(){return this.f();}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -80,7 +80,7 @@
     },
     {
       "name": "backward sibling: incompatible",
-      "source": "class C{x:string=\"s\";f(){return this.x;}m(){return this.f();}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";f(){return this.x;}m(){return this.f();}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -118,7 +118,7 @@
     },
     {
       "name": "static separate namespace: compatible",
-      "source": "class C{x:number=1;static x:string=\"s\";static m(){return this.x;}}function unused(){const q:string=C.m();}",
+      "source": "value class C{x:number=1;static x:string=\"s\";static m(){return this.x;}}function unused(){const q:string=C.m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -126,7 +126,7 @@
     },
     {
       "name": "static separate namespace: incompatible",
-      "source": "{class C{x:number=1;static x:string=\"s\";static m(){return this.x;}}function unused(){const q:number=C.m();}}",
+      "source": "{value class C{x:number=1;static x:string=\"s\";static m(){return this.x;}}function unused(){const q:number=C.m();}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -141,7 +141,7 @@
     },
     {
       "name": "instance separate namespace: compatible",
-      "source": "class C{static x:number=1;x:string=\"s\";m(){return this.x;}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{static x:number=1;x:string=\"s\";m(){return this.x;}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -149,7 +149,7 @@
     },
     {
       "name": "instance separate namespace: incompatible",
-      "source": "class C{static x:number=1;x:string=\"s\";m(){return this.x;}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{static x:number=1;x:string=\"s\";m(){return this.x;}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -164,7 +164,7 @@
     },
     {
       "name": "private field: compatible",
-      "source": "class C{m(){return this.#x;}#x:string=\"s\";}function unused(){const q:string=new C().m();}",
+      "source": "value class C{m(){return this.#x;}#x:string=\"s\";}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -172,7 +172,7 @@
     },
     {
       "name": "private field: incompatible",
-      "source": "class C{m(){return this.#x;}#x:string=\"s\";}function unused(){const q:number=new C().m();}",
+      "source": "value class C{m(){return this.#x;}#x:string=\"s\";}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -187,7 +187,7 @@
     },
     {
       "name": "private method: compatible",
-      "source": "class C{m(){return this.#f();}#f(){return this.#x;}#x:string=\"s\";}function unused(){const q:string=new C().m();}",
+      "source": "value class C{m(){return this.#f();}#f(){return this.#x;}#x:string=\"s\";}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -195,7 +195,7 @@
     },
     {
       "name": "private method: incompatible",
-      "source": "class C{m(){return this.#f();}#f(){return this.#x;}#x:string=\"s\";}function unused(){const q:number=new C().m();}",
+      "source": "value class C{m(){return this.#f();}#f(){return this.#x;}#x:string=\"s\";}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -233,7 +233,7 @@
     },
     {
       "name": "lexical arrow: compatible",
-      "source": "class C{x:string=\"s\";m(){return (()=>this.x)();}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){return (()=>this.x)();}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -241,7 +241,7 @@
     },
     {
       "name": "lexical arrow: incompatible",
-      "source": "class C{x:string=\"s\";m(){return (()=>this.x)();}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){return (()=>this.x)();}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -256,7 +256,7 @@
     },
     {
       "name": "lexical arrow block: compatible",
-      "source": "class C{x:string=\"s\";m(){return (()=>{return this.x;})();}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){return (()=>{return this.x;})();}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -264,7 +264,7 @@
     },
     {
       "name": "lexical arrow block: incompatible",
-      "source": "class C{x:string=\"s\";m(){return (()=>{return this.x;})();}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){return (()=>{return this.x;})();}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -279,7 +279,7 @@
     },
     {
       "name": "local constant: compatible",
-      "source": "class C{x:string=\"s\";m(){const value=this.x;return value;}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){const value=this.x;return value;}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -287,7 +287,7 @@
     },
     {
       "name": "local constant: incompatible",
-      "source": "class C{x:string=\"s\";m(){const value=this.x;return value;}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){const value=this.x;return value;}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -302,7 +302,7 @@
     },
     {
       "name": "local helper capture: compatible",
-      "source": "class C{x:string=\"s\";m(){const value=this.x;return f();function f(){return value;}}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){const value=this.x;return f();function f(){return value;}}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -310,7 +310,7 @@
     },
     {
       "name": "local helper capture: incompatible",
-      "source": "class C{x:string=\"s\";m(){const value=this.x;return f();function f(){return value;}}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){const value=this.x;return f();function f(){return value;}}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -325,7 +325,7 @@
     },
     {
       "name": "overload preserves selected result: compatible",
-      "source": "class C{x:string=\"s\";m(a:string){return this.x;}m(a:number){return a;}}function unused(){const q:string=new C().m(\"s\");}",
+      "source": "value class C{x:string=\"s\";m(a:string){return this.x;}m(a:number){return a;}}function unused(){const q:string=new C().m(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -333,7 +333,7 @@
     },
     {
       "name": "overload preserves selected result: incompatible",
-      "source": "class C{x:string=\"s\";m(a:string){return this.x;}m(a:number){return a;}}function unused(){const q:number=new C().m(\"s\");}",
+      "source": "value class C{x:string=\"s\";m(a:string){return this.x;}m(a:number){return a;}}function unused(){const q:number=new C().m(\"s\");}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -348,7 +348,7 @@
     },
     {
       "name": "inherited field: compatible",
-      "source": "class B{x:string=\"s\";}class C extends B{m(){return this.x;}}function unused(){const q:string=new C().m();}",
+      "source": "value class B{x:string=\"s\";}value class C extends B{m(){return this.x;}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -356,7 +356,7 @@
     },
     {
       "name": "inherited field: incompatible",
-      "source": "class B{x:string=\"s\";}class C extends B{m(){return this.x;}}function unused(){const q:number=new C().m();}",
+      "source": "value class B{x:string=\"s\";}value class C extends B{m(){return this.x;}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -371,7 +371,7 @@
     },
     {
       "name": "inherited method: compatible",
-      "source": "class B{x:string=\"s\";m(){return this.x;}}class C extends B{}function unused(){const q:string=new C().m();}",
+      "source": "value class B{x:string=\"s\";m(){return this.x;}}value class C extends B{}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -379,7 +379,7 @@
     },
     {
       "name": "inherited method: incompatible",
-      "source": "class B{x:string=\"s\";m(){return this.x;}}class C extends B{}function unused(){const q:number=new C().m();}",
+      "source": "value class B{x:string=\"s\";m(){return this.x;}}value class C extends B{}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -394,7 +394,7 @@
     },
     {
       "name": "generic class: compatible",
-      "source": "class C<T:type>{x:T;m(){return this.x;}}function unused(c:C.<string>){const q:string=c.m();}",
+      "source": "value class C<T:type extends value>{x:T;m(){return this.x;}}function unused(c:C.<string>){const q:string=c.m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -417,7 +417,7 @@
     },
     {
       "name": "generic sibling: compatible",
-      "source": "class C<T:type>{x:T;m(){return this.f();}f(){return this.x;}}function unused(c:C.<string>){const q:string=c.m();}",
+      "source": "value class C<T:type extends value>{x:T;m(){return this.f();}f(){return this.x;}}function unused(c:C.<string>){const q:string=c.m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -463,7 +463,7 @@
     },
     {
       "name": "generic inherited field: compatible",
-      "source": "class B<T:type>{x:T;}class C extends B.<string>{m(){return this.x;}}function unused(c:C){const q:string=c.m();}",
+      "source": "value class B<T:type extends value>{x:T;}value class C extends B.<string>{m(){return this.x;}}function unused(c:C){const q:string=c.m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -471,7 +471,7 @@
     },
     {
       "name": "generic inherited field: incompatible",
-      "source": "class B<T:type>{x:T;}class C extends B.<string>{m(){return this.x;}}function unused(c:C){const q:number=c.m();}",
+      "source": "value class B<T:type extends value>{x:T;}value class C extends B.<string>{m(){return this.x;}}function unused(c:C){const q:number=c.m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -486,7 +486,7 @@
     },
     {
       "name": "class expression: compatible",
-      "source": "const C=class {x:string=\"s\";m(){return this.x;}};function unused(){const q:string=new C().m();}",
+      "source": "const C=value class {x:string=\"s\";m(){return this.x;}};function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -494,7 +494,7 @@
     },
     {
       "name": "class expression: incompatible",
-      "source": "const C=class {x:string=\"s\";m(){return this.x;}};function unused(){const q:number=new C().m();}",
+      "source": "const C=value class {x:string=\"s\";m(){return this.x;}};function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -509,7 +509,7 @@
     },
     {
       "name": "generic self result: compatible",
-      "source": "class C<T:type>{x:T;m(){return this;}}function unused(c:C.<string>){const q:C.<string>=c.m();}",
+      "source": "value class C<T:type extends value>{x:T;m(){return this;}}function unused(c:C.<string>){const q:C.<string>=c.m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -517,7 +517,7 @@
     },
     {
       "name": "generic self result: incompatible",
-      "source": "class C<T:type>{x:T;m(){return this;}}function unused(c:C.<string>){const q:C.<number>=c.m();}",
+      "source": "value class C<T:type extends value>{x:T;m(){return this;}}function unused(c:C.<string>){const q:C.<number>=c.m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -532,7 +532,7 @@
     },
     {
       "name": "async method: compatible",
-      "source": "class C{x:string=\"s\";async m(){return this.x;}}function unused(){const q:Promise.<string>=new C().m();}",
+      "source": "value class C{x:string=\"s\";async m(){return this.x;}}function unused(){const q:Promise.<string>=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -540,7 +540,7 @@
     },
     {
       "name": "async method: incompatible",
-      "source": "class C{x:string=\"s\";async m(){return this.x;}}function unused(){const q:Promise.<number>=new C().m();}",
+      "source": "value class C{x:string=\"s\";async m(){return this.x;}}function unused(){const q:Promise.<number>=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -555,7 +555,7 @@
     },
     {
       "name": "generator method: compatible",
-      "source": "class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<string,undefined,void>=new C().m();}",
+      "source": "value class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<string,undefined,void>=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -563,7 +563,7 @@
     },
     {
       "name": "generator method: incompatible",
-      "source": "class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<number,undefined,void>=new C().m();}",
+      "source": "value class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<number,undefined,void>=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -578,7 +578,7 @@
     },
     {
       "name": "async generator method: compatible",
-      "source": "class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<string,undefined,void>=new C().m();}",
+      "source": "value class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<string,undefined,void>=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -586,7 +586,7 @@
     },
     {
       "name": "async generator method: incompatible",
-      "source": "class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<number,undefined,void>=new C().m();}",
+      "source": "value class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<number,undefined,void>=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -601,7 +601,7 @@
     },
     {
       "name": "generic method shadow: compatible",
-      "source": "type T=number;class C<T:type>{x:T;m<T:type>(x:T){return x;}}function unused(c:C.<number>){const q:string=c.m.<string>(\"s\");}",
+      "source": "type T=number;value class C<T:type extends value>{x:T;m<T:type>(x:T){return x;}}function unused(c:C.<number>){const q:string=c.m.<string>(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -624,7 +624,7 @@
     },
     {
       "name": "mutable field contract: compatible",
-      "source": "class C{x:string|number=\"s\";m(){return this.x;}}function unused(){const q:string|number=new C().m();}",
+      "source": "value class C{x:string|number=\"s\";m(){return this.x;}}function unused(){const q:string|number=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -632,7 +632,7 @@
     },
     {
       "name": "mutable field contract: incompatible",
-      "source": "class C{x:string|number=\"s\";m(){return this.x;}}function unused(){const q:string=new C().m();}",
+      "source": "value class C{x:string|number=\"s\";m(){return this.x;}}function unused(){const q:string=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -647,7 +647,7 @@
     },
     {
       "name": "ordinary nested function has own receiver",
-      "source": "class C{x:string=\"s\";m(){function f(){return this.x;}return f();}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){function f(){return this.x;}return f();}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -655,7 +655,7 @@
     },
     {
       "name": "ordinary function expression has own receiver",
-      "source": "class C{x:string=\"s\";m(){return (function(){return this.x;})();}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){return (function(){return this.x;})();}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -679,7 +679,7 @@
     },
     {
       "name": "explicit result wins",
-      "source": "class C{x:string=\"s\";m():any{return this.x;}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m():any{return this.x;}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -687,7 +687,7 @@
     },
     {
       "name": "duplicate untyped later member wins",
-      "source": "class C{x:string=\"s\";m(){return this.x;}m(){return 1;}}function unused(){const q:number=new C().m();}",
+      "source": "value class C{x:string=\"s\";m(){return this.x;}m(){return 1;}}function unused(){const q:number=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -756,7 +756,7 @@
     },
     {
       "name": "long forward dependency chain: compatible",
-      "source": "class C{m0(){return this.m1();}m1(){return this.m2();}m2(){return this.m3();}m3(){return this.m4();}m4(){return this.m5();}m5(){return this.m6();}m6(){return this.m7();}m7(){return this.m8();}m8(){return this.m9();}m9(){return this.m10();}m10(){return this.m11();}m11(){return this.m12();}m12(){return this.x;}x:string=\"s\";}function unused(){const q:string=new C().m0();}",
+      "source": "value class C{m0(){return this.m1();}m1(){return this.m2();}m2(){return this.m3();}m3(){return this.m4();}m4(){return this.m5();}m5(){return this.m6();}m6(){return this.m7();}m7(){return this.m8();}m8(){return this.m9();}m9(){return this.m10();}m10(){return this.m11();}m11(){return this.m12();}m12(){return this.x;}x:string=\"s\";}function unused(){const q:string=new C().m0();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -764,7 +764,7 @@
     },
     {
       "name": "long forward dependency chain: incompatible",
-      "source": "class C{m0(){return this.m1();}m1(){return this.m2();}m2(){return this.m3();}m3(){return this.m4();}m4(){return this.m5();}m5(){return this.m6();}m6(){return this.m7();}m7(){return this.m8();}m8(){return this.m9();}m9(){return this.m10();}m10(){return this.m11();}m11(){return this.m12();}m12(){return this.x;}x:string=\"s\";}function unused(){const q:number=new C().m0();}",
+      "source": "value class C{m0(){return this.m1();}m1(){return this.m2();}m2(){return this.m3();}m3(){return this.m4();}m4(){return this.m5();}m5(){return this.m6();}m6(){return this.m7();}m7(){return this.m8();}m8(){return this.m9();}m9(){return this.m10();}m10(){return this.m11();}m11(){return this.m12();}m12(){return this.x;}x:string=\"s\";}function unused(){const q:number=new C().m0();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -779,7 +779,7 @@
     },
     {
       "name": "instanceValue",
-      "source": "class C{x:string=\"s\";m(){return this.x;}}new C().m();",
+      "source": "value class C{x:string=\"s\";m(){return this.x;}}new C().m();",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -797,7 +797,7 @@
     },
     {
       "name": "genericValue",
-      "source": "class C<T:type>{x:T;constructor(x:T){this.x=x;}m(){return this.x;}}new C.<string>(\"s\").m();",
+      "source": "value class C<T:type extends value>{x:T;constructor(x:T){this.x=x;}m(){return this.x;}}new C.<string>(\"s\").m();",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -806,7 +806,7 @@
     },
     {
       "name": "generatorValue",
-      "source": "class C{x:string=\"s\";*m(){yield this.x;}}new C().m().next().value;",
+      "source": "value class C{x:string=\"s\";*m(){yield this.x;}}new C().m().next().value;",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -815,7 +815,7 @@
     },
     {
       "name": "alwaysTrue",
-      "source": "class C{x:string=\"s\";m(){return this.x;}}function unused(){const x=new C().m();if(x is string){}}",
+      "source": "value class C{x:string=\"s\";m(){return this.x;}}function unused(){const x=new C().m();if(x is string){}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -830,7 +830,7 @@
     },
     {
       "name": "alwaysFalse",
-      "source": "class C{x:string=\"s\";m(){return this.x;}}function unused(){const x=new C().m();if(x is number){}}",
+      "source": "value class C{x:string=\"s\";m(){return this.x;}}function unused(){const x=new C().m();if(x is number){}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -845,7 +845,7 @@
     },
     {
       "name": "extracted receiver keeps inferred return conversion",
-      "source": "class C{x:string=\"s\";m(){return this.x;}}const c:any=new C();const m=c.m;typeof m.call({x:1});",
+      "source": "value class C{x:string=\"s\";m(){return this.x;}}const c:any=new C();const m=c.m;typeof m.call({x:1});",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

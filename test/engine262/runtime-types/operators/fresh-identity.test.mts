@@ -11,7 +11,7 @@ test.each([
   "function f(o: object) { if (o !== {}) {} }",
   "function f(g: () => void) { if (g === (() => {})) {} }",
   "function f(o: object) { switch (o) { case {}: return 1; } return 0; }",
-  "class C { x: uint8 = 1; } function f(c: C) { if (c === new C()) {} }",
+  "value class C { x: uint8 = 1; } function f(c: C) { if (c === new C()) {} }",
 ])("a strict comparison with a fresh value is refused: %s", expectStaticTypeError);
 
 test.each([

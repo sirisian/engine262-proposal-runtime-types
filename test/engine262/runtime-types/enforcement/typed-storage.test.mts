@@ -76,7 +76,7 @@ test('Reflect.get returns the declared-type value', () => {
 
 // -- Non-dynamic typed class ---------------------------------------------------
 test('a typed own property cannot be added to a non-dynamic typed class instance', () => {
-  expectThrown('class A { x: uint8 = (1 := uint8); } let a = new A(); Object.defineProperty(a, "y", { type: uint8, writable: true });');
+  expectThrown('value class A { x: uint8 = (1 := uint8); } let a = new A(); Object.defineProperty(a, "y", { type: uint8, writable: true });');
 });
 
 // -- Untyped properties and feature off ----------------------------------------
@@ -200,7 +200,7 @@ test('a redefinition is checked against the type the position already has', () =
   // A typed field, a typed object property, a typed array element and a tuple
   // position are the four positions that can hold one, and both spellings
   // reach the same internal method for each.
-  const cls = 'class C { n: uint8 = 1; } const c = new C(); let bad = {}; bad.v = "no"; ';
+  const cls = 'value class C { n: uint8 = 1; } const c = new C(); let bad = {}; bad.v = "no"; ';
   expectThrown(`${cls} Object.defineProperty(c, "n", { value: bad.v });`);
   expectThrown(`${cls} Reflect.defineProperty(c, "n", { value: bad.v });`);
   const obj = 'let o: { p: uint8 } = { p: 1 }; let bad = {}; bad.v = "no"; ';
@@ -242,7 +242,7 @@ test('a redefinition is checked against the type the position already has', () =
   // A typed field, a typed object property, a typed array element and a tuple
   // position are the four positions that can hold one, and both spellings
   // reach the same internal method for each.
-  const cls = 'class C { n: uint8 = 1; } const c = new C(); let bad = {}; bad.v = "no"; ';
+  const cls = 'value class C { n: uint8 = 1; } const c = new C(); let bad = {}; bad.v = "no"; ';
   expectThrown(`${cls} Object.defineProperty(c, "n", { value: bad.v });`);
   expectThrown(`${cls} Reflect.defineProperty(c, "n", { value: bad.v });`);
   const obj = 'let o: { p: uint8 } = { p: 1 }; let bad = {}; bad.v = "no"; ';
@@ -287,10 +287,10 @@ test('a redefinition is checked against the type the position already has', () =
 // ---------------------------------------------------------------------------
 
 test('deleting a declared member is refused at the check', () => {
-  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); delete c.v;');
+  expectStaticTypeError('value class C { v: uint8 = 0; } const c = new C(); delete c.v;');
   expectStaticTypeError('type T = { a: uint8 }; let o: T = { a: 1 }; delete o.a;');
   // Through `this`, now that a class body's receiver has a type.
-  expectStaticTypeError('class C { v: uint8 = 0; m() { delete this.v; } }');
+  expectStaticTypeError('value class C { v: uint8 = 0; m() { delete this.v; } }');
 });
 
 test('what delete still allows', () => {

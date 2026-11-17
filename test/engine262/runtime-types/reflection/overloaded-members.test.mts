@@ -179,7 +179,7 @@ test('overloads: an unannotated METHOD has no signatures; a constructor always d
     + " const s = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor').signatures[0];"
     + " String(s.parameters[0].name + ':' + (s.parameters[0].type === any) + ':' + (s.return === undefined));")).toBe('a:true:true');
   // the IMPLICIT constructor of a class that writes none answers too
-  expect(evaluated("class A { x: uint8 = 1; }"
+  expect(evaluated("value class A { x: uint8 = 1; }"
     + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor');"
     + ' String(r.signatures.length + \':\' + r.signatures[0].parameters.length);')).toBe('1:0');
 });

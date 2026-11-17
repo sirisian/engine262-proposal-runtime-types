@@ -536,7 +536,7 @@
       "name": "named expression self field",
       "steps": [
         {
-          "source": "function make(){const C=reference class Self{next:Self|null=null;};return type C;}const A=make(),B=make();String(new A().next===null)+\"/\"+String(Reflect.isAssignable(A,B));",
+          "source": "function make(){const C=class Self{next:Self|null=null;};return type C;}const A=make(),B=make();String(new A().next===null)+\"/\"+String(Reflect.isAssignable(A,B));",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

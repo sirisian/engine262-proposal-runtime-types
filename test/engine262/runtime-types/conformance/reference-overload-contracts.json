@@ -708,7 +708,7 @@
       "name": "class receiver reverse=False",
       "steps": [
         {
-          "source": "class C {label:string=\"label\";f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}};const c=new C();let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "source": "value class C {label:string=\"label\";f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}};const c=new C();let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -722,7 +722,7 @@
       "name": "class receiver reverse=True",
       "steps": [
         {
-          "source": "class C {label:string=\"label\";f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}};const c=new C();let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "source": "value class C {label:string=\"label\";f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}};const c=new C();let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -764,7 +764,7 @@
       "name": "constructor reverse=False",
       "steps": [
         {
-          "source": "class C{label:string=\"initial\";constructor(ref ...xs:[uint8,string]){xs[0]=2;xs[1]=\"ok\";this.label=\"chosen\";}constructor(ref ...xs:[boolean,uint8]){this.label=\"wrong\";}}let a:uint8=1;let b:string=\"b\";const c=new C(ref a,ref b);c.label+\"/\"+String(a)+\"/\"+b;",
+          "source": "value class C{label:string=\"initial\";constructor(ref ...xs:[uint8,string]){xs[0]=2;xs[1]=\"ok\";this.label=\"chosen\";}constructor(ref ...xs:[boolean,uint8]){this.label=\"wrong\";}}let a:uint8=1;let b:string=\"b\";const c=new C(ref a,ref b);c.label+\"/\"+String(a)+\"/\"+b;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -848,7 +848,7 @@
       "name": "constructor reverse=True",
       "steps": [
         {
-          "source": "class C{label:string=\"initial\";constructor(ref ...xs:[boolean,uint8]){this.label=\"wrong\";}constructor(ref ...xs:[uint8,string]){xs[0]=2;xs[1]=\"ok\";this.label=\"chosen\";}}let a:uint8=1;let b:string=\"b\";const c=new C(ref a,ref b);c.label+\"/\"+String(a)+\"/\"+b;",
+          "source": "value class C{label:string=\"initial\";constructor(ref ...xs:[boolean,uint8]){this.label=\"wrong\";}constructor(ref ...xs:[uint8,string]){xs[0]=2;xs[1]=\"ok\";this.label=\"chosen\";}}let a:uint8=1;let b:string=\"b\";const c=new C(ref a,ref b);c.label+\"/\"+String(a)+\"/\"+b;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

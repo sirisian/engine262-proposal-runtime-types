@@ -363,7 +363,7 @@
     {
       "name": "construction-still-works",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const c=new C.<string>(\"ok\");if (!(c.value===\"ok\"&&c instanceof C.<string>&&Reflect.isAssignable(C.<string>,C.<string>))) throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}const c=new C.<string>(\"ok\");if (!(c.value===\"ok\"&&c instanceof C.<string>&&Reflect.isAssignable(C.<string>,C.<string>))) throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -981,7 +981,7 @@
     {
       "name": "type-boundary-preserves-constructor",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const original=C.<string>;const held:type=original;if(!(held===original&&typeof held===\"function\"&&new held(\"ok\").value===\"ok\"))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}const original=C.<string>;const held:type=original;if(!(held===original&&typeof held===\"function\"&&new held(\"ok\").value===\"ok\"))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -993,7 +993,7 @@
     {
       "name": "type-return-preserves-constructor",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}function identity(x:type):type{return x;}const original=C.<string>;const held=identity(original);if(!(held===original&&Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}function identity(x:type):type{return x;}const original=C.<string>;const held=identity(original);if(!(held===original&&Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -1005,7 +1005,7 @@
     {
       "name": "typeobject-boundary-preserves-constructor",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const original=C.<string>;function identity(x:Reflect.TypeObject):Reflect.TypeObject{return x;}const held=identity(original);if(!(held===original&&Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}const original=C.<string>;function identity(x:Reflect.TypeObject):Reflect.TypeObject{return x;}const held=identity(original);if(!(held===original&&Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -1017,7 +1017,7 @@
     {
       "name": "constructor-type-membership",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}if(!((C.<string> is type)&&(C.<string> is Reflect.TypeObject)))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}if(!((C.<string> is type)&&(C.<string> is Reflect.TypeObject)))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -1029,7 +1029,7 @@
     {
       "name": "constructor-typeof-stays-callable",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const held:type=C.<string>;if(!(Reflect.getReflection(Reflect.typeOf(held)).kind===\"function\"))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}const held:type=C.<string>;if(!(Reflect.getReflection(Reflect.typeOf(held)).kind===\"function\"))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -1065,7 +1065,7 @@
     {
       "name": "type-membership-rejects-instance",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(new C.<string>(\"ok\"))))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(new C.<string>(\"ok\"))))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -1077,7 +1077,7 @@
     {
       "name": "type-membership-rejects-bound",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(C.<string>.bind(null))))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(C.<string>.bind(null))))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -1089,7 +1089,7 @@
     {
       "name": "type-membership-rejects-proxy",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}let hits=0;const p=new Proxy(C.<string>,{get(){hits++;throw new Error(\"trap\");}});function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(p)&&hits===0))throw new Error(\"wrong reflection result\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}}let hits=0;const p=new Proxy(C.<string>,{get(){hits++;throw new Error(\"trap\");}});function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(p)&&hits===0))throw new Error(\"wrong reflection result\");"
       },
       "expected": {
         "status": "fulfilled",

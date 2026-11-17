@@ -214,7 +214,7 @@ test('the corrupted value no longer escapes into untyped code', () => {
   expect(evaluated('let x: number | bigint = 5; let y = x; String(typeof y);')).toBe('number');
   expect(evaluated('let x: number | bigint = 5; JSON.stringify({ v: x });')).toBe('{"v":5}');
   // Every position that applies the type, not only a `let`.
-  expect(evaluated('class C { f: number | bigint = 5; } String(typeof new C().f);')).toBe('number');
+  expect(evaluated('value class C { f: number | bigint = 5; } String(typeof new C().f);')).toBe('number');
   expect(evaluated('function g(): number | bigint { return 5; } String(typeof g());')).toBe('number');
   expect(evaluated('function h(v: number | bigint) { return typeof v; } String(h(5));')).toBe('number');
 });

@@ -54,7 +54,7 @@ test.each([
   ],
   [
     "null",
-    "function unused(){class C extends null{v:uint8;}}unused();"
+    "function unused(){value class C extends null{v:uint8;}}unused();"
   ],
   [
     "nullable union",

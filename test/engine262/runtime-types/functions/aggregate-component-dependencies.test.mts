@@ -50,7 +50,7 @@ function fixture() {
   setSurroundingAgent(agent);
   const realm = new ManagedRealm();
   const producer = EnsureCompletion(realm.evaluateScriptSkipDebugger(
-    'function make(){class P{tag:string="p";constructor(v:string){}}return()=>{const p:P="x";return p;};}make();',
+    'function make(){value class P{tag:string="p";constructor(v:string){}}return()=>{const p:P="x";return p;};}make();',
   ));
   expect(producer.Type).toBe('normal');
   const pop = realm.pushTopContext();

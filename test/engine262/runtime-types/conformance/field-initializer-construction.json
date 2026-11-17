@@ -1373,7 +1373,7 @@
     {
       "name": "public-numeric-admission",
       "modules": {
-        "main": "const raw:any=7;class C{a:uint8=raw;}const c=new C();if(Reflect.typeOf(c.a)!==uint8)throw new Error(\"conversion\");"
+        "main": "const raw:any=7;value class C{a:uint8=raw;}const c=new C();if(Reflect.typeOf(c.a)!==uint8)throw new Error(\"conversion\");"
       },
       "script": true,
       "expected": {
@@ -1386,7 +1386,7 @@
     {
       "name": "public-dynamic-type-failure",
       "modules": {
-        "main": "const raw:any=\"wrong\";class C{a:uint8=raw;}new C();"
+        "main": "const raw:any=\"wrong\";value class C{a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1400,7 +1400,7 @@
     {
       "name": "public-dynamic-range-failure",
       "modules": {
-        "main": "const raw:any=300;class C{a:uint8=raw;}new C();"
+        "main": "const raw:any=300;value class C{a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1414,7 +1414,7 @@
     {
       "name": "private-numeric-admission",
       "modules": {
-        "main": "const raw:any=7;class C{#a:uint8=raw;get(){return this.#a;}}const c=new C();if(Reflect.typeOf(c.get())!==uint8)throw new Error(\"conversion\");"
+        "main": "const raw:any=7;value class C{#a:uint8=raw;get(){return this.#a;}}const c=new C();if(Reflect.typeOf(c.get())!==uint8)throw new Error(\"conversion\");"
       },
       "script": true,
       "expected": {
@@ -1427,7 +1427,7 @@
     {
       "name": "private-dynamic-type-failure",
       "modules": {
-        "main": "const raw:any=\"wrong\";class C{#a:uint8=raw;}new C();"
+        "main": "const raw:any=\"wrong\";value class C{#a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1441,7 +1441,7 @@
     {
       "name": "private-dynamic-range-failure",
       "modules": {
-        "main": "const raw:any=300;class C{#a:uint8=raw;}new C();"
+        "main": "const raw:any=300;value class C{#a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1455,7 +1455,7 @@
     {
       "name": "accessor-numeric-admission",
       "modules": {
-        "main": "const raw:any=7;class C{accessor a:uint8=raw;}const c=new C();if(Reflect.typeOf(c.a)!==uint8)throw new Error(\"conversion\");"
+        "main": "const raw:any=7;value class C{accessor a:uint8=raw;}const c=new C();if(Reflect.typeOf(c.a)!==uint8)throw new Error(\"conversion\");"
       },
       "script": true,
       "expected": {
@@ -1468,7 +1468,7 @@
     {
       "name": "accessor-dynamic-type-failure",
       "modules": {
-        "main": "const raw:any=\"wrong\";class C{accessor a:uint8=raw;}new C();"
+        "main": "const raw:any=\"wrong\";value class C{accessor a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1482,7 +1482,7 @@
     {
       "name": "accessor-dynamic-range-failure",
       "modules": {
-        "main": "const raw:any=300;class C{accessor a:uint8=raw;}new C();"
+        "main": "const raw:any=300;value class C{accessor a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1496,7 +1496,7 @@
     {
       "name": "private-accessor-numeric-admission",
       "modules": {
-        "main": "const raw:any=7;class C{accessor #a:uint8=raw;get(){return this.#a;}}const c=new C();if(Reflect.typeOf(c.get())!==uint8)throw new Error(\"conversion\");"
+        "main": "const raw:any=7;value class C{accessor #a:uint8=raw;get(){return this.#a;}}const c=new C();if(Reflect.typeOf(c.get())!==uint8)throw new Error(\"conversion\");"
       },
       "script": true,
       "expected": {
@@ -1509,7 +1509,7 @@
     {
       "name": "private-accessor-dynamic-type-failure",
       "modules": {
-        "main": "const raw:any=\"wrong\";class C{accessor #a:uint8=raw;}new C();"
+        "main": "const raw:any=\"wrong\";value class C{accessor #a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1523,7 +1523,7 @@
     {
       "name": "private-accessor-dynamic-range-failure",
       "modules": {
-        "main": "const raw:any=300;class C{accessor #a:uint8=raw;}new C();"
+        "main": "const raw:any=300;value class C{accessor #a:uint8=raw;}new C();"
       },
       "script": true,
       "expected": {
@@ -1563,7 +1563,7 @@
     {
       "name": "private-default",
       "modules": {
-        "main": "class C{#v:uint8;accessor n:uint16;get(){return this.#v;}}const c=new C();if(Reflect.typeOf(c.get())!==uint8||Reflect.typeOf(c.n)!==uint16||Number(c.get())!==0||Number(c.n)!==0)throw new Error(\"default\");"
+        "main": "value class C{#v:uint8;accessor n:uint16;get(){return this.#v;}}const c=new C();if(Reflect.typeOf(c.get())!==uint8||Reflect.typeOf(c.n)!==uint16||Number(c.get())!==0||Number(c.n)!==0)throw new Error(\"default\");"
       },
       "script": true,
       "expected": {

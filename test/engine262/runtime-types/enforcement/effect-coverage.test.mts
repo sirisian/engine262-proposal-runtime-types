@@ -84,7 +84,7 @@ const routes = [
   [
     "field decorator",
     "const decorate=()=>{mutate();};",
-    "class A {@decorate x:number;}"
+    "value class A {@decorate x:number;}"
   ],
   [
     "logical and callee",

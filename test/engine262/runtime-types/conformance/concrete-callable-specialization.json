@@ -652,7 +652,7 @@
       "name": "source method borrows call receiver",
       "steps": [
         {
-          "source": "class Box{v:string=\"a\";m<T:type>(x:T):T{this.v=String(x);return x;}}interface I{m(x:string):string}const a=new Box(),b=new Box();const f:I[\"m\"]=a.m;const g:any=f;g.call(b,\"b\");a.v+\"/\"+b.v;",
+          "source": "value class Box{v:string=\"a\";m<T:type>(x:T):T{this.v=String(x);return x;}}interface I{m(x:string):string}const a=new Box(),b=new Box();const f:I[\"m\"]=a.m;const g:any=f;g.call(b,\"b\");a.v+\"/\"+b.v;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

@@ -239,7 +239,7 @@ test('two unrelated nominal CLASSES are reported at the `&`', () => {
   // canonicalization. The checking pass is already running IsSubtype, so the
   // judgment is free here and the interning path keeps its conservative answer.
   expectThrown(
-    'class A { x: uint8 = 1; } class B { y: uint8 = 1; } type T = A & B;',
+    'value class A { x: uint8 = 1; } value class B { y: uint8 = 1; } type T = A & B;',
     'no value is an instance of both "A" and "B"',
   );
   // The mistake this actually catches, which passed silently before: two cases
@@ -249,26 +249,26 @@ test('two unrelated nominal CLASSES are reported at the `&`', () => {
 
 test('the class rule spares every pair that shares a value', () => {
   // A base and its subclass share every value of the subclass.
-  expect(ok('class A { x: uint8 = 1; } class B extends A { y: uint8 = 1; } let v: A & B = new B();')).toBe(true);
-  expect(ok('class A { x: uint8 = 1; } type T = A & A;')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } value class B extends A { y: uint8 = 1; } let v: A & B = new B();')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } type T = A & A;')).toBe(true);
 
   // ~nominal~ covers an INTERFACE and an ENUM as well as a class, and the rule
   // is restricted to class declarations because of it: a value satisfies any
   // number of interfaces, and a class may implement them.
-  expect(ok('class A { x: uint8 = 1; } interface J { y: uint8; }'
-    + ' class M extends A implements J { y: uint8 = 1; } let v: A & J = new M();')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } interface J { y: uint8; }'
+    + ' value class M extends A implements J { y: uint8 = 1; } let v: A & J = new M();')).toBe(true);
   expect(ok('interface I { x: uint8; } interface J { y: uint8; } let v: I & J = { x: 1, y: 1 };')).toBe(true);
-  expect(ok('enum E: uint8 { A = 1 } class A { x: uint8 = 1; } type T = E & A;')).toBe(true);
+  expect(ok('enum E: uint8 { A = 1 } value class A { x: uint8 = 1; } type T = E & A;')).toBe(true);
   // A class against an OBJECT type stays live too: a subclass may have the
   // member, so the pair is not empty.
-  expect(ok('class A { x: uint8 = 1; } type T = A & { y: uint8 };')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } type T = A & { y: uint8 };')).toBe(true);
 
   // The exemptions the other two rules have. A written `never` states the
   // emptiness on purpose, and a type PARAMETER is not resolved far enough to be
   // judged - a rule on the syntax must not reject an instantiation that may
   // never happen.
-  expect(ok('class A { x: uint8 = 1; } type T = A & never;')).toBe(true);
-  expect(ok('class A { x: uint8 = 1; } type F<T: type> = A & T;')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } type T = A & never;')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } type F<T: type> = A & T;')).toBe(true);
 });
 
 test('`Symbol.hasInstance` does not reach the judgment the rule rests on', () => {
@@ -277,6 +277,6 @@ test('`Symbol.hasInstance` does not reach the judgment the rule rests on', () =>
   expect(evaluated('class A { static [Symbol.hasInstance](x) { return true; } } String(({}) instanceof A);')).toBe('true');
   // ...but `Reflect.typeOf` is not, and it is what #sec-runtimetypeof defines
   // and what the type system reads.
-  expect(evaluated('class A { x: uint8 = 1; } String(Reflect.typeOf(new A()) === type A);')).toBe('true');
-  expect(evaluated('class A { x: uint8 = 1; } class C { x: uint8 = 1; } String(new C() is A);')).toBe('false');
+  expect(evaluated('value class A { x: uint8 = 1; } String(Reflect.typeOf(new A()) === type A);')).toBe('true');
+  expect(evaluated('value class A { x: uint8 = 1; } value class C { x: uint8 = 1; } String(new C() is A);')).toBe('false');
 });

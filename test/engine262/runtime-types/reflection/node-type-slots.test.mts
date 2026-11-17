@@ -100,7 +100,7 @@ test('every emitted kind is one the table lists', () => {
   }
   // A class and an enum are named leaves and share the `primitive` node; the
   // enum-ness a walker needs is `family` on that node, not a kind of its own.
-  expect(evaluated('class P { x: uint8 } String(Reflect.getReflection(type P).kind);')).toBe('primitive');
+  expect(evaluated('value class P { x: uint8 } String(Reflect.getReflection(type P).kind);')).toBe('primitive');
   expect(evaluated('enum E { a, b } String(Reflect.getReflection(type E).kind);')).toBe('primitive');
   expect(evaluated('enum E { a, b } String(Reflect.getReflection(type E).family);')).toBe('enum');
 });

@@ -51,7 +51,7 @@ test('a bare parameterized primitive is not a value, and an applied one is', () 
 });
 
 test('a representative construction of each remaining extension resolves', () => {
-  expect(ok('class P { @offset(0) x: uint8; }')).toBe(true);
+  expect(ok('value class P { @offset(0) x: uint8; }')).toBe(true);
   expect(ok('class V { operator+(o: V): V { return this; } }')).toBe(true);
   expect(ok('function d(t) { return t; } class C { @d m() {} }')).toBe(true);
   expect(ok('const r = match (1) { when 1: "one"; };')).toBe(true);

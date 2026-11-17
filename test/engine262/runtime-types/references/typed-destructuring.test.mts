@@ -119,7 +119,7 @@ test('an annotated destructuring member is checked like an annotated declaration
   expectStaticTypeError('let { (v: uint8): b } = { v: 1 }; let s: string = b;');
   // An optional member, and a `ref` member, carry their annotations the same way.
   expectStaticTypeError('let { (v?: uint8) } = { v: 1 }; let s: string = v;');
-  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); let { (ref v: uint8) } = c; let s: string = v;');
+  expectStaticTypeError('value class C { v: uint8 = 0; } const c = new C(); let { (ref v: uint8) } = c; let s: string = v;');
   // At any depth.
   expectStaticTypeError('let { a: { (v: uint8) } } = { a: { v: 1 } }; let s: string = v;');
   // The control the rule is stated against.

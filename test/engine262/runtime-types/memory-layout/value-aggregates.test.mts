@@ -36,8 +36,8 @@ test('a read out of a slot copies, and a store into one copies in', () => {
   // Two slots are never one storage.
   expect(evaluated(`${grid}m[1] = m[0]; m[1][0] = 9; String(m[0][0]) + String(m[1][0]);`)).toBe('19');
   expect(evaluated(`${pairs}ts[1] = ts[0]; ts[1][0] = 9; String(ts[0][0]) + String(ts[1][0]);`)).toBe('19');
-  expect(evaluated('class M { q: [2].<uint8>; } const o = new M(); const other: [2].<uint8> = [5, 6]; o.q = other; other[0] = 9; String(o.q[0]);')).toBe('5');
-  expect(evaluated('class M { q: [2].<uint8>; } const o = new M(); const q = o.q; q[0] = 9; String(o.q[0]) + String(q[0]);')).toBe('09');
+  expect(evaluated('value class M { q: [2].<uint8>; } const o = new M(); const other: [2].<uint8> = [5, 6]; o.q = other; other[0] = 9; String(o.q[0]);')).toBe('5');
+  expect(evaluated('value class M { q: [2].<uint8>; } const o = new M(); const q = o.q; q[0] = 9; String(o.q[0]) + String(q[0]);')).toBe('09');
   // A literal at a typed array's annotation stores each element it names.
   expect(evaluated(`${fixed}const m: [1].<[2].<uint8>> = [a]; m[0][0] = 9; String(a[0]);`)).toBe('1');
 });
@@ -52,7 +52,7 @@ test('passing and returning one copies it', () => {
 
 test('a store through a path is in place, and so is a method', () => {
   expect(evaluated(`${grid}m[0][1] = 5; String(m[0][1]);`)).toBe('5');
-  expect(evaluated('class M { q: [2].<uint8>; set(i: uint8, v: uint8): void { this.q[i] = v; } } const o = new M(); o.q[0] = 5; o.set(1, 7); String(o.q[0]) + String(o.q[1]);')).toBe('57');
+  expect(evaluated('value class M { q: [2].<uint8>; set(i: uint8, v: uint8): void { this.q[i] = v; } } const o = new M(); o.q[0] = 5; o.set(1, 7); String(o.q[0]) + String(o.q[1]);')).toBe('57');
   expect(evaluated("const v: [3].<uint8> = [3, 1, 2]; v.sort(); v.reverse(); v.join('');")).toBe('321');
   expect(evaluated('const hist: [3].<uint32>; function bump(i: uint8) { hist[i] += 1; } bump(1); bump(1); String(hist[1]);')).toBe('2');
 });
@@ -66,7 +66,7 @@ test('the caller\'s array is written through ref, a window, or const ref', () =>
   expect(evaluated(`${fixed}function swap(arr, i, j) { const x = arr[i]; arr[i] = arr[j]; arr[j] = x; } const w: Span.<uint8> = a; swap(w, 0, 1); a.join('');`)).toBe('21');
   expect(evaluated(`${grid}for (const ref row of m) row[0] = 9; String(m[0][0]) + String(m[1][0]);`)).toBe('99');
   expect(evaluated(`${pairs}const ref e = ts[0]; e[1] += 1; String(ts[0][1]);`)).toBe('3');
-  expect(evaluated('class Stack { items: [4].<uint8>; top: uint8; push(x: uint8): void { const ref items = this.items; items[this.top] = x; this.top += 1; } } const s = new Stack(); s.push(5); String(s.items[0]);')).toBe('5');
+  expect(evaluated('value class Stack { items: [4].<uint8>; top: uint8; push(x: uint8): void { const ref items = this.items; items[this.top] = x; this.top += 1; } } const s = new Stack(); s.push(5); String(s.items[0]);')).toBe('5');
 });
 
 test('equal contents are one value: ===, and one key in a Map or a Set', () => {
@@ -89,11 +89,11 @@ test('one cannot be held weakly', () => {
 test('a tuple of value types has a layout, and a class holding one is a value type class', () => {
   expect(evaluated('type T = [uint8, uint8]; String(T.byteLength) + String(T.hasLayout);')).toBe('2true');
   expect(evaluated('type T = [uint8, uint32]; String(T.byteLength);')).toBe('8');
-  expect(evaluated('class P { p: [uint8, uint8]; n: uint8; } String(P.byteLength); ')).toBe('3');
-  expect(evaluated('class P { p: [uint8, uint8]; n: uint8; } const xs: [1].<P>; const c = xs[0]; c.p[0] = 9; c.n = 7; String(xs[0].p[0]) + String(xs[0].n) + String(c.n);')).toBe('007');
+  expect(evaluated('value class P { p: [uint8, uint8]; n: uint8; } String(P.byteLength); ')).toBe('3');
+  expect(evaluated('value class P { p: [uint8, uint8]; n: uint8; } const xs: [1].<P>; const c = xs[0]; c.p[0] = 9; c.n = 7; String(xs[0].p[0]) + String(xs[0].n) + String(c.n);')).toBe('007');
   // A copy of a class is whole: the array inside it is copied with it.
-  expect(evaluated('class M { q: [2].<uint8>; } const xs: [1].<M>; const c = xs[0]; c.q[0] = 8; String(xs[0].q[0]) + String(c.q[0]);')).toBe('08');
-  expect(evaluated('class M { q: [2].<uint8>; } const a = new M(); const b = a; b.q[0] = 8; String(a.q[0]) + String(a === b);')).toBe('0false');
+  expect(evaluated('value class M { q: [2].<uint8>; } const xs: [1].<M>; const c = xs[0]; c.q[0] = 8; String(xs[0].q[0]) + String(c.q[0]);')).toBe('08');
+  expect(evaluated('value class M { q: [2].<uint8>; } const a = new M(); const b = a; b.q[0] = 8; String(a.q[0]) + String(a === b);')).toBe('0false');
 });
 
 test('a copying member gives arrays and tuples of the caller\'s own', () => {
@@ -118,7 +118,7 @@ test('a binding copies every value but one a new or a literal constructs', () =>
   // copied only for a name, a field read and an element read, and took every
   // other form for a construction, so each of these made a second name for a
   // value: a store through the new binding wrote the old one.
-  const P = 'class P { x: uint8; } const p = new P(); const other = new P(); ';
+  const P = 'value class P { x: uint8; } const p = new P(); const other = new P(); ';
   const untouched = (taken: string): void => {
     expect(evaluated(`${P}${taken} String(p.x);`)).toBe('0');
   };
@@ -135,7 +135,7 @@ test('a binding copies every value but one a new or a literal constructs', () =>
   expect(evaluated(`${a}const b = a.reverse(); b[0] = 9; a.join('') + String(a === b);`)).toBe('213false');
   expect(evaluated(`${a}const b = a.sort(); b[0] = 9; const c = a.fill(1, 2); c[0] = 8; a.join('');`)).toBe('121');
   // `this` names the value the method was called on, so binding it copies too.
-  expect(evaluated(`${P}class Q { n: uint8; grow(): uint8 { const self = this; self.n = 5; this.n += 1; return self.n; } } const q = new Q(); String(q.grow()) + String(q.n);`)).toBe('51');
+  expect(evaluated(`${P}value class Q { n: uint8; grow(): uint8 { const self = this; self.n = 5; this.n += 1; return self.n; } } const q = new Q(); String(q.grow()) + String(q.n);`)).toBe('51');
 });
 
 test('a chain on a value is in place: no position of the clause lies between a call and its result', () => {

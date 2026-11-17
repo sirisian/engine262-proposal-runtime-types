@@ -471,7 +471,7 @@
     },
     {
       "name": "receiver context: number",
-      "source": "class C{v:string;m(){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=this.v;}}",
+      "source": "value class C{v:string;m(){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=this.v;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -516,7 +516,7 @@
     },
     {
       "name": "receiver context: string",
-      "source": "class C{v:string;m(){const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=this.v;}}",
+      "source": "value class C{v:string;m(){const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=this.v;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true

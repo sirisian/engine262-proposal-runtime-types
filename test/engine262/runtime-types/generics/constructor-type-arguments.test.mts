@@ -66,7 +66,7 @@ test('target-typed construction names the specialization', () => {
 test('contextual positions: return, argument, assignment, field initializer, field store, object literal, union', () => {
   expect(evaluated(`${ALIAS} function mk(): Box.<uint8> { return new C(1); } String(Reflect.typeOf(mk()));`)).toBe('Box.<uint.<8>>');
   expect(evaluated(`${ALIAS} function f(x: Box.<uint8>): uint8 { return x.v; } String(f(new C(1)));`)).toBe('1');
-  expect(evaluated(`${ALIAS} let b: Box.<uint8>; b = new C(1); String(Reflect.typeOf(b));`)).toBe('Box.<uint.<8>>');
+  expect(evaluated(`${ALIAS} let b: Box.<uint8> = new Box.<uint8>(0); b = new C(1); String(Reflect.typeOf(b));`)).toBe('Box.<uint.<8>>');
   expect(evaluated(`${ALIAS} class W { b: Box.<uint8> = new C(1); } String(Reflect.typeOf(new W().b));`)).toBe('Box.<uint.<8>>');
   expect(evaluated(`${ALIAS} class W { b: Box.<uint8>; constructor() { this.b = new C(1); } } String(Reflect.typeOf(new W().b));`)).toBe('Box.<uint.<8>>');
   expect(evaluated(`${ALIAS} const o: { b: Box.<uint8> } = { b: new C(1) }; String(Reflect.typeOf(o.b));`)).toBe('Box.<uint.<8>>');
@@ -194,7 +194,7 @@ test('inference beats a default; a default fills what nothing reaches', () => {
 // -- Defaults and the bare name in type position -----------------------------
 
 test('`A`, `A.<>` and a trailing default are one type, both sides', () => {
-  const A = 'class A<T: type = uint8> { a: T; constructor(a: T) { this.a = a; } } ';
+  const A = 'value class A<T: type extends value = uint8> { a: T; constructor(a: T) { this.a = a; } } ';
   expect(evaluated(`${A} const x: A.<> = new A(5); String(Reflect.typeOf(x));`)).toBe('A.<uint.<8>>');
   expect(evaluated(`${A} const x: A = new A.<>(5); String(Reflect.typeOf(x));`)).toBe('A.<uint.<8>>');
   expect(evaluated(`${A} let x: A; String(Reflect.typeOf(x)) + " " + String(Reflect.typeOf(x.a));`)).toBe('A.<uint.<8>> uint.<8>');

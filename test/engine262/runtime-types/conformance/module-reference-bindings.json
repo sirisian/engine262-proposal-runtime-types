@@ -312,7 +312,7 @@
     {
       "name": "soa-view",
       "modules": {
-        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];r.x=2;if(a[0].x!==2||r.x!==2)throw new Error(\"view\");"
+        "main": "value class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});let ref r=a[0];r.x=2;if(a[0].x!==2||r.x!==2)throw new Error(\"view\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -327,7 +327,7 @@
     {
       "name": "soa-stale",
       "modules": {
-        "main": "class P{x:uint8;}const a=new SoA.<P>();a.push({x:1});let ref r=a[0];a.reserve(64);const value:any=r.x;"
+        "main": "value class P{x:uint8;}const a=new SoA.<P>();a.push({x:1});let ref r=a[0];a.reserve(64);const value:any=r.x;"
       },
       "expected": {
         "status": "rejected",

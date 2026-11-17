@@ -18,7 +18,7 @@ import {
  * reference type.
  */
 
-const R = 'reference class Conn { id: uint8 = 1; } ';
+const R = 'class Conn { id: uint8 = 1; } ';
 const missing = { bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-missing-default' } };
 
 test('a constructor assigns a field whose type has no default', () => {
@@ -27,7 +27,7 @@ test('a constructor assigns a field whose type has no default', () => {
   expect(evaluated('class H { o: object; constructor(o: object) { this.o = o; } } typeof new H({}).o;')).toBe('object');
   expect(evaluated('class H { f: () => uint8; constructor(f: () => uint8) { this.f = f; } } String(new H(() => 3).f());')).toBe('3');
   expect(evaluated("interface Named { name: string; } class H { n: Named; constructor(n: Named) { this.n = n; } } new H({ name: 'a' }).n.name;")).toBe('a');
-  expect(evaluated('type Big = uint8 where this > 5; class H { b: Big; constructor(b: Big) { this.b = b; } } String(new H(9).b);')).toBe('9');
+  expect(evaluated('type Big = uint8 where this > 5; value class H { b: Big; constructor(b: Big) { this.b = b; } } String(new H(9).b);')).toBe('9');
   // Several fields, a `readonly` one, and a private one.
   expect(evaluated(`${R}class S { readonly conn: Conn; #peer: Conn; n: uint8; constructor(a: Conn, b: Conn) { this.conn = a; this.#peer = b; } get peer(): uint8 { return this.#peer.id; } } const s = new S(new Conn(), new Conn()); String(s.conn.id) + String(s.peer) + String(s.n);`))
     .toBe('110');
@@ -88,8 +88,8 @@ test('it is an early error only where no constructor can reach the field', () =>
 
 test('a class with such a field has no default, and one whose fields all have defaults is as before', () => {
   expect(observeScript(`${R}class Session { conn: Conn; constructor(c: Conn) { this.conn = c; } } let s: Session;`)).toMatchObject(missing);
-  expect(evaluated('class P { x: uint8; s: string; constructor() { } } const p = new P(); String(p.x) + "[" + p.s + "]";')).toBe('0[]');
-  expect(evaluated('class P { x: uint8; constructor(x: uint8) { this.x = x; } } let d: P; String(d.x) + String(new P(4).x);')).toBe('04');
+  expect(evaluated('value class P { x: uint8; s: string; constructor() { } } const p = new P(); String(p.x) + "[" + p.s + "]";')).toBe('0[]');
+  expect(evaluated('value class P { x: uint8; constructor(x: uint8) { this.x = x; } } let d: P; String(d.x) + String(new P(4).x);')).toBe('04');
 });
 
 test("the design repository's result class holds an error", () => {

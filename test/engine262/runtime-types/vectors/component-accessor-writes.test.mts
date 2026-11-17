@@ -55,7 +55,7 @@ test('reading a repeated accessor is unaffected', () => {
 test('a member that merely looks like an accessor is untouched', () => {
   // The rule is about vectors. A class field or an object property named `xx`
   // is a property, and assigning to it is ordinary.
-  expect(evaluated('class C { xx: uint8 = 1; } let c: C = new C(); c.xx = 2; String(c.xx);')).toBe('2');
+  expect(evaluated('value class C { xx: uint8 = 1; } let c: C = new C(); c.xx = 2; String(c.xx);')).toBe('2');
   expect(evaluated('let o = { xx: 1 }; o.xx = 2; String(o.xx);')).toBe('2');
 });
 

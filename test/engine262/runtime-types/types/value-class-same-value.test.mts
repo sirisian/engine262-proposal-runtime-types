@@ -20,7 +20,7 @@ import { evaluated } from '../harness.mts';
  * value.
  */
 
-const V = 'class P { x: uint8 = 0; } ';
+const V = 'value class P { x: uint8 = 0; } ';
 
 test('Object.is compares a value type class field-wise, as === does', () => {
   expect(evaluated(`${V} const a = new P(); a.x = 1; const b = new P(); b.x = 1; String(Object.is(a, b));`)).toBe('true');
@@ -34,7 +34,7 @@ test('nothing else changes', () => {
   expect(evaluated('class Q { s: [].<string> = []; } const a = new Q(); const b = new Q(); String(Object.is(a, b));')).toBe('false');
   // A class of `string` fields IS one - "the existing primitive types are value types"
   // (#sec-value-types), and a layout is not part of the condition (#sec-typed-classes).
-  expect(evaluated('class Q { s: string = ""; } const a = new Q(); const b = new Q(); String(Object.is(a, b)) + String(a === b);')).toBe('truetrue');
+  expect(evaluated('value class Q { s: string = ""; } const a = new Q(); const b = new Q(); String(Object.is(a, b)) + String(a === b);')).toBe('truetrue');
   expect(evaluated('const a = { x: 1 }; const b = { x: 1 }; String(Object.is(a, b));')).toBe('false');
   // `Object.is`'s own distinguishing cases are untouched.
   expect(evaluated('String(Object.is(NaN, NaN));')).toBe('true');

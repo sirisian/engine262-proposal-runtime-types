@@ -41,7 +41,7 @@ function evaluateModule(specifier: string, source: string): Promise<unknown> {
 
 test('a class declared in a module carries that module as its source', async () => {
   const type = await evaluateModule('pkg/user.mts',
-    'export class User { name: string; }\nglobalThis.__T = User;\n');
+    'export value class User { name: string; }\nglobalThis.__T = User;\n');
   const [origin] = TypeOrigins(type as never);
   expect(origin?.source).toBe('pkg/user.mts');
   expect(origin?.name).toBe('User');
@@ -55,9 +55,9 @@ test('two modules give two sources for the same declared name', async () => {
   // so a second agent cannot answer for a type recorded under the first - which
   // is correct, and is the shape a producer must respect: an artifact is written
   // for one graph in one agent, not assembled from several.
-  const first = await evaluateModule('pkg/a.mts', 'class T { x: uint8; }\nglobalThis.__T = T;\n');
+  const first = await evaluateModule('pkg/a.mts', 'value class T { x: uint8; }\nglobalThis.__T = T;\n');
   const fromA = TypeOrigins(first as never)[0]?.source;
-  const second = await evaluateModule('pkg/b.mts', 'class T { y: string; }\nglobalThis.__T = T;\n');
+  const second = await evaluateModule('pkg/b.mts', 'value class T { y: string; }\nglobalThis.__T = T;\n');
   const fromB = TypeOrigins(second as never)[0]?.source;
   expect(fromA).toBe('pkg/a.mts');
   expect(fromB).toBe('pkg/b.mts');

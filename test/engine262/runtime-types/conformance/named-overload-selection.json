@@ -242,7 +242,7 @@
       "name": "class receiver reverse=False",
       "steps": [
         {
-          "source": "class C{prefix:string=\"p\";f(x:uint8,label:string):string{return \"wrong\";}f(x:string,label:string):string{return this.prefix+x+label;}}const c=new C();c.f(x:\"a\",label:\"b\");",
+          "source": "value class C{prefix:string=\"p\";f(x:uint8,label:string):string{return \"wrong\";}f(x:string,label:string):string{return this.prefix+x+label;}}const c=new C();c.f(x:\"a\",label:\"b\");",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -270,7 +270,7 @@
       "name": "constructor reverse=False",
       "steps": [
         {
-          "source": "class C{value:string=\"\";constructor(x:uint8,label:string){this.value=\"wrong\";}constructor(x:string,label:string){this.value=x+label;}}new C(x:\"a\",label:\"b\").value;",
+          "source": "value class C{value:string=\"\";constructor(x:uint8,label:string){this.value=\"wrong\";}constructor(x:string,label:string){this.value=x+label;}}new C(x:\"a\",label:\"b\").value;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -522,7 +522,7 @@
       "name": "class receiver reverse=True",
       "steps": [
         {
-          "source": "class C{prefix:string=\"p\";f(x:string,label:string):string{return this.prefix+x+label;}f(x:uint8,label:string):string{return \"wrong\";}}const c=new C();c.f(x:\"a\",label:\"b\");",
+          "source": "value class C{prefix:string=\"p\";f(x:string,label:string):string{return this.prefix+x+label;}f(x:uint8,label:string):string{return \"wrong\";}}const c=new C();c.f(x:\"a\",label:\"b\");",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -550,7 +550,7 @@
       "name": "constructor reverse=True",
       "steps": [
         {
-          "source": "class C{value:string=\"\";constructor(x:string,label:string){this.value=x+label;}constructor(x:uint8,label:string){this.value=\"wrong\";}}new C(x:\"a\",label:\"b\").value;",
+          "source": "value class C{value:string=\"\";constructor(x:string,label:string){this.value=x+label;}constructor(x:uint8,label:string){this.value=\"wrong\";}}new C(x:\"a\",label:\"b\").value;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

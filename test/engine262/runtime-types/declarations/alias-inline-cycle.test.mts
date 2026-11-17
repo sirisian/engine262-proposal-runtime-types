@@ -62,7 +62,7 @@ test('the cycles the clause admits still stand', () => {
     + 'const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next?.value);')).toBe('2');
   expect(ok('type L = { next?: L | null }; let l: L = {};')).toBe(true);
   // A class field is a reference position too.
-  expect(ok('class C { x: uint8 = 1; } type A = { c: C | null }; let a: A = { c: null };')).toBe(true);
+  expect(ok('value class C { x: uint8 = 1; } type A = { c: C | null }; let a: A = { c: null };')).toBe(true);
 });
 
 test('a generic alias is judged at its application, not at its declaration', () => {

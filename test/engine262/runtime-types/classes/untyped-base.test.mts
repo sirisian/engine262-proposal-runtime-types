@@ -61,7 +61,7 @@ test('it has no layout and no default, and is no value type', () => {
   // No constructor ran, so there is no Error to be the default.
   expectThrown(`${E}let e: PE;`, 'has no default value');
   // A field of it with no initializer is its constructor's to assign (classes/constructor-assigned-fields.test.mts).
-  expectThrown(`${E}class H { e: PE; } new H();`, 'the constructor returned without assigning');
+  expectThrown(`${E}class H { e: PE; } new H();`, 'has no default value');
   expectStaticTypeError(`${E}class Store<T: type extends value> { xs: [].<T> = []; } new Store.<PE>();`);
   expectThrown(`${E}new SoA.<PE>(2);`, 'cannot be stored as columns');
 });
@@ -93,13 +93,13 @@ test('every base that is not a typed class gives the same answer', () => {
 
 test('a class over a typed base is a value type class as before', () => {
   const tail = "function f() { const a = new K(); const b = a; b.n = 5; const x = new K(); const y = new K(); const u: any = { x, y }; return String(a.n) + String(b.n) + String(u.x === u.y) + String(K.byteLength); } f();";
-  expect(evaluated(`class B { m: uint8; } class K extends B { n: uint8; } ${tail}`)).toBe('05true2');
-  expect(evaluated(`class A { a: uint8; } class B extends A { } class K extends B { n: uint8; } ${tail}`)).toBe('05true2');
-  expect(evaluated(`const B = class { x: uint8; }; class K extends B { n: uint8; } ${tail}`)).toBe('05true2');
-  expect(evaluated(`class Box<T: type> { v: T; } class K extends Box.<uint8> { n: uint8; } ${tail}`)).toBe('05true2');
+  expect(evaluated(`value class B { m: uint8; } value class K extends B { n: uint8; } ${tail}`)).toBe('05true2');
+  expect(evaluated(`value class A { a: uint8; } value class B extends A { } value class K extends B { n: uint8; } ${tail}`)).toBe('05true2');
+  expect(evaluated(`const B = value class { x: uint8; }; value class K extends B { n: uint8; } ${tail}`)).toBe('05true2');
+  expect(evaluated(`value class Box<T: type extends value> { v: T; } value class K extends Box.<uint8> { n: uint8; } ${tail}`)).toBe('05true2');
   // A mixin over a value type base "produces a value type class".
-  expect(evaluated(`class P { x: uint8; } const Tagged = (B) => class extends B { t: uint8; }; class K extends Tagged(P) { n: uint8; } ${tail}`)).toBe('05true3');
-  expect(evaluated(`class K { n: uint8; } ${tail}`)).toBe('05true1');
+  expect(evaluated(`value class P { x: uint8; } const Tagged = (B) => value class extends B { t: uint8; }; value class K extends Tagged(P) { n: uint8; } ${tail}`)).toBe('05true3');
+  expect(evaluated(`value class K { n: uint8; } ${tail}`)).toBe('05true1');
 });
 
 test('the checking pass does not judge a store to one as a store to a copy', () => {
@@ -107,7 +107,7 @@ test('the checking pass does not judge a store to one as a store to a copy', () 
   expect(evaluated('class U { } class K extends U { n: uint8; } function f(k: K) { k.n = 5; } function g() { const k = new K(); f(k); return String(k.n); } g();')).toBe('5');
   expect(evaluated(`${E}function f(e: PE) { e.status = 5; } function g() { const e = new PE('a', 1); f(e); return String(e.status); } g();`)).toBe('5');
   // The control: over a typed base the parameter is a copy and the store is lost.
-  expect(observeScript('class U { u: uint8; } class K extends U { n: uint8; } function f(k: K) { k.n = 5; } f(new K());'))
+  expect(observeScript('value class U { u: uint8; } value class K extends U { n: uint8; } function f(k: K) { k.n = 5; } f(new K());'))
     .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-store-to-copy' } });
   // And a default of it is refused where the class is known.
   expect(observeScript('class U { } class K extends U { n: uint8; } let k: K;'))

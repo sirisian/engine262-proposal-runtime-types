@@ -13,22 +13,27 @@ import { evaluated, expectThrown } from '../harness.mts';
  */
 
 test('layout and plainness diverge in both directions', () => {
-  expect(evaluated(`class A { x: uint8 = 1; }
-    class S { s: string = ''; }
+  expect(evaluated(`value class A { x: uint8 = 1; }
+    value class S { s: string = ''; }
     dynamic class D { x = 1; }
     class C { d: D | null = null; }
     [A.hasLayout, A.isPlainData,
      S.hasLayout, S.isPlainData,
-     C.hasLayout, C.isPlainData].join(',');`)).toBe('true,true,false,false,true,false');
+     C.hasLayout, C.isPlainData].join(',');`)).toBe('true,true,false,false,false,false');
+  // A class that holds a reference is not a value class (#sec-value-classes), so it reports no
+  // layout either. It did, a pointer's width, while a class was a value or not by its fields; what
+  // still has a layout and is not plain data is a fixed-length array of references.
+  expect(evaluated(`dynamic class D { x = 1; }
+    [(type [2].<D | null>).hasLayout, (type [2].<D | null>).isPlainData].join(',');`)).toBe('true,false');
 });
 
 test('plainness descends through fields, arrays, enums and brands', () => {
-  expect(evaluated(`class V { x: float32 = 0; y: float32 = 0; }
-    class Nest { v: V; n: uint8 = 0; }
-    class Arr { a: [4].<V>; }
+  expect(evaluated(`value class V { x: float32 = 0; y: float32 = 0; }
+    value class Nest { v: V; n: uint8 = 0; }
+    value class Arr { a: [4].<V>; }
     class Dyn { a: [].<V> = []; }
     enum E: uint16 { A = 1 }
-    class WithEnum { e: E = E.A; }
+    value class WithEnum { e: E = E.A; }
     [Nest.isPlainData, Arr.isPlainData, Dyn.isPlainData, WithEnum.isPlainData].join(',');`))
     .toBe('true,true,false,true');
 });
@@ -45,14 +50,14 @@ test('asking never throws, where asserting still does', () => {
   expectThrown('string.byteLength;', 'has no layout');
 });
 
-test('a reference type reports no layout, though a field of it costs one', () => {
+test('a reference type reports no layout, and neither does a class that holds one', () => {
   // `table-layout-by-type` gives a reference type no layout - "a reference's
   // width is the implementation's business" - so the reported answer and the
   // storage answer are different questions and now different functions.
-  expect(evaluated(`reference class R { x: uint8 = 1; }
+  expect(evaluated(`class R { x: uint8 = 1; }
     class H { r: R | null = null; }
-    R.hasLayout + '/' + H.byteLength;`)).toBe('false/8');
-  expectThrown('reference class R { x: uint8 = 1; } R.byteLength;', 'has no layout');
+    R.hasLayout + '/' + H.hasLayout;`)).toBe('false/false');
+  expectThrown('class R { x: uint8 = 1; } R.byteLength;', 'has no layout');
 });
 
 test('a buffer view refuses a reference-bearing element at construction', () => {
@@ -65,7 +70,7 @@ test('a buffer view refuses a reference-bearing element at construction', () => 
 });
 
 test('a buffer view still accepts a plain element', () => {
-  expect(evaluated(`class V { x: float32 = 0; y: float32 = 0; }
+  expect(evaluated(`value class V { x: float32 = 0; y: float32 = 0; }
     String(Span.<V>(new ArrayBuffer(64)).length);`)).toBe('8');
   expect(evaluated('String(Span.<uint8>(new ArrayBuffer(64)).length);')).toBe('64');
 });
@@ -74,8 +79,8 @@ test('value classes copy and reference classes alias', () => {
   // Guards the five copy sites that used to read value-type-ness off
   // `LayoutOf(t) !== null` and patch the reference case back out by hand; they
   // now ask IsValueTypeClass once.
-  expect(evaluated(`class V { x: uint8 = 1; }
-    reference class R { x: uint8 = 1; }
+  expect(evaluated(`value class V { x: uint8 = 1; }
+    class R { x: uint8 = 1; }
     const a = new V(); const b = a; b.x = 9;
     const p = new R(); const q = p; q.x = 9;
     a.x + '/' + p.x;`)).toBe('1/9');
@@ -91,7 +96,7 @@ test('value classes copy and reference classes alias', () => {
  * writing to `xs.slice()[0]` wrote `xs`.
  */
 test('a built-in member copies a value-type element it returns or stores', () => {
-  const A = 'class A { a: uint8; b: uint8; } const xs: [2].<A>; ';
+  const A = 'value class A { a: uint8; b: uint8; } const xs: [2].<A>; ';
   const untouched = (taken: string): void => {
     expect(evaluated(`${A}${taken} String(xs[0].a) + String(xs[1].a);`)).toBe('00');
   };
@@ -117,7 +122,7 @@ test('a plain object or array still holds a reference to an inline element', () 
   // The same clause: "A plain object's property and a plain array's element
   // ... hold a REFERENCE ... and a program that wants a copy into one writes a
   // conversion."
-  const A = 'class A { a: uint8; } const xs: [2].<A>; ';
+  const A = 'value class A { a: uint8; } const xs: [2].<A>; ';
   expect(evaluated(`${A}const o = { e: xs[0] }; o.e.a = 9; String(xs[0].a);`)).toBe('9');
   expect(evaluated(`${A}const plain = [xs[0]]; plain[0].a = 9; String(xs[0].a);`)).toBe('9');
   expect(evaluated(`${A}const all = [...xs]; all[1].a = 9; String(xs[1].a);`)).toBe('9');
@@ -128,7 +133,7 @@ test('a plain object or array still holds a reference to an inline element', () 
 test('Array.from copies the value-type elements it takes from a typed source', () => {
   // Its result carries the source's element type, so each element is stored
   // into typed storage, and copied (#sec-value-type-copying). It shared them.
-  const A = 'class A { a: uint8; } const xs: [2].<A>; ';
+  const A = 'value class A { a: uint8; } const xs: [2].<A>; ';
   expect(evaluated(`${A}const c: [].<A> = Array.from(xs); c[0].a = 9; c[1].a = 9; String(xs[0].a) + String(xs[1].a) + String(c.length);`)).toBe('002');
   expect(evaluated(`${A}const w: Span.<A> = xs; const c: [].<A> = Array.from(w); c[0].a = 9; String(xs[0].a);`)).toBe('0');
   // A mapping decides its own elements, and an array of numbers is as before.
@@ -141,7 +146,7 @@ test('a Map with a declared value type returns a copy of a value it stores', () 
   // "a case of this and not an exception to it". `set` already stored a copy;
   // `get` handed out the stored value itself, so a store through its result
   // wrote the Map.
-  const P = 'class P { x: uint8; } ';
+  const P = 'value class P { x: uint8; } ';
   const read = "const k = m.get('k'); String(k !== undefined ? k.x : -1);";
   expect(evaluated(`${P}const m = new Map.<string, P>(); const p = new P(); m.set('k', p); p.x = 5; const g = m.get('k'); if (g !== undefined) g.x = 9; ${read}`)).toBe('0');
   expect(evaluated(`${P}const m = new Map.<string, P>(); const a = m.getOrInsert('k', new P()); a.x = 9; const c = m.getOrInsert('k', new P()); c.x = 7; ${read}`)).toBe('0');
@@ -151,7 +156,7 @@ test('a Map with a declared value type returns a copy of a value it stores', () 
     + "const again = m.get('k'); String(again !== undefined ? again[0] : -1) + String(again !== undefined ? again[1] : -1);")).toBe('12');
   // A reference class is stored by reference, and an untyped Map is a plain
   // holder whose value is a reference, as a plain object's property is.
-  expect(evaluated("reference class R { x: uint8; } const m = new Map.<string, R>(); const r = new R(); m.set('k', r); const g = m.get('k'); if (g !== undefined) g.x = 9; String(r.x);")).toBe('9');
+  expect(evaluated("class R { x: uint8; } const m = new Map.<string, R>(); const r = new R(); m.set('k', r); const g = m.get('k'); if (g !== undefined) g.x = 9; String(r.x);")).toBe('9');
   // A store through the call writes the value the holder refers to; a binding
   // from the call copies it, as a binding from `o.k` does.
   expect(evaluated(`${P}const m = new Map(); const p = new P(); m.set('k', p); m.get('k').x = 9; String(p.x);`)).toBe('9');

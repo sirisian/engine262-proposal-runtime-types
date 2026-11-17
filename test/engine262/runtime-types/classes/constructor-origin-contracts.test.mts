@@ -4,19 +4,19 @@ import { expectStaticTypeError, ok } from '../harness.mts';
 // #sec-typed-classes
 
 test("aliased heritage contract", () => {
-  expectStaticTypeError("class Base { value: uint8 = 0; }\nconst Alias = Base;\nclass Derived extends Alias {\n  change() { this.value = \"bad\"; }\n}");
+  expectStaticTypeError("value class Base { value: uint8 = 0; }\nconst Alias = Base;\nvalue class Derived extends Alias {\n  change() { this.value = \"bad\"; }\n}");
 });
 
 test("heritage alias chain bad", () => {
-  expectStaticTypeError("class B{x:uint8=0;}const A=B;const Alias=A;class C extends Alias{f(){this.x=\"s\";}}");
+  expectStaticTypeError("value class B{x:uint8=0;}const A=B;const Alias=A;value class C extends Alias{f(){this.x=\"s\";}}");
 });
 
 test("heritage alias parenthesized bad", () => {
-  expectStaticTypeError("class B{x:uint8=0;}const Alias=(B);class C extends Alias{f(){this.x=\"s\";}}");
+  expectStaticTypeError("value class B{x:uint8=0;}const Alias=(B);value class C extends Alias{f(){this.x=\"s\";}}");
 });
 
 test("heritage alias generic bad", () => {
-  expectStaticTypeError("class B<T:type>{x:T;}const Alias=B.<uint8>;class C extends Alias{f(){this.x=\"s\";}}");
+  expectStaticTypeError("value class B<T:type extends value>{x:T;}const Alias=B.<uint8>;value class C extends Alias{f(){this.x=\"s\";}}");
 });
 
 test("heritage alias abstract bad", () => {
@@ -40,15 +40,15 @@ test("heritage alias override", () => {
 });
 
 test("heritage direct field", () => {
-  expectStaticTypeError("class B {x:uint8=0;} class C extends B {f(){this.x=\"s\";}}");
+  expectStaticTypeError("value class B {x:uint8=0;} value class C extends B {f(){this.x=\"s\";}}");
 });
 
 test("heritage parens bad", () => {
-  expectStaticTypeError("class B{x:uint8=0;}class C extends (B){f(){this.x=\"s\";}}");
+  expectStaticTypeError("value class B{x:uint8=0;}value class C extends (B){f(){this.x=\"s\";}}");
 });
 
 test("heritage alias good", () => {
-  expect(ok("class B{x:uint8=0;}const Alias=B;class C extends Alias{f(){this.x=1;}}")).toBe(true);
+  expect(ok("value class B{x:uint8=0;}const Alias=B;value class C extends Alias{f(){this.x=1;}}")).toBe(true);
 });
 
 test("heritage alias unknown", () => {
@@ -56,19 +56,19 @@ test("heritage alias unknown", () => {
 });
 
 test("heritage alias shadow good", () => {
-  expect(ok("class B{x:uint8=0;}const Alias=B;function f(){const Alias=class{x:string=\"s\";};class C extends Alias{f(){this.x=\"s\";}}}")).toBe(true);
+  expect(ok("value class B{x:uint8=0;}const Alias=B;function f(){const Alias=value class{x:string=\"s\";};value class C extends Alias{f(){this.x=\"s\";}}}")).toBe(true);
 });
 
 test("retains a mutable constructor alias at an unaffected heritage read", () => {
-  expectStaticTypeError("class B{x:uint8=0;}let Alias=B;class C extends Alias{f(){this.x=\"s\";}}");
+  expectStaticTypeError("value class B{x:uint8=0;}let Alias=B;value class C extends Alias{f(){this.x=\"s\";}}");
 });
 
 test("defers a mutable constructor alias after an affecting call", () => {
-  expect(ok("class B{x:uint8=0;}let Alias=B;function forget(){}forget();class C extends Alias{f(){this.x=\"s\";}}")).toBe(true);
+  expect(ok("value class B{x:uint8=0;}let Alias=B;function forget(){}forget();value class C extends Alias{f(){this.x=\"s\";}}")).toBe(true);
 });
 
 test("defers an unknown mixin result", () => {
-  expect(ok("class B{x:uint8=0;}function f(mixin:any){class C extends mixin(B){f(){this.x=\"s\";}}}")).toBe(true);
+  expect(ok("value class B{x:uint8=0;}function f(mixin:any){class C extends mixin(B){f(){this.x=\"s\";}}}")).toBe(true);
 });
 
 test("substitutes a closed alias in the default constructor", () => {

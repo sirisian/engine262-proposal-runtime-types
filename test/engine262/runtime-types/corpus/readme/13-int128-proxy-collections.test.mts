@@ -32,9 +32,9 @@ test('128-bit: a 128-bit type does not implicitly convert to number', () => {
 // Constructing a Proxy over a typed-class instance is a TypeError; an untyped
 // object is unchanged.
 test('Proxy: constructing a proxy over a typed-class instance is a TypeError', () => {
-  expectThrown('class A { x: uint32 = (0 := uint32); } new Proxy(new A(), {});');
+  expectThrown('value class A { x: uint32 = (0 := uint32); } new Proxy(new A(), {});');
   // a field-only typed class (default constructor) is likewise rejected
-  expectThrown('class A { x: uint32; } new Proxy(new A(), {});');
+  expectThrown('value class A { x: uint32; } new Proxy(new A(), {});');
 });
 
 test('Proxy: an untyped object or class is still proxyable', () => {

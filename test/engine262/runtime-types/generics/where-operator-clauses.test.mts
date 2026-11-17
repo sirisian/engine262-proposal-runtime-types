@@ -10,21 +10,21 @@ import { evaluated, observeScript } from '../harness.mts';
 const refused = (source: string, rule: string) => expect(observeScript(source)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule } });
 
 test('an operator clause is checked at each application', () => {
-  expect(evaluated("class V { v: uint8 = 1; operator*(rhs: uint8): V where rhs > 10 { return this; } } const b = new V() * (20 := uint8); 'ok';")).toBe('ok');
-  expect(evaluated("class V { v: uint8 = 1; operator*(rhs: uint8): V where rhs > 10 { return this; } } let m = 'none'; try { const b = new V() * (5 := uint8); m = 'ran'; } catch (e) { m = 'threw'; } m;")).toBe('threw');
-  expect(evaluated('class V { v: uint8 = 1; operator*(rhs: uint8): uint8 where return > 0 { return rhs; } } String(new V() * (3 := uint8));')).toBe('3');
+  expect(evaluated("value class V { v: uint8 = 1; operator*(rhs: uint8): V where rhs > 10 { return this; } } const b = new V() * (20 := uint8); 'ok';")).toBe('ok');
+  expect(evaluated("value class V { v: uint8 = 1; operator*(rhs: uint8): V where rhs > 10 { return this; } } let m = 'none'; try { const b = new V() * (5 := uint8); m = 'ran'; } catch (e) { m = 'threw'; } m;")).toBe('threw');
+  expect(evaluated('value class V { v: uint8 = 1; operator*(rhs: uint8): uint8 where return > 0 { return rhs; } } String(new V() * (3 := uint8));')).toBe('3');
 });
 
 test('an operator clause is judged at the declaration', () => {
-  refused("class V { v: uint8 = 1; operator*(rhs: uint8): V where rhs > 300 { return this; } } 'ok';", 'rt-numeric-range');
-  refused("class V { v: uint8 = 1; operator*(rhs: uint8): V where this.v > 300 { return this; } } 'ok';", 'rt-numeric-range');
-  expect(evaluated("class V { v: uint8 = 1; operator*(rhs: uint8): V where this.v > 0 { return this; } } const b = new V() * (3 := uint8); 'ok';")).toBe('ok');
+  refused("value class V { v: uint8 = 1; operator*(rhs: uint8): V where rhs > 300 { return this; } } 'ok';", 'rt-numeric-range');
+  refused("value class V { v: uint8 = 1; operator*(rhs: uint8): V where this.v > 300 { return this; } } 'ok';", 'rt-numeric-range');
+  expect(evaluated("value class V { v: uint8 = 1; operator*(rhs: uint8): V where this.v > 0 { return this; } } const b = new V() * (3 := uint8); 'ok';")).toBe('ok');
 });
 
 test('a conversion or spread operator takes clauses too', () => {
   expect(evaluated('class A { x = 7; operator number() where this.x > 0 { return this.x; } } const a = new A(); let n: number = a; String(n);')).toBe('7');
   expect(evaluated("class A { x = 0; operator number() where this.x > 0 { return this.x; } } let r = 'none'; try { const a = new A(); let n: number = a; r = 'ran'; } catch (e) { r = 'threw'; } r;")).toBe('threw');
-  refused("class L { n: uint8 = 2; * operator ...() where this.n > 300 { yield 1; } } 'ok';", 'rt-numeric-range');
+  refused("value class L { n: uint8 = 2; * operator ...() where this.n > 300 { yield 1; } } 'ok';", 'rt-numeric-range');
 });
 
 test('a primitive block\'s operator reads the primitive as its receiver', () => {

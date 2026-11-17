@@ -876,7 +876,7 @@
       "name": "value copy at tuple acquisition",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const t:[P]=raw;p.value=2;String(raw[0].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const t:[P]=raw;p.value=2;String(raw[0].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -890,7 +890,7 @@
       "name": "inherited value copy retains accessor observation",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[P]=raw;const again:[P]=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[P]=raw;const again:[P]=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -904,7 +904,7 @@
       "name": "value copy refuses nonwritable tuple",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=Object.freeze([p]);let result=\"missed\";try{const t:[P]=raw;}catch(e){result=e.name;}result;",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=Object.freeze([p]);let result=\"missed\";try{const t:[P]=raw;}catch(e){result=e.name;}result;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

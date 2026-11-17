@@ -53,7 +53,7 @@ test('every position that supplies an expected type still selects a form', () =>
   expect(ok(`${AB}const r: boolean32x4 = a < b;`)).toBe(true);
   expect(ok('function f(a: float32x4, b: float32x4): boolean32x4 { return a < b; }')).toBe(true);
   expect(ok(`function g(m: boolean32x4) { return m; } ${AB}g(a < b);`)).toBe(true);
-  expect(ok(`class C { m: boolean32x4 | null = null; } ${AB}let c: C = new C(); c.m = a < b;`)).toBe(true);
+  expect(ok(`value class C { m: boolean32x4 | null = null; } ${AB}let c: C = new C(); c.m = a < b;`)).toBe(true);
 });
 
 test('the message names the three forms as types a program can write', () => {

@@ -45,8 +45,8 @@ test('array and tuple patterns nest, and a nested capture\'s bound is enforced',
 test('a class case over an array runs its body and has its layout', () => {
   expect(evaluated('class C<T: type> { k(): string { return "p"; } } class C<[].<const E>> { k(): string { return "dyn"; } } '
     + 'new C.<[].<uint8>>().k() + "," + new C.<[4].<uint8>>().k();')).toBe('dyn,p');
-  expect(evaluated('class Cell<T: type> { a: uint8; } class Cell<[const N].<const E>> { a: uint8; b: uint32; } '
-    + 'class H { g: Cell.<[4].<uint8>> = new Cell.<[4].<uint8>>(); } class K { g: Cell.<string> = new Cell.<string>(); } '
+  expect(evaluated('value class Cell<T: type> { a: uint8; } value class Cell<[const N].<const E>> { a: uint8; b: uint32; } '
+    + 'value class H { g: Cell.<[4].<uint8>> = new Cell.<[4].<uint8>>(); } value class K { g: Cell.<string> = new Cell.<string>(); } '
     + 'String(H.byteLength) + "," + String(K.byteLength);')).toBe('8,1');
 });
 

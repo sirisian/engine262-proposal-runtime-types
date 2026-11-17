@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectThrown } from '../harness.mts';
 
 /**
  * Spec: #sec-reflection-shapes (Reflection Shapes).
@@ -65,8 +65,8 @@ test('an ACCESSOR reads back too', () => {
   // accessor, decorated or not, which is the rule the method arm had to learn
   // as well. The NAME comes from the node: an accessor's record carries its
   // backing Private Name, and a reflection names what was declared.
-  expect(evaluated('class A { accessor a: uint8 = 1; } const r = Reflect.getReflection.<Reflect.ClassAccessor, A>("a"); r.kind + "/" + String(r.name);')).toBe('ClassAccessor/a');
-  expect(evaluated('class A { accessor plain: uint8 = 1; } Reflect.getReflection.<Reflect.ClassAccessor, A>("plain").kind;')).toBe('ClassAccessor');
+  expect(evaluated('value class A { accessor a: uint8 = 1; } const r = Reflect.getReflection.<Reflect.ClassAccessor, A>("a"); r.kind + "/" + String(r.name);')).toBe('ClassAccessor/a');
+  expect(evaluated('value class A { accessor plain: uint8 = 1; } Reflect.getReflection.<Reflect.ClassAccessor, A>("plain").kind;')).toBe('ClassAccessor');
   expect(evaluated('class A { static accessor a: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassAccessor, A>("a").static);')).toBe('true');
 });
 
@@ -101,7 +101,7 @@ test('the two FIELD paths are merged into one read', () => {
   // class that had one - and the declaration record built for methods held
   // fields too. Two paths that disagreed about the same question. Merged: the
   // record supplies what was DECLARED, the layout supplies where it SITS.
-  expect(evaluated('class A { a: uint8; b: uint32; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('4');
+  expect(evaluated('value class A { a: uint8; b: uint32; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('4');
   expect(evaluated('class A { static s: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassField, A>("s").static);')).toBe('true');
   // A class with NO layout reads its declaration facts and reports no
   // placement - absent rather than *undefined* would be wrong here, since the
@@ -109,10 +109,14 @@ test('the two FIELD paths are merged into one read', () => {
   // `kind` names the CONTEXT, so this is 'ClassField' - it read 'field', the one
   // shape reporting something other than the context that produced it.
   expect(evaluated('class A { a; b: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("b").kind;')).toBe('ClassField');
-  expect(evaluated('class A { a; b: uint8; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('undefined');
+  // The LAYOUT context has nothing to say of such a class, and says so by throwing
+  // (#sec-reflection-shape-class-field-layout). It returned the reflection with its
+  // placement absent, so `.offset` read *undefined*.
+  expectThrown('class A { a; b: uint8; } Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b");', 'has no layout, so its field "b" has no placement');
+  expect(evaluated('class A { a; b: uint8; } String(Reflect.getReflection.<Reflect.ClassField, A>("b").offset);')).toBe('undefined');
   // A name that was never declared is still refused, which is what says the
   // merge widened the answer rather than the acceptance.
-  expect(outcome('class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("z");')).toBe('TypeError');
+  expect(outcome('value class A { a: uint8; } Reflect.getReflection.<Reflect.ClassField, A>("z");')).toBe('TypeError');
 });
 
 test('getReflectionByIndex returns a member\'s PARAMETERS, indexed', () => {
@@ -164,14 +168,14 @@ test('getReflectionByIndex returns a member\'s PARAMETERS, indexed', () => {
 const GRAB = 'let ctx; function g(c) { ctx = c; } ';
 
 test('a field context reports its OFFSET and BYTE LENGTH', () => {
-  expect(evaluated(`${GRAB} class A { x: uint32 = 0; @g a: uint8 = 3; } String(ctx.offset);`)).toBe('4');
-  expect(evaluated(`${GRAB} class A { @g a: uint32 = 3; } String(ctx.byteLength);`)).toBe('4');
+  expect(evaluated(`${GRAB} value class A { x: uint32 = 0; @g a: uint8 = 3; } String(ctx.offset);`)).toBe('4');
+  expect(evaluated(`${GRAB} value class A { @g a: uint32 = 3; } String(ctx.byteLength);`)).toBe('4');
   // The FIRST field sits at 0, which distinguishes "reported" from "absent" - a
   // falsy-but-present value.
-  expect(evaluated(`${GRAB} class A { @g a: uint32 = 3; } String(ctx.offset);`)).toBe('0');
+  expect(evaluated(`${GRAB} value class A { @g a: uint32 = 3; } String(ctx.offset);`)).toBe('0');
   // And they AGREE with the layout reflection, which is the property that
   // matters: two reflections of one field must not disagree.
-  expect(evaluated('class A { x: uint32 = 0; a: uint8 = 3; } '
+  expect(evaluated('value class A { x: uint32 = 0; a: uint8 = 3; } '
     + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").offset);')).toBe('4');
 });
 
@@ -186,13 +190,13 @@ test('THE ORDERING RULE these are accessors for', () => {
   // either point would always be *undefined*, and these are ACCESSORS read when
   // ASKED - which is what "present when the declaring class has one" means.
   expect(evaluated('let seen = "X"; function g(c) { seen = String(c.offset); } '
-    + 'class A { x: uint32 = 0; @g a: uint8 = 3; } seen;')).toBe('undefined');
+    + 'value class A { x: uint32 = 0; @g a: uint8 = 3; } seen;')).toBe('undefined');
   expect(evaluated('let seen = "X"; function g(c) { c.addInitializer(function () { seen = String(c.offset); }); } '
-    + 'class A { x: uint32 = 0; @g a: uint8 = 3; } new A(); seen;')).toBe('undefined');
+    + 'value class A { x: uint32 = 0; @g a: uint8 = 3; } new A(); seen;')).toBe('undefined');
   // Read AFTER the class finishes: present. Twelve cycles of *undefined*
   // readings were all taken from inside `addInitializer`, which is NOT later
   // than the layout assignment.
-  expect(evaluated(`${GRAB} class A { x: uint32 = 0; @g a: uint8 = 3; } String(ctx.offset);`)).toBe('4');
+  expect(evaluated(`${GRAB} value class A { x: uint32 = 0; @g a: uint8 = 3; } String(ctx.offset);`)).toBe('4');
 });
 
 // -- The method context type -----------------------------------------------------
@@ -438,13 +442,13 @@ test('the layout reflection says which field it describes', () => {
   // Redundant when fetched BY name, necessary when the set is enumerated -
   // which is the form that reads a whole layout out - and the design's
   // ClassFieldReflection lists `name` either way.
-  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").name);')).toBe('b');
+  expect(evaluated('value class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").name);')).toBe('b');
   // The bit-field surface stays where it is and is the memory-layout
   // extension's own reflection. It carries no `static`, `private`, or
   // `protected`: those are facts about the DECLARATION, which the ClassField
   // reflection reports, and duplicating them here is what let the two shapes
   // look like variants of one thing rather than answers to different questions.
-  expect(evaluated('class A { a: uint8; b: uint16; } Object.keys(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b")).join(",");'))
+  expect(evaluated('value class A { a: uint8; b: uint16; } Object.keys(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b")).join(",");'))
     .toBe('kind,name,offset,byteLength,bitLength,alignment,offsetBit,isBitField');
 });
 
@@ -589,7 +593,7 @@ test('the declaration and the layout are two contexts, not one', () => {
   // `Reflect.ClassFieldLayout`, separate from the `ClassField` reflection of what it was
   // declared as. The two answer different questions, so one retrieval expression must not answer
   // both shapes.
-  const V = 'class V { x: uint32 = 1; y: uint8 = 2; } ';
+  const V = 'value class V { x: uint32 = 1; y: uint8 = 2; } ';
   // The declaration view: what the field WAS DECLARED as.
   expect(evaluated(`${V} Reflect.getReflection.<Reflect.ClassField, V>('x').kind;`)).toBe('ClassField');
   expect(evaluated(`${V} String(Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.ClassField, V>('x')).includes('type'));`)).toBe('true');
@@ -601,7 +605,12 @@ test('the declaration and the layout are two contexts, not one', () => {
   // They answer differently for a class with no layout, and both are right: the
   // declaration reflection reports no placement, and asking the layout one at
   // all is the mistake.
-  expect(evaluated(`class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>('a').offset);`)).toBe('undefined');
+  expect(evaluated(`class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassField, U>('a').offset);`)).toBe('undefined');
+  expectThrown(`class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassFieldLayout, U>('a');`, 'has no layout');
+  // A class that is not a value class has no layout either, whatever its fields are
+  // (#sec-value-classes).
+  expect(evaluated(`class U { a: uint8; b: uint32; } String(Reflect.getReflection.<Reflect.ClassField, U>('b').offset);`)).toBe('undefined');
+  expectThrown(`class U { a: uint8; b: uint32; } Reflect.getReflection.<Reflect.ClassFieldLayout, U>('b');`, 'has no layout');
 });
 
 test('an enum reports the type its enumerators take their values in', () => {

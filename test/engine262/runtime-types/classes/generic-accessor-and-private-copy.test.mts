@@ -81,7 +81,7 @@ test.each([
   ],
   [
     "B12-E08: private method survives typed boundary",
-    "class C{#v:uint8=1;#m():uint8{return this.#v;}f(o:C):uint8{return o.#m();}}const c=new C();globalThis.settled=String(c.f(c));",
+    "value class C{#v:uint8=1;#m():uint8{return this.#v;}f(o:C):uint8{return o.#m();}}const c=new C();globalThis.settled=String(c.f(c));",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -91,7 +91,7 @@ test.each([
   ],
   [
     "B12-E09: private method identity survives copy",
-    "class C{#v:uint8=1;#m():uint8{return this.#v;}same(o:C):boolean{return o.#m===this.#m;}}const c=new C();globalThis.settled=String(c.same(c));",
+    "value class C{#v:uint8=1;#m():uint8{return this.#v;}same(o:C):boolean{return o.#m===this.#m;}}const c=new C();globalThis.settled=String(c.same(c));",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -101,7 +101,7 @@ test.each([
   ],
   [
     "B12-E10: private accessors preserve value copy isolation",
-    "class C{#v:uint8=1;get #x():uint8{return this.#v;}set #x(v:uint8){this.#v=v;}read():uint8{return this.#x;}change(o:C):uint8{o.#x=2;return o.#x;}}const c=new C();globalThis.settled=String(c.change(c))+\":\"+String(c.read());",
+    "value class C{#v:uint8=1;get #x():uint8{return this.#v;}set #x(v:uint8){this.#v=v;}read():uint8{return this.#x;}change(o:C):uint8{o.#x=2;return o.#x;}}const c=new C();globalThis.settled=String(c.change(c))+\":\"+String(c.read());",
     {
       "completion": "normal",
       "bodyRan": "true",

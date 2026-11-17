@@ -16,7 +16,7 @@ test.each(corpus.cases)('$name', async ({ modules, expected }) => {
 
 test('failed alias consumers leave the producer unevaluated and a compatible consumer usable', async () => {
   const results = await observeModuleSequence({
-    dep: 'globalThis.effects=(globalThis.effects||0)+1;class E{text:string="ok";get(){return this.text;}}export const Alias=E;export default E;',
+    dep: 'globalThis.effects=(globalThis.effects||0)+1;value class E{text:string="ok";get(){return this.text;}}export const Alias=E;export default E;',
     bad: 'import {Alias} from "dep";const result:boolean=new Alias().get();',
     good: 'import * as ns from "dep";const result:string=new ns.default().get();if(result!=="ok"||globalThis.effects!==1)throw new Error("effects");',
   }, ['bad', 'bad', 'good', 'good', 'bad']);
@@ -34,9 +34,9 @@ test('failed alias consumers leave the producer unevaluated and a compatible con
 
 test('a failed alias producer does not poison another producer in the same realm', async () => {
   const results = await observeModuleSequence({
-    badDep: 'class E{text:string="bad";}export const Alias=E;const invalid:boolean="bad";',
+    badDep: 'value class E{text:string="bad";}export const Alias=E;const invalid:boolean="bad";',
     bad: 'import {Alias} from "badDep";new Alias();',
-    goodDep: 'class E{text:string="ok";}export const Alias=E;',
+    goodDep: 'value class E{text:string="ok";}export const Alias=E;',
     good: 'import {Alias} from "goodDep";const result:string=new Alias().text;if(result!=="ok")throw new Error("identity");',
   }, ['bad', 'bad', 'good', 'good']);
   for (const result of results.slice(0, 2)) {

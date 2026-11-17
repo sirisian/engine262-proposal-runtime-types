@@ -83,7 +83,7 @@ test('what the decoration RESOLVES TO is judged, and by kind', () => {
   // there is no factory whose result could be judged instead. What a
   // decorator RETURNS is inspected only on the replacement path.
   expect(rejectionKind('const f = 5; class A { @f() a: uint8; }')).toBe('TypeError');
-  expect(rejectionKind('function f(c) { return 5; } class A { @f() a: uint8; }')).toBe('NO-THROW');
+  expect(rejectionKind('function f(c) { return 5; } value class A { @f() a: uint8; }')).toBe('NO-THROW');
 });
 
 test('a reserved layout control is not shadowable by a user binding', () => {
@@ -99,15 +99,15 @@ test('a reserved layout control is not shadowable by a user binding', () => {
   // what makes a layout control mean the same thing in every program: a
   // library that happens to export a function called `packed` cannot change
   // what `@packed` does to a class in a module that imports it.
-  const control = '@packed class A { a: uint8; b: uint16; } String((type A).byteLength);';
+  const control = '@packed value class A { a: uint8; b: uint16; } String((type A).byteLength);';
   expect(evaluated(control)).toBe('3');
   // The same source with the name bound to a function: the layout is still
   // packed, and the function does NOT run.
   expect(evaluated(`let fired = "no"; function packed(c) { fired = "yes"; } ${control}`)).toBe('3');
-  expect(evaluated('let fired = "no"; function packed(c) { fired = "yes"; } @packed class A { a: uint8; b: uint16; } fired;')).toBe('no');
+  expect(evaluated('let fired = "no"; function packed(c) { fired = "yes"; } @packed value class A { a: uint8; b: uint16; } fired;')).toBe('no');
   // And the control still applies where the binding is a non-function, which
   // would otherwise be the TypeError of the test above.
-  expect(evaluated('const packed = 5; @packed class A { a: uint8; b: uint16; } String((type A).byteLength);')).toBe('3');
+  expect(evaluated('const packed = 5; @packed value class A { a: uint8; b: uint16; } String((type A).byteLength);')).toBe('3');
   // A name that is NOT a reserved control takes the ordinary path, which is
   // what proves the two are actually distinguished rather than every unknown
   // `@name` being swallowed as a control.
@@ -121,7 +121,7 @@ test('the two positions that once parsed and did nothing now FIRE', () => {
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } class A { @f constructor() {} } k;')).toBe('ClassMethod/constructor');
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind + ":" + String(c.index); } class A { constructor(@f p: uint8) {} } k;')).toBe('ClassMethodParameter:0');
   expect(evaluated('const l = []; function t(n, c) { l.push(n); } '
-    + 'class A { @t("a") x: uint8 = 1; @t("ctor") constructor() {} @t("b") y: uint8 = 2; } l.join(",");')).toBe('a,ctor,b');
+    + 'value class A { @t("a") x: uint8 = 1; @t("ctor") constructor() {} @t("b") y: uint8 = 2; } l.join(",");')).toBe('a,ctor,b');
   // A constructor written in a form `PropName` normalizes (`"constructor"() {}`) is still the
   // constructor and not an ordinary method: defining it as one would put a `constructor`
   // property on the prototype and change every instance's structural type.
@@ -132,7 +132,7 @@ test('the two positions that once parsed and did nothing now FIRE', () => {
   // does. Unspecified: the specification gives a partial class body neither an exception nor a
   // rule, and it is where a program adds behaviour to a class it does not own; the tests pin
   // that its members are decorated.
-  const base = 'class A { x: uint8 = 1; } ';
+  const base = 'value class A { x: uint8 = 1; } ';
   expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } partial class A { @f m() {} } k;`)).toBe('ClassMethod/m');
   expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind + ":" + String(c.index); } partial class A { m(@f p: uint8) {} } k;`)).toBe('ClassMethodParameter:0');
   expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind; } partial class A { @f get v(): uint8 { return 1; } } k;`)).toBe('ClassGetter');

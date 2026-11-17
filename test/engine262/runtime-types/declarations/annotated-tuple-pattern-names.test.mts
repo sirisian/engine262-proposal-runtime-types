@@ -13,7 +13,7 @@ test('a tuple annotation types each position\'s name', () => {
 });
 
 test('a pattern nested at a tuple position takes that position\'s members', () => {
-  expectStaticTypeError('class P { start: uint8 = 1; } const p = new P(); const [{ start: x }]: [P] = [p]; const s: string = x;');
+  expectStaticTypeError('value class P { start: uint8 = 1; } const p = new P(); const [{ start: x }]: [P] = [p]; const s: string = x;');
 });
 
 test('a name taken from a replaced member is checked against the member\'s type', () => {

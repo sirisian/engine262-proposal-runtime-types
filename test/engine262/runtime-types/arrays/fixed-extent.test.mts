@@ -97,7 +97,7 @@ test('a growable array and a plain array are untouched', () => {
 });
 
 test('a fixed SoA refuses growth as it always did', () => {
-  expectThrownKind('class P { x: float32; } const s = new SoA.<P, 4>(); s.push({ x: 1 });', 'TypeError');
+  expectThrownKind('value class P { x: float32; } const s = new SoA.<P, 4>(); s.push({ x: 1 });', 'TypeError');
 });
 
 test('a fixed-extent array cannot be shortened either', () => {

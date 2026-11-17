@@ -381,7 +381,7 @@
     {
       "name": "construction-counter-only",
       "modules": {
-        "main": "let fields=0;class E{text:string=(fields++,\"ok\");}if(fields!==0)throw new Error(\"checking\");const e=new E();if(fields!==1)throw new Error(\"construction\");"
+        "main": "let fields=0;value class E{text:string=(fields++,\"ok\");}if(fields!==0)throw new Error(\"checking\");const e=new E();if(fields!==1)throw new Error(\"construction\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -396,7 +396,7 @@
     {
       "name": "constructor-and-getter-opaque",
       "modules": {
-        "main": "const state:any={gets:0,fields:0};class E{text:string=(state.fields++,\"ok\");get value(){state.gets++;return this.text;}}if(JSON.stringify(state)!=='{\"gets\":0,\"fields\":0}')throw new Error(\"checking\");const e=new E();if(JSON.stringify(state)!=='{\"gets\":0,\"fields\":1}')throw new Error(\"construction\");const q:string=e.value;if(JSON.stringify(state)!=='{\"gets\":1,\"fields\":1}')throw new Error(\"get\");"
+        "main": "const state:any={gets:0,fields:0};value class E{text:string=(state.fields++,\"ok\");get value(){state.gets++;return this.text;}}if(JSON.stringify(state)!=='{\"gets\":0,\"fields\":0}')throw new Error(\"checking\");const e=new E();if(JSON.stringify(state)!=='{\"gets\":0,\"fields\":1}')throw new Error(\"construction\");const q:string=e.value;if(JSON.stringify(state)!=='{\"gets\":1,\"fields\":1}')throw new Error(\"get\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -447,7 +447,7 @@
     {
       "name": "construction-pair-fields",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -462,7 +462,7 @@
     {
       "name": "construction-pair-with-writer",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -477,7 +477,7 @@
     {
       "name": "construction-pair-field-left",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(fields!==0||a!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(fields!==0||a!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -492,7 +492,7 @@
     {
       "name": "construction-sequential",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0)throw new Error(\"before\");if(fields!==0)throw new Error(\"field before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0)throw new Error(\"before\");if(fields!==0)throw new Error(\"field before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -507,7 +507,7 @@
     {
       "name": "construction-only-field-with-writer",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -522,7 +522,7 @@
     {
       "name": "construction-compound-after",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(a!==0||fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(a!==0||fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -537,7 +537,7 @@
     {
       "name": "construction-reversed-after",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1||a!==0)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1||a!==0)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -552,7 +552,7 @@
     {
       "name": "construction-single-after",
       "modules": {
-        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+        "main": "let a=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -567,7 +567,7 @@
     {
       "name": "construction-inferred-getter",
       "modules": {
-        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");const q=e.value;"
+        "main": "let gets=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");const q=e.value;"
       },
       "expected": {
         "status": "fulfilled",
@@ -582,7 +582,7 @@
     {
       "name": "construction-bare-getter",
       "modules": {
-        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");e.value;"
+        "main": "let gets=0;let fields=0;value class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");e.value;"
       },
       "expected": {
         "status": "fulfilled",

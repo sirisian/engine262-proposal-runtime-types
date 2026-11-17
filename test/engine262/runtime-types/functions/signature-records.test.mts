@@ -260,7 +260,7 @@ test('an adopted self marker resolves to the owner, and only for reading', () =>
   // class where a narrower interface is wanted - the ordinary use of
   // `implements`. This is that case, and it must keep working.
   expect(evaluated('interface Small { m(): uint8; } '
-    + 'class Rich implements Small { v: uint8 = 1; w: uint8 = 2; m(): uint8 { return (0 := uint8); } } '
+    + 'value class Rich implements Small { v: uint8 = 1; w: uint8 = 2; m(): uint8 { return (0 := uint8); } } '
     + 'let r := new Rich(); let s: Small = r; String(s.m());')).toBe('0');
   // The `implements` clause is what makes the class usable AS the interface:
   // #sec-issubtype relates two ~nominal~ types along declared inheritance, and

@@ -77,7 +77,7 @@ test.each([
   ],
   [
     "using-class-unused",
-    "class Bad{[Symbol.dispose]:uint8=1;}function f(){using x=new Bad();}",
+    "value class Bad{[Symbol.dispose]:uint8=1;}function f(){using x=new Bad();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -89,7 +89,7 @@ test.each([
   ],
   [
     "using-inherited-unused",
-    "class B{[Symbol.dispose]:uint8=1;}class C extends B{}function f(c:C){using x=c;}",
+    "value class B{[Symbol.dispose]:uint8=1;}value class C extends B{}function f(c:C){using x=c;}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -371,7 +371,7 @@ test.each([
   ],
   [
     "R59-E11: disposal order and exactly once",
-    "let log=\"\";class R{constructor(name:string){this.name=name;}name:string;[Symbol.dispose]():void{log+=this.name;}}function f(){using a=new R(\"a\"),b=new R(\"b\");log+=\"f\";}f();globalThis.settled=log;",
+    "let log=\"\";value class R{constructor(name:string){this.name=name;}name:string;[Symbol.dispose]():void{log+=this.name;}}function f(){using a=new R(\"a\"),b=new R(\"b\");log+=\"f\";}f();globalThis.settled=log;",
     {
       "completion": "normal",
       "bodyRan": "true",

@@ -90,19 +90,19 @@ test.each([
   ['numeric eval store', 'let x:uint8=5;eval("x=300");', 'RangeError'],
   ['replaced callable result', `function g(n:uint8):uint8{return n;}eval('g=(n)=>"s"');const r:uint8=g(1);`, 'TypeError'],
   ['alias remains immutable', 'type T=string;eval("T=uint8");', 'TypeError'],
-  ['unknown ancestry and added value storage', 'class V{x:uint8=1;}eval("1");class W extends V{y:uint8=2;}const v:V=new W();', 'TypeError'],
+  ['unknown ancestry and added value storage', 'value class V{x:uint8=1;}eval("1");value class W extends V{y:uint8=2;}const v:V=new W();', 'TypeError'],
 ])('%s fails at runtime', (_name, source, errorClass) => {
   expect(observeScript(source!)).toMatchObject({ bodyEntered: true, errorClass, completion: { Type: 'throw' } });
 });
 
 test.each([
-  ['known added value storage before later eval', 'class V{x:uint8=1;}class W extends V{y:uint8=2;}const v:V=new W();eval("1");'],
+  ['known added value storage before later eval', 'value class V{x:uint8=1;}value class W extends V{y:uint8=2;}const v:V=new W();eval("1");'],
   ['unrelated classes', 'class V{}class X{}const v:V=new X();eval("1");'],
   ['known null heritage', 'class V{}class W extends (null){constructor(){return Object.create(new.target.prototype);}}const v:V=new W();eval("1");'],
   ['known primitive mismatch', 'class V{}class W extends V{}const v:number=new W();eval("1");'],
   ['same family arguments', 'class V{}class W<T:type> extends V{}const v:W.<string> = new W.<number>();eval("1");'],
   ['own field contract', 'class V{}class W extends V{field:uint8=1;}const v:string=new W().field;eval("1");'],
-  ['known added value storage', 'class V{x:uint8=1;}class W extends V{y:uint8=2;}const v:V=new W();'],
+  ['known added value storage', 'value class V{x:uint8=1;}value class W extends V{y:uint8=2;}const v:V=new W();'],
   ['known invalid union alternative', 'class V{}class W extends V{}const v:V=true?new W():"invalid";eval("1");'],
   ['bad annotation', 'class V{}class W extends V{}const v:Missing=new W();eval("1");'],
 ])('%s is still refused before body entry', (_name, source) => {

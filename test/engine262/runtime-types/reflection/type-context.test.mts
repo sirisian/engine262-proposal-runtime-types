@@ -53,7 +53,7 @@ test('Reflect.Type discriminates every structural form', () => {
   // the nominal type; its members are reached through the existing
   // `Reflect.Enum` and `Reflect.Class` contexts, so `Reflect.Type` DOES NOT
   // DUPLICATE enum or class member reflection."
-  expect(evaluated('class C { a: uint8; } Reflect.getReflection.<Reflect.Type, C>().kind;')).toBe('primitive');
+  expect(evaluated('value class C { a: uint8; } Reflect.getReflection.<Reflect.Type, C>().kind;')).toBe('primitive');
 });
 
 test('a type declaration carries no decorator', () => {

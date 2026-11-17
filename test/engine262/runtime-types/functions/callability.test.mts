@@ -21,7 +21,7 @@ test('a value of a primitive type is not callable', () => {
   expectThrown(dead('let s: string = "x"; let q = s();'), 'is not callable');
   expectThrown(dead('let b: boolean = true; let q = b();'), 'is not callable');
   // A member whose declared type is a primitive is the same question.
-  expectThrown(dead('class C { x: uint8 = uint8(1); } let c: C = new C(); let q = c.x();'),
+  expectThrown(dead('value class C { x: uint8 = uint8(1); } let c: C = new C(); let q = c.x();'),
     'is not callable');
 });
 
@@ -88,7 +88,7 @@ test('what callability does not reach', () => {
   // A generic class's own name inside a static field: typing the target would
   // reach the rule that refuses a bare generic, which this judgment must not
   // provoke.
-  expect(ok('class Box<T: type> { x: uint8; static default = new Box.<uint8>(); } "ok";')).toBe(true);
+  expect(ok('value class Box<T: type> { x: uint8; static default = new Box.<uint8>(); } "ok";')).toBe(true);
 });
 
 test('an OBJECT is not callable either', () => {
@@ -98,7 +98,7 @@ test('an OBJECT is not callable either', () => {
   // Structure is one. A structure still an ~object~ after that carries no call
   // signature.
   expectThrown(dead('class C { } let c: C = new C(); let q = c();'), 'is not callable');
-  expectThrown(dead('class C { x: uint8 = uint8(1); } let c: C = new C(); let q = c();'),
+  expectThrown(dead('value class C { x: uint8 = uint8(1); } let c: C = new C(); let q = c();'),
     'is not callable');
   expectThrown(dead('let o: { a: uint8 } = { a: uint8(1) }; let q = o();'), 'is not callable');
   expectThrown(dead('interface I { a: uint8 } function g(i: I) { let q = i(); }'),

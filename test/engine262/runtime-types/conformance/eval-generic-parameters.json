@@ -459,7 +459,7 @@
     {
       "name": "class",
       "modules": {
-        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}run(){const outer=this.value;type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}const n=new C.<number>(7),s=new C.<string>(\"outer\");const a=n.run(),b=s.run(),c=n.run();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
+        "main": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}run(){const outer=this.value;type G=<V:type>(value:V)=>{outer:T,own:V};return eval(\"const f:G=function(value:V):{outer:T,own:V}{return {outer,own:value};};f.<string>(\\\"ok\\\");\");}}const n=new C.<number>(7),s=new C.<string>(\"outer\");const a=n.run(),b=s.run(),c=n.run();if(a.outer!==7||b.outer!==\"outer\"||c.outer!==7||a.own!==\"ok\"||b.own!==\"ok\"||c.own!==\"ok\")throw new Error(\"capture\");"
       },
       "expected": {
         "status": "fulfilled",

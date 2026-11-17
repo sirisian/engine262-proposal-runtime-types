@@ -920,7 +920,7 @@
     },
     {
       "name": "runtime generic direct methods keep instances",
-      "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}read():T{return this.value;}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
+      "source": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}read():T{return this.value;}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

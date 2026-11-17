@@ -16,7 +16,7 @@ test.each([
 test.each([
   ['fresh typed getter', 'let calls = 0; const o = { get x(): uint8 { calls++; return 1; } }; String(calls);', '0'],
   ['specialized function constant', 'function id<T: type>(x: T): T { return x; } const f = id.<uint8>; String(f(1));', '1'],
-  ['named generic constructor', 'class C<T: type> { x: T; constructor(x: T) { this.x = x; } } const c = new C.<uint8>(x: 1); String(c.x);', '1'],
+  ['named generic constructor', 'value class C<T: type extends value> { x: T; constructor(x: T) { this.x = x; } } const c = new C.<uint8>(x: 1); String(c.x);', '1'],
   ['generator constant', 'function* g(): uint8 { yield 1; } const x = g(); typeof x[Symbol.iterator];', 'function'],
   ['async generator constant', 'async function* g(): uint8 { yield 1; } const x = g(); typeof x[Symbol.asyncIterator];', 'function'],
   ['hoisted var before initialization', 'function f() { const before = x; var x: uint8; return `${before}/${x}`; } f();', 'undefined/0'],

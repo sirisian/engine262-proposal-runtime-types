@@ -47,8 +47,8 @@ test.each([
   'async function f(): Promise.<uint8, Error> { return Promise.resolve((1 := uint8)); }',
   'async function* f(): uint8 { yield Promise.resolve((1 := uint8)); }',
   'async function* f(): AsyncGenerator.<uint8, uint8, void> { return Promise.resolve((1 := uint8)); }',
-  'class C { x: uint8; m() { async function f() { this.x = "s"; } } }',
-  'class C { x: uint8; m() { function* f() { this.x = "s"; } } }',
+  'value class C { x: uint8; m() { async function f() { this.x = "s"; } } }',
+  'value class C { x: uint8; m() { function* f() { this.x = "s"; } } }',
 ])('uses the effective async value and ordinary function context: %s', (source) => {
   expect(ok(source)).toBe(true);
 });
@@ -56,7 +56,7 @@ test.each([
 test.each([
   'async function f(): Promise.<uint8, Error> { return Promise.resolve("s"); }',
   'async function* f(): uint8 { yield Promise.resolve("s"); }',
-  'class C { x: uint8; m() { const f = async () => { this.x = "s"; }; } }',
+  'value class C { x: uint8; m() { const f = async () => { this.x = "s"; }; } }',
 ])('keeps checks at async boundaries and lexical this: %s', expectStaticTypeError);
 
 test('an async generator checks the value after awaiting a yield', () => {

@@ -108,7 +108,7 @@ test('and NOT typed by an annotation that says nothing about an instance', () =>
   ]) {
     expect(evaluated(`${decl} String(Object.isExtensible(new C(1)));`), decl).toBe('true');
   }
-  expect(evaluated('class C { x: uint8 = 1; } String(Object.isExtensible(new C()));')).toBe('false');
+  expect(evaluated('value class C { x: uint8 = 1; } String(Object.isExtensible(new C()));')).toBe('false');
 });
 
 test('the annotation may come AFTER the constructor', () => {
@@ -149,7 +149,7 @@ test('nesting: only the constructor\'s OWN returns count', () => {
 });
 
 test('`return this` and bare `return` are the forms that survive', () => {
-  expect(evaluated('class C { z: uint8 = 1; constructor() { return this; } } String((new C()).z);')).toBe('1');
-  expect(evaluated('class C { z: uint8 = 1; constructor() { if (false) { return; } } }'
+  expect(evaluated('value class C { z: uint8 = 1; constructor() { return this; } } String((new C()).z);')).toBe('1');
+  expect(evaluated('value class C { z: uint8 = 1; constructor() { if (false) { return; } } }'
     + ' String((new C()).z);')).toBe('1');
 });

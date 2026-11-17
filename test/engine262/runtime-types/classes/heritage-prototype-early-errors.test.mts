@@ -98,7 +98,7 @@ test("getter prototype contract is checked", () => {
 });
 
 test("inherited prototype contract is checked", () => {
-  expectStaticTypeError("class Parent {prototype:number=1;}class Child extends Parent{}function f(base:Child){class C extends base{}}");
+  expectStaticTypeError("value class Parent {prototype:number=1;}value class Child extends Parent{}function f(base:Child){class C extends base{}}");
 });
 
 test("specialized prototype contract is checked", () => {

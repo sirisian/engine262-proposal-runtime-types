@@ -304,7 +304,7 @@
     },
     {
       "name": "instance field: number",
-      "source": "function outer(){class C{q:number=g();}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
+      "source": "function outer(){value class C{q:number=g();}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -323,7 +323,7 @@
     },
     {
       "name": "instance field: string",
-      "source": "function outer(){class C{q:string=g();}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
+      "source": "function outer(){value class C{q:string=g();}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -358,7 +358,7 @@
     },
     {
       "name": "class expression: number",
-      "source": "function outer(){const C=class{q:number=g();};function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
+      "source": "function outer(){const C=value class{q:number=g();};function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -377,7 +377,7 @@
     },
     {
       "name": "class expression: string",
-      "source": "function outer(){const C=class{q:string=g();};function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
+      "source": "function outer(){const C=value class{q:string=g();};function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -466,7 +466,7 @@
     },
     {
       "name": "instance receiver: number",
-      "source": "function outer(){class C{v:string;q:number=(g(),this.v);}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
+      "source": "function outer(){value class C{v:string;q:number=(g(),this.v);}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -542,7 +542,7 @@
     },
     {
       "name": "instance receiver: string",
-      "source": "function outer(){class C{v:string;q:string=(g(),this.v);}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
+      "source": "function outer(){value class C{v:string;q:string=(g(),this.v);}function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -598,7 +598,7 @@
     },
     {
       "name": "completed unknown field result",
-      "source": "function outer(x){class C{q:number=g();}function g(){return s;}const s=h();function h(){return x;}}",
+      "source": "function outer(x){value class C{q:number=g();}function g(){return s;}const s=h();function h(){return x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -632,7 +632,7 @@
     },
     {
       "name": "instance initializer executes once",
-      "source": "let calls=0;class C{q:string=g();}function g(){calls++;return s;}const s=h(false);function h(b:boolean){return b?t:\"s\";}let u:string|number=\"s\";const t=u;new C();String(calls);",
+      "source": "let calls=0;value class C{q:string=g();}function g(){calls++;return s;}const s=h(false);function h(b:boolean){return b?t:\"s\";}let u:string|number=\"s\";const t=u;new C();String(calls);",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

@@ -44,7 +44,7 @@ test('an equal vector is one key of a Map and one member of a Set', () => {
 });
 
 test('a value type class holding a vector is compared by it', () => {
-  expect(evaluated('class K { v: vector.<float32, 4>; n: uint8; } function f() { const x = new K(); const y = new K(); const u: any = { x, y }; const same = u.x === u.y; y.n = 1; return String(same) + String(u.x === u.y) + String(new Set([x]).has(new K())); } f();'))
+  expect(evaluated('value class K { v: vector.<float32, 4>; n: uint8; } function f() { const x = new K(); const y = new K(); const u: any = { x, y }; const same = u.x === u.y; y.n = 1; return String(same) + String(u.x === u.y) + String(new Set([x]).has(new K())); } f();'))
     .toBe('truefalsetrue');
 });
 

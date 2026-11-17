@@ -13,7 +13,7 @@ import { evaluated } from '../harness.mts';
  * JavaScript freezes it.
  */
 
-const T = "class A { a: uint8; bump() { this.a += 1; } } reference class R { x: uint8; } let out = ''; const at = (f) => { try { f(); out += 'ok,'; } catch (e) { out += e.name + ','; } }; ";
+const T = "value class A { a: uint8; bump() { this.a += 1; } } class R { x: uint8; } let out = ''; const at = (f) => { try { f(); out += 'ok,'; } catch (e) { out += e.name + ','; } }; ";
 
 test('an element of a frozen array that is stored inline is read-only in every part', () => {
   // A fixed-length array of a value class: the element, a field of it, and a method that stores to `this`.
@@ -41,7 +41,7 @@ test('a store to an element of a frozen typed array is a TypeError outside stric
   const made = "function make() { const q: [2].<uint8> = [1, 2]; return q; } const o = { q: make() }; Object.freeze(o.q); let r = 'ok'; try { o.q[0] = 4; } catch (e) { r = e.name; } r + String(o.q[0]);";
   expect(evaluated(made)).toBe('TypeError1');
   // A field's array and a field's tuple, frozen on their own.
-  expect(evaluated("class B { q: [2].<uint8>; t: [uint8, uint8]; } const b = new B(); Object.freeze(b.q); Object.freeze(b.t); let r = ''; try { b.q[0] = 4; } catch (e) { r += e.name; } try { b.t[1] = 4; } catch (e) { r += e.name; } r + String(b.q[0]) + String(b.t[1]);"))
+  expect(evaluated("value class B { q: [2].<uint8>; t: [uint8, uint8]; } const b = new B(); Object.freeze(b.q); Object.freeze(b.t); let r = ''; try { b.q[0] = 4; } catch (e) { r += e.name; } try { b.t[1] = 4; } catch (e) { r += e.name; } r + String(b.q[0]) + String(b.t[1]);"))
     .toBe('TypeErrorTypeError00');
 });
 

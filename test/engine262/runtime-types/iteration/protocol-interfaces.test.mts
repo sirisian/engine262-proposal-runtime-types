@@ -20,7 +20,7 @@ test('a class implements Iterable and reaches an Iterable position', () => {
 });
 
 test('the design\'s own example: a class with a method and an object with an arrow are both an Iterator', () => {
-  const Cursor = 'class Cursor implements Iterator.<uint8> { n: uint8 = 0; next(): IteratorResult.<uint8, void> { this.n += 1; return this.n > 2 ? { value: undefined, done: true } : { value: this.n, done: false }; } } '
+  const Cursor = 'value class Cursor implements Iterator.<uint8> { n: uint8 = 0; next(): IteratorResult.<uint8, void> { this.n += 1; return this.n > 2 ? { value: undefined, done: true } : { value: this.n, done: false }; } } '
     + 'function drain(it: Iterator.<uint8>): string { const r = it.next(); return String(r.value); } ';
   expect(evaluated(`${Cursor}drain(new Cursor());`)).toBe('1');
   expect(evaluated(`${Cursor}drain({ next: () => ({ value: 7, done: false }) });`)).toBe('7');
@@ -127,8 +127,8 @@ test('an instance of a class that declares an interface is of it by that declara
   // class declared nothing is asked for the members.
   const I = 'interface I { m(): uint8; } class C implements I { m(): uint8 { return 1; } } function f(v: any) { return v is I; } ';
   expect(evaluated(`${I}String(f(new C())) + String(f({ m() { return 1; } })) + String(f({}));`)).toBe('truetruefalse');
-  expect(evaluated('interface Box<T: type> { v: T; } class B8 implements Box.<uint8> { v: uint8 = 1; } function f(v: any) { return v is Box.<uint16>; } function g(v: any) { return v is Box.<uint8>; } String(f(new B8())) + String(g(new B8()));')).toBe('falsetrue');
-  expect(evaluated("interface A { a: string; } interface B extends A { b: uint8; } class C implements B { a: string = 'x'; b: uint8 = 1; } function f(v: any) { return v is A; } String(f(new C()));")).toBe('true');
+  expect(evaluated('interface Box<T: type> { v: T; } value class B8 implements Box.<uint8> { v: uint8 = 1; } function f(v: any) { return v is Box.<uint16>; } function g(v: any) { return v is Box.<uint8>; } String(f(new B8())) + String(g(new B8()));')).toBe('falsetrue');
+  expect(evaluated("interface A { a: string; } interface B extends A { b: uint8; } value class C implements B { a: string = 'x'; b: uint8 = 1; } function f(v: any) { return v is A; } String(f(new C()));")).toBe('true');
 });
 
 test('a generator written where a protocol is asked for yields that protocol\'s element', () => {

@@ -65,5 +65,5 @@ test.each([
 
 
 test("conditional class call is rejected before evaluation", () => {
-  expectStaticTypeError("class A{x:uint8;}class B{x:uint8;}function f(b:boolean){(b?A:B)();}");
+  expectStaticTypeError("value class A{x:uint8;}value class B{x:uint8;}function f(b:boolean){(b?A:B)();}");
 });

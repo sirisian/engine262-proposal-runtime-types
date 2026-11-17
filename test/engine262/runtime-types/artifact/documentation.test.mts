@@ -22,7 +22,7 @@ import {
  */
 
 const GRAPH: Record<string, string> = {
-  'user.mts': '/** A registered user. */\nexport class User { name: string; }\n',
+  'user.mts': '/** A registered user. */\nexport value class User { name: string; }\n',
   'main.mts': 'import { User } from "user.mts";\n'
     + '// One page of users.\n'
     + '// Cursor-based.\n'

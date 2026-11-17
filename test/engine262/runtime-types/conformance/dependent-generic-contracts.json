@@ -56,7 +56,7 @@
     },
     {
       "name": "runtime generic class keeps instances",
-      "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}read():T{const captured=this.value;function produce(){return captured;}return produce();}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
+      "source": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}read():T{const captured=this.value;function produce(){return captured;}return produce();}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -74,7 +74,7 @@
     },
     {
       "name": "runtime annotated generic class keeps instances",
-      "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}read():T{const captured:T=this.value;function produce(){return captured;}return produce();}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
+      "source": "value class C<T:type extends value>{value:T;constructor(value:T){this.value=value;}read():T{const captured:T=this.value;function produce(){return captured;}return produce();}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

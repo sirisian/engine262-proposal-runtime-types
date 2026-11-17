@@ -8,7 +8,7 @@ test.each(['super("bad")', 'super()'])('known base signatures check %s before in
 test('implicit derived constructors forward the base contract', () => {
   expectStaticTypeError('class B { constructor(x: uint8) {} } class D extends B {} function f() { new D("bad"); }');
   expectStaticTypeError('class B { constructor(x: uint8) {} } class D extends B {} function f() { new D(); }');
-  expect(evaluated('class B { x: uint8; constructor(x: uint8) { this.x = x; } } class D extends B {} String(new D(1).x);')).toBe('1');
+  expect(evaluated('value class B { x: uint8; constructor(x: uint8) { this.x = x; } } value class D extends B {} String(new D(1).x);')).toBe('1');
 });
 
 test.each(['new (A)()', 'new A.<uint8>()', 'new (A.<uint8>)()'])(

@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: eaeadfa5d1d1cf158dd049880db15c9ae438a53b29e67a13717c1588c0005131
+// Catalog SHA-256: fe418f4a2a9fe31021dca7ad9a7ccf85d0042da9f527bb1fc8d43d43a44c5d80
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -2908,8 +2908,33 @@ export const TypeDiagnosticCatalog = [
       "declaration",
       "origin"
     ]
+  },
+  {
+    "code": "RT_VALUE_CLASS",
+    "rule": "rt-value-class",
+    "status": "provisional",
+    "applicability": "always",
+    "phases": [
+      "static",
+      "pre-evaluation"
+    ],
+    "errorClass": "StaticTypeError",
+    "specification": [
+      "sec-value-classes"
+    ],
+    "explanation": "A class declared `value` has a field with no type or with a type that is not a value type, or a base that is not a value class; or a class that extends a value class is not declared one.",
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relatedLocations": [
+      "declaration",
+      "origin"
+    ]
   }
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = 'eaeadfa5d1d1cf158dd049880db15c9ae438a53b29e67a13717c1588c0005131';
+export const TypeDiagnosticCatalogHash = 'fe418f4a2a9fe31021dca7ad9a7ccf85d0042da9f527bb1fc8d43d43a44c5d80';

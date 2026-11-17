@@ -46,7 +46,7 @@ test('a class member reads like the same member of an object literal', () => {
 
 test('construction runs no user code: literal fields, typed fields and static parts', () => {
   refusedStatically(`class C { x = 1; get y() { return this.x; } } ${declared} new C().y; const k: uint32 = n();`);
-  refusedStatically(`class C { x: uint8 = 3; } ${declared} new C().x; const k: uint32 = n();`);
+  refusedStatically(`value class C { x: uint8 = 3; } ${declared} new C().x; const k: uint32 = n();`);
   refusedStatically(`class C { static s = 1; static {} get x() { return 1; } } ${declared} new C().x; const k: uint32 = n();`);
   // An imaginary literal makes a fresh complex value; negating one is the built-in negation.
   refusedStatically(`class C { z = 2i; w = -1i; get x() { return 1; } } ${declared} new C().x; const k: uint32 = n();`);
@@ -98,11 +98,11 @@ test('a constructor alias keeps its class across a transparent construction', ()
   // #sec-class-value-origin-order: the class-value evidence for `K` survives a
   // construction that has no effect, as it does when nothing runs in between,
   // so `new K()` is an `A` and its `uint8` field is refused for a string.
-  refusedStatically('class A { x: uint8 = 1; } let K; K = A; const s: string = new K().x;');
-  refusedStatically('class A { x: uint8 = 1; } class T { y = 1; } let K; K = A; new T(); const s: string = new K().x;');
-  refusedStatically('{ class A { x: uint8 = 1; } class T { y = 1; } let K; K = A; new T(); const s: string = new K().x; }');
+  refusedStatically('value class A { x: uint8 = 1; } let K; K = A; const s: string = new K().x;');
+  refusedStatically('value class A { x: uint8 = 1; } class T { y = 1; } let K; K = A; new T(); const s: string = new K().x;');
+  refusedStatically('{ value class A { x: uint8 = 1; } class T { y = 1; } let K; K = A; new T(); const s: string = new K().x; }');
   // A constructor body may replace `K`, so the evidence is withdrawn there.
-  expect(observeScript('class A { x: uint8 = 1; } class U { constructor() {} } let K; K = A; new U(); const s: string = new K().x;').completion.Type).toBe('normal');
+  expect(observeScript('value class A { x: uint8 = 1; } class U { constructor() {} } let K; K = A; new U(); const s: string = new K().x;').completion.Type).toBe('normal');
 });
 
 test('a class whose construction or definition may run user code is not transparent', () => {

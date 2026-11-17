@@ -2812,7 +2812,7 @@
       "name": "user class named Range retains own members",
       "steps": [
         {
-          "source": "class Range{start:string=\"user\";}function get(r:Range):string{return r.start;}get(new Range());",
+          "source": "value class Range{start:string=\"user\";}function get(r:Range):string{return r.start;}get(new Range());",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -2825,7 +2825,7 @@
       "name": "user class wrong member type retains own contract",
       "steps": [
         {
-          "source": "class Range{start:string=\"user\";}function bad(r:Range){const x:uint8=r.start;} \"entered\";",
+          "source": "value class Range{start:string=\"user\";}function bad(r:Range){const x:uint8=r.start;} \"entered\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,
@@ -2855,7 +2855,7 @@
       "name": "ordered class endpoint identity",
       "steps": [
         {
-          "source": "class P{value:uint8;constructor(v:uint8){this.value=v;}operator<(rhs:P){return this.value<rhs.value;}}function get(r:ClosedRange.<P>):P{return r.start;}const a=new P(1),b=new P(2);const r:ClosedRange.<P>=a..=b;String(get(r)===a);",
+          "source": "value class P{value:uint8;constructor(v:uint8){this.value=v;}operator<(rhs:P){return this.value<rhs.value;}}function get(r:ClosedRange.<P>):P{return r.start;}const a=new P(1),b=new P(2);const r:ClosedRange.<P>=a..=b;String(get(r)===a);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

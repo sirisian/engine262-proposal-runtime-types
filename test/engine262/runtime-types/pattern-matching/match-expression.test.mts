@@ -110,8 +110,8 @@ test('the three kinds that CANNOT be routed still use IsOfType', () => {
   expect(evaluated('type T = { [k: string]: uint8 }; String(({ a: uint8(1) }) is T);')).toBe('true');
   // NOMINAL types: a class rejects a plain object with the right members, so it
   // can never become a structural test.
-  expect(evaluated('class C { g: uint8 = 1; } String(new C() is C);')).toBe('true');
-  expect(evaluated('class C { g: uint8 = 1; } String(({ g: uint8(1) }) is C);')).toBe('false');
+  expect(evaluated('value class C { g: uint8 = 1; } String(new C() is C);')).toBe('true');
+  expect(evaluated('value class C { g: uint8 = 1; } String(({ g: uint8(1) }) is C);')).toBe('false');
   // An INTERFACE is structural here and may be routed.
   expect(evaluated('interface I { g: uint8 } String(({ g: uint8(1) }) is I);')).toBe('true');
 });

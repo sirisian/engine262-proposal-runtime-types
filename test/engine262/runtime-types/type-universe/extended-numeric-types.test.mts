@@ -386,23 +386,23 @@ test('memory layout: a value type class lays out by natural alignment', () => {
   // among its fields, and its byteLength is rounded up to that alignment so
   // that every element of an array of the class is aligned too." The design's
   // own worked examples are the test vector.
-  const V = 'class Vertex { x: float32; y: float32; z: float32; } ';
+  const V = 'value class Vertex { x: float32; y: float32; z: float32; } ';
   expect(evaluated(`${V} String((type Vertex).byteLength) + "/" + String((type Vertex).alignment);`)).toBe('12/4');
   expect(evaluated(`${V} String((type Vertex).bitLength);`)).toBe('96');
   // Padded from 3 to 4 so `b` stays aligned in an array of A.
-  expect(evaluated('class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('4/2');
+  expect(evaluated('value class A { a: uint8; b: uint16; } String((type A).byteLength) + "/" + String((type A).alignment);')).toBe('4/2');
   // DECLARATION ORDER, never reordered: the clause is explicit that field order
   // is a performance decision the program makes, because views, serialization,
   // and interop depend on it. These two hold the same fields.
-  expect(evaluated('class P { a: uint8; b: float64; c: uint8; } String((type P).byteLength);')).toBe('24');
-  expect(evaluated('class T { b: float64; a: uint8; c: uint8; } String((type T).byteLength);')).toBe('16');
+  expect(evaluated('value class P { a: uint8; b: float64; c: uint8; } String((type P).byteLength);')).toBe('24');
+  expect(evaluated('value class T { b: float64; a: uint8; c: uint8; } String((type T).byteLength);')).toBe('16');
   // Inheritance APPENDS: a base's fields keep their offsets and a subclass's
   // follow, so a subclass lays out as the flattening of both.
-  expect(evaluated('class B { a: uint8; } class S extends B { b: uint8; } class F { a: uint8; b: uint8; } String((type S).byteLength === (type F).byteLength);')).toBe('true');
+  expect(evaluated('value class B { a: uint8; } value class S extends B { b: uint8; } value class F { a: uint8; b: uint8; } String((type S).byteLength === (type F).byteLength);')).toBe('true');
   // A field that is itself a laid-out type - a class, a fixed array - carries
   // its own alignment up into the enclosing class.
-  expect(evaluated('class V2 { x: float32; y: float32; } class N { v: V2; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('8/4');
-  expect(evaluated('class Ar { a: [4].<uint8>; b: uint32; } String((type Ar).byteLength) + "/" + String((type Ar).alignment);')).toBe('8/4');
+  expect(evaluated('value class V2 { x: float32; y: float32; } value class N { v: V2; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('8/4');
+  expect(evaluated('value class Ar { a: [4].<uint8>; b: uint32; } String((type Ar).byteLength) + "/" + String((type Ar).alignment);')).toBe('8/4');
   // An enum's layout is its underlying type's, read off the Type Record's
   // underlying type, so this row costs one line.
   expect(evaluated('enum E: uint8 { A, B } String((type E).byteLength) + "/" + String((type E).bitLength);')).toBe('1/8');
@@ -411,7 +411,7 @@ test('memory layout: a value type class lays out by natural alignment', () => {
   // THE ROWS WITH NO LAYOUT, proved by rejection, since reading a size off one
   // must be a TypeError rather than "a number that hides the mistake".
   expectThrownKind('class U { a: uint8; b; } (type U).byteLength;', 'TypeError');
-  expectThrownKind('class S2 { s: string; } (type S2).byteLength;', 'TypeError');
+  expectThrownKind('value class S2 { s: string; } (type S2).byteLength;', 'TypeError');
   expectThrownKind('dynamic class D { d: uint8; } (type D).byteLength;', 'TypeError');
 });
 
@@ -421,16 +421,16 @@ test('memory layout: a field reports its offset through the ClassField reflectio
   // Reflect.getReflection.<Reflect.ClassFieldLayout, T>(name) reports an offset and a
   // byteLength ... This is the offsetof a serializer, a placement
   // construction, or a vertex attribute descriptor needs."
-  const V = 'class Vertex { x: float32; y: float32; z: float32; } ';
+  const V = 'value class Vertex { x: float32; y: float32; z: float32; } ';
   expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, Vertex>("y").offset);`)).toBe('4');
   expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, Vertex>("y").byteLength);`)).toBe('4');
   expect(evaluated(`${V} String(Reflect.getReflection.<Reflect.ClassFieldLayout, Vertex>("z").offset);`)).toBe('8');
   // The offset is the LAID-OUT one, so the padding the alignment rule inserts
   // is visible here: `b` is at 2 and not at 1.
-  expect(evaluated('class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('2');
+  expect(evaluated('value class A { a: uint8; b: uint16; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);')).toBe('2');
   // Inheritance appends, so a base's field keeps its offset when read through
   // the subclass and the subclass's field follows it.
-  const S = 'class B { a: uint8; } class S extends B { b: uint8; } ';
+  const S = 'value class B { a: uint8; } value class S extends B { b: uint8; } ';
   expect(evaluated(`${S} String(Reflect.getReflection.<Reflect.ClassFieldLayout, S>("a").offset) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, S>("b").offset);`)).toBe('0/1');
 
   // A context is used in TYPE position, so it has to BE a type for the call to
@@ -446,12 +446,15 @@ test('memory layout: a field reports its offset through the ClassField reflectio
   // unreflectable although the record held it.
   // `kind` names the CONTEXT that produced the reflection.
   expect(evaluated('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a").kind;')).toBe('ClassField');
-  expect(evaluated('class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("a").offset);')).toBe('undefined');
-  expectThrownKind('class V2 { x: float32; } Reflect.getReflection.<Reflect.ClassField, V2>("nope");', 'TypeError');
+  expect(evaluated('class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassField, U>("a").offset);')).toBe('undefined');
+  // The LAYOUT context is a separate one since, and has no answer for a class with no layout
+  // (#sec-reflection-shape-class-field-layout): asking it is a *TypeError*.
+  expectThrown('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassFieldLayout, U>("a");', 'has no layout, so its field "a" has no placement');
+  expectThrownKind('value class V2 { x: float32; } Reflect.getReflection.<Reflect.ClassField, V2>("nope");', 'TypeError');
   // The one-argument form is untouched. `family` joined the primitive node when
   // #table-reflection-nodes' "It also carries `family`" was implemented; the
   // node is still the opaque leaf, with the Type Object as its payload.
-  expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type,family');
+  expect(evaluated('value class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type,family');
 });
 
 test('memory layout: a fixed array and a value type class hold zero-filled defaults', () => {
@@ -462,31 +465,31 @@ test('memory layout: a fixed array and a value type class hold zero-filled defau
   // than an optimization, and gives security as the reason: an allocation
   // exposing a previous one's bytes leaks whatever was there.
   expect(evaluated('let p: [3].<uint8>; String(p.length) + "/" + String(Number(p[0]));')).toBe('3/0');
-  expect(evaluated('class A { a: uint8; b: uint16; } let c: A; String(Number(c.a)) + "/" + String(Number(c.b));')).toBe('0/0');
-  expect(evaluated('class A { a: uint8; } let d: [3].<A>; String(d.length) + "/" + String(Number(d[0].a));')).toBe('3/0');
+  expect(evaluated('value class A { a: uint8; b: uint16; } let c: A; String(Number(c.a)) + "/" + String(Number(c.b));')).toBe('0/0');
+  expect(evaluated('value class A { a: uint8; } let d: [3].<A>; String(d.length) + "/" + String(Number(d[0].a));')).toBe('3/0');
   // A DYNAMIC extent defaults to a new EMPTY array, not to *undefined*.
   expect(evaluated('let dyn: [].<uint8>; String(dyn.length);')).toBe('0');
 
   // Each element is its OWN instance. A shared one would make `d[0].a = 5`
   // visible at `d[1]`, which is the defect this is written to catch.
-  expect(evaluated('class A { a: uint8; } let d: [3].<A>; d[0].a = 5; String(Number(d[0].a)) + "/" + String(Number(d[1].a));')).toBe('5/0');
+  expect(evaluated('value class A { a: uint8; } let d: [3].<A>; d[0].a = 5; String(Number(d[0].a)) + "/" + String(Number(d[1].a));')).toBe('5/0');
 
   // The instance comes into existence WITHOUT its constructor running, which
   // #sec-typed-classes endorses: "a value type class is a shape with a zero,
   // not an object with an invariant its constructor establishes". It still
   // carries its field types, so a store into a defaulted instance is checked
   // exactly as one into a constructed instance is, and it is sealed.
-  expect(evaluated('class A { a: uint8; } let d: [3].<A>; function anyv() { return 300; } try { d[0].a = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
-  expect(evaluated('class A { a: uint8; } let d: [2].<A>; String(Object.isExtensible(d[0]));')).toBe('false');
+  expect(evaluated('value class A { a: uint8; } let d: [3].<A>; function anyv() { return 300; } try { d[0].a = anyv(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expect(evaluated('value class A { a: uint8; } let d: [2].<A>; String(Object.isExtensible(d[0]));')).toBe('false');
 
   // Field-wise regardless of LAYOUT: a class holding a `string` has no layout
   // and still has a default.
-  expect(evaluated('class W { s: string; } let w: W; JSON.stringify(w.s);')).toBe('""');
+  expect(evaluated('value class W { s: string; } let w: W; JSON.stringify(w.s);')).toBe('""');
 
   // #sec-layout-properties, the dynamic-array row: "An instance has a
   // byteLength, its length times its element's" - a property of the INSTANCE,
   // where the length is known, rather than of the type, which has no extent.
-  expect(evaluated('class A { a: uint8; b: uint16; } let d: [3].<A>; String(d.byteLength);')).toBe('12');
+  expect(evaluated('value class A { a: uint8; b: uint16; } let d: [3].<A>; String(d.byteLength);')).toBe('12');
   expect(evaluated('let p: [10].<uint8>; String(p.byteLength);')).toBe('10');
   // An untyped array is untouched.
   expect(evaluated('const plain = [1, 2]; String(plain.byteLength);')).toBe('undefined');

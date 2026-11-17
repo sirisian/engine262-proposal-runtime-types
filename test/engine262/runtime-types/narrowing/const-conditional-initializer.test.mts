@@ -21,19 +21,19 @@ const accepted = (source: string, value: string): void => {
 
 test('a conditional that initialises an unannotated const narrows its arms', () => {
   accepted('function f(s: string | undefined): string { const n = s !== undefined ? s.length : 0; return String(n); } f("ab");', '2');
-  accepted('reference class R { x: uint8 = 4; } function f(r: R | undefined): string { const n = r !== undefined ? r.x : 0; return String(n); } f(new R());', '4');
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined): string { const n = p !== undefined ? p.x : 0; return String(n); } f(new P());', '4');
-  accepted('class P { x: uint8 = 4; } function f(p: P | null): string { const n = p !== null ? p.x : 0; return String(n); } f(new P());', '4');
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined): string { const n = p ? p.x : 0; return String(n); } f(new P());', '4');
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined): string { const n = p === undefined ? 0 : p.x; return String(n); } f(new P());', '4');
+  accepted('class R { x: uint8 = 4; } function f(r: R | undefined): string { const n = r !== undefined ? r.x : 0; return String(n); } f(new R());', '4');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined): string { const n = p !== undefined ? p.x : 0; return String(n); } f(new P());', '4');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | null): string { const n = p !== null ? p.x : 0; return String(n); } f(new P());', '4');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined): string { const n = p ? p.x : 0; return String(n); } f(new P());', '4');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined): string { const n = p === undefined ? 0 : p.x; return String(n); } f(new P());', '4');
   // At the top level of a script, and from a typed Map's get.
-  accepted('class P { x: uint8 = 4; } const t = new Map.<string, P>(); t.set("k", new P()); const g = t.get("k"); const r = g !== undefined ? g.x : 7; String(r);', '4');
+  accepted('value class P { x: uint8 = 4; } const t = new Map.<string, P>(); t.set("k", new P()); const g = t.get("k"); const r = g !== undefined ? g.x : 7; String(r);', '4');
 });
 
 test('...at any depth, and under an operator', () => {
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined, q: P | null): string { const n = (p !== undefined ? p.x : q !== null ? q.x : 0) + 1; return String(n); } f(undefined, new P());', '5');
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined): string { const a = [p !== undefined ? p.x : 0]; return String(a[0]); } f(new P());', '4');
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined): string { const o = { n: p !== undefined ? p.x : 0 }; return String(o.n); } f(new P());', '4');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined, q: P | null): string { const n = (p !== undefined ? p.x : q !== null ? q.x : 0) + 1; return String(n); } f(undefined, new P());', '5');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined): string { const a = [p !== undefined ? p.x : 0]; return String(a[0]); } f(new P());', '4');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined): string { const o = { n: p !== undefined ? p.x : 0 }; return String(o.n); } f(new P());', '4');
   accepted('function f(s: string | undefined): string { const n = (s !== undefined ? s.length : 0); return String(n); } f("abc");', '3');
 });
 
@@ -41,7 +41,7 @@ test('the forms that were always accepted are unchanged', () => {
   accepted('function f(s: string | undefined): string { let n = s !== undefined ? s.length : 0; return String(n); } f("ab");', '2');
   accepted('function f(s: string | undefined): string { const n: number = s !== undefined ? s.length : 0; return String(n); } f("ab");', '2');
   accepted('function f(s: string | undefined): string { return String(s !== undefined ? s.length : 0); } f("ab");', '2');
-  accepted('class P { x: uint8 = 4; } function f(p: P | undefined): string { const ok = p !== undefined && p.x === 4; return String(ok); } f(new P());', 'true');
+  accepted('value class P { x: uint8 = 4; } function f(p: P | undefined): string { const ok = p !== undefined && p.x === 4; return String(ok); } f(new P());', 'true');
 });
 
 test('an arm that the test does not narrow is still refused', () => {

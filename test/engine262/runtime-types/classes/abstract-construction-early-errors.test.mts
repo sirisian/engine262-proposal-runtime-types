@@ -118,7 +118,7 @@ test.each([
   ],
   [
     "anonymous concrete expression",
-    "const K=class{x:uint8=1;};new K();"
+    "const K=value class{x:uint8=1;};new K();"
   ]
 ])('accepts a viable edge case: %s', (_name, source) => {
   expect(ok(source)).toBe(true);

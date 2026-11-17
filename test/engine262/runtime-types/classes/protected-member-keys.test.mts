@@ -4,11 +4,11 @@ import { evaluated, expectStaticTypeError, ok } from '../harness.mts';
 test.each([
   [
     "protected bracket",
-    "class A{protected x:uint8;}function f(a:A){a['x'];}"
+    "value class A{protected x:uint8;}function f(a:A){a['x'];}"
   ],
   [
     "protected union",
-    "class A{protected x:uint8;}class B{protected x:uint8;}function f(a:A|B){a.x;}"
+    "value class A{protected x:uint8;}value class B{protected x:uint8;}function f(a:A|B){a.x;}"
   ],
   [
     "protected method",
@@ -24,19 +24,19 @@ test.each([
   ],
   [
     "protected single",
-    "class A{protected x:uint8;}function f(a:A){a.x;}"
+    "value class A{protected x:uint8;}function f(a:A){a.x;}"
   ],
   [
     "finite keys",
-    "class A{protected x:uint8;protected y:uint8;}function f(a:A,k:'x'|'y'){a[k];}"
+    "value class A{protected x:uint8;protected y:uint8;}function f(a:A,k:'x'|'y'){a[k];}"
   ],
   [
     "mixed union",
-    "class A{protected x:uint8;}class B{x:uint8;}function f(a:A|B){a.x;}"
+    "value class A{protected x:uint8;}value class B{x:uint8;}function f(a:A|B){a.x;}"
   ],
   [
     "inherited declaration",
-    "class A{protected x:uint8;}class B extends A{}function f(b:B){b['x'];}"
+    "value class A{protected x:uint8;}value class B extends A{}function f(b:B){b['x'];}"
   ],
   [
     "protected setter",
@@ -48,11 +48,11 @@ test.each([
   ],
   [
     "optional access",
-    "class A{protected x:uint8;}function f(a:A|null){a?.['x'];}"
+    "value class A{protected x:uint8;}function f(a:A|null){a?.['x'];}"
   ],
   [
     "unrelated this receiver",
-    "class A{protected x:uint8;}class B{f(a:A){a.x;}}"
+    "value class A{protected x:uint8;}class B{f(a:A){a.x;}}"
   ]
 ])('%s is rejected before evaluation', (_name, source) => {
   expectStaticTypeError(source);
@@ -61,15 +61,15 @@ test.each([
 test.each([
   [
     "protected good",
-    "class A{protected x:uint8;f(){return this.x;}}class B extends A{f(){return this.x;}}"
+    "value class A{protected x:uint8;f(){return this.x;}}value class B extends A{f(){return this.x;}}"
   ],
   [
     "protected any control",
-    "class A{protected x:uint8;}function f(a:any){a.x;}"
+    "value class A{protected x:uint8;}function f(a:any){a.x;}"
   ],
   [
     "dynamic key",
-    "class A{protected x:uint8;}function f(a:A,k:string){a[k];}"
+    "value class A{protected x:uint8;}function f(a:A,k:string){a[k];}"
   ]
 ])('%s remains valid', (_name, source) => {
   expect(ok(source)).toBe(true);
@@ -78,7 +78,7 @@ test.each([
 test.each([
   [
     "subclass computed access",
-    "class A{protected x:uint8=1;}class B extends A{f(a:A):uint8{return a['x'];}}String(new B().f(new A()));",
+    "value class A{protected x:uint8=1;}value class B extends A{f(a:A):uint8{return a['x'];}}String(new B().f(new A()));",
     "1"
   ],
   [
@@ -104,7 +104,7 @@ test("protected abstract is rejected before evaluation", () => {
 });
 
 test("protected same name is rejected before evaluation", () => {
-  expectStaticTypeError("class A{protected x:uint8;}function f(a:A){class A{f(){a.x;}}}");
+  expectStaticTypeError("value class A{protected x:uint8;}function f(a:A){class A{f(){a.x;}}}");
 });
 
 test("protected generic is rejected before evaluation", () => {
@@ -112,5 +112,5 @@ test("protected generic is rejected before evaluation", () => {
 });
 
 test("protected permitted mixed is rejected before evaluation", () => {
-  expectStaticTypeError("class A{protected x:uint8;f(a:A|B){a.x;}}class B{protected x:uint8;}");
+  expectStaticTypeError("value class A{protected x:uint8;f(a:A|B){a.x;}}value class B{protected x:uint8;}");
 });

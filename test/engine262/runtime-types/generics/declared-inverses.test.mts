@@ -123,7 +123,7 @@ test('a builder without an inverse still refuses naming the builder (the rung-th
 
 test('a multi-slot builder proposes a record keyed by parameter name, verified jointly', async () => {
   const src = 'import { inverse } from "std:types";' + NL
-    + 'class Pair<A: type, B: type> { a: A; b: B; constructor(a: A, b: B) { this.a = a; this.b = b; } }' + NL
+    + 'value class Pair<A: type extends value, B: type extends value> { a: A; b: B; constructor(a: A, b: B) { this.a = a; this.b = b; } }' + NL
     + 'function unpair(P) { const as = Reflect.getReflection(P).generic.arguments; return { A: as[0], B: as[1] }; }' + NL
     + '@inverse(unpair)' + NL
     + 'function pairOf(A, B) { const a = A; const b = B; return type Pair.<a, b>; }' + NL

@@ -87,8 +87,8 @@ test('reflection answers the class relations the checker decides', () => {
   // [[Base]] for the inheritance chain and compares [[Structure]] to decide
   // that a class satisfies an interface it implements, and the record the
   // RUNTIME built for a class carried neither. Every answer below was *false*.
-  const decls = 'class Base { a: uint8 = 1; } class Derived extends Base { b: uint8 = 2; } '
-    + 'class Unrelated { a: uint8 = 1; } interface I { a: uint8 } class Impl implements I { a: uint8 = 1; } ';
+  const decls = 'value class Base { a: uint8 = 1; } value class Derived extends Base { b: uint8 = 2; } '
+    + 'value class Unrelated { a: uint8 = 1; } interface I { a: uint8 } value class Impl implements I { a: uint8 = 1; } ';
   expect(evaluated(`${decls} String(Reflect.isAssignable(type Derived, type Base));`)).toBe('true');
   expect(evaluated(`${decls} String(Reflect.isAssignable(type Impl, type I));`)).toBe('true');
   // The chain is one-way, and an unrelated class of the same shape is not in it:
@@ -109,7 +109,7 @@ test('a class type is satisfied by construction, not by shape', () => {
   // that its type is for" - so membership follows the prototype chain and
   // subtyping follows the declaration.
   expect(evaluated('class A {} const T = type A; String(!({} instanceof T));')).toBe('true');
-  expect(evaluated('class A { a: uint8 = 1; } const T = type A; String(!({ a: 1 } instanceof T));')).toBe('true');
+  expect(evaluated('value class A { a: uint8 = 1; } const T = type A; String(!({ a: 1 } instanceof T));')).toBe('true');
   expectThrown('class A {} function f(a: A) { return a; } f({});');
   // An INTERFACE is still satisfied structurally, which is the same field read
   // for the other question.
@@ -173,9 +173,9 @@ test('what the class-object type does NOT model', () => {
   // A static `ref` RETURN stays assignable through.
   expect(evaluated('class C { static first(a) { return ref a[0]; } } let a = [1]; C.first(a) = 5; String(a[0]);')).toBe('5');
   // The instance side is untouched.
-  expect(evaluated('class C { v: uint8 = 0; } const c = new C(); c.v = 1; String(c.v);')).toBe('1');
+  expect(evaluated('value class C { v: uint8 = 0; } const c = new C(); c.v = 1; String(c.v);')).toBe('1');
   // A class with no static fields forms no type and is not disturbed.
-  expect(evaluated('class C { v: uint8 = 0; } String(typeof C);')).toBe('function');
+  expect(evaluated('value class C { v: uint8 = 0; } String(typeof C);')).toBe('function');
 });
 
 // ---------------------------------------------------------------------------
@@ -209,10 +209,10 @@ test('the two things a hand-rolled static builder lost', () => {
 test('the instance side is unchanged by the extraction', () => {
   // The refactor moved the code every class type depends on, so these assert
   // the extraction was faithful rather than that any feature works.
-  expectStatic('class C { v: uint8 = 0; } const c = new C(); c.v = "s";');
+  expectStatic('value class C { v: uint8 = 0; } const c = new C(); c.v = "s";');
   expectStatic('class C { m(a: uint8) {} } const c = new C(); c.m("s");');
   expect(evaluated('class A { m(a: uint8) { return "u8"; } m(a: string) { return "str"; } } const a = new A(); String(a.m((1 := uint8))) + "," + String(a.m("x"));')).toBe('u8,str');
-  expect(evaluated('class B { v: uint8 = 1; } class D extends B { } const d = new D(); String(d.v);')).toBe('1');
+  expect(evaluated('value class B { v: uint8 = 1; } value class D extends B { } const d = new D(); String(d.v);')).toBe('1');
 });
 
 test('what the static side does not claim', () => {
@@ -231,10 +231,10 @@ test('the rules downstream of the walk still see a mutable Properties', () => {
   // for the accessor-variance checks, both AFTER the folds - so returning a
   // finished list would have broken them, and silently, by giving the tail
   // nothing to merge into.
-  const I = 'interface I { v: uint8 } class C implements I { v: uint8 = 1; } const c = new C(); ';
+  const I = 'interface I { v: uint8 } value class C implements I { v: uint8 = 1; } const c = new C(); ';
   expect(evaluated(`${I} let u: uint8 = c.v; String(u);`)).toBe('1');
   expectStatic(`${I} let s: string = c.v;`);
-  const ACC = 'class D { #x: uint8 = 0; get v(): uint8 { return this.#x; } set v(n: uint8) { this.#x = n; } } const d = new D(); ';
+  const ACC = 'value class D { #x: uint8 = 0; get v(): uint8 { return this.#x; } set v(n: uint8) { this.#x = n; } } const d = new D(); ';
   expect(evaluated(`${ACC} d.v = 3; String(d.v);`)).toBe('3');
   expectStatic(`${ACC} d.v = "s";`);
 });
@@ -261,7 +261,7 @@ test('a method annotated with its own class is checked', () => {
   expectStatic('class B { m(): B { return this; } } const b = new B(); let s: string = b.m();');
   expectStatic('class B { m(): B { return new B(); } } const b = new B(); let s: string = b.m();');
   // A correct use is unaffected, and reaches the class's members.
-  expect(evaluated('class B { v: uint8 = 1; m(): B { return this; } } const b = new B(); let x: B = b.m(); String(x.v);')).toBe('1');
+  expect(evaluated('value class B { v: uint8 = 1; m(): B { return this; } } const b = new B(); let x: B = b.m(); String(x.v);')).toBe('1');
 });
 
 test('the guard still does the job it was written for', () => {
@@ -309,9 +309,13 @@ test('what the static merge does not claim', () => {
   expect(evaluated('function mixin(x) { return x; } class B5 { static b: uint8 = 1; } class D5 extends mixin(B5) { } "ok";')).toBe('ok');
   // `dynamic` does NOT inherit: a typed subclass of a dynamic base is sealed,
   // because the derivation reads the class's OWN declaration.
-  expectStatic('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } const d = new D6(); d.nope = 1;');
+  // The store `d.nope = 1` was refused before the program ran, while a class of value-typed fields
+  // was a value and so could be no subclass. D6 is held by reference (#sec-value-classes), where a
+  // subclass may declare the member, so the sealed instance is what refuses the store.
+  expect(evaluated('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } const d = new D6(); String(Object.isExtensible(d)) + String(Object.isExtensible(new B6()));')).toBe('falsetrue');
+  expectThrown('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } function f() { "use strict"; const d = new D6(); d.nope = 1; } f();', 'Cannot set property');
   // The INSTANCE path is a separate merge and is untouched.
-  expectStatic('class B7 { v: uint8 = 0; } class D7 extends B7 { } const d = new D7(); let s: string = d.v;');
+  expectStatic('value class B7 { v: uint8 = 0; } value class D7 extends B7 { } const d = new D7(); let s: string = d.v;');
 });
 
 test('a sealed instance cannot gain a member, the CONSTRUCTOR included', () => {
@@ -322,24 +326,24 @@ test('a sealed instance cannot gain a member, the CONSTRUCTOR included', () => {
   // `readonly` field be FILLED there returned before this judgment was reached.
   // The two are different questions - what may be written, and what is a member
   // at all.
-  expectStatic('class S1 { x: uint8 = uint8(1); constructor() { this.other = 1; } }');
-  expectStatic('class S2 { x: uint8 = uint8(1); m() { this.other = 1; } }');
-  expectStatic('class S3 { x: uint8 = uint8(1); get g(): uint8 { this.other = 1; return uint8(1); } }');
-  expectStatic('class S4 { x: uint8 = uint8(1); } const c = new S4(); c.other = 1;');
+  expectStatic('value class S1 { x: uint8 = uint8(1); constructor() { this.other = 1; } }');
+  expectStatic('value class S2 { x: uint8 = uint8(1); m() { this.other = 1; } }');
+  expectStatic('value class S3 { x: uint8 = uint8(1); get g(): uint8 { this.other = 1; return uint8(1); } }');
+  expectStatic('value class S4 { x: uint8 = uint8(1); } const c = new S4(); c.other = 1;');
 
   // The exemption it sits above is intact: a `readonly` field is filled by the
   // constructor, which is the form the modifier exists for, and refused
   // anywhere else.
-  expect(evaluated('class S5 { readonly v: uint8 = uint8(0); constructor() { this.v = uint8(7); } }'
+  expect(evaluated('value class S5 { readonly v: uint8 = uint8(0); constructor() { this.v = uint8(7); } }'
     + ' String(new S5().v);')).toBe('7');
-  expectStatic('class S6 { readonly v: uint8 = uint8(0); m() { this.v = uint8(7); } }');
+  expectStatic('value class S6 { readonly v: uint8 = uint8(0); m() { this.v = uint8(7); } }');
 
   // And what a constructor may legitimately write is unaffected: its own
   // declared field, an inherited one, a private one, and an accessor that
   // carries no annotation and so contributes no Property to the structure.
-  expect(evaluated('class S7 { x: uint8 = uint8(1); constructor() { this.x = uint8(2); } }'
+  expect(evaluated('value class S7 { x: uint8 = uint8(1); constructor() { this.x = uint8(2); } }'
     + ' String(new S7().x);')).toBe('2');
-  expect(evaluated('class B8 { b: uint8 = uint8(1); } class D8 extends B8 { d: uint8 = uint8(2);'
+  expect(evaluated('value class B8 { b: uint8 = uint8(1); } value class D8 extends B8 { d: uint8 = uint8(2);'
     + ' constructor() { super(); this.b = uint8(3); this.d = uint8(4); } }'
     + ' const d = new D8(); String(d.b) + "," + String(d.d);')).toBe('3,4');
   expect(evaluated('class S9 { #p: uint8 = uint8(1); constructor() { this.#p = uint8(2); }'

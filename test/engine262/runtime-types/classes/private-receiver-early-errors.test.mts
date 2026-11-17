@@ -5,7 +5,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 test.each([
   [
     "private-read-unused",
-    "class C {#x:uint8=1;f(o:uint8){return o.#x;}}",
+    "value class C {#x:uint8=1;f(o:uint8){return o.#x;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -17,7 +17,7 @@ test.each([
   ],
   [
     "private-read-run",
-    "class C {#x:uint8=1;f(o:uint8){return o.#x;}}new C().f(1);",
+    "value class C {#x:uint8=1;f(o:uint8){return o.#x;}}new C().f(1);",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -29,7 +29,7 @@ test.each([
   ],
   [
     "private-write",
-    "class C {#x:uint8=1;f(o:uint8){o.#x=2;}}new C().f(1);",
+    "value class C {#x:uint8=1;f(o:uint8){o.#x=2;}}new C().f(1);",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -53,7 +53,7 @@ test.each([
   ],
   [
     "private-update",
-    "class C{#x:uint8=1;f(o:uint8){o.#x++;}}",
+    "value class C{#x:uint8=1;f(o:uint8){o.#x++;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -65,7 +65,7 @@ test.each([
   ],
   [
     "private-pattern",
-    "class C{#x:uint8=1;f(o:uint8){[o.#x]=[1];}}",
+    "value class C{#x:uint8=1;f(o:uint8){[o.#x]=[1];}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -77,7 +77,7 @@ test.each([
   ],
   [
     "private-optional-scalar",
-    "class C{#x:uint8=1;f(o:uint8){return o?.#x;}}",
+    "value class C{#x:uint8=1;f(o:uint8){return o?.#x;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -89,7 +89,7 @@ test.each([
   ],
   [
     "private-string",
-    "class C{#x:uint8=1;f(o:string){return o.#x;}}",
+    "value class C{#x:uint8=1;f(o:string){return o.#x;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -101,7 +101,7 @@ test.each([
   ],
   [
     "private-union",
-    "class C{#x:uint8=1;f(o:uint8|string){return o.#x;}}",
+    "value class C{#x:uint8=1;f(o:uint8|string){return o.#x;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -113,7 +113,7 @@ test.each([
   ],
   [
     "private-optional-null",
-    "class C{#x:uint8=1;f(o:C|null){return o?.#x;}}new C().f(null);",
+    "value class C{#x:uint8=1;f(o:C|null){return o?.#x;}}new C().f(null);",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -124,7 +124,7 @@ test.each([
   ],
   [
     "private-mixed",
-    "class C{#x:uint8=1;f(o:C|uint8){return o.#x;}}let c=new C();c.f(c);",
+    "value class C{#x:uint8=1;f(o:C|uint8){return o.#x;}}let c=new C();c.f(c);",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -146,7 +146,7 @@ test.each([
   ],
   [
     "private-in",
-    "class C {#x:uint8=1;f(o:uint8){return #x in o;}}",
+    "value class C {#x:uint8=1;f(o:uint8){return #x in o;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -158,7 +158,7 @@ test.each([
   ],
   [
     "private-borrow",
-    "class C{#x:uint8=1;f(o:uint8){let ref x=o.#x;}}",
+    "value class C{#x:uint8=1;f(o:uint8){let ref x=o.#x;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -179,7 +179,7 @@ test.each([
   ],
   [
     "any private receiver keeps runtime check",
-    "class C{#x:uint8=1;f(o:any){return o.#x;}}new C().f(1);",
+    "value class C{#x:uint8=1;f(o:any){return o.#x;}}new C().f(1);",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -197,7 +197,7 @@ test.each([
   ],
   [
     "valid private owner",
-    "class C{#x:uint8=1;f(o:C){return o.#x;}}let c=new C();c.f(c);",
+    "value class C{#x:uint8=1;f(o:C){return o.#x;}}let c=new C();c.f(c);",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -206,7 +206,7 @@ test.each([
   ],
   [
     "optional nullish union has an invalid selected access",
-    "class C{#x:uint8=1;f(o:uint8|null){return o?.#x;}}new C().f(null);",
+    "value class C{#x:uint8=1;f(o:uint8|null){return o?.#x;}}new C().f(null);",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -242,7 +242,7 @@ test.each([
   ],
   [
     "ordinary null private receiver already rejected",
-    "class C{#x:uint8=1;f(o:null){return o.#x;}}",
+    "value class C{#x:uint8=1;f(o:null){return o.#x;}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -254,7 +254,7 @@ test.each([
   ],
   [
     "R56-E01: nested private scope",
-    "class A{#x:uint8=1;f(){class B{#x:uint8=2;f(n:boolean){return n.#x;}}}}",
+    "value class A{#x:uint8=1;f(){value class B{#x:uint8=2;f(n:boolean){return n.#x;}}}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -290,7 +290,7 @@ test.each([
   ],
   [
     "R56-E04: inherited private brand",
-    "class B{#x:uint8=1;read(o:object){return o.#x;}}class C extends B{}const c=new C();globalThis.settled=String(c.read(c));",
+    "value class B{#x:uint8=1;read(o:object){return o.#x;}}value class C extends B{}const c=new C();globalThis.settled=String(c.read(c));",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -300,7 +300,7 @@ test.each([
   ],
   [
     "R56-E05: foreign object still checks brand dynamically",
-    "class C{#x:uint8=1;read(o:object){return o.#x;}}new C().read({});",
+    "value class C{#x:uint8=1;read(o:object){return o.#x;}}new C().read({});",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -319,7 +319,7 @@ test.each([
   ],
   [
     "R56-E07: generic private receiver stays open",
-    "class C{#x:uint8=1;f<T: type>(o:T){return o.#x;}}",
+    "value class C{#x:uint8=1;f<T: type>(o:T){return o.#x;}}",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -328,7 +328,7 @@ test.each([
   ],
   [
     "R56-E08: generic private getter specialized remains valid",
-    "class C<T: type>{#v:T;constructor(v:T){this.#v=v;}get #x():T{return this.#v;}f(o:C.<T>):T{return o.#x;}}const c=new C.<uint8>(1);globalThis.settled=String(c.f(c));",
+    "value class C<T: type extends value>{#v:T;constructor(v:T){this.#v=v;}get #x():T{return this.#v;}f(o:C.<T>):T{return o.#x;}}const c=new C.<uint8>(1);globalThis.settled=String(c.f(c));",
     {
       "completion": "normal",
       "bodyRan": "true",

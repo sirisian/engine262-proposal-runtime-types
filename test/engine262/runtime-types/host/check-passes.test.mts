@@ -88,7 +88,7 @@ function linkWith(source: string, body: string): Promise<string> {
 // The binding's TYPE comes from an imported class, so at parse time `c` is
 // untyped and `f` is unanchored; only the link-time pass can see the anchor,
 // and the anchor is a binding of the module's own.
-const DEP_CLASS = 'export class C { x: uint8 = 1; }';
+const DEP_CLASS = 'export value class C { x: uint8 = 1; }';
 
 test('link time: a direct read through the imported class is refused (the baseline)', () => linkWith(DEP_CLASS,
   'import { C } from "dep";' + NL + 'let c: C = new C();' + NL + 'if (false) { let s: string = c.x; }')
@@ -115,6 +115,6 @@ test('link time: an imported specialized constructor checks its argument', () =>
 ).then((r) => expect(r).toBe('threw')));
 
 test('link time: an imported specialized constructor admits a fitting literal', () => linkWith(
-  'export class C<T: type> { x: T; constructor(x: T) { this.x = x; } }',
+  'export value class C<T: type extends value> { x: T; constructor(x: T) { this.x = x; } }',
   'import { C } from "dep"; const c = (new C.<uint8>(1)); let n: uint8 = c.x;',
 ).then((r) => expect(r).toBe('ok')));

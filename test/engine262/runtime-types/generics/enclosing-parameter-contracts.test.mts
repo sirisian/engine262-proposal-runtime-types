@@ -16,7 +16,7 @@ test("class local shadow nongeneric", () => {
 });
 
 test("closed extent length", () => {
-  expectStaticTypeError("class S{b:[4].<uint8>;get len():string{return this.b.length;}}");
+  expectStaticTypeError("value class S{b:[4].<uint8>;get len():string{return this.b.length;}}");
 });
 
 test("method own generic valid", () => {

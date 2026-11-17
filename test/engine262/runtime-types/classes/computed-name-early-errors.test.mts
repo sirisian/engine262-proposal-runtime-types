@@ -328,7 +328,7 @@ test.each([
   },
   {
     "name": "field initializer still checked",
-    "source": "class C{[\"x\"]:uint8=\"bad\";}",
+    "source": "value class C{[\"x\"]:uint8=\"bad\";}",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -352,7 +352,7 @@ test.each([
   },
   {
     "name": "name rebind affects later store",
-    "source": "class C{readonly x:uint8=1;}let c:C=new C();let a:[1].<uint8>=[1];let ref r=a[0];const o={[do {ref r=c.x;\"m\";}](){}};r=2;",
+    "source": "value class C{readonly x:uint8=1;}let c:C=new C();let a:[1].<uint8>=[1];let ref r=a[0];const o={[do {ref r=c.x;\"m\";}](){}};r=2;",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -364,7 +364,7 @@ test.each([
   },
   {
     "name": "name rebind leaves readonly location",
-    "source": "class C{readonly x:uint8=1;}let c:C=new C();let a:[1].<uint8>=[1];let ref r=c.x;const o={[do {ref r=a[0];\"m\";}](){}};r=2;globalThis.settled=String(a[0]);",
+    "source": "value class C{readonly x:uint8=1;}let c:C=new C();let a:[1].<uint8>=[1];let ref r=c.x;const o={[do {ref r=a[0];\"m\";}](){}};r=2;globalThis.settled=String(a[0]);",
     "expected": {
       "completion": "normal",
       "bodyRan": "true",
@@ -376,7 +376,7 @@ test.each([
   },
   {
     "name": "name reference write rejected",
-    "source": "class C{readonly x:uint8=1;}let c:C=new C();let ref r=c.x;const o={[(r=2)](){}};",
+    "source": "value class C{readonly x:uint8=1;}let c:C=new C();let ref r=c.x;const o={[(r=2)](){}};",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",

@@ -43,7 +43,7 @@ function evaluateGraph(modules: Record<string, string>, entry: string): Promise<
 }
 
 const GRAPH = {
-  'user.mts': 'export class User { name: string; }\n',
+  'user.mts': 'export value class User { name: string; }\n',
   'main.mts': 'import { User } from "user.mts";\n'
     + 'type Page = { u: User };\n'
     + 'type Secret = { k: string };\n'
@@ -79,7 +79,7 @@ test('a module with no exported types yields no artifact', async () => {
 
 test('exported class denotations survive replacement and type-valued stores remain contracts', async () => {
   const artifact = ProduceArtifact(await evaluateGraph({ 'main.mts':
-    'export class C { n:uint8; } C=class D{}; export let current:type=uint8;',
+    'export value class C { n:uint8; } C=class D{}; export let current:type=uint8;',
   }, 'main.mts'))!;
   const root = (name: string) => artifact.table.types[artifact.table.exports[name]];
   expect(root('C')).toMatchObject({ Kind: 'nominal', nominal: { name: 'C', source: 'main.mts' } });

@@ -56,8 +56,8 @@ test('a match over a subject with no atoms needs a catch-all', () => {
   // An unsealed class is an open set: a subclass arm leaves the base's other
   // values uncovered, while a type pattern naming the class itself narrows
   // the subject to nothing and so covers it.
-  expectStaticTypeError('class P { x: uint8 = 1; } class Q extends P {} let p: P = new P(); let r = match (p) { when Q: 0; };');
-  expect(ok('class P { x: uint8 = 1; } let p: P = new P(); let r = match (p) { when P: 0; };')).toBe(true);
+  expectStaticTypeError('value class P { x: uint8 = 1; } value class Q extends P {} let p: P = new P(); let r = match (p) { when Q: 0; };');
+  expect(ok('value class P { x: uint8 = 1; } let p: P = new P(); let r = match (p) { when P: 0; };')).toBe(true);
   // A guarded binding is refutable, so it is not a catch-all; an annotated
   // binding at the subject's own type covers it by narrowing.
   expectStaticTypeError('let x: uint8 = 2; let r = match (x) { when let v if (v > 1): v; };');
@@ -118,7 +118,7 @@ test('two applicable conversions of one form with no more specific one are refus
   // "It is a type error if two conversions of the same form apply and neither is more
   // specific." The direct `new T(c)` reports this through ResolveOverload, and the
   // implicit boundary reports it too.
-  const shapes = 'interface I1 { a: uint8 } interface I2 { b: uint8 } class C implements I1, I2 { a: uint8 = 1; b: uint8 = 2; } ';
+  const shapes = 'interface I1 { a: uint8 } interface I2 { b: uint8 } value class C implements I1, I2 { a: uint8 = 1; b: uint8 = 2; } ';
   const operators = 'class T { operator T(v: I1) { return new T(); } operator T(v: I2) { return new T(); } } ';
   const constructors = 'class T { constructor(v: I1) {} constructor(v: I2) {} } ';
   expectStaticTypeError(`${shapes}${operators}let c: C = new C(); let t: T = c;`);
@@ -128,13 +128,13 @@ test('two applicable conversions of one form with no more specific one are refus
 });
 
 test('a more specific conversion, or one of each form, resolves', () => {
-  expect(ok('class A { x: uint8 = 1; } class B extends A {} class T { operator T(v: A) { return new T(); } operator T(v: B) { return new T(); } } let b: B = new B(); let t: T = b;')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } value class B extends A {} class T { operator T(v: A) { return new T(); } operator T(v: B) { return new T(); } } let b: B = new B(); let t: T = b;')).toBe(true);
   // Statically one of two operators applies; which one the run time selects is a separate
   // matter (it currently picks by declaration order), so only the judgment is asserted.
-  expect(ok('class A { x: uint8 = 1; } class T { operator T(v: A) { return new T(); } operator T(v: string) { return new T(); } } function g(a: A): T { return a; }')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; } class T { operator T(v: A) { return new T(); } operator T(v: string) { return new T(); } } function g(a: A): T { return a; }')).toBe(true);
   // "When both a converting constructor and a declared conversion could apply
   // to the same pair, the constructor is preferred": two forms, no ambiguity.
-  expect(ok('class S { x: uint8 = 1; } class T { constructor(v?: S) {} operator T(v: S) { return new T(); } } let s: S = new S(); let t: T = s;')).toBe(true);
+  expect(ok('value class S { x: uint8 = 1; } class T { constructor(v?: S) {} operator T(v: S) { return new T(); } } let s: S = new S(); let t: T = s;')).toBe(true);
 });
 
 // ---- #sec-proved-library-operations: the intrinsic-origin effect screen's reach ----

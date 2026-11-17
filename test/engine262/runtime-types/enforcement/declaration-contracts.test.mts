@@ -58,7 +58,7 @@ test.each([
   "const C = class { static x: uint8 = 1; static m() { this.x = \"s\"; } }; C.m();",
   "class C { static x: uint8 = 1; static m() { this.x = \"s\"; } }",
   "const C = class { static x: uint8 = 1; static m(): string { return this.x; } };",
-  "const C = class { x: uint8 = 1; m() { this.x = \"s\"; } };",
+  "const C = value class { x: uint8 = 1; m() { this.x = \"s\"; } };",
   "const C = class { static x: uint8 = 1; static m() { const f = () => { this.x = \"s\"; }; } };",
   "const C = class { static x: uint8 = 1; static { this.x = \"s\"; } };",
 ])("class expressions type static this: %s", (source) => expectStaticTypeError(source));
@@ -96,14 +96,14 @@ test.each([
   "class C { operator [](i: uint8): uint8 { return 1; } } const c: C = new C(); c[0]++;",
   "class C { operator [](i: uint8): uint8 { return 1; } } function unused(c: C) { c[0] += 1; }",
   "class C { operator [](i: uint8): uint8 { return 1; } } function unused(c: C) { [c[0]] = [1]; }",
-  "class C { x: uint8; operator [](i: uint8): ref uint8 { return ref this.x; } } function unused(c: C) { c[0] = \"s\"; }",
+  "value class C { x: uint8; operator [](i: uint8): ref uint8 { return ref this.x; } } function unused(c: C) { c[0] = \"s\"; }",
 ])("index writes require a writable location: %s", (source) => expectStaticTypeError(source));
 
 test("index writes require a writable location preserve valid and dynamic cases", () => {
-  expect(evaluated("class C { x: uint8; operator [](i: uint8): ref uint8 { return ref this.x; } } const c: C = new C(); c[0] = 2; String(c.x);")).toBe("2");
+  expect(evaluated("value class C { x: uint8; operator [](i: uint8): ref uint8 { return ref this.x; } } const c: C = new C(); c[0] = 2; String(c.x);")).toBe("2");
   expect(evaluated("class C { operator [](i: uint8): uint8 { return 1; } } const c: C = new C(); String(c[0]);")).toBe("1");
   expect(ok("function unused(c: any) { c[0] = 2; }")).toBe(true);
-  expect(evaluated("class C { x: uint8; get operator [](i: uint8): uint8 { return this.x; } set operator [](i: uint8, v: uint8) { this.x = v; } } const c: C = new C(); c[0] = 2; String(c[0]);")).toBe("2");
+  expect(evaluated("value class C { x: uint8; get operator [](i: uint8): uint8 { return this.x; } set operator [](i: uint8, v: uint8) { this.x = v; } } const c: C = new C(); c[0] = 2; String(c[0]);")).toBe("2");
   expect(evaluated("dynamic class C { operator [](i: uint8): uint8 { return 1; } } const c: C = new C(); c[\"foo\"] = \"s\"; c.foo;")).toBe("s");
 });
 
@@ -139,14 +139,14 @@ test("published getter returns type object properties preserve valid and dynamic
 });
 
 test.each([
-  "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f = c.m; f?.(); }",
-  "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { (0,c.m)?.(); }",
-  "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f = c.m; f(); }",
-  "class C { x: uint8; m(): uint8 { return this.x; } } const c: C = new C(); const f = c.m; f?.();",
+  "value class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f = c.m; f?.(); }",
+  "value class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { (0,c.m)?.(); }",
+  "value class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f = c.m; f(); }",
+  "value class C { x: uint8; m(): uint8 { return this.x; } } const c: C = new C(); const f = c.m; f?.();",
   "class C { m(): uint8 { return 1; } } const c: C = new C(); const f = c.m; String(f?.());",
   "function unused(x: uint8) { x?.(); }",
-  "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f = c[\"m\"]; f?.(); }",
-  "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const {m} = c; m?.(); }",
+  "value class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f = c[\"m\"]; f?.(); }",
+  "value class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const {m} = c; m?.(); }",
 ])("optional calls preserve receiver requirements: %s", (source) => expectStaticTypeError(source));
 
 test("optional calls reject an always-nullish receiver's unreachable continuation", () => {
@@ -154,32 +154,32 @@ test("optional calls reject an always-nullish receiver's unreachable continuatio
 });
 
 test.each([
-  ["class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());", "0"],
+  ["value class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());", "0"],
   ["const f: (() => uint8) | null = (): uint8 => 1; String(f?.());", "1"],
 ])("a redundant optional call leaves no written continuation unreachable: %s", (source, expected) => {
   expect(evaluated(source)).toBe(expected);
 });
 
 test("optional calls preserve receiver requirements preserve valid and dynamic cases", () => {
-  expect(evaluated("class C { x: uint8; m(): uint8 { return this.x; } } function invoke(c: C | null) { return c?.m(); } String(invoke(new C())) + '/' + String(invoke(null));")).toBe("0/undefined");
-  expect(ok("class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f: any = c.m; f?.(); }")).toBe(true);
+  expect(evaluated("value class C { x: uint8; m(): uint8 { return this.x; } } function invoke(c: C | null) { return c?.m(); } String(invoke(new C())) + '/' + String(invoke(null));")).toBe("0/undefined");
+  expect(ok("value class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f: any = c.m; f?.(); }")).toBe(true);
 });
 
 test.each([
-  "function unused() { class C { x: uint8; x: string; } }",
+  "function unused() { value class C { x: uint8; x: string; } }",
   "function unused() { class C { static x: uint8; static x: string; } }",
-  "function unused() { class C { x: string; x: uint8; } }",
-  "function unused() { class C { [\"x\"]: uint8; x: string; } }",
-  "class C { x: uint8; x: string; } new C();",
-  "function unused() { class B { x: uint8; } class C extends B { x: string; } }",
+  "function unused() { value class C { x: string; x: uint8; } }",
+  "function unused() { value class C { [\"x\"]: uint8; x: string; } }",
+  "value class C { x: uint8; x: string; } new C();",
+  "function unused() { value class B { x: uint8; } value class C extends B { x: string; } }",
 ])("repeated fields share a storage contract: %s", (source) => expectStaticTypeError(source));
 
 test("repeated fields share a storage contract preserve valid and dynamic cases", () => {
-  expect(ok("class C { x: uint8; x: uint8; } new C();")).toBe(true);
+  expect(ok("value class C { x: uint8; x: uint8; } new C();")).toBe(true);
   expect(evaluated("class C { x = 1; x = \"s\"; } new C().x;")).toBe("s");
-  expect(evaluated("class C { x: uint8; static x: string; } String(new C().x) + C.x;")).toBe("0");
-  expect(evaluated("class C { x: uint8 = 1; x: uint8 = 2; } String(new C().x);")).toBe("2");
-  expect(ok("function unused(key: any) { class C { [key]: uint8; x: string; } }")).toBe(true);
+  expect(evaluated("value class C { x: uint8; static x: string; } String(new C().x) + C.x;")).toBe("0");
+  expect(evaluated("value class C { x: uint8 = 1; x: uint8 = 2; } String(new C().x);")).toBe("2");
+  expect(ok("function unused(key: any) { value class C { [key]: uint8; x: string; } }")).toBe(true);
 });
 
 test('a receiver-free function remains callable through an optional call', () => {
@@ -203,10 +203,10 @@ test('resolved dynamic heritage retains abstract obligations', () => {
 });
 
 test('resolved repeated field keys enforce the same runtime contract', () => {
-  expectThrownKind('function key() { return "x"; } class C { [key()]: uint8; [key()]: string; }', 'TypeError');
+  expectThrownKind('function key() { return "x"; } value class C { [key()]: uint8; [key()]: string; }', 'TypeError');
   expectStaticTypeError('function unused() { class C { x: uint8; x = "bad"; } }');
-  expectStaticTypeError('function unused() { class C { readonly x: uint8; x: uint8; } }');
-  expect(evaluated('let count = 0; class C { x: uint8 = ++count; x: uint8 = ++count; } const c = new C(); String(count) + ":" + String(c.x);')).toBe('2:2');
+  expectStaticTypeError('function unused() { value class C { readonly x: uint8; x: uint8; } }');
+  expect(evaluated('let count = 0; value class C { x: uint8 = ++count; x: uint8 = ++count; } const c = new C(); String(count) + ":" + String(c.x);')).toBe('2:2');
 });
 
 test('contextual rest collection preserves a fixed argument sequence', () => {
@@ -232,14 +232,14 @@ test('contextual declared defaults exclude omission from the body type', () => {
 });
 
 test('compatible repeated fields occupy one layout slot', () => {
-  expect(evaluated('class C { x: uint8 = 1; x: uint8 = 2; } String((type C).byteLength);')).toBe('1');
+  expect(evaluated('value class C { x: uint8 = 1; x: uint8 = 2; } String((type C).byteLength);')).toBe('1');
 });
 
 test('repeated typed field qualifiers and computed key effects are preserved', () => {
   expectStaticTypeError('function unused() { class C { @align(4) x: uint8; @align(8) x: uint8; } }');
-  expectStaticTypeError('function unused() { class C { protected x: uint8; x: uint8; } }');
-  expect(evaluated('let calls = 0; function key() { calls++; return "x"; } class C { [key()]: uint8 = 1; [key()]: uint8 = 2; } const c = new C(); String(calls) + ":" + String(c.x);')).toBe('2:2');
-  expect(evaluated('class C { x: uint8 = 1; x = 2; } String((type C).byteLength);')).toBe('1');
+  expectStaticTypeError('function unused() { value class C { protected x: uint8; x: uint8; } }');
+  expect(evaluated('let calls = 0; function key() { calls++; return "x"; } value class C { [key()]: uint8 = 1; [key()]: uint8 = 2; } const c = new C(); String(calls) + ":" + String(c.x);')).toBe('2:2');
+  expect(evaluated('value class C { x: uint8 = 1; x = 2; } String((type C).byteLength);')).toBe('1');
 });
 
 test('a contextual tuple rest distributes its positional contracts', () => {
@@ -259,7 +259,7 @@ test('abstract accessors preserve member kinds and read/write contracts', () => 
 });
 
 test('dependent field contracts are checked when their types close', () => {
-  expect(ok('class C<T: type> { x: T; x: uint8; }')).toBe(true);
-  expect(ok('class C<T: type> { x: T; x: uint8; } new C.<uint8>();')).toBe(true);
-  expectStaticTypeError('class C<T: type> { x: T; x: uint8; } function unused() { new C.<string>(); }');
+  expect(ok('value class C<T: type extends value> { x: T; x: uint8; }')).toBe(true);
+  expect(ok('value class C<T: type extends value> { x: T; x: uint8; } new C.<uint8>();')).toBe(true);
+  expectStaticTypeError('value class C<T: type extends value> { x: T; x: uint8; } function unused() { new C.<string>(); }');
 });

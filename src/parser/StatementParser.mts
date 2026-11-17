@@ -1062,7 +1062,9 @@ export abstract class StatementParser extends TypeParser {
         if (this.test('let')) {
           return give(this.parseLexicalDeclaration());
         }
-        if (this.test(Token.CLASS)) {
+        // A class with a modifier is a class: `@packed value class V { }`. A decorator list
+        // was followed by `class` or by a statement, so a modifier made the class one.
+        if (this.test(Token.CLASS) || this.testClassModifierRun()) {
           return this.parseClassDeclaration(decorators);
         }
         // Any other STATEMENT is admitted here and judged by the static

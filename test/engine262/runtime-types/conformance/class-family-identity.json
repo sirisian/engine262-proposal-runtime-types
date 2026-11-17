@@ -102,7 +102,7 @@
       "name": "field initializer keeps captured type",
       "steps": [
         {
-          "source": "function make<T:type>(saved:T){return class C<U:type>{value:T=saved;};}const A=make.<string>(\"s\");new A.<number>().value;",
+          "source": "function make<T:type>(saved:T){return value class C<U:type>{value:T=saved;};}const A=make.<string>(\"s\");new A.<number>().value;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -158,7 +158,7 @@
       "name": "inferred construction retains capture",
       "steps": [
         {
-          "source": "function make<T:type>(saved:T){return class C<U:type>{value:U;constructor(v:U){this.value=v;}read(){const x:T=saved;return String(x)+\"/\"+String(this.value);}};}const A=make.<string>(\"s\");new A(2).read();",
+          "source": "function make<T:type>(saved:T){return value class C<U:type extends value>{value:U;constructor(v:U){this.value=v;}read(){const x:T=saved;return String(x)+\"/\"+String(this.value);}};}const A=make.<string>(\"s\");new A(2).read();",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -270,7 +270,7 @@
       "name": "private declaration scope survives escape",
       "steps": [
         {
-          "source": "class Outer{#value:string;constructor(v:string){this.#value=v;}make(){const self=this;return class C<T:type>{read(){return self.#value;}};}}const A=new Outer(\"a\").make();const B=new Outer(\"b\").make();new A.<string>().read()+\"/\"+new B.<string>().read();",
+          "source": "value class Outer{#value:string;constructor(v:string){this.#value=v;}make(){const self=this;return class C<T:type>{read(){return self.#value;}};}}const A=new Outer(\"a\").make();const B=new Outer(\"b\").make();new A.<string>().read()+\"/\"+new B.<string>().read();",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

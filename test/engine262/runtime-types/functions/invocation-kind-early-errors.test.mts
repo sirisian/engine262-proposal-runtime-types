@@ -16,11 +16,11 @@ test.each([
 });
 
 test.each([
-  '(class { x: uint8 = 1; })();',
-  'class C { x: uint8 = 1; } C();',
-  'const C = class { x: uint8 = 1; }; const D = C; D();',
-  'class C { x: uint8 = 1; } C?.();',
-  'class C { x: uint8 = 1; } C``;',
+  '(value class { x: uint8 = 1; })();',
+  'value class C { x: uint8 = 1; } C();',
+  'const C = value class { x: uint8 = 1; }; const D = C; D();',
+  'value class C { x: uint8 = 1; } C?.();',
+  'value class C { x: uint8 = 1; } C``;',
 ])('ordinary invocation of a stable typed class is rejected: %s', (body) => {
   expectStaticTypeError(`function unused() { ${body} }`);
 });
@@ -33,7 +33,7 @@ test('hoisted declarations and later immutable origins are checked without stale
 
 test('ordinary functions construct and classes accept new', () => {
   expect(evaluated('function F(x: uint8) { this.x = x; } String(new F(1).x);')).toBe('1');
-  expect(evaluated('class C { x: uint8 = 1; } String(new C().x);')).toBe('1');
+  expect(evaluated('value class C { x: uint8 = 1; } String(new C().x);')).toBe('1');
 });
 
 test.each([
@@ -42,12 +42,12 @@ test.each([
   '[C] = [function () { return 1; }];',
   '({ f: C } = { f: function () { return 1; } });',
 ])('reassignment withdraws a class origin: %s', (assignment) => {
-  expect(evaluated(`class C { x: uint8 = 1; } ${assignment} String(C());`)).toBe('1');
+  expect(evaluated(`value class C { x: uint8 = 1; } ${assignment} String(C());`)).toBe('1');
 });
 
 test('captured mutation, shadowing and mutable properties do not retain stale facts', () => {
   expect(ok('let f = (x: uint8) => x; f = function (x: uint8) { this.x = x; }; new f(1);')).toBe(true);
-  expect(evaluated('class C { x: uint8 = 1; } function call() { return C(); } C = function () { return 1; }; String(call());')).toBe('1');
+  expect(evaluated('value class C { x: uint8 = 1; } function call() { return C(); } C = function () { return 1; }; String(call());')).toBe('1');
   expect(ok('const f = (x: uint8) => x; function unused(f) { new f(1); }')).toBe(true);
   expect(ok('const o = { f: (x: uint8) => x }; o.f = function (x: uint8) { this.x = x; return x; }; new o.f(1);')).toBe(true);
 });
@@ -67,7 +67,7 @@ test.each([
 });
 
 test('direct eval withdraws mutable declaration origins', () => {
-  expect(evaluated('class C { x: uint8 = 1; } eval("C = function () { return 1; }"); String(C());')).toBe('1');
+  expect(evaluated('value class C { x: uint8 = 1; } eval("C = function () { return 1; }"); String(C());')).toBe('1');
 });
 
 test('a computed global property write can replace a function declaration', () => {

@@ -486,7 +486,7 @@
       "name": "simple setter",
       "steps": [
         {
-          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]=7;log+\":\"+String(c.value);",
+          "source": "let log=\"\";value class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]=7;log+\":\"+String(c.value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -500,7 +500,7 @@
       "name": "compound setter",
       "steps": [
         {
-          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]+=7;log+\":\"+String(c.value);",
+          "source": "let log=\"\";value class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]+=7;log+\":\"+String(c.value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -514,7 +514,7 @@
       "name": "postfix setter",
       "steps": [
         {
-          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]++;log+\":\"+String(c.value);",
+          "source": "let log=\"\";value class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]++;log+\":\"+String(c.value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -528,7 +528,7 @@
       "name": "logical setter",
       "steps": [
         {
-          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]&&=7;log+\":\"+String(c.value);",
+          "source": "let log=\"\";value class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]&&=7;log+\":\"+String(c.value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -542,7 +542,7 @@
       "name": "setter assigned value still checked",
       "steps": [
         {
-          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]=\"bad\";\"ok\";",
+          "source": "let log=\"\";value class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]=\"bad\";\"ok\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

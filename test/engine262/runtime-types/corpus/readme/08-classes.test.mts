@@ -18,11 +18,11 @@ import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
 // has PreventExtensions performed on its instances; a field may be written but a
 // property may not be added.
 test('Value/Reference: a class with a typed field seals its instances', () => {
-  expect(evaluated('class A { x: uint32 = (0 := uint32); } let a = new A(); Object.isExtensible(a) ? "ext" : "sealed";')).toBe('sealed');
+  expect(evaluated('value class A { x: uint32 = (0 := uint32); } let a = new A(); Object.isExtensible(a) ? "ext" : "sealed";')).toBe('sealed');
   // a field may still be written
-  expect(bool('class A { x: uint32 = (0 := uint32); } let a = new A(); a.x = (5 := uint32); String(a.x === (5 := uint32));')).toBe(true);
+  expect(bool('value class A { x: uint32 = (0 := uint32); } let a = new A(); a.x = (5 := uint32); String(a.x === (5 := uint32));')).toBe(true);
   // adding a property is rejected in strict mode
-  expectThrown('"use strict"; class A { x: uint32 = (0 := uint32); } let a = new A(); a.y = 5;');
+  expectThrown('"use strict"; value class A { x: uint32 = (0 := uint32); } let a = new A(); a.y = 5;');
 });
 
 test('Value/Reference: an untyped class is not sealed; `dynamic` opts out', () => {
@@ -32,14 +32,14 @@ test('Value/Reference: an untyped class is not sealed; `dynamic` opts out', () =
 
 test('Value/Reference: a subclass appends typed fields and is sealed once', () => {
   // the subclass adds its own typed field during super and is not blocked
-  expect(bool('class A { x: uint32 = (0 := uint32); } class B extends A { y: uint32 = (0 := uint32); } let b = new B(); String(b.x === (0 := uint32) && b.y === (0 := uint32));')).toBe(true);
+  expect(bool('value class A { x: uint32 = (0 := uint32); } value class B extends A { y: uint32 = (0 := uint32); } let b = new B(); String(b.x === (0 := uint32) && b.y === (0 := uint32));')).toBe(true);
   // the fully-built instance is sealed
-  expect(evaluated('class A { x: uint32 = (0 := uint32); } class B extends A { y: uint32 = (0 := uint32); } let b = new B(); Object.isExtensible(b) ? "ext" : "sealed";')).toBe('sealed');
+  expect(evaluated('value class A { x: uint32 = (0 := uint32); } value class B extends A { y: uint32 = (0 := uint32); } let b = new B(); Object.isExtensible(b) ? "ext" : "sealed";')).toBe('sealed');
 });
 
 // -- Class type as annotation and membership -----------------------------------
 test('Value/Reference: a class name is a type usable as an annotation', () => {
-  expect(evaluated('class A { x: uint32 = (0 := uint32); } let a: A = new A(); typeof a;')).toBe('object');
+  expect(evaluated('value class A { x: uint32 = (0 := uint32); } let a: A = new A(); typeof a;')).toBe('object');
   expect(evaluated('class A {} let a = new A(); String(a instanceof A);')).toBe('true');
 });
 
@@ -47,16 +47,16 @@ test('Value/Reference: a class name is a type usable as an annotation', () => {
 // A field declared without an initializer takes its type's default (the same
 // DefaultValueOf rule as a typed binding), never undefined.
 test('Class Members: a typed field without an initializer takes its type default', () => {
-  expect(bool('class A { x: uint32; } let a = new A(); String(a.x === (0 := uint32));')).toBe(true);
-  expect(bool('class A { s: string; } let a = new A(); String(a.s === "");')).toBe(true);
-  expect(bool('class A { b: boolean; } let a = new A(); String(a.b === false);')).toBe(true);
-  expect(bool('class A { n: uint8 | null; } let a = new A(); String(a.n === null);')).toBe(true);
+  expect(bool('value class A { x: uint32; } let a = new A(); String(a.x === (0 := uint32));')).toBe(true);
+  expect(bool('value class A { s: string; } let a = new A(); String(a.s === "");')).toBe(true);
+  expect(bool('value class A { b: boolean; } let a = new A(); String(a.b === false);')).toBe(true);
+  expect(bool('value class A { n: uint8 | null; } let a = new A(); String(a.n === null);')).toBe(true);
   // an untyped field is still undefined
   expect(bool('class A { x; } let a = new A(); String(a.x === undefined);')).toBe(true);
 });
 
 test('Class Members: a private typed field takes its default too', () => {
-  expect(bool('class A { #x: uint32; get() { return this.#x; } } let a = new A(); String(a.get() === (0 := uint32));')).toBe(true);
+  expect(bool('value class A { #x: uint32; get() { return this.#x; } } let a = new A(); String(a.get() === (0 := uint32));')).toBe(true);
 });
 
 // -- Static Members ------------------------------------------------------------
@@ -70,16 +70,16 @@ test('Static Members: typed static fields live on the constructor with a default
 // -- Constructors --------------------------------------------------------------
 // A single typed constructor enforces its parameters. (Overloading is deferred.)
 test('Constructors: a single typed constructor enforces its parameters', () => {
-  expect(bool('class A { x: uint32; constructor(v: uint32) { this.x = v; } } let a = new A((5 := uint32)); String(a.x === (5 := uint32));')).toBe(true);
+  expect(bool('value class A { x: uint32; constructor(v: uint32) { this.x = v; } } let a = new A((5 := uint32)); String(a.x === (5 := uint32));')).toBe(true);
   // members may be declared outside the constructor
-  expect(ok('class A { x: float32; constructor(x: float32) { this.x = x; } } typeof A;')).toBe(true);
+  expect(ok('value class A { x: float32; constructor(x: float32) { this.x = x; } } typeof A;')).toBe(true);
 });
 
 // -- Readonly Fields -------------------------------------------------------------
 // A `readonly` field may be assigned only in its own initializer and in the declaring class's constructors; every
 // other assignment is a TypeError (#sec-typed-classes).
 test('Readonly Fields: a readonly field is assignable in its initializer and constructor', () => {
-  expect(evaluated('class A { readonly id: uint32 = (5 := uint32); } let a = new A(); String(a.id);')).toBe('5');
+  expect(evaluated('value class A { readonly id: uint32 = (5 := uint32); } let a = new A(); String(a.id);')).toBe('5');
   expect(evaluated('class A { readonly id; constructor() { this.id = 10; } } let a = new A(); String(a.id);')).toBe('10');
 });
 

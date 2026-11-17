@@ -298,7 +298,7 @@
       "name": "growth creates fresh value class defaults",
       "steps": [
         {
-          "source": "class V {x:uint8;}const a:[].<V>=[];const raw:any=a;raw.length=2;raw[0].x=9;String(raw[0].x)+\"/\"+raw[1].x;",
+          "source": "value class V {x:uint8;}const a:[].<V>=[];const raw:any=a;raw.length=2;raw[0].x=9;String(raw[0].x)+\"/\"+raw[1].x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -312,7 +312,7 @@
       "name": "growth bypasses value class constructor",
       "steps": [
         {
-          "source": "let calls=0;class V {x:uint8;constructor(){calls++;this.x=9;}}const a:[].<V>=[];const raw:any=a;raw.length=2;String(calls)+\"/\"+raw[0].x+\"/\"+raw[1].x;",
+          "source": "let calls=0;value class V {x:uint8;constructor(){calls++;this.x=9;}}const a:[].<V>=[];const raw:any=a;raw.length=2;String(calls)+\"/\"+raw[0].x+\"/\"+raw[1].x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -326,7 +326,7 @@
       "name": "growth copies declared zero",
       "steps": [
         {
-          "source": "class V {x:uint8;static default=new V();static {V.default.x=(7:=uint8);}}const a:[].<V>=[];const raw:any=a;raw.length=2;raw[0].x=9;String(raw[0].x)+\"/\"+raw[1].x+\"/\"+V.default.x;",
+          "source": "value class V {x:uint8;static default=new V();static {V.default.x=(7:=uint8);}}const a:[].<V>=[];const raw:any=a;raw.length=2;raw[0].x=9;String(raw[0].x)+\"/\"+raw[1].x+\"/\"+V.default.x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -340,7 +340,7 @@
       "name": "growth initializes private value fields",
       "steps": [
         {
-          "source": "class V {#x:uint8;get(){return this.#x;}}const a:[].<V>=[];const raw:any=a;raw.length=2;String(raw[0].get())+\"/\"+raw[1].get();",
+          "source": "value class V {#x:uint8;get(){return this.#x;}}const a:[].<V>=[];const raw:any=a;raw.length=2;String(raw[0].get())+\"/\"+raw[1].get();",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -844,7 +844,7 @@
       "name": "nested declared zeros remain independent",
       "steps": [
         {
-          "source": "class V {x:uint8;static default=new V();static{V.default.x=(7:=uint8);}}const a:[].<[V]>=[];const raw:any=a;raw.length=2;raw[0][0].x=9;String(raw[0][0].x)+\"/\"+raw[1][0].x+\"/\"+V.default.x;",
+          "source": "value class V {x:uint8;static default=new V();static{V.default.x=(7:=uint8);}}const a:[].<[V]>=[];const raw:any=a;raw.length=2;raw[0][0].x=9;String(raw[0][0].x)+\"/\"+raw[1][0].x+\"/\"+V.default.x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -858,7 +858,7 @@
       "name": "class fields receive independent declared zeros",
       "steps": [
         {
-          "source": "class V {x:uint8;static default=new V();static{V.default.x=(7:=uint8);}}class Pair{a:V;b:V;}const a:[].<Pair>=[];const raw:any=a;raw.length=1;raw[0].a.x=9;String(raw[0].a.x)+\"/\"+raw[0].b.x+\"/\"+V.default.x;",
+          "source": "value class V {x:uint8;static default=new V();static{V.default.x=(7:=uint8);}}value class Pair{a:V;b:V;}const a:[].<Pair>=[];const raw:any=a;raw.length=1;raw[0].a.x=9;String(raw[0].a.x)+\"/\"+raw[0].b.x+\"/\"+V.default.x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

@@ -907,7 +907,7 @@ test('the handler rule leaves the neighbouring receivers alone', () => {
   expect(ok('if (false) { let a: [].<uint8> = []; a.map((v) => { let n: uint8 = v; return 1; }); } 1;')).toBe(true);
 });
 
-const SUB = 'class A { x: uint8 = (0 := uint8); } class B extends A { y: uint8 = (0 := uint8); } ';
+const SUB = 'value class A { x: uint8 = (0 := uint8); } value class B extends A { y: uint8 = (0 := uint8); } ';
 
 test('a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
   // #sec-issubtype: "A position declared covariant admits an argument the

@@ -143,7 +143,7 @@ test.each([
   ],
   [
     "inherited member contribution",
-    "class B{p:null=null;}class C extends B{}function f(x:C){const {}=x.p;}"
+    "value class B{p:null=null;}value class C extends B{}function f(x:C){const {}=x.p;}"
   ]
 ])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);

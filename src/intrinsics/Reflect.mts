@@ -2215,6 +2215,8 @@ export function bootstrapReflectClassField(realmRec: Realm) {
  */
 export function ClassFieldReflection(classRecord: TypeRecord, name: string, realmRec: Realm): ValueCompletion {
   const constructor = (classRecord as { Constructor?: { InstanceLayout?: ClassLayout | null } }).Constructor;
+  // #sec-value-classes: only a value class carries a layout, so a class held by reference has
+  // none here, as it has none for `hasLayout`, a placement `new` or a decorator's `offset`.
   const layout = constructor?.InstanceLayout ?? null;
   const placement = layout ? layout.fields.find((f) => f.key === name) : undefined;
   // TWO SOURCES, ONE READ. The DECLARATION record says what the field was
@@ -2238,10 +2240,13 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
   // two shapes look like variants of one thing rather than answers to different
   // questions.
   if (!placement) {
-    // Declared but not placed: the class has no layout, so the PLACEMENT half
-    // is absent rather than *undefined*, which is how this suite reports a
-    // deferral a reader should meet.
-    return obj;
+    // #sec-reflection-shape-class-field-layout: "It is a *TypeError* exception where _T_ has no
+    // layout: asking a class with none for a field's placement is the mistake, as reading
+    // `byteLength` from a `string` is." This returned the reflection with its placement absent,
+    // so `.offset` read *undefined* and a serializer went on with it. A class not declared
+    // `value` has no layout (#sec-value-classes), which makes this the answer for the ordinary
+    // class and no longer only for one with an untyped field.
+    return Throw.TypeError('this type has no layout, so its field $1 has no placement', Value(name));
   }
   // The field this describes. Redundant when fetched BY name and necessary when
   // the whole set is enumerated, which is the form that reads a layout out.

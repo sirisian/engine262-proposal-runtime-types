@@ -739,7 +739,7 @@ test('a returned value type class instance is copied', () => {
   // path, which stamps a typed ARRAY and never reaches `CheckedConvertValue`.
   // The array branch there already says the copy for the same reason, quoting
   // #sec-elision-stability - "eliding a check must not change what a value IS".
-  const V = 'class P { x: uint8 = (0 := uint8); } const a = new P(); a.x = (1 := uint8); ';
+  const V = 'value class P { x: uint8 = (0 := uint8); } const a = new P(); a.x = (1 := uint8); ';
   // 1 means the returned value was COPIED before `a` was mutated; 9 means it aliased.
   expect(evaluated(`${V} function f(): P { return a; } const b = f(); a.x = (9 := uint8); String(b.x);`)).toBe('1');
   expect(evaluated(`${V} const f = (): P => { return a; }; const b = f(); a.x = (9 := uint8); String(b.x);`)).toBe('1');
@@ -758,7 +758,7 @@ test('a returned value type class instance is copied', () => {
   expect(evaluated(`${V} function f(): P { return new P(); } const b = f(); String(b.x);`)).toBe('0');
 
   // The clause's own worked example, unchanged: `let e: V = arr[0]` holds a copy.
-  expect(evaluated('class P { x: uint8 = (0 := uint8); } let r: [].<P> = [new P()]; r[0].x = (5 := uint8); let e: P = r[0]; r[0].x = (9 := uint8); String(e.x);')).toBe('5');
+  expect(evaluated('value class P { x: uint8 = (0 := uint8); } let r: [].<P> = [new P()]; r[0].x = (5 := uint8); let e: P = r[0]; r[0].x = (9 := uint8); String(e.x);')).toBe('5');
 });
 
 test('Promise.resolve rejects with never, as the statics table states', () => {
@@ -1404,21 +1404,21 @@ test('a class implements a GENERIC interface at its arguments', () => {
   //
   // The arguments are on the `implements` reference, and are bound to the
   // interface's parameters and substituted, as at any other parameterized use.
-  expect(accepts('interface G<T: type> { x: T; } class C implements G.<uint8> { x: uint8; }'
+  expect(accepts('interface G<T: type> { x: T; } value class C implements G.<uint8> { x: uint8; }'
     + ' let g: G.<uint8> = new C();')).toBe(true);
   expect(accepts('interface G<T: type, U: type> { x: T; y: U; }'
-    + ' class C implements G.<uint8, string> { x: uint8; y: string; }')).toBe(true);
-  expect(accepts('interface G<T: type> { x: T; } class C implements G.<string> { x: string; }')).toBe(true);
-  expect(evaluated('interface G<T: type> { x: T; } class C implements G.<uint8> { x: uint8; }'
+    + ' value class C implements G.<uint8, string> { x: uint8; y: string; }')).toBe(true);
+  expect(accepts('interface G<T: type> { x: T; } value class C implements G.<string> { x: string; }')).toBe(true);
+  expect(evaluated('interface G<T: type> { x: T; } value class C implements G.<uint8> { x: uint8; }'
     + ' String(new C() is G.<uint8>);')).toBe('true');
 
   // A member of the WRONG type is still refused, and the message names the
   // SUBSTITUTED type rather than the parameter.
-  expect(accepts('interface G<T: type> { x: T; } class C implements G.<uint8> { x: string; }')).toBe(false);
+  expect(accepts('interface G<T: type> { x: T; } value class C implements G.<uint8> { x: string; }')).toBe(false);
   // A MISSING member is still refused.
   expect(accepts('interface G<T: type> { x: T; } class C implements G.<uint8> { }')).toBe(false);
   // A non-generic interface has no arguments to bind.
-  expect(accepts('interface S { x: uint8; } class C implements S { x: uint8; } let s: S = new C();')).toBe(true);
+  expect(accepts('interface S { x: uint8; } value class C implements S { x: uint8; } let s: S = new C();')).toBe(true);
 });
 
 test('a field with no annotation still declares a member', () => {
@@ -1444,8 +1444,8 @@ test('a field with no annotation still declares a member', () => {
 
   // An annotated field, with or without an initializer, is unchanged, and a
   // missing member is still refused.
-  expect(accepts('interface A { a: uint32; } class C implements A { a: uint32 = (1 := uint32); }')).toBe(true);
-  expect(accepts('interface A { a: uint32; } class C implements A { a: uint32; }')).toBe(true);
+  expect(accepts('interface A { a: uint32; } value class C implements A { a: uint32 = (1 := uint32); }')).toBe(true);
+  expect(accepts('interface A { a: uint32; } value class C implements A { a: uint32; }')).toBe(true);
   expect(accepts('interface A { a: uint32; } class C implements A { }')).toBe(false);
 });
 
@@ -1478,7 +1478,7 @@ test('a comparison against a SIGNED numeric literal narrows', () => {
 });
 
 test('a CLASS type is not satisfied by an object literal', () => {
-  const C = 'class C { a: uint8 = (0 := uint8); } ';
+  const C = 'value class C { a: uint8 = (0 := uint8); } ';
   // The literal arm ended `return contextual`, GIVING the literal the
   // target's type without comparing - so a missing member and an excess one both
   // passed, and only a wrong member TYPE was caught by the walk's own check.
@@ -1492,8 +1492,8 @@ test('a CLASS type is not satisfied by an object literal', () => {
 
   // A class is satisfied by CONSTRUCTION, which is unaffected.
   expect(accepts(`${C} let c: C = new C();`)).toBe(true);
-  expect(accepts(`${C} class D extends C { } let c: C = new D();`)).toBe(true);
-  expect(accepts('interface I { a: uint8 } class D implements I { a: uint8 = (0 := uint8); } let c: I = new D();')).toBe(true);
+  expect(accepts(`${C} value class D extends C { } let c: C = new D();`)).toBe(true);
+  expect(accepts('interface I { a: uint8 } value class D implements I { a: uint8 = (0 := uint8); } let c: I = new D();')).toBe(true);
 
   // ...and the other three targets this arm serves still take a literal.
   expect(accepts('interface I { a: uint8 } let c: I = { a: (1 := uint8) };')).toBe(true);
@@ -1610,6 +1610,6 @@ test('an unannotated field declares a member and does not constrain stores', () 
 
   // An ANNOTATED field is unaffected - the annotation is what it means.
   // (The copy is read after the store; a store nothing reads is #sec-store-to-a-copy's.)
-  expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = 7; return c.y; }')).toBe(true);
-  expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = "s"; }')).toBe(false);
+  expect(accepts('value class C { y: uint8 = 1; } function nc(c: C) { c.y = 7; return c.y; }')).toBe(true);
+  expect(accepts('value class C { y: uint8 = 1; } function nc(c: C) { c.y = "s"; }')).toBe(false);
 });

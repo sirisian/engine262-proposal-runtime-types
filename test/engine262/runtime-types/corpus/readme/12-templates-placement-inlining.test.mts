@@ -34,15 +34,15 @@ test('Tagged Templates: the strings parameter carries a raw array', () => {
 // member-expression form. It parses and constructs an instance; the buffer-backed
 // layout is the memory-layout extension.
 test('Placement New: the single-instance syntax parses and constructs', () => {
-  expect(evaluated('class T { x: uint32 = (0 := uint32); } let buf = new ArrayBuffer(16); let a = new(buf, 0) T(); typeof a;')).toBe('object');
+  expect(evaluated('value class T { x: uint32 = (0 := uint32); } let buf = new ArrayBuffer(16); let a = new(buf, 0) T(); typeof a;')).toBe('object');
   // the constructed instance is a T
-  expect(evaluated('class T { x: uint32 = (0 := uint32); } let buf = new ArrayBuffer(16); let a = new(buf, 0) T(); String(a instanceof T);')).toBe('true');
+  expect(evaluated('value class T { x: uint32 = (0 := uint32); } let buf = new ArrayBuffer(16); let a = new(buf, 0) T(); String(a instanceof T);')).toBe('true');
   // a byte offset argument is accepted
-  expect(evaluated('class T { x: uint32 = (0 := uint32); } let buf = new ArrayBuffer(16); let a = new(buf, 4) T(); typeof a;')).toBe('object');
+  expect(evaluated('value class T { x: uint32 = (0 := uint32); } let buf = new ArrayBuffer(16); let a = new(buf, 4) T(); typeof a;')).toBe('object');
 });
 
 test('Placement New: a placement-constructed instance carries its typed field default', () => {
-  expect(ok('class T { x: uint32; } let buf = new ArrayBuffer(16); let a = new(buf, 0) T(); a.x === (0 := uint32);')).toBe(true);
+  expect(ok('value class T { x: uint32; } let buf = new ArrayBuffer(16); let a = new(buf, 0) T(); a.x === (0 := uint32);')).toBe(true);
 });
 
 // -- Guaranteed inlining (unspecified) ------------------------------------------

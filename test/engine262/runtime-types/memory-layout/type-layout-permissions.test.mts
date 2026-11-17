@@ -32,8 +32,8 @@ test.each([
   ['vector', '', 'float32x4', '16'],
   ['fixed array type', 'type A=[2].<uint8>;', 'A', '2'],
   ['fixed array constructor', '', '([2].<uint8>)', '2'],
-  ['class', 'class C {x:uint8;}', 'C', '1'],
-  ['generic class specialization', 'class C<T:type> {x:T;}', 'C.<uint8>', '1'],
+  ['class', 'value class C {x:uint8;}', 'C', '1'],
+  ['generic class specialization', 'value class C<T:type extends value> {x:T;}', 'C.<uint8>', '1'],
 ])('%s exposes fixed own layout data', (_name, declaration, type, size) => {
   expect(evaluated(`${declaration}
     const T=${type};
@@ -58,7 +58,7 @@ test('logical assignment skips a store to an existing nonzero constant', () => {
 });
 
 test('a conflicting static declaration cannot replace layout data', () => {
-  expectThrownKind('class C {x:uint8;static byteLength=7;}', 'TypeError');
+  expectThrownKind('value class C {x:uint8;static byteLength=7;}', 'TypeError');
 });
 
 test('a prototype setter does not intercept fixed own layout data', () => {
@@ -73,7 +73,7 @@ test.each([
   'let ref r=uint8.byteLength;r=1;',
   '(type uint8).byteLength=1;',
   '([2].<uint8>).byteLength=1;',
-  'class C{x:uint8;}C.byteLength=1;',
+  'value class C{x:uint8;}C.byteLength=1;',
 ])('preserves fixed layout permission: %s', (source) => {
   expectStaticTypeError(source);
 });

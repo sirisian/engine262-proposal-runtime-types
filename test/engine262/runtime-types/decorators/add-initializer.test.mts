@@ -16,11 +16,11 @@ import { evaluated } from '../harness.mts';
 test('the contexts that have it', () => {
   const t = 'let t = "?"; function f(c) { t = typeof c.addInitializer; } ';
   expect(evaluated(`${t} @f class A {} t;`)).toBe('function');
-  expect(evaluated(`${t} class A { @f a: uint8 = 1; } t;`)).toBe('function');
+  expect(evaluated(`${t} value class A { @f a: uint8 = 1; } t;`)).toBe('function');
   expect(evaluated(`${t} class A { @f m() {} } t;`)).toBe('function');
   expect(evaluated(`${t} class A { @f get v(): uint8 { return 1; } } t;`)).toBe('function');
   expect(evaluated(`${t} class A { @f set v(x: uint8) {} } t;`)).toBe('function');
-  expect(evaluated(`${t} class A { @f accessor a: uint8 = 1; } t;`)).toBe('function');
+  expect(evaluated(`${t} value class A { @f accessor a: uint8 = 1; } t;`)).toBe('function');
   expect(evaluated(`${t} const o = { @f m() {} }; t;`)).toBe('function');
 });
 

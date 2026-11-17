@@ -506,9 +506,9 @@ test('a constructor contributes nothing to inference', () => {
   // which is a different thing - its parameters are known and its result is
   // fixed by rule, so nothing is inferred. The absence of the `return` slot is what says so.
   for (const decl of [
-    'class C { x: uint8 = 1; constructor(y: uint8) {} }',
-    'class C { x: uint8 = 1; constructor(y) {} }',
-    'class C { x: uint8 = 1; }',
+    'value class C { x: uint8 = 1; constructor(y: uint8) {} }',
+    'value class C { x: uint8 = 1; constructor(y) {} }',
+    'value class C { x: uint8 = 1; }',
   ]) {
     expect(value(`${decl} const r = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor');`
       + ' String(r.signatures[0].return === undefined);'), decl).toBe('true');
@@ -528,11 +528,11 @@ test('inference through a factory yields the class', () => {
   // `new K()` has static type `K`, and that is true rather than assumed: no
   // typed class can return anything else.
   // So an unannotated factory infers the class, seeded by the construction.
-  expect(value('class K { x: uint8 = 1; } function make() { return new K(); }'
+  expect(value('value class K { x: uint8 = 1; } function make() { return new K(); }'
     + ' const s = Reflect.getReflection(Reflect.typeOf(make)).signatures[0];'
     + ' String(s.return.type === type K);')).toBe('true');
   // and the inferred type is usable at a boundary, which is the point
-  expect(value('class K { x: uint8 = 1; } function make() { return new K(); }'
+  expect(value('value class K { x: uint8 = 1; } function make() { return new K(); }'
     + ' const k: K = make(); String(k.x);')).toBe('1');
 });
 
@@ -540,9 +540,9 @@ test('a getter\'s published return still joins its shape', () => {
   // Regression guard on the clause the rule touches: the annotation refusal is
   // scoped to `constructor`, and a getter is the neighbour most likely to be
   // caught by an over-wide rule, since it reaches the same parse.
-  expect(value('class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'
+  expect(value('value class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'
     + ' const r = Reflect.getReflection.<Reflect.ClassGetter, C>("g");'
     + ' String(r.type !== undefined);')).toBe('true');
-  expect(value('class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'
+  expect(value('value class C { x: uint8 = 1; get g(): uint8 { return this.x; } }'
     + ' const v: uint8 = (new C()).g; String(v);')).toBe('1');
 });

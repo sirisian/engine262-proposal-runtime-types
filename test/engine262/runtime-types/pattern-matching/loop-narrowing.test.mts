@@ -18,7 +18,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * first pass and stale on the second, and one walk cannot tell them apart. The
  * rule is therefore conservative by exactly that much.
  */
-const H = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); let n: uint8 = 0; ';
+const H = 'value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); let n: uint8 = 0; ';
 
 test('every loop form widens a narrowing its body can invalidate', () => {
   expectThrown(`${H}if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; v = null; } }`,
@@ -56,7 +56,7 @@ test('the idioms that were always correct still are', () => {
   // test - none of these is touched by the widening.
   expect(evaluated(`${H}if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; } } String(n);`)).toBe('1');
   expect(evaluated(`${H}for (let i: uint8 = 0; i < 2; i = i + 1) { if (v !== null) { n = v.x; v = null; } } String(n);`)).toBe('1');
-  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } const v: A | null = readV(); let n: uint8 = 0;
+  expect(evaluated(`value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } const v: A | null = readV(); let n: uint8 = 0;
     if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; } } String(n);`)).toBe('1');
   expect(evaluated(`${H}while (v !== null) { n = v.x; v = null; } String(n);`)).toBe('1');
 });
@@ -80,7 +80,7 @@ test('straight-line invalidation outside a loop is unchanged', () => {
  * a loop body containing a call widens those names up front, for the same
  * single-pass reason the assigned set does.
  */
-const C = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); let n: uint8 = 0; ';
+const C = 'value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); let n: uint8 = 0; ';
 
 test('a call widens a narrowing of a name some function assigns', () => {
   expectThrown(`${C}function clob(): uint8 { v = null; return 0; }
@@ -103,7 +103,7 @@ test('a call that cannot touch the binding widens nothing', () => {
 });
 
 test('a const base survives any call', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } const v: A | null = readV(); let n: uint8 = 0;
+  expect(evaluated(`value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } const v: A | null = readV(); let n: uint8 = 0;
     function clob(): uint8 { return 0; }
     if (v !== null) { clob(); n = v.x; } String(n);`)).toBe('1');
 });
@@ -125,17 +125,17 @@ test('a narrowing re-established after the call holds', () => {
  * nothing, since control joins and no fact holds after it.
  */
 test('a guard clause carries its narrowing over a path as well as a binding', () => {
-  const B = 'class A { x: uint8 = 1; } class B { a: A | null = null; } const b = new B(); b.a = new A(); ';
+  const B = 'value class A { x: uint8 = 1; } value class B { a: A | null = null; } const b = new B(); b.a = new A(); ';
   expect(evaluated(`${B}function f(c: B): uint8 { if (c.a === null) return 0; return c.a.x; } String(f(b));`)).toBe('1');
-  expect(evaluated(`class A { x: uint8 = 1; }
+  expect(evaluated(`value class A { x: uint8 = 1; }
     function f(v: A | null): uint8 { if (v === null) return 0; return v.x; } String(f(new A()));`)).toBe('1');
   // `throw` leaves as surely as `return` does.
-  expect(evaluated(`class A { x: uint8 = 1; }
+  expect(evaluated(`value class A { x: uint8 = 1; }
     function f(v: A | null): uint8 { if (v === null) throw new Error("x"); return v.x; } String(f(new A()));`)).toBe('1');
 });
 
 test('a guard whose branch does not leave carries nothing', () => {
-  expectThrown(`class A { x: uint8 = 1; }
+  expectThrown(`value class A { x: uint8 = 1; }
     function f(v: A | null): uint8 { if (v === null) { } return v.x; } f(new A());`,
   'is not declared by every member');
 });

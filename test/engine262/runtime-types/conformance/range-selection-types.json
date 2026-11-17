@@ -1870,7 +1870,7 @@
       "name": "selected class endpoint preserves value-copy semantics",
       "steps": [
         {
-          "source": "class C{n:number;constructor(n:number){this.n=n;}operator<(other:C):boolean{return this.n<other.n;}}const x=new C(1);const y=new C(5);const z=new C(2);const a:ClosedRange.<C>=x..=y;const b:RangeFrom.<C>=(z..);const c=a.intersect(b);z.n=3;String(c.start===z)+\":\"+String(c.start?.n);",
+          "source": "value class C{n:number;constructor(n:number){this.n=n;}operator<(other:C):boolean{return this.n<other.n;}}const x=new C(1);const y=new C(5);const z=new C(2);const a:ClosedRange.<C>=x..=y;const b:RangeFrom.<C>=(z..);const c=a.intersect(b);z.n=3;String(c.start===z)+\":\"+String(c.start?.n);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

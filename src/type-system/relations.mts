@@ -1129,6 +1129,15 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (IsFamilyRecord(t)) {
     return !!s && s.Kind === 'primitive' && s.Name === (t as { Name: string }).Name && !IsFamilyRecord(s);
   }
+  // The two bound types, `value` and `plain`, admit a type by a predicate over it and not by its
+  // structure (#sec-layout-properties), and they admit it as a bound wherever a bound is asked
+  // for. A specialization is matched with this relation, so `class Cell<uint8>` beside `value
+  // class Cell<T: type extends value>` was never selected: `uint8` is a value type and was no
+  // subtype of `value`, and every application took the primary's body.
+  if (t && t.Kind === 'primitive' && (t.Name === 'value' || t.Name === 'plain') && t.Arguments.length === 0
+      && s && s.Kind !== 'any') {
+    return IsAssignable(s, t);
+  }
   // A record that is ABSENT relates to nothing. The recursions in
   // SameTypeWithAssumptions follow `s.Base` for a literal and `s.Constraint`
   // for a type parameter, and either can be missing - an unconstrained

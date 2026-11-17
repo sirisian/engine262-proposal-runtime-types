@@ -55,7 +55,7 @@ for (const mode of ['Function', 'eval']) {
     const agent = new Agent({ features: ['runtime-types'] });
     setSurroundingAgent(agent);
     const realm = new ManagedRealm();
-    const body = 'class P{x:uint8=1;constructor(v:boolean=true){}constructor(v:string){}}class S{operator P(){return new P(true);}}const raw:any=new S();const p:P=raw;'
+    const body = 'value class P{x:uint8=1;constructor(v:boolean=true){}constructor(v:string){}}class S{operator P(){return new P(true);}}const raw:any=new S();const p:P=raw;'
       + (mode === 'Function' ? 'return ' : '') + 'String(p.x);';
     const source = mode === 'Function' ? `Function(${JSON.stringify(body)})();` : `eval(${JSON.stringify(body)});`;
     const result = EnsureCompletion(realm.evaluateScriptSkipDebugger(source));
@@ -69,7 +69,7 @@ test('foreign value-class conversion retains nominal identity and copies its res
   const agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);
   const foreign = new ManagedRealm();
-  const target = EnsureCompletion(foreign.evaluateScriptSkipDebugger('class P{x:uint8=1;constructor(v:boolean=true){}constructor(v:string){}}const saved:any=new P(true);class S{operator P(){return saved;}}P;'));
+  const target = EnsureCompletion(foreign.evaluateScriptSkipDebugger('value class P{x:uint8=1;constructor(v:boolean=true){}constructor(v:string){}}const saved:any=new P(true);class S{operator P(){return saved;}}P;'));
   const source = EnsureCompletion(foreign.evaluateScriptSkipDebugger('new S();'));
   expect(target.Type).toBe('normal');
   expect(source.Type).toBe('normal');

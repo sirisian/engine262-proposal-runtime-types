@@ -321,6 +321,6 @@ test('a class type answers with its declared instance members', () => {
   // A private name is not a property key and cannot be written as one.
   expect(evaluated(`${C}type K = keyof C; String("p" is K);`)).toBe('false');
   // A class and an interface of one shape agree.
-  expect(evaluated('interface I { a: uint8, m(): void } class D { a: uint8 = 1; m(): void {} } '
+  expect(evaluated('interface I { a: uint8, m(): void } value class D { a: uint8 = 1; m(): void {} } '
     + 'type KI = keyof I; type KD = keyof D; String(KI === KD);')).toBe('true');
 });

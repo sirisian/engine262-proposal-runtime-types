@@ -15,7 +15,7 @@ test("rejects override method field nested", () => {
 });
 
 test("rejects override field field", () => {
-  expectStaticTypeError("class B{x:uint8=1;} class D extends B{x:string=\"s\";}");
+  expectStaticTypeError("value class B{x:uint8=1;} value class D extends B{x:string=\"s\";}");
 });
 
 test("accepts override method field good", () => {
@@ -59,7 +59,7 @@ test("inherited generic good", () => {
 });
 
 test("inherited own field precedence", () => {
-  expect(evaluated("class B{x:uint8=1;}class D extends B{x():string{return 's';}}let d:D=new D();const x:uint8=d.x;String(x);")).toBe("1");
+  expect(evaluated("value class B{x:uint8=1;}value class D extends B{x():string{return 's';}}let d:D=new D();const x:uint8=d.x;String(x);")).toBe("1");
 });
 
 test("inherited private field", () => {

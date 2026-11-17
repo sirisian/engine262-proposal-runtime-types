@@ -13,8 +13,8 @@ import { evaluated } from '../harness.mts';
  * the default rule cannot quietly move it.
  */
 
-const AB = 'class A { x: uint32 = 0; } class B extends A { y: uint32 = 0; } ';
-const ABC = `${AB}class C extends B { z: uint32 = 0; } `;
+const AB = 'value class A { x: uint32 = 0; } value class B extends A { y: uint32 = 0; } ';
+const ABC = `${AB}value class C extends B { z: uint32 = 0; } `;
 
 test('each class in the hierarchy reports its own width', () => {
   expect(evaluated(`${ABC}A.byteLength + '/' + B.byteLength + '/' + C.byteLength;`)).toBe('4/8/12');

@@ -24,7 +24,7 @@ import { evaluated, ok, expectThrown } from '../harness.mts';
  * about a type.
  */
 
-const byArity = 'class C { x: uint32 = 0;'
+const byArity = 'value class C { x: uint32 = 0;'
   + ' constructor(a: uint32) { this.x = 1; }'
   + ' constructor(a: uint32, b: uint32) { this.x = 2; } } ';
 const byType = 'class D { x: uint32 = 0;'
@@ -52,7 +52,7 @@ test('an unmatched construction is refused, not silently routed', () => {
 test('`super` reaches the right overload', () => {
   // A derived constructor calls the base's [[Construct]], so it dispatches by the
   // same path rather than by one of its own.
-  expect(evaluated(`${byArity} class S extends C { constructor() { super((1 := uint32), (2 := uint32)); } }`
+  expect(evaluated(`${byArity} value class S extends C { constructor() { super((1 := uint32), (2 := uint32)); } }`
     + ' String(Number(new S().x));')).toBe('2');
 });
 
@@ -68,7 +68,7 @@ test('the annotation is what turns it on', () => {
 test('a single constructor is untouched', () => {
   // The dispatch is skipped entirely where there is nothing to choose between, so
   // an ordinary class pays nothing and behaves as before.
-  expect(evaluated('class E { x: uint32 = 0; constructor(a: uint32) { this.x = 7; } }'
+  expect(evaluated('value class E { x: uint32 = 0; constructor(a: uint32) { this.x = 7; } }'
     + ' String(Number(new E((1 := uint32)).x));')).toBe('7');
   expect(evaluated('class P { constructor(a) { this.a = a; } } String(new P(5).a);')).toBe('5');
 });
@@ -104,7 +104,7 @@ test('every one-parameter overload is a converting constructor', () => {
   expect(evaluated(`${M} let t: M = (1 := uint32); String(Number(t.v));`)).toBe('1');
   expect(evaluated(`${M} let t: M = "s"; String(Number(t.v));`)).toBe('2');
   // A sole one-parameter constructor converts as it always did.
-  expect(evaluated('class N { v: uint32 = 0; constructor(a: uint32) { this.v = 9; } }'
+  expect(evaluated('value class N { v: uint32 = 0; constructor(a: uint32) { this.v = 9; } }'
     + ' let t: N = (1 := uint32); String(Number(t.v));')).toBe('9');
   // An overload of another arity is not a converting constructor and does not
   // disturb the one that is.

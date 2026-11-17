@@ -77,7 +77,7 @@ test('the rule stands down where the vector mentions a type parameter', () => {
   // unconditionally, so a generic class could not carry a vector field at all.
   expect(ok('function f<T: type>(v: vector.<T, 4>) { return v; }')).toBe(true);
   expect(ok('class B<T: type> { v: vector.<T, 4> | null = null; }')).toBe(true);
-  expect(ok('class G<N: uint32> { v: vector.<uint8, N> | null = null; }')).toBe(true);
+  expect(ok('value class G<N: uint32> { v: vector.<uint8, N> | null = null; }')).toBe(true);
   expect(ok('type V<N: uint32> = vector.<uint8, N>;')).toBe(true);
 });
 

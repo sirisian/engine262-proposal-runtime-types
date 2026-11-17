@@ -285,7 +285,7 @@
     {
       "name": "boundary-field",
       "modules": {
-        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;class C{a:float32.<{m:1}>;constructor(){this.a=source;}}new C();"
+        "main": "type Dim={m:int32};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float32<const X:Dim>{operator float32.<X>(){if(String(X.m)!==\"1\")throw new Error(\"capture\");return this;}}const source:float32=3;value class C{a:float32.<{m:1}>;constructor(){this.a=source;}}new C();"
       },
       "expected": {
         "status": "fulfilled",

@@ -298,7 +298,7 @@
       "name": "source conversion retains instance receiver",
       "steps": [
         {
-          "source": "class S{value:string=\"ok\";operator string(){const read=()=>this;const s:S=read();return s.value;}}const s:any=new S();const text:string=s;text;",
+          "source": "value class S{value:string=\"ok\";operator string(){const read=()=>this;const s:S=read();return s.value;}}const s:any=new S();const text:string=s;text;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -312,7 +312,7 @@
       "name": "inherited source receiver retains declaration context",
       "steps": [
         {
-          "source": "class S{value:string=\"ok\";operator string(){const read=()=>this;const s:S=read();return s.value;}}class D extends S{}const s:any=new D();const text:string=s;text;",
+          "source": "value class S{value:string=\"ok\";operator string(){const read=()=>this;const s:S=read();return s.value;}}value class D extends S{}const s:any=new D();const text:string=s;text;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -326,7 +326,7 @@
       "name": "following instance and static contexts restored",
       "steps": [
         {
-          "source": "class C{value:string=\"ok\";static value:string=\"static\";operator C(v:any){const receiver:undefined=this;return new C();}read():string{return this.value;}static read():string{return this.value;}}new C().read()+\"/\"+C.read();",
+          "source": "value class C{value:string=\"ok\";static value:string=\"static\";operator C(v:any){const receiver:undefined=this;return new C();}read():string{return this.value;}static read():string{return this.value;}}new C().read()+\"/\"+C.read();",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -340,7 +340,7 @@
       "name": "following arithmetic operator receiver restored",
       "steps": [
         {
-          "source": "class C{value:number=2;operator C(v:any){const receiver:undefined=this;return new C();}operator +(other:C):number{return this.value+other.value;}}String(new C()+new C());",
+          "source": "value class C{value:number=2;operator C(v:any){const receiver:undefined=this;return new C();}operator +(other:C):number{return this.value+other.value;}}String(new C()+new C());",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -411,7 +411,7 @@
       "name": "inbound property read has no instance",
       "steps": [
         {
-          "source": "class C{value:number=1;operator C(v:any){const value:number=this.value;return new C();}}\"entered\";",
+          "source": "value class C{value:number=1;operator C(v:any){const value:number=this.value;return new C();}}\"entered\";",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

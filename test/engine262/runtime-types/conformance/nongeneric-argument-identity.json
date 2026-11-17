@@ -368,7 +368,7 @@
       "name": "self field keeps own nominal argument",
       "steps": [
         {
-          "source": "function make(){reference class C{next:C|null=null;}return type C;}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(new A().next===null);",
+          "source": "function make(){class C{next:C|null=null;}return type C;}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(new A().next===null);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

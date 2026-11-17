@@ -46,15 +46,15 @@ test('the refusal names the control', () => {
 });
 
 test('a literal argument still sets the control', () => {
-  expect(evaluated('@size(16) class A { x: float64 = 0; } String((type A).byteLength);')).toBe('16');
-  expect(evaluated('@alignAll(8) class A { x: uint8 = 0; } String((type A).alignment);')).toBe('8');
-  expect(evaluated('class A { @offset(4) x: uint8 = 0; } String((type A).byteLength);')).toBe('5');
+  expect(evaluated('@size(16) value class A { x: float64 = 0; } String((type A).byteLength);')).toBe('16');
+  expect(evaluated('@alignAll(8) value class A { x: uint8 = 0; } String((type A).alignment);')).toBe('8');
+  expect(evaluated('value class A { @offset(4) x: uint8 = 0; } String((type A).byteLength);')).toBe('5');
 });
 
 test('a control with no argument is unaffected', () => {
   // `@packed` is a bare name, so there is no argument to read and nothing to
   // refuse.
-  expect(evaluated('@packed class A { a: uint.<3> = 0; b: uint.<5> = 0; } String((type A).byteLength);')).toBe('1');
+  expect(evaluated('@packed value class A { a: uint.<3> = 0; b: uint.<5> = 0; } String((type A).byteLength);')).toBe('1');
 });
 
 test('the size a literal fixes is still enforced', () => {

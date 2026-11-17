@@ -53,7 +53,7 @@ test('a class constructor inside a structure reports its constructor signature; 
   expect(evaluated('class C { static x = 1; constructor(v: uint8) {} } String(Reflect.typeOf({ C }));')).toBe('{ C: (v: uint.<8>) => C }');
   expect(evaluated('class C { static x = 1; constructor(v: uint8) {} } String(Reflect.typeOf(C));')).toBe('(v: uint.<8>) => C');
   // Two classes with identical default constructors are two types.
-  expect(evaluated('class C { x: uint8 = 1; } class D { y: string = ""; } String(Reflect.typeOf(C)) + " " + String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('() => C true');
+  expect(evaluated('value class C { x: uint8 = 1; } value class D { y: string = ""; } String(Reflect.typeOf(C)) + " " + String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('() => C true');
   expect(evaluated('enum E { A, B } String(Reflect.typeOf({ E }));')).toBe('{ E: { 0: E, 1: E, A: E, B: E } }');
 });
 

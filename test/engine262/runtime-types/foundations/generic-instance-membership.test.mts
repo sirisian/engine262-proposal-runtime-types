@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-const G = 'class G<T: type> { x: uint8; } ';
+const G = 'value class G<T: type> { x: uint8; } ';
 
 test('a specialized instance is a member of its own type', () => {
   // A generic class APPLICATION is a distinct constructor with its own prototype, and an
@@ -32,14 +32,14 @@ test('membership still discriminates, and still refuses what it should', () => {
 });
 
 test('the shapes that already worked are unchanged', () => {
-  expect(evaluated('class P { x: uint8; } String(new P() is P);')).toBe('true');
+  expect(evaluated('value class P { x: uint8; } String(new P() is P);')).toBe('true');
   // A bare construction of a generic class constructs a specialization, from
   // its context where the arguments reach nothing (#sec-constructing-a-generic-class);
   // with neither, the naming error rather than an instance of an open type.
   expect(evaluated(`${G} let b: G.<uint8> = new G(); String(b is G.<uint8>);`)).toBe('true');
   expectThrown(`${G} new G();`, 'is not determined by the arguments and has no default');
   expect(evaluated(`${G} let b: G.<uint8> = new G.<uint8>(); String(b.x);`)).toBe('0');
-  expect(evaluated('class C<T: type = uint8> { x: uint8; } let c: C = new C(); String(c.x);')).toBe('0');
+  expect(evaluated('value class C<T: type = uint8> { x: uint8; } let c: C = new C(); String(c.x);')).toBe('0');
 });
 
 test('the three-way contradiction is resolved, not traded', () => {

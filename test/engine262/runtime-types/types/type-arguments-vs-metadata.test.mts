@@ -78,7 +78,7 @@ test('metadata still reads as metadata on every base that accepts it', () => {
   expect(kind("type T = [uint8, string].<{ brand: 'V' }>;")).toBe('parameterized');
   expect(kind("interface I { a: uint8 } type T = I.<{ brand: 'V' }>;")).toBe('parameterized');
   expect(kind("type Box<T: type> = { v: T }; type T = Box.<uint8>.<{ brand: 'V' }>;")).toBe('parameterized');
-  expect(kind("class C<T: type> { v: T; constructor(v: T) { this.v = v; } } type T = C.<uint8>.<{ brand: 'V' }>;")).toBe('parameterized');
+  expect(kind("value class C<T: type extends value> { v: T; constructor(v: T) { this.v = v; } } type T = C.<uint8>.<{ brand: 'V' }>;")).toBe('parameterized');
   expect(kind("type E = string.<{ brand: 'E' }>; type T = E.<{ brand: 'N' }>;")).toBe('parameterized');
 });
 
@@ -151,7 +151,7 @@ test('a HIGHER-KINDED parameter is applied, not read as metadata', () => {
   // The deferred reading must not swallow this. `W` is bound to a generic
   // DECLARATION, so `W.<uint8>` is an application and has parameters left to
   // supply; only a binding with none reads its argument as metadata.
-  expect(evaluated('type Identity<T: type> = T; class C<W<_>: type> { v: W.<uint8>; }'
+  expect(evaluated('type Identity<T: type> = T; value class C<W<_>: type> { v: W.<uint8>; }'
     + " String('ok');")).toBe('ok');
 });
 

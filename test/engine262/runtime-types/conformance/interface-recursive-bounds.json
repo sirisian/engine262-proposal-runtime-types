@@ -503,7 +503,7 @@
     {
       "name": "generic-class-dependent-bound",
       "modules": {
-        "main": "interface I<A:type,T:type extends I.<A,T>>{get():T;value:A;}class C<U:type> implements I.<U,C.<U>>{value:U;get():C.<U>{return this;}}I.<string,C.<string>>;I.<number,C.<number>>;"
+        "main": "interface I<A:type,T:type extends I.<A,T>>{get():T;value:A;}value class C<U:type extends value> implements I.<U,C.<U>>{value:U;get():C.<U>{return this;}}I.<string,C.<string>>;I.<number,C.<number>>;"
       },
       "expected": {
         "status": "fulfilled",

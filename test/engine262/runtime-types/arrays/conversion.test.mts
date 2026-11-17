@@ -65,7 +65,7 @@ test('every position a tuple may occupy converts', () => {
   // a return, a field, and a nesting - the boundary is the same one
   expect(evaluated("function f(): [uint8, string] { return [1, 'x']; }"
     + ' const r = f(); String(r[0] is uint8);')).toBe('true');
-  expect(evaluated("class C { t: [uint8, string] = [1, 'x']; }"
+  expect(evaluated("value class C { t: [uint8, string] = [1, 'x']; }"
     + ' String(new C().t[0] is uint8);')).toBe('true');
   expect(evaluated("const a: [[uint8], string] = [[1], 'x']; String(a[0][0] is uint8);")).toBe('true');
   // a tuple position whose type is an ARRAY converts through the array rule

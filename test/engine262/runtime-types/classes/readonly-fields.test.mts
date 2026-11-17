@@ -17,7 +17,7 @@ import { evaluated, expectThrown, runFlagOff, expectStaticTypeError, ok } from '
 // -- Permitted assignments -----------------------------------------------------
 test('a readonly field is assignable in its initializer', () => {
   expect(evaluated('class A { readonly x = 5; } let a = new A(); String(a.x);')).toBe('5');
-  expect(evaluated('class A { readonly id: uint32 = (7 := uint32); } let a = new A(); String(a.id);')).toBe('7');
+  expect(evaluated('value class A { readonly id: uint32 = (7 := uint32); } let a = new A(); String(a.id);')).toBe('7');
 });
 
 test('a readonly field is assignable in the declaring class constructor', () => {
@@ -83,12 +83,12 @@ test('a static readonly field is the same member through a subclass', () => {
   // A specialization of a generic class has its own static fields.
   expect(evaluated('class G<T: type> { static readonly z: uint8 = 9; } const S = G.<uint8>; const o: any = { S }; let r = String(S.z); try { o.S.z = 3; r += "stored"; } catch (e) { r += e.name; } r;')).toBe('9TypeError');
   // An instance field of the same name is another member.
-  expect(evaluated('class H { static readonly n: uint8 = 4; n: uint8 = 1; } const h = new H(); h.n = 2; String(h.n) + String(H.n);')).toBe('24');
+  expect(evaluated('value class H { static readonly n: uint8 = 4; n: uint8 = 1; } const h = new H(); h.n = 2; String(h.n) + String(H.n);')).toBe('24');
 });
 
 test('the value of a static readonly field is read-only where it is a value type', () => {
-  expect(evaluated(`class A { a: uint8; } class H { static readonly origin: A = new A(); } const o: any = { H }; ${UNSEEN}attempt(() => { o.H.origin = new A(); }); attempt(() => { o.H.origin.a = 3; }); const c = H.origin; c.a = 9; out + String(H.origin.a) + String(c.a);`)).toBe('TypeError,TypeError,09');
-  expect(evaluated('reference class R { x: uint8; } class H { static readonly r: R = new R(); } H.r.x = 5; String(H.r.x);')).toBe('5');
+  expect(evaluated(`value class A { a: uint8; } class H { static readonly origin: A = new A(); } const o: any = { H }; ${UNSEEN}attempt(() => { o.H.origin = new A(); }); attempt(() => { o.H.origin.a = 3; }); const c = H.origin; c.a = 9; out + String(H.origin.a) + String(c.a);`)).toBe('TypeError,TypeError,09');
+  expect(evaluated('class R { x: uint8; } class H { static readonly r: R = new R(); } H.r.x = 5; String(H.r.x);')).toBe('5');
 });
 
 // -- readonly as a field name --------------------------------------------------
@@ -100,9 +100,9 @@ test('readonly is still usable as a field name', () => {
 // -- Object.freeze makes fields readonly ---------------------------------------
 test('freezing a typed instance makes its fields readonly in every mode', () => {
   // sloppy mode: a write after freeze is a TypeError, not a silent failure
-  expectThrown('class A { x: uint8 = (1 := uint8); } let a = new A(); Object.freeze(a); a.x = (2 := uint8);');
+  expectThrown('value class A { x: uint8 = (1 := uint8); } let a = new A(); Object.freeze(a); a.x = (2 := uint8);');
   // and the instance reports as frozen
-  expect(evaluated('class A { x: uint8 = (1 := uint8); } let a = new A(); Object.freeze(a); String(Object.isFrozen(a));')).toBe('true');
+  expect(evaluated('value class A { x: uint8 = (1 := uint8); } let a = new A(); Object.freeze(a); String(Object.isFrozen(a));')).toBe('true');
 });
 
 test('freezing an ordinary object is unchanged', () => {
@@ -188,10 +188,10 @@ test('a method may not be extracted from the object it belongs to', () => {
   // rather than a TypeError inside it." It used to fail INSIDE the body, with
   // "Cannot convert undefined to object" when it read a typed field off
   // undefined.
-  expectThrown('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+  expectThrown('value class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
     + ' type Free = () => uint8; let f: Free = (new C()).read;');
   // Calling it through the object is untouched.
-  expect(evaluated('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+  expect(evaluated('value class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
     + ' const c = new C(); String(c.read());')).toBe('5');
 });
 
@@ -202,9 +202,9 @@ test('a method still satisfies an interface and an object type', () => {
   // method a `C` and the interface's an `I` would make the class's the
   // narrower, which contravariance rejects - refusing a program that is sound.
   expect(evaluated('interface I { read(): uint8 }'
-    + ' class C implements I { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+    + ' value class C implements I { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
     + ' let i: I = new C(); String(i.read());')).toBe('5');
-  expect(evaluated('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
+  expect(evaluated('value class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
     + ' type Shape = { read(): uint8 }; let o: Shape = new C(); String(o.read());')).toBe('5');
 });
 
@@ -223,7 +223,7 @@ test('a method still satisfies an interface and an object type', () => {
 // ---------------------------------------------------------------------------
 
 test('a write through a known base is an Early Error', () => {
-  const C = 'class C { readonly v: uint8 = 0; } const c = new C(); ';
+  const C = 'value class C { readonly v: uint8 = 0; } const c = new C(); ';
   expectStaticTypeError(`${C} c.v = 1;`);
   // "every assignment form is a write": a compound assignment and an update are
   // writes, and the operation that refuses them already sat outside the `=`
@@ -237,10 +237,10 @@ test('a write through a known base is an Early Error', () => {
 });
 
 test('what stays writable', () => {
-  expect(ok('class C { v: uint8 = 0; } const c = new C(); c.v = 1;')).toBe(true);
-  expect(evaluated('class C { readonly v: uint8 = 3; } const c = new C(); let u: uint8 = c.v; String(u);')).toBe('3');
+  expect(ok('value class C { v: uint8 = 0; } const c = new C(); c.v = 1;')).toBe(true);
+  expect(evaluated('value class C { readonly v: uint8 = 3; } const c = new C(); let u: uint8 = c.v; String(u);')).toBe('3');
   // The constructor is where a `readonly` field is filled.
-  expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
+  expect(evaluated('value class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
 });
 
 // ---------------------------------------------------------------------------
@@ -256,21 +256,21 @@ test('what stays writable', () => {
 // ---------------------------------------------------------------------------
 
 test('an access through `this` is checked as one through a binding is', () => {
-  expectStaticTypeError('class B { v: uint8 = 0; m() { this.v = "s"; } }');
-  expectStaticTypeError('class B { v: uint8 = 0; m() { let s: string = this.v; } }');
+  expectStaticTypeError('value class B { v: uint8 = 0; m() { this.v = "s"; } }');
+  expectStaticTypeError('value class B { v: uint8 = 0; m() { let s: string = this.v; } }');
   expectStaticTypeError('class B { m(a: uint8) {} go() { this.m("s"); } }');
   // Correct uses are unaffected.
-  expect(evaluated('class B { v: uint8 = 0; m(a: uint8) { this.v = a; } go() { this.m(3); return this.v; } } String(new B().go());')).toBe('3');
+  expect(evaluated('value class B { v: uint8 = 0; m(a: uint8) { this.v = a; } go() { this.m(3); return this.v; } } String(new B().go());')).toBe('3');
 });
 
 test('the readonly rule is about a class\'s USERS, so `this` is exempt', () => {
   // The form the modifier exists for. This only arose once `this` had a type:
   // before, the receiver was ~any~ and the member was never found readonly.
-  expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
+  expect(evaluated('value class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
   // A user still cannot write it, and the field's TYPE is still enforced
   // through `this`.
-  expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
-  expectStaticTypeError('class C { v: uint8 = 0; m() { this.v = "s"; } }');
+  expectStaticTypeError('value class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
+  expectStaticTypeError('value class C { v: uint8 = 0; m() { this.v = "s"; } }');
 });
 
 // ---------------------------------------------------------------------------
@@ -290,14 +290,14 @@ test('the readonly rule is about a class\'s USERS, so `this` is exempt', () => {
 // ---------------------------------------------------------------------------
 
 test('an access through `super` is checked against the base class', () => {
-  const B = 'class B { v: uint8 = 0; m(a: uint8) { return a; } } ';
-  expectStaticTypeError(`${B} class D extends B { go() { super.v = "s"; } }`);
-  expectStaticTypeError(`${B} class D extends B { go() { super.m("s"); } }`);
-  expectStaticTypeError(`${B} class D extends B { go() { let s: string = super.v; } }`);
+  const B = 'value class B { v: uint8 = 0; m(a: uint8) { return a; } } ';
+  expectStaticTypeError(`${B} value class D extends B { go() { super.v = "s"; } }`);
+  expectStaticTypeError(`${B} value class D extends B { go() { super.m("s"); } }`);
+  expectStaticTypeError(`${B} value class D extends B { go() { let s: string = super.v; } }`);
   // The compound spelling follows, as it does for every other target.
-  expectStaticTypeError(`${B} class D extends B { go() { super.v += "s"; } }`);
+  expectStaticTypeError(`${B} value class D extends B { go() { super.v += "s"; } }`);
   // Correct uses are unaffected, and reach the base's member.
-  expect(evaluated(`${B} class D extends B { go() { super.v = 1; return super.m(2); } } String(new D().go());`)).toBe('2');
+  expect(evaluated(`${B} value class D extends B { go() { super.v = 1; return super.m(2); } } String(new D().go());`)).toBe('2');
 });
 
 // ---------------------------------------------------------------------------
@@ -318,20 +318,20 @@ test('an access through `super` is checked against the base class', () => {
 // ---------------------------------------------------------------------------
 
 test('a readonly field is filled by the constructor and by nothing else', () => {
-  expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
-  expect(evaluated('class C { readonly v: uint8 = 3; } String(new C().v);')).toBe('3');
+  expect(evaluated('value class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
+  expect(evaluated('value class C { readonly v: uint8 = 3; } String(new C().v);')).toBe('3');
   // The hole the coarse exemption left.
-  expectStaticTypeError('class C { readonly v: uint8 = 0; m() { this.v = 1; } }');
+  expectStaticTypeError('value class C { readonly v: uint8 = 0; m() { this.v = 1; } }');
   // A user still cannot write it, from outside or through a compound operator.
-  expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
-  expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v += 1;');
+  expectStaticTypeError('value class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
+  expectStaticTypeError('value class C { readonly v: uint8 = 0; } const c = new C(); c.v += 1;');
 });
 
 test('the exemption is only about writability, not about the type', () => {
   // A field WITHOUT the modifier is writable from a method, as before.
-  expect(evaluated('class C { v: uint8 = 0; m() { this.v = 1; return this.v; } } String(new C().m());')).toBe('1');
+  expect(evaluated('value class C { v: uint8 = 0; m() { this.v = 1; return this.v; } } String(new C().m());')).toBe('1');
   // ...and the constructor's own store is still checked against the type.
-  expectStaticTypeError('class C { v: uint8; constructor() { this.v = "s"; } }');
+  expectStaticTypeError('value class C { v: uint8; constructor() { this.v = "s"; } }');
 });
 
 // #sec-typed-classes: "an assignment... through reflection is a *TypeError*".
@@ -339,21 +339,21 @@ test('the exemption is only about writability, not about the type', () => {
 // readonly field a new value.
 test('a definition that gives a readonly field another value is refused', () => {
   const TRY = "const at = (f) => { try { return f(); } catch (e) { return e.name; } }; ";
-  expect(evaluated(`${TRY}class H { readonly n: uint8 = 1; m: uint8 = 1; } const h = new H(); [at(() => { Object.defineProperty(h, 'n', { value: 5 }); return 'value'; }), at(() => { Object.defineProperty(h, 'n', { get() { return 9; } }); return 'getter'; }), at(() => { Object.defineProperties(h, { n: { value: 7 } }); return 'properties'; }), at(() => { Object.defineProperty(h, 'm', { value: 6 }); return 'writable'; })].join() + String(h.n) + String(h.m);`)).toBe('TypeError,TypeError,TypeError,writable16');
+  expect(evaluated(`${TRY}value class H { readonly n: uint8 = 1; m: uint8 = 1; } const h = new H(); [at(() => { Object.defineProperty(h, 'n', { value: 5 }); return 'value'; }), at(() => { Object.defineProperty(h, 'n', { get() { return 9; } }); return 'getter'; }), at(() => { Object.defineProperties(h, { n: { value: 7 } }); return 'properties'; }), at(() => { Object.defineProperty(h, 'm', { value: 6 }); return 'writable'; })].join() + String(h.n) + String(h.m);`)).toBe('TypeError,TypeError,TypeError,writable16');
   // Restating the value, and changing an attribute, are not assignments.
-  expect(evaluated('class H { readonly n: uint8 = 1; } const h = new H(); Object.defineProperty(h, "n", { value: h.n }); Object.freeze(h); String(h.n) + String(Object.isFrozen(h));')).toBe('1true');
+  expect(evaluated('value class H { readonly n: uint8 = 1; } const h = new H(); Object.defineProperty(h, "n", { value: h.n }); Object.freeze(h); String(h.n) + String(Object.isFrozen(h));')).toBe('1true');
   // The declaring constructor assigns as before, and a static field is covered.
-  expect(evaluated('class H { readonly n: uint8; constructor(n: uint8) { this.n = n; } } String(new H(4).n);')).toBe('4');
+  expect(evaluated('value class H { readonly n: uint8; constructor(n: uint8) { this.n = n; } } String(new H(4).n);')).toBe('4');
   expect(evaluated(`${TRY}class H { static readonly n: uint8 = 1; } at(() => { Object.defineProperty(H, 'n', { value: 5 }); return 'defined'; }) + String(H.n);`)).toBe('TypeError1');
 });
 
 // Freezing is an act on one object. A copy is another value, the reader's own.
 test('a copy of a frozen value is not frozen, and keeps its declared readonly fields', () => {
-  const B = 'class A { a: uint8; } class B { p: A; q: [2].<uint8>; n: uint8; readonly k: uint8 = 3; readonly r: A; } ';
+  const B = 'value class A { a: uint8; } value class B { p: A; q: [2].<uint8>; n: uint8; readonly k: uint8 = 3; readonly r: A; } ';
   const TRY = "let out = ''; const at = (f) => { try { f(); out += 'ok,'; } catch (e) { out += e.name + ','; } }; ";
   expect(evaluated(`${B}${TRY}const b = new B(); Object.freeze(b); const c = b; const u: any = { c }; out += String(Object.isFrozen(b)) + String(Object.isFrozen(c)) + ','; at(() => { c.n = 4; }); at(() => { c.p.a = 4; }); at(() => { c.q[0] = 4; }); at(() => { u.c.k = 9; }); at(() => { u.c.r.a = 9; }); at(() => { b.n = 5; }); out + String(c.n) + String(c.p.a) + String(c.q[0]) + String(c.k) + String(c.r.a) + String(b.n) + String(b.p.a);`)).toBe('truefalse,ok,ok,ok,TypeError,TypeError,TypeError,4443000');
   // Every place a value is copied to: a field, an element, a parameter and a return.
-  expect(evaluated(`${B}class H { b: B; } const b = new B(); Object.freeze(b); const h = new H(); h.b = b; h.b.n = 2; const arr: [1].<B> = [b]; arr[0].n = 3; function same(x: B): B { x.n = 4; return x; } const d = same(b); String(h.b.n) + String(arr[0].n) + String(d.n) + String(b.n);`)).toBe('2340');
+  expect(evaluated(`${B}value class H { b: B; } const b = new B(); Object.freeze(b); const h = new H(); h.b = b; h.b.n = 2; const arr: [1].<B> = [b]; arr[0].n = 3; function same(x: B): B { x.n = 4; return x; } const d = same(b); String(h.b.n) + String(arr[0].n) + String(d.n) + String(b.n);`)).toBe('2340');
   // The original stays frozen, and is still equal to a copy that was not changed.
   expect(evaluated(`${B}const b = new B(); Object.freeze(b); const c = b; let r = ''; try { b.n = 1; } catch (e) { r = e.name; } r + String(c === b);`)).toBe('TypeErrortrue');
 });

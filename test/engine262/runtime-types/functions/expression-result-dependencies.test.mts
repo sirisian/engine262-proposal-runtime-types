@@ -69,11 +69,11 @@ test('foreign closure supplies its own class identity', async () => {
   const agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);
   const foreign = new ManagedRealm();
-  const closure = EnsureCompletion(foreign.evaluateScriptSkipDebugger('function make(){class P{tag:string="foreign";constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make();const b=make();function use(flag:boolean){const result=flag?a("yes"):b("yes");return result;}use;'));
+  const closure = EnsureCompletion(foreign.evaluateScriptSkipDebugger('function make(){value class P{tag:string="foreign";constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make();const b=make();function use(flag:boolean){const result=flag?a("yes"):b("yes");return result;}use;'));
   expect(closure.Type).toBe('normal');
   const local = new ManagedRealm();
   X(CreateDataPropertyOrThrow(local.GlobalObject, Value('foreign'), closure.Value as import('#self').Value));
-  const result = EnsureCompletion(local.evaluateScriptSkipDebugger('class P{tag:string="wrong";}foreign(true).tag;'));
+  const result = EnsureCompletion(local.evaluateScriptSkipDebugger('value class P{tag:string="wrong";}foreign(true).tag;'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue: () => string }).stringValue()).toBe('foreign');
 });

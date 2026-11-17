@@ -35,7 +35,7 @@ for (const operation of [
 for (const fields of ['readonly x: uint8; readonly y: uint8;', 'readonly x: uint8; y: uint8;']) {
   test.each(['a[k] = 1;', 'a[k]++;', '[a[k]] = [1];', 'let ref p = a[k]; p = 1;'])
   (`finite keys preserve permissions (${fields}): %s`, (operation) => {
-    expectStaticTypeError(`class C { ${fields} } function f(a: C, k: 'x' | 'y') { ${operation} }`);
+    expectStaticTypeError(`value class C { ${fields} } function f(a: C, k: 'x' | 'y') { ${operation} }`);
   });
 }
 
@@ -51,21 +51,21 @@ test('numeric key alternatives are property identities', () => {
 });
 
 test.each([
-  'class A { x: uint8; } class B { y: uint8; } function f(a: A | B) { a.z = 1; }',
-  'class A { x: uint8; } class B { y: uint8; } function f(a: A | B) { a.x = 1; }',
-  "class A { x: uint8; } class B { y: uint8; } function f(a: A | B) { a['z'] = 1; }",
-  'class A { x: uint8; } function f(a: A | { z: uint8 }) { a.z = 1; }',
+  'value class A { x: uint8; } value class B { y: uint8; } function f(a: A | B) { a.z = 1; }',
+  'value class A { x: uint8; } value class B { y: uint8; } function f(a: A | B) { a.x = 1; }',
+  "value class A { x: uint8; } value class B { y: uint8; } function f(a: A | B) { a['z'] = 1; }",
+  'value class A { x: uint8; } function f(a: A | { z: uint8 }) { a.z = 1; }',
 ])('closed storage is checked per receiver: %s', expectStaticTypeError);
 
 test.each([
-  'class Base { x: uint8; } class A extends Base {} class B extends Base {} function f(a: A | B) { a.x = 1; }',
+  'value class Base { x: uint8; } value class A extends Base {} value class B extends Base {} function f(a: A | B) { a.x = 1; }',
   'function f(a: { x: uint8 } | { y: uint8 }) { a.z = 1; }',
-  'class A { x: uint8; } function f(a: any) { a.z = 1; }',
+  'value class A { x: uint8; } function f(a: any) { a.z = 1; }',
 ])('inherited and open storage retain their behavior: %s', (source) => expect(ok(source)).toBe(true));
 
 for (const [classes, params, location] of [
-  ['class A { x: uint.<1>; } class B { x: uint.<2>; }', 'a: A | B', 'a.x'],
-  ['class C { x: uint.<1>; y: uint.<2>; }', "a: C, k: 'x' | 'y'", 'a[k]'],
+  ['value class A { x: uint.<1>; } value class B { x: uint.<2>; }', 'a: A | B', 'a.x'],
+  ['value class C { x: uint.<1>; y: uint.<2>; }', "a: C, k: 'x' | 'y'", 'a[k]'],
 ]) {
   test.each([
     `let ref r = ${location};`, `let ref r = other; ref r = ${location};`,
@@ -76,14 +76,14 @@ for (const [classes, params, location] of [
 }
 
 test.each([
-  'class A { x: uint8; } class B { x: uint16; } function f(a: A | B) { let ref r = a.x; }',
-  'class A { x: uint.<1>; } class B { x: uint8; } function f(a: A | B) { let ref r = a.x; }',
-  "class C { x: uint.<1>; y: uint8; } function f(a: C, k: 'x' | 'y') { let ref r = a[k]; }",
+  'value class A { x: uint8; } value class B { x: uint16; } function f(a: A | B) { let ref r = a.x; }',
+  'value class A { x: uint.<1>; } value class B { x: uint8; } function f(a: A | B) { let ref r = a.x; }',
+  "value class C { x: uint.<1>; y: uint8; } function f(a: C, k: 'x' | 'y') { let ref r = a[k]; }",
   'function f(a: { x: uint.<1> } | { x: uint.<2> }) { let ref r = a.x; }',
 ])('byte storage and mixed/unknown provenance remain eligible: %s', (source) => expect(ok(source)).toBe(true));
 
 test('a deferred mixed selection still checks layout at runtime', () => {
-  expectThrownKind('class A { x: uint.<1>; } class B { x: uint8; } function f(a: A | B) { let ref r = a.x; } f(new A());', 'TypeError');
+  expectThrownKind('value class A { x: uint.<1>; } value class B { x: uint8; } function f(a: A | B) { let ref r = a.x; } f(new A());', 'TypeError');
 });
 
 test('a computed key is evaluated once when the store executes', () => {
@@ -91,12 +91,12 @@ test('a computed key is evaluated once when the store executes', () => {
 });
 
 test('the declaring constructor may initialize every selected own readonly field', () => {
-  expect(ok("class C { readonly x: uint8; readonly y: uint8; constructor(k: 'x' | 'y') { this[k] = 1; } }")).toBe(true);
+  expect(ok("value class C { readonly x: uint8; readonly y: uint8; constructor(k: 'x' | 'y') { this[k] = 1; } }")).toBe(true);
 });
 
 test.each([
-  'reference class A { x: uint8; } reference class B { y: uint8; } function f(a: A | B) { a.z = 1; }',
-  'class A { x: uint8; set operator[](i: uint32, v: uint8) {} } class B { x: uint8; set operator[](i: uint32, v: uint8) {} } function f(a: A | B) { a[0] = 1; }',
+  'class A { x: uint8; } class B { y: uint8; } function f(a: A | B) { a.z = 1; }',
+  'value class A { x: uint8; set operator[](i: uint32, v: uint8) {} } value class B { x: uint8; set operator[](i: uint32, v: uint8) {} } function f(a: A | B) { a[0] = 1; }',
 ])('preserves reference-class and index-operator exemptions: %s', (source) => expect(ok(source)).toBe(true));
 
 test('a substituted reference retains runtime liveness checks', () => {

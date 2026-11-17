@@ -144,7 +144,7 @@
       "name": "checked result at field",
       "steps": [
         {
-          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();class H{n:uint8=raw;}const n=new H().n;String(n is uint8)+\"/\"+calls;",
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();value class H{n:uint8=raw;}const n=new H().n;String(n is uint8)+\"/\"+calls;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -382,7 +382,7 @@
       "name": "value-class inbound result is copied",
       "steps": [
         {
-          "source": "class P{x:uint8=1;operator P(v:boolean){return saved;}}let saved:any=new P();const raw:any=true;const result:P=raw;result.x=9;String(saved.x)+\"/\"+String(result.x);",
+          "source": "value class P{x:uint8=1;operator P(v:boolean){return saved;}}let saved:any=new P();const raw:any=true;const result:P=raw;result.x=9;String(saved.x)+\"/\"+String(result.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

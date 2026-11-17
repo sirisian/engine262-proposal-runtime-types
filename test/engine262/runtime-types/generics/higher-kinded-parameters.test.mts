@@ -76,7 +76,7 @@ test('the shared tokens still mean what they did', () => {
 
 test('an unapplied higher-kinded parameter is not a type', () => {
   expect(ok('class C<W<_>: type> { v: W; }')).toBe(false);
-  expect(ok('type Identity<T: type> = T; class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('type Identity<T: type> = T; value class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
 });
 
 test('the refusal names the arity', () => {
@@ -100,8 +100,8 @@ test('arity distinguishes parameters of the same name', () => {
   // `W<_>` and `W<_, _>` are different parameters: one stands for a
   // one-argument declaration and the other for a two-argument one, so a value
   // of one is not a value of the other.
-  expect(ok('class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
-  expect(ok('class C<W<_, _>: type> { v: W.<uint8, uint16>; }')).toBe(true);
+  expect(ok('value class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('value class C<W<_, _>: type> { v: W.<uint8, uint16>; }')).toBe(true);
   // #sec-higher-kinded-parameters: an application supplies exactly the arity,
   // so the two-hole parameter applied to one argument is refused.
   expect(ok('class C<W<_, _>: type> { v: W.<uint8>; }')).toBe(false);
@@ -110,7 +110,7 @@ test('arity distinguishes parameters of the same name', () => {
 test('an ordinary parameter is untouched', () => {
   // Arity 0 is what every existing generic declares, and the whole generics
   // suite is the real assertion; these are the shapes closest to the change.
-  expect(ok('class C<T: type> { v: T; }')).toBe(true);
+  expect(ok('value class C<T: type extends value> { v: T; }')).toBe(true);
   expect(ok('class C<T: type> { m(v: T): T { return v; } }')).toBe(true);
   expect(ok('function f<T: type>(x: T): T { return x; }')).toBe(true);
 });
@@ -132,7 +132,7 @@ test('an ordinary parameter is untouched', () => {
  */
 
 test('a bound higher-kinded parameter applies', () => {
-  expect(ok('type Identity<T: type> = T; class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('type Identity<T: type> = T; value class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
   expect(ok('class C<W<_>: type> { v: W; }')).toBe(false);
 });
 

@@ -337,7 +337,7 @@ test('a parameter without a default still needs its argument', () => {
 // enforced in one position and ignored in the other.
 
 test('a specialized field holds the argument type', () => {
-  const box = 'class Box<T: type> { value: T; set(v: T) { this.value = v; } } ';
+  const box = 'value class Box<T: type extends value> { value: T; set(v: T) { this.value = v; } } ';
   // Defaulted from the BOUND type rather than left undefined.
   expect(evaluated(`${box} const b = new Box.<uint8>(); \`\${b.value}:\${b.value is uint8}\`;`)).toBe('0:true');
   // A literal converts, as it does at any other typed field.
@@ -355,7 +355,7 @@ test('a plain literal is not a value of the parameter, in a field as in a bindin
   // field's type was invisible to the checker. What substitutes is the field's
   // TYPE: a value that arrives AS a `T` reads back at the bound type.
   expectError('class A<T: type> { value: T = 0; }');
-  expect(evaluated('class A<T: type> { value: T; constructor(v: T) { this.value = v; } } const a = new A.<uint8>(0);'
+  expect(evaluated('value class A<T: type extends value> { value: T; constructor(v: T) { this.value = v; } } const a = new A.<uint8>(0);'
     + ' `${a.value}:${a.value is uint8}`;')).toBe('0:true');
 });
 
@@ -372,7 +372,7 @@ test('two specializations do not share a field type', () => {
   // The way this fix could go wrong worse than the bug: one field type resolved
   // once and reused, so `Box.<uint8>` and `Box.<string>` would agree on what
   // they accept.
-  const box = 'class Box<T: type> { value: T; } ';
+  const box = 'value class Box<T: type extends value> { value: T; } ';
   expect(evaluated(`${box} const u = new Box.<uint8>(); const s = new Box.<string>();`
     + ' u.value = 5; s.value = "text"; `${u.value}:${s.value}`;')).toBe('5:text');
   expectThrown(`${box} const u = new Box.<uint8>(); u.value = "s";`);
@@ -384,8 +384,8 @@ test('an unspecialized generic does not construct', () => {
   // naming error: there is no instance whose `v: T` is open.
   // Every construction of a generic class is a construction of a specialization.
   expectThrown('class U<T: type> { v: T; } new U();', 'is not determined by the arguments and has no default');
-  expect(evaluated('class U<T: type> { v: T; } typeof new U.<uint8>();')).toBe('object');
-  expect(evaluated('class U<T: type> { v: T; } const u: U.<uint8> = new U(); typeof u;')).toBe('object');
+  expect(evaluated('value class U<T: type extends value> { v: T; } typeof new U.<uint8>();')).toBe('object');
+  expect(evaluated('value class U<T: type extends value> { v: T; } const u: U.<uint8> = new U(); typeof u;')).toBe('object');
 });
 
 // -- Declaration-site variance (#sec-generic-variance) ------------------------

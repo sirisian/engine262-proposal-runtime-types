@@ -508,7 +508,7 @@
       "name": "value elements copied into result",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const outer:any={item:raw};const t:{item:[P,number=7]}=outer;p.value=2;outer.item[0].value+\"/\"+raw[0].value+\"/\"+outer.item[1];",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const outer:any={item:raw};const t:{item:[P,number=7]}=outer;p.value=2;outer.item[0].value+\"/\"+raw[0].value+\"/\"+outer.item[1];",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -522,7 +522,7 @@
       "name": "value defaults copied on independent constructions",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}type T=[number,P=new P()];const outer:any={a:[1],b:[2]};const t:{a:T,b:T}=outer;outer.a[1].value=8;String(outer.b[1].value);",
+          "source": "value class P{value:uint8=1;}type T=[number,P=new P()];const outer:any={a:[1],b:[2]};const t:{a:T,b:T}=outer;outer.a[1].value=8;String(outer.b[1].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

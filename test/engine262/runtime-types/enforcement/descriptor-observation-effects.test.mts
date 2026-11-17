@@ -258,7 +258,7 @@ test('a typed Symbol property retains its descriptor type', () => {
 });
 
 test('a typed class field exposes its declared storage type', () => {
-  expect(observe('class C{x:uint8=1;}const target=new C();',
+  expect(observe('value class C{x:uint8=1;}const target=new C();',
     'String(Object.getOwnPropertyDescriptor(target,"x").type===(type uint8));'))
     .toMatchObject({ completion: 'normal', bodyEntered: true, value: 'true' });
 });

@@ -10,7 +10,7 @@ const BUS = 'interface Bus { on(name: string): void; }';
 
 test('a class satisfying its interface declares and evaluates', () => {
   expect(evaluated(`${BUS} class Ok implements Bus { on(name: string): void {} } "declared";`)).toBe('declared');
-  expect(evaluated('interface P { x: uint8; y?: string; } class C implements P { x: uint8 = 1; } "declared";')).toBe('declared');
+  expect(evaluated('interface P { x: uint8; y?: string; } value class C implements P { x: uint8 = 1; } "declared";')).toBe('declared');
 });
 
 test('a missing required member is refused, naming the class, the member, and the interface', () => {
@@ -19,7 +19,7 @@ test('a missing required member is refused, naming the class, the member, and th
 
 test('a member of the wrong type is refused', () => {
   expectThrown(`${BUS} class Bad implements Bus { on(x: uint8): void {} }`, 'not assignable');
-  expectThrown('interface P { x: uint8; } class C implements P { x: string = "s"; }', 'not assignable');
+  expectThrown('interface P { x: uint8; } value class C implements P { x: string = "s"; }', 'not assignable');
 });
 
 test('a generic method satisfies through identity up to renaming, and a different shape does not', () => {

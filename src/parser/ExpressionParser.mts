@@ -395,21 +395,29 @@ export abstract class ExpressionParser extends FunctionParser {
   // for the abstract-method placement check.
   protected currentClassModifiers: readonly string[] | null = null;
 
-  // ClassModifier : one of `abstract` `sealed` `reference` `dynamic`
+  // ClassModifier : one of `value` `abstract` `sealed` `dynamic`
   // True when a run of class modifiers can begin here; the run must reach
   // `class`, so a lone identifier never takes this route.
+  //
+  // [no LineTerminator here] between a modifier and what follows it, as between
+  // `async` and `function`. Each of these words is an identifier, and `value` a
+  // common one: `const y = value` followed on the next line by a class
+  // declaration is two statements, and must stay two.
   protected testClassModifierRun(): boolean {
     if (!surroundingAgent.feature('runtime-types')) {
       return false;
     }
-    if (!(this.test('abstract') || this.test('sealed') || this.test('reference')
+    if (!(this.test('value') || this.test('abstract') || this.test('sealed')
       || this.test('dynamic') || this.test('partial'))) {
       return false;
     }
+    if (this.peekAhead().hadLineTerminatorBefore) {
+      return false;
+    }
     return this.testAhead(Token.CLASS)
+      || this.testAhead('value')
       || this.testAhead('abstract')
       || this.testAhead('sealed')
-      || this.testAhead('reference')
       || this.testAhead('dynamic')
       || this.testAhead('partial');
   }
@@ -2025,7 +2033,7 @@ export abstract class ExpressionParser extends FunctionParser {
           // is decided by the VALUE it produces rather than by its syntax - a
           // composite backed by an array is a Tuple and one backed by an object
           // is a Record, the same split the composites' intern key carries.
-          if (!this.test(Token.CLASS)) {
+          if (!this.test(Token.CLASS) && !this.testClassModifierRun()) {
             const node = this.startNode<ParseNode.DecoratedExpression>();
             node.Decorators = decorators ?? [];
             node.Expression = this.parseAssignmentExpression();
@@ -2368,13 +2376,16 @@ export abstract class ExpressionParser extends FunctionParser {
     if (ClassModifiers && ClassModifiers.includes('sealed') && ClassModifiers.includes('dynamic')) {
       this.raise(Throw.SyntaxError('A class cannot be both sealed and dynamic'));
     }
-    // proposal-runtime-types #sec-reference-classes: `reference` with `abstract`,
-    // `sealed` or `dynamic` is REDUNDANT rather than an error - each of those is
-    // already a reference type - so nothing is raised for the combination. The
-    // one pairing that IS contradictory is `reference dynamic`, and it is
-    // already refused by the `dynamic` rules below rather than here: a `dynamic`
-    // class is unsealed and keeps no fixed layout, which is a different claim
-    // from being reached through a reference, so the two do not conflict.
+    // proposal-runtime-types #sec-value-classes: a value class is held by value and
+    // each of `sealed`, `abstract` and `dynamic` is held by reference, so `value`
+    // combines with none of them. A `partial` declaration adds members to a class
+    // that exists and declares no kind of its own.
+    if (ClassModifiers && ClassModifiers.includes('value')) {
+      const other = ClassModifiers.find((word) => word !== 'value');
+      if (other !== undefined) {
+        this.raise(Throw.SyntaxError('A class cannot be both value and $1', Value(other)));
+      }
+    }
     node.ClassModifiers = ClassModifiers;
     this.expect(Token.CLASS);
     // proposal-runtime-types: a `partial class` re-opens an existing class to add

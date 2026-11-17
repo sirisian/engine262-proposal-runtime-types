@@ -774,7 +774,7 @@
       "name": "SoA argument ref p:P",
       "steps": [
         {
-          "source": "class P{x:uint8;}const s=new SoA.<P>();s.push({x:1});function f(ref p:P,label:string){p.x=2;return label;}const result=f(ref s[0],label:\"ok\");result+\"/\"+String(s[0].x);",
+          "source": "value class P{x:uint8;}const s=new SoA.<P>();s.push({x:1});function f(ref p:P,label:string){p.x=2;return label;}const result=f(ref s[0],label:\"ok\");result+\"/\"+String(s[0].x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -788,7 +788,7 @@
       "name": "SoA argument p:ref P",
       "steps": [
         {
-          "source": "class P{x:uint8;}const s=new SoA.<P>();s.push({x:1});function f(p:ref P,label:string){p.x=2;return label;}const result=f(ref s[0],label:\"ok\");result+\"/\"+String(s[0].x);",
+          "source": "value class P{x:uint8;}const s=new SoA.<P>();s.push({x:1});function f(p:ref P,label:string){p.x=2;return label;}const result=f(ref s[0],label:\"ok\");result+\"/\"+String(s[0].x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -802,7 +802,7 @@
       "name": "SoA argument p:P",
       "steps": [
         {
-          "source": "class P{x:uint8;}const s=new SoA.<P>();s.push({x:1});function f(p:P,label:string){p.x=2;return label+String(p.x);}const result=f(ref s[0],label:\"ok\");result+\"/\"+String(s[0].x);",
+          "source": "value class P{x:uint8;}const s=new SoA.<P>();s.push({x:1});function f(p:P,label:string){p.x=2;return label+String(p.x);}const result=f(ref s[0],label:\"ok\");result+\"/\"+String(s[0].x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

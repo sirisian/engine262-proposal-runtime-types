@@ -243,7 +243,7 @@
     {
       "name": "closed-base-field-wins",
       "modules": {
-        "main": "interface Has{get():string;}class B{get:boolean=false;}class E<T:type> extends B implements Has{}partial class E{get():string{return \"ok\";}}new E.<uint8>();"
+        "main": "interface Has{get():string;}value class B{get:boolean=false;}class E<T:type> extends B implements Has{}partial class E{get():string{return \"ok\";}}new E.<uint8>();"
       },
       "expected": {
         "status": "rejected",
@@ -588,7 +588,7 @@
     {
       "name": "primary-field-hides-inherited-method",
       "modules": {
-        "main": "interface Has{get():string;}class B{get:boolean=false;}class E<T:type> extends B implements Has{get():string{return \"ok\";}}"
+        "main": "interface Has{get():string;}value class B{get:boolean=false;}class E<T:type> extends B implements Has{get():string{return \"ok\";}}"
       },
       "expected": {
         "status": "rejected",

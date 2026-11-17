@@ -24,11 +24,11 @@ test.each([
   ],
   [
     "guard private primitive",
-    "class C{#x:uint8;f(v:C|uint8){if(v instanceof uint8){v.#x;}}}"
+    "value class C{#x:uint8;f(v:C|uint8){if(v instanceof uint8){v.#x;}}}"
   ],
   [
     "guard private primitive control",
-    "class C{#x:uint8;f(v:uint8){v.#x;}}"
+    "value class C{#x:uint8;f(v:uint8){v.#x;}}"
   ],
   [
     "guard null run",

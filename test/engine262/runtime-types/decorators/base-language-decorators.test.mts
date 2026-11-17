@@ -31,5 +31,5 @@ test('a class decorator runs for its effects', () => {
 test('the reserved layout controls still work beside them', () => {
   // The seven are read syntactically and are not base-language decorators; both
   // spellings coexist, which is what made the blanket refusal look plausible.
-  expect(evaluated("class A { @align(4) x: uint8 = 0; } 'ok';")).toBe('ok');
+  expect(evaluated("value class A { @align(4) x: uint8 = 0; } 'ok';")).toBe('ok');
 });

@@ -14,7 +14,7 @@ test('soa: SoA is a type name, and its layout is the column rule', () => {
   // engine. A type name, and unlike the library names beside it in the table NOT a global constructor
   // whose prototype chain decides membership. An alias: a binding of a type with no default is refused,
   // and `SoA` is a library nominal rather than a value type class.
-  expect(evaluated('class T { x: float32; } type S = SoA.<T, 4>; "ok";')).toBe('ok');
+  expect(evaluated('value class T { x: float32; } type S = SoA.<T, 4>; "ok";')).toBe('ok');
 
   // The layout table's row: "each field of `T` is a COLUMN of _N_ elements,
   // PADDED AND ALIGNED ON ITS OWN, and the size is the sum of the columns. An
@@ -26,7 +26,7 @@ test('soa: SoA is a type name, and its layout is the column rule', () => {
   // float64 at offset 8), so four of them is 64 - while the columns are 4 bytes
   // of `a`, aligned up to 8, then 32 of `b`: 40. A `T` that does not pad gives
   // the same number either way, so testing only that would prove nothing.
-  const pad = 'class Pad { a: uint8; b: float64; } ';
+  const pad = 'value class Pad { a: uint8; b: float64; } ';
   expect(evaluated(`${pad} String((type Pad).byteLength * 4);`)).toBe('64');
   expect(evaluated(`${pad} const S = type SoA.<Pad, 4>; String(S.byteLength) + "/" + String(S.alignment);`)).toBe('40/8');
 
@@ -34,7 +34,7 @@ test('soa: SoA is a type name, and its layout is the column rule', () => {
   // itself a value type stays one column, interleaved within itself. A consumer wanting `origin` as a
   // contiguous stream of Vec2 gets it, and flattening the class is how a program asks for the other
   // thing.
-  const proj = 'class Vec2 { x: float32; y: float32; } class P { origin: Vec2; direction: Vec2; speed: float32; } ';
+  const proj = 'value class Vec2 { x: float32; y: float32; } value class P { origin: Vec2; direction: Vec2; speed: float32; } ';
   expect(evaluated(`${proj} String((type SoA.<P, 4>).byteLength);`)).toBe('80');
   // `elementByteLength` is the PER-ELEMENT SUM OF COLUMN STRIDES, which is not
   // the interleaved stride: `Pad` sums to 9 where its interleaved stride is 16.
@@ -50,9 +50,9 @@ test('soa: SoA is a type name, and its layout is the column rule', () => {
   // REJECTIONS. "`T` must be a value type class, since a class with a reference
   // field has nothing to split", and a growable `SoA.<T>` has no layout as a
   // TYPE exactly as `[].<T>` has none - its instances have a byteLength.
-  expectThrown('class Ref { s: string; } (type SoA.<Ref, 4>).byteLength;');
+  expectThrown('value class Ref { s: string; } (type SoA.<Ref, 4>).byteLength;');
   expectThrown('class U { a: uint8; b; } (type SoA.<U, 4>).byteLength;');
-  expectThrown('class Ok { a: uint8; } (type SoA.<Ok>).byteLength;');
+  expectThrown('value class Ok { a: uint8; } (type SoA.<Ok>).byteLength;');
 });
 
 // -- threading: shared classes and threads -------------------------------------
@@ -64,7 +64,7 @@ test('soa: allocation, capacity, and reserve', () => {
   // offsets, not one allocation per column: a byte view over an `SoA` sees the columns in declaration
   // order, one after another. That is also its serialization order, and it is why `byteLength` is a sum
   // of column lengths.
-  const pad = 'class Pad { a: uint8; b: float64; } ';
+  const pad = 'value class Pad { a: uint8; b: float64; } ';
 
   // A FIXED extent is its length from construction, as `[N].<T>` is.
   expect(evaluated(`${pad} const s = new SoA.<Pad, 4>(); String(s.length) + "/" + String(s.capacity);`)).toBe('4/4');
@@ -100,7 +100,7 @@ test('soa: the element boundary gathers and scatters', () => {
   // Every operation that reads or writes an element behaves as it does on `[].<T>`
   // (#sec-soa-references). `particles[0]` gathers a value from the columns and
   // `particles[0] = spawned` scatters the fields into them.
-  const pad = 'class Pad { a: uint8; b: float64; } ';
+  const pad = 'value class Pad { a: uint8; b: float64; } ';
 
   // ZERO-FILL: a fixed
   // `SoA.<T, N>` holds N zero-filled elements from construction, the same rule
@@ -130,7 +130,7 @@ test('soa: the element boundary gathers and scatters', () => {
 });
 
 test('soa: push, pop, fill, and toArray', () => {
-  const pad = 'class Pad { a: uint8; b: float64; } ';
+  const pad = 'value class Pad { a: uint8; b: float64; } ';
   // `push` "appends to every column" and returns the new length; growth doubles
   // the capacity, so a run of pushes does not recopy every column each time.
   const pushed = `${pad} const g = new SoA.<Pad>(); g.push({ a: 1, b: 1.5 }); g.push({ a: 2, b: 2.5 }); `;
@@ -160,7 +160,7 @@ test('soa: a ref into an SoA is a column set and an index', () => {
   // SET AND AN INDEX, and field accesses through it are a load or store on one column. This is NOT a
   // proxy object. A proxy traps every field access and checks it at the read; this computes the read
   // from the columns directly, which is the mechanism a placed instance's fields already use.
-  const pad = 'class Pad { a: uint8; b: float64; } const s = new SoA.<Pad, 3>(); const seed = new Pad(); seed.a = 1; seed.b = 1.5; s[0] = seed; ';
+  const pad = 'value class Pad { a: uint8; b: float64; } const s = new SoA.<Pad, 3>(); const seed = new Pad(); seed.a = 1; seed.b = 1.5; s[0] = seed; ';
   expect(evaluated(`${pad} const ref p = s[0]; String(Number(p.a)) + "/" + String(Number(p.b));`)).toBe('1/1.5');
   // THE WRITE THROUGH, which is the whole point: a `ref` names storage, so a
   // field write lands in the column and is visible through the element API.
@@ -175,7 +175,7 @@ test('soa: a ref into an SoA is a column set and an index', () => {
   // that takes a `ref Particle`. A system written against one storage works
   // against the other" - and neither call site says which layout produced the
   // reference. No other test proves this.
-  const cross = 'class Particle { x: float32; y: float32; } '
+  const cross = 'value class Particle { x: float32; y: float32; } '
     + 'function move(ref p: Particle) { p.x++; } '
     + 'const soa = new SoA.<Particle, 2>(); const seed = new Particle(); seed.x = 10; soa[0] = seed; '
     + 'let arr: [2].<Particle>; arr[0].x = 20; '
@@ -186,12 +186,12 @@ test('soa: a ref into an SoA is a column set and an index', () => {
   // `push` that reallocates moves every column, so growing an `SoA` while a
   // reference into it is live is a TypeError, exactly as changing an array's
   // length during `ref` iteration is."
-  const grow = 'class P { a: uint8; } const g = new SoA.<P>(); const seed = new P(); seed.a = 1; '
+  const grow = 'value class P { a: uint8; } const g = new SoA.<P>(); const seed = new P(); seed.a = 1; '
     + 'g.push(seed); g.push(seed); const ref r = g[0]; ';
   expect(evaluated(`${grow} String(Number(r.a));`)).toBe('1');
   expectThrownKind(`${grow} for (let i = 0; i < 10; i = i + 1) { g.push(seed); } r.a;`, 'TypeError');
   // A fixed extent cannot grow, so a reference into one never moves.
-  expect(evaluated('class P { a: uint8; } const f = new SoA.<P, 2>(); const ref fr = f[0]; fr.a = 7; String(Number(f[0].a));')).toBe('7');
+  expect(evaluated('value class P { a: uint8; } const f = new SoA.<P, 2>(); const ref fr = f[0]; fr.a = 7; String(Number(f[0].a));')).toBe('7');
 });
 
 test('soa: reference iteration mutates in place', () => {
@@ -200,12 +200,12 @@ test('soa: reference iteration mutates in place', () => {
   // and the index - rather than a location, because a location over an SoA index would gather a COPY
   // and every write through the binding would be lost. Same distinction the `ref` binding form draws,
   // same reason it exists.
-  expect(evaluated('class P { a: uint8; } const s = new SoA.<P, 3>(); for (const ref p of s) { p.a = 7; } String(Number(s[0].a)) + String(Number(s[1].a)) + String(Number(s[2].a));')).toBe('777');
+  expect(evaluated('value class P { a: uint8; } const s = new SoA.<P, 3>(); for (const ref p of s) { p.a = 7; } String(Number(s[0].a)) + String(Number(s[1].a)) + String(Number(s[2].a));')).toBe('777');
 
   // The design's own loop, in two passes so the second reads what the first
   // wrote - which is what shows the writes reaching the columns rather than a
   // per-iteration copy.
-  const particles = 'class Particle { position: float32; velocity: float32; } '
+  const particles = 'value class Particle { position: float32; velocity: float32; } '
     + 'const particles = new SoA.<Particle, 3>(); '
     + 'for (const ref p of particles) { p.velocity = 2; } '
     + 'const dt = 0.5; '
@@ -215,13 +215,13 @@ test('soa: reference iteration mutates in place', () => {
   // The length is fixed, and for a sharper reason than an array's: growth
   // reallocates every column, so a reference taken in an earlier iteration is
   // invalidated by a `push` in a later one.
-  const grow = 'class Particle { position: float32; velocity: float32; } '
+  const grow = 'value class Particle { position: float32; velocity: float32; } '
     + 'const g = new SoA.<Particle>(); const seed = new Particle(); g.push(seed); g.push(seed); ';
   expectThrownKind(`${grow} for (const ref p of g) { g.push(seed); }`, 'TypeError');
 
   // Array reference iteration is untouched - the SoA path is taken only for an
   // SoA, and the loop that already worked still does.
-  expect(evaluated('class P { a: uint8; } let d: [2].<P>; for (const ref q of d) { q.a = 3; } String(Number(d[0].a)) + String(Number(d[1].a));')).toBe('33');
+  expect(evaluated('value class P { a: uint8; } let d: [2].<P>; for (const ref q of d) { q.a = 3; } String(Number(d[0].a)) + String(Number(d[1].a));')).toBe('33');
 });
 
 test('array views alias bytes that already exist', () => {
@@ -261,7 +261,7 @@ test('soa: a fixed SoA views bytes that already exist', () => {
   // The view form of an SoA is the array view's (#sec-array-views). It is A CALL ON THE TYPE rather than
   // a `new`, because nothing is constructed, and the buffer argument accepts what `[].<T>`'s does, so
   // an `SoA` view and a `[].<uint8>` over the same bytes alias the same memory.
-  const pad = 'class Pad { a: uint8; b: float64; } const need = (type SoA.<Pad, 4>).byteLength; '
+  const pad = 'value class Pad { a: uint8; b: float64; } const need = (type SoA.<Pad, 4>).byteLength; '
     + 'const align = (type SoA.<Pad, 4>).alignment; const buf = new ArrayBuffer(need + 32); ';
   expect(evaluated(`${pad} const v = SoA.<Pad, 4>(buf, 0); String(v.length) + "/" + String(v.byteLength);`)).toBe('4/40');
   // ALIASING is the assertion that matters: a view that copied would pass a
@@ -276,7 +276,7 @@ test('soa: a fixed SoA views bytes that already exist', () => {
   expect(evaluated(`${pad} String(SoA.<Pad, 4>(buf, align).length);`)).toBe('4');
   // "The buffer must hold SoA.<T, Length>.byteLength bytes past byteOffset, or
   // it's a TypeError."
-  expectThrownKind('class Pad { a: uint8; b: float64; } SoA.<Pad, 4>(new ArrayBuffer(8), 0);', 'TypeError');
+  expectThrownKind('value class Pad { a: uint8; b: float64; } SoA.<Pad, 4>(new ArrayBuffer(8), 0);', 'TypeError');
 
   // "ONLY THE FIXED FORM IS VIEWABLE, and the reason is the layout rather than
   // caution ... an `SoA`'s capacity is baked into every column's offset, so
@@ -287,7 +287,7 @@ test('soa: a fixed SoA views bytes that already exist', () => {
   // "Detachment follows the fixed array view: shrinking a resizable buffer below
   // the view's extent detaches it and any access afterward is a TypeError, while
   // GROWTH NEVER INVALIDATES IT."
-  const rz = 'class Pad { a: uint8; b: float64; } const need = (type SoA.<Pad, 4>).byteLength; '
+  const rz = 'value class Pad { a: uint8; b: float64; } const need = (type SoA.<Pad, 4>).byteLength; '
     + 'const rb = new ArrayBuffer(need, { maxByteLength: need * 4 }); const v = SoA.<Pad, 4>(rb, 0); '
     + 'const seed = new Pad(); seed.a = 3; v[0] = seed; ';
   expect(evaluated(`${rz} String(Number(v[0].a));`)).toBe('3');
@@ -303,7 +303,7 @@ test('soa: a fixed SoA views bytes that already exist', () => {
 test('soa: conversion is explicit and copies, and the two types are distinct', () => {
   // #sec-structure-of-arrays: `SoA.<T>` and `[N].<T>` are DISTINCT TYPES WITH DISTINCT LAYOUTS, and
   // NEITHER IS ASSIGNABLE TO THE OTHER. Conversion is explicit and copies.
-  const arr = 'class Pad { a: uint8; } let arr: [3].<Pad>; arr[0].a = 1; arr[1].a = 2; arr[2].a = 3; ';
+  const arr = 'value class Pad { a: uint8; } let arr: [3].<Pad>; arr[0].a = 1; arr[1].a = 2; arr[2].a = 3; ';
 
   // `SoA.from` takes the element type from the array's own, so the caller does
   // not restate it, and produces a growable SoA as the signature says.
@@ -319,7 +319,7 @@ test('soa: conversion is explicit and copies, and the two types are distinct', (
 
   // `withCapacity.<T>(n)` - "Empty, capacity >= n". Its element type is a TYPE
   // argument because there is no value to infer it from.
-  expect(evaluated('class Pad { a: uint8; } const w = SoA.withCapacity.<Pad>(8); String(w.length) + "/" + String(w.capacity);')).toBe('0/8');
+  expect(evaluated('value class Pad { a: uint8; } const w = SoA.withCapacity.<Pad>(8); String(w.length) + "/" + String(w.capacity);')).toBe('0/8');
 
   // NEITHER DIRECTION ASSIGNS. The array-into-SoA direction was already an early
   // error; the SoA-into-array direction was NOT, because the membership judgment
@@ -328,21 +328,21 @@ test('soa: conversion is explicit and copies, and the two types are distinct', (
   // the design refuses: "making the two silently interchangeable ... reads well
   // until a function needs the concrete layout, and then the abstraction has to
   // be undone."
-  expectThrown('class Pad { a: uint8; } let arr: [2].<Pad>; let t: SoA.<Pad, 2> = arr;');
+  expectThrown('value class Pad { a: uint8; } let arr: [2].<Pad>; let t: SoA.<Pad, 2> = arr;');
   // Through a `let`, so the RUN-TIME refusal is what answers. A `const` bound to
   // a construction now takes that construction's type, and `SoA` is a
   // library nominal like `Map`, so the conversion is refused as an Early Error
   // before the run time is reached. Both are asserted, the early error being the
   // better answer.
-  expectThrownKind('class Pad { a: uint8; } let s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;', 'TypeError');
-  expectThrown('class Pad { a: uint8; } const s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;');
+  expectThrownKind('value class Pad { a: uint8; } let s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;', 'TypeError');
+  expectThrown('value class Pad { a: uint8; } const s = new SoA.<Pad, 2>(); let u: [2].<Pad> = s;');
 });
 
 test('soa: fields projects each column as a live view', () => {
   // #sec-structure-of-arrays: `fields` projects each of `T`'s immediate fields as a `Span.<F>`
   // (#sec-span-type) ALIASING THAT FIELD'S COLUMN. The views are LIVE: writes through them are visible
   // through the element API and the reverse.
-  const pad = 'class Pad { a: uint8; b: float64; } const s = new SoA.<Pad, 3>(); ';
+  const pad = 'value class Pad { a: uint8; b: float64; } const s = new SoA.<Pad, 3>(); ';
   expect(evaluated(`${pad} Object.getOwnPropertyNames(s.fields).join(",");`)).toBe('a,b');
   expect(evaluated(`${pad} String(s.fields.a.length);`)).toBe('3');
 
@@ -356,12 +356,12 @@ test('soa: fields projects each column as a live view', () => {
 
   // "The projections live under `fields` RATHER THAN ON THE CONTAINER so a field
   // named `length` or `push` collides with nothing."
-  expect(evaluated('class C { length: uint8; push: uint8; } const t = new SoA.<C, 2>(); String(t.length) + "/" + String(t.fields.length.length);')).toBe('2/2');
+  expect(evaluated('value class C { length: uint8; push: uint8; } const t = new SoA.<C, 2>(); String(t.length) + "/" + String(t.fields.length.length);')).toBe('2/2');
 
   // THE SPLIT IS ONE LEVEL. "Nested value type fields project as columns of
   // that type, so `p.fields.origin` is a `[].<Vec2>` and `p.fields.origin.x`
   // doesn't exist; flatten the class if that's what's wanted."
-  const proj = 'class Vec2 { x: float32; y: float32; } class Projectile { origin: Vec2; direction: Vec2; speed: float32; } const p = new SoA.<Projectile, 4>(); ';
+  const proj = 'value class Vec2 { x: float32; y: float32; } value class Projectile { origin: Vec2; direction: Vec2; speed: float32; } const p = new SoA.<Projectile, 4>(); ';
   expect(evaluated(`${proj} Object.getOwnPropertyNames(p.fields).join(",");`)).toBe('origin,direction,speed');
   expect(evaluated(`${proj} String(p.fields.origin.length) + "/" + String(p.fields.origin.x);`)).toBe('4/undefined');
   // A nested column is read and written as an aggregate at its offset - the
@@ -379,7 +379,7 @@ test('soa: the three open questions, resolved', () => {
   // Rust's borrow checker refuses the program outright and pays nothing, but
   // nothing here marks the end of a projection's life, so a container that
   // could not grow while one had ever been taken could never grow again.
-  const grow = 'class P { a: uint8; } const g = new SoA.<P>(); const seed = new P(); seed.a = 1; '
+  const grow = 'value class P { a: uint8; } const g = new SoA.<P>(); const seed = new P(); seed.a = 1; '
     + 'g.push(seed); g.push(seed); const col = g.fields.a; ';
   expect(evaluated(`${grow} String(Number(col[0]));`)).toBe('1');
   expectThrownKind(`${grow} for (let i = 0; i < 20; i = i + 1) { g.push(seed); } col[0];`, 'TypeError');
@@ -387,31 +387,31 @@ test('soa: the three open questions, resolved', () => {
   // invalidated at all - which is the case the performance argument cares
   // about, since its accesses have no check to make.
   expect(evaluated(`${grow} for (let i = 0; i < 20; i = i + 1) { g.push(seed); } String(Number(g.fields.a[0]));`)).toBe('1');
-  expect(evaluated('class P { a: uint8; } const f = new SoA.<P, 3>(); const fc = f.fields.a; fc[0] = 5; String(Number(f[0].a));')).toBe('5');
+  expect(evaluated('value class P { a: uint8; } const f = new SoA.<P, 3>(); const fc = f.fields.a; fc[0] = 5; String(Number(f[0].a));')).toBe('5');
 
   // 2. `Length` is defaulted, so `SoA.<T>` and `SoA.<T, 0>` name ONE type - as a
   // defaulted parameter does in C++, TypeScript, and Rust alike. Two interned
   // records for one type cost a `===` that answers *false* and, under
   // monomorphization, room for two specializations of the same generic.
-  expect(evaluated('class P { a: uint8; } String((type SoA.<P>) === (type SoA.<P, 0>));')).toBe('true');
-  expect(evaluated('class P { a: uint8; } const g = new SoA.<P>(); String(g.length) + "/" + String(g.capacity);')).toBe('0/0');
+  expect(evaluated('value class P { a: uint8; } String((type SoA.<P>) === (type SoA.<P, 0>));')).toBe('true');
+  expect(evaluated('value class P { a: uint8; } const g = new SoA.<P>(); String(g.length) + "/" + String(g.capacity);')).toBe('0/0');
 
   // 3. Each column is aligned to its ELEMENT TYPE and to nothing wider. A vector
   // width is a property of the host, so folding one in would make the same SoA a
   // different size on different implementations and cost `byteLength` its place
   // among the compile-time constants. Where the allocation is PLACED is a
   // separate question and the implementation's own.
-  expect(evaluated('class P { a: uint8; b: float64; } String((type SoA.<P, 4>).alignment);')).toBe('8');
-  expect(evaluated('class F { x: float32; } String((type SoA.<F, 4>).alignment);')).toBe('4');
+  expect(evaluated('value class P { a: uint8; b: float64; } String((type SoA.<P, 4>).alignment);')).toBe('8');
+  expect(evaluated('value class F { x: float32; } String((type SoA.<F, 4>).alignment);')).toBe('4');
   // And byteLength stays exactly the sum the layout rule computes.
-  expect(evaluated('class P { a: uint8; b: float64; } String((type SoA.<P, 4>).byteLength);')).toBe('40');
+  expect(evaluated('value class P { a: uint8; b: float64; } String((type SoA.<P, 4>).byteLength);')).toBe('40');
 });
 
 test('a boolean SoA column is written and read as a boolean', () => {
   // A `ref` write and a scatter both reach the column writer, which must store a boolean
   // as a boolean: `RequireType` answers a BooleanValue for a `boolean` column, and the
   // writer must not treat it as a Number on the way into the buffer.
-  const R = 'class R { x: float32; id: uint32; alive: boolean; } ';
+  const R = 'value class R { x: float32; id: uint32; alive: boolean; } ';
   const s = `${R} const s = new SoA.<R, 4>(); `;
   // A `ref` write.
   expect(evaluated(`${s} const ref p = s[0]; p.alive = true; String(s[0].alive);`)).toBe('true');
@@ -436,11 +436,11 @@ test('the boolean fix does not disturb the layout or its neighbours', () => {
   // layout-compatible with the same declaration in those languages. Rust's `bool` is ONE BYTE, and the
   // placement code maps a boolean column to Uint8 - so the representation was never in question and
   // nothing about the storage changes.
-  const G = 'class G { x: float32; y: float32; id: uint32; alive: boolean; } ';
+  const G = 'value class G { x: float32; y: float32; id: uint32; alive: boolean; } ';
   // 4+4+4+1 = 13 bytes per element, packed, times 8.
   expect(evaluated(`${G} String(new SoA.<G, 8>().byteLength);`)).toBe('104');
   // One byte per boolean, which is the layout rule at its most visible.
-  expect(evaluated('class B { a: boolean; b: boolean; c: boolean; } '
+  expect(evaluated('value class B { a: boolean; b: boolean; c: boolean; } '
     + 'String(new SoA.<B, 4>().byteLength);')).toBe('12');
   // The numeric columns still write, and columns stay isolated.
   expect(evaluated(`${G} const s = new SoA.<G, 4>(); const ref p = s[2]; `
@@ -448,7 +448,7 @@ test('the boolean fix does not disturb the layout or its neighbours', () => {
     + 'String(s[2].x) + "/" + String(s[2].id) + "/" + String(s[3].x);')).toBe('1.5/77/0');
   // An ENUM column is still REFUSED with a diagnostic rather than an assertion -
   // the neighbouring kind, and the model for what "handled" looks like here.
-  expectThrown('enum C: uint8 { Red = 0 } class E { c: C; } '
+  expectThrown('enum C: uint8 { Red = 0 } value class E { c: C; } '
     + 'const s = new SoA.<E, 2>(); s[0].c;');
   // A gather is a COPY (#sec-soa-references: "the same detached copy the expression `s[i]` produces") -
   // specified, not a defect, and easy to mistake for one. What it is NOT is a different value: `G` is a

@@ -395,7 +395,7 @@
     {
       "name": "local-narrowing",
       "modules": {
-        "main": "class A{x:uint8=1;}function f(v:A|null):uint8{if(v instanceof A)return v.x;return 0;}if(f(new A())!==1)throw new Error(\"result\");"
+        "main": "value class A{x:uint8=1;}function f(v:A|null):uint8{if(v instanceof A)return v.x;return 0;}if(f(new A())!==1)throw new Error(\"result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -407,7 +407,7 @@
     {
       "name": "local-value-query",
       "modules": {
-        "main": "class A{x:uint8=1;}const v=new A();if(String(v instanceof A)!==\"true\")throw new Error(\"result\");"
+        "main": "value class A{x:uint8=1;}const v=new A();if(String(v instanceof A)!==\"true\")throw new Error(\"result\");"
       },
       "expected": {
         "status": "fulfilled",
@@ -419,7 +419,7 @@
     {
       "name": "import-narrowing",
       "modules": {
-        "dep": "export class A{x:uint8=1;}",
+        "dep": "export value class A{x:uint8=1;}",
         "main": "import {A} from \"dep\";function f(v:A|null):uint8{if(v instanceof A)return v.x;return 0;}if(f(new A())!==1)throw new Error(\"result\");"
       },
       "expected": {
@@ -433,7 +433,7 @@
     {
       "name": "import-value-query",
       "modules": {
-        "dep": "export class A{x:uint8=1;}",
+        "dep": "export value class A{x:uint8=1;}",
         "main": "import {A} from \"dep\";const v=new A();if(String(v instanceof A)!==\"true\")throw new Error(\"result\");"
       },
       "expected": {
@@ -942,7 +942,7 @@
     {
       "name": "completed-result-readmission",
       "modules": {
-        "main": "class A{x:uint8=1;}function read():A|null{return new A();}const v:A|null=read();if((v instanceof A)&&v.x!==1)throw new Error(\"result\");"
+        "main": "value class A{x:uint8=1;}function read():A|null{return new A();}const v:A|null=read();if((v instanceof A)&&v.x!==1)throw new Error(\"result\");"
       },
       "expected": {
         "status": "fulfilled",

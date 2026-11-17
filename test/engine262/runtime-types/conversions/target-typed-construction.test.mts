@@ -59,7 +59,7 @@ test('the target may be any CONSTRUCTIBLE type, not only a class', () => {
   expect(evaluated('let a: [].<float32x4> = [new.(1,2,3,4), new.(1,2,3,4)]; String(a.length);')).toBe('2');
   expect(evaluated('function g(v: float32x4) { return 1; } String(g(new.(1, 2, 3, 4)));')).toBe('1');
   // A class target is unchanged.
-  expect(evaluated('class C { x: uint8 = 0; } let c: C = new.(); String(Number(c.x));')).toBe('0');
+  expect(evaluated('value class C { x: uint8 = 0; } let c: C = new.(); String(Number(c.x));')).toBe('0');
 
   // An ARRAY is filled with its element's default, which is what the written
   // form does: `new [4].<uint8>()` and `new [4].<uint8>(1,2,3,4)` both give
@@ -91,16 +91,16 @@ test('a type named by a BINDING is a target too', () => {
   // the declaration evaluates. `new.()` did not, being the one construct that
   // needs its type BEFORE the value exists, so a valid program was refused
   // statically with a message about a contextual type the position HAD.
-  expect(evaluated('class C { x: uint8 = 0; } const MyT = C;'
+  expect(evaluated('value class C { x: uint8 = 0; } const MyT = C;'
     + ' let a: MyT = new.(); String(Number(a.x));')).toBe('0');
   // Including one introduced at runtime, which is why absence can never be
   // proved at check time and why the refusal could not have been made correct by
   // resolving harder.
-  expect(evaluated('class C { x: uint8 = 0; } globalThis.MyT = C;'
+  expect(evaluated('value class C { x: uint8 = 0; } globalThis.MyT = C;'
     + ' let a: MyT = new.(); String(Number(a.x));')).toBe('0');
   // A `type` alias resolves statically and always worked; it is the pair with
   // the line above that shows the two kinds of name apart.
-  expect(evaluated('class C { x: uint8 = 0; } type MyT = C;'
+  expect(evaluated('value class C { x: uint8 = 0; } type MyT = C;'
     + ' let a: MyT = new.(); String(Number(a.x));')).toBe('0');
 
   // The Syntax Error is kept for what it is about: nothing written for the
@@ -139,7 +139,7 @@ test('a resolvable annotation still constructs, however the type is named', () =
   // The four rows the change that caused the regression existed for. They must
   // pass UNEDITED - if propagating the annotation's error reached these, it went
   // further than intended.
-  const C = 'class C { x: uint8 = 0; } ';
+  const C = 'value class C { x: uint8 = 0; } ';
   expect(evaluated(`${C} let a: C = new.(); String(Number(a.x));`)).toBe('0');
   expect(evaluated(`${C} const MyT = C; let a: MyT = new.(); String(Number(a.x));`)).toBe('0');
   expect(evaluated(`${C} globalThis.MyT2 = C; let a: MyT2 = new.(); String(Number(a.x));`)).toBe('0');

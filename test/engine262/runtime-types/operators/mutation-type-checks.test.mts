@@ -14,7 +14,7 @@ test.each(['x--', '--x'])('%s invalidates a narrowing in the opposite direction'
 
 test.each(['/=', '%='])('integer %s rejects a literal zero divisor before evaluation', (operator) => {
   expectStaticTypeError(`function f() { let n: uint8 = 1; n ${operator} 0; }`);
-  expectStaticTypeError(`class C { n: uint8 = 1; } function f(c: C) { c.n ${operator} 0; }`);
+  expectStaticTypeError(`value class C { n: uint8 = 1; } function f(c: C) { c.n ${operator} 0; }`);
   expect(ok(`function f() { let n: uint8 = 1; n ${operator} 1; } f();`)).toBe(true);
   expect(ok(`class C { operator${operator}(n: uint8): C { return this; } } const c: C = new C(); c ${operator} 0;`)).toBe(true);
   // #sec-integer-operations: the same judgment applies to `bigint` in

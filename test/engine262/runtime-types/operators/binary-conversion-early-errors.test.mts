@@ -108,7 +108,7 @@ test.each([
   ],
   [
     "control: typed member",
-    "class C{s:symbol=Symbol();}function f(c:C){c.s*2;}f(new C());"
+    "value class C{s:symbol=Symbol();}function f(c:C){c.s*2;}f(new C());"
   ],
   [
     "control: typed return",

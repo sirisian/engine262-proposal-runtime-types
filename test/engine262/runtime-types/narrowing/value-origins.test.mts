@@ -180,11 +180,11 @@ test("numeric-categories: shadowed", () => {
 });
 
 test("data-pattern: field", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";} function f(x:C){if(x is {tag:uint8}){if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";} function f(x:C){if(x is {tag:uint8}){if(x.tag is string){}}}");
 });
 
 test("data-pattern: literal", () => {
-  expectStaticTypeError("class C{tag:string=\"\";} function f(x:C){if(x is {tag:\"a\"}){if(x.tag!==\"a\"){}}}");
+  expectStaticTypeError("value class C{tag:string=\"\";} function f(x:C){if(x is {tag:\"a\"}){if(x.tag!==\"a\"){}}}");
 });
 
 test("data-pattern: composite", () => {
@@ -192,15 +192,15 @@ test("data-pattern: composite", () => {
 });
 
 test("data-pattern: match", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";} function f(x:C){return match(x){when {tag:uint8}: x.tag is string ? 1:2;default:0;};}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";} function f(x:C){return match(x){when {tag:uint8}: x.tag is string ? 1:2;default:0;};}");
 });
 
 test("data-pattern: for-in", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";} function f(x:C,keys:object){for(const k in keys){if(x is {tag:uint8}){if(x.tag is string){}}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";} function f(x:C,keys:object){for(const k in keys){if(x is {tag:uint8}){if(x.tag is string){}}}}");
 });
 
 test("data-pattern: direct", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";} function f(x:C){if(x.tag is uint8){if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";} function f(x:C){if(x.tag is uint8){if(x.tag is string){}}}");
 });
 
 test("data-pattern: getter", () => {
@@ -208,39 +208,39 @@ test("data-pattern: getter", () => {
 });
 
 test("data-pattern: field-write", () => {
-  evaluated("class C{tag:uint8|string=\"\";} function f(x:C,y:uint8|string){if(x is {tag:uint8}){x.tag=y;if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";} function f(x:C,y:uint8|string){if(x is {tag:uint8}){x.tag=y;if(x.tag is string){}}}");
 });
 
 test("data-pattern: unknown-call", () => {
-  evaluated("class C{tag:uint8|string=\"\";} function f(x:C,g:any){if(x is {tag:uint8}){g();if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";} function f(x:C,g:any){if(x is {tag:uint8}){g();if(x.tag is string){}}}");
 });
 
 test("constant-key: const", () => {
-  expectStaticTypeError("class A{x:uint8=0;} function f(x:A){const key=\"x\";if(key in x){}}");
+  expectStaticTypeError("value class A{x:uint8=0;} function f(x:A){const key=\"x\";if(key in x){}}");
 });
 
 test("constant-key: singleton-key", () => {
-  expectStaticTypeError("class A{x:uint8=0;} function f(x:A,key:\"x\"){if(key in x){}}");
+  expectStaticTypeError("value class A{x:uint8=0;} function f(x:A,key:\"x\"){if(key in x){}}");
 });
 
 test("constant-key: negative", () => {
-  expectStaticTypeError("class A{x:uint8=0;} class B{y:uint8=0;} function f(x:A|B){const key=\"x\";if(!(key in x)){if(x is A){}}}");
+  expectStaticTypeError("value class A{x:uint8=0;} value class B{y:uint8=0;} function f(x:A|B){const key=\"x\";if(!(key in x)){if(x is A){}}}");
 });
 
 test("constant-key: switch", () => {
-  expectStaticTypeError("class A{x:uint8=0;} function f(x:A){const key=\"x\";switch(true){case key in x:break;}}");
+  expectStaticTypeError("value class A{x:uint8=0;} function f(x:A){const key=\"x\";switch(true){case key in x:break;}}");
 });
 
 test("constant-key: literal", () => {
-  expectStaticTypeError("class A{x:uint8=0;} function f(x:A){if(\"x\" in x){}}");
+  expectStaticTypeError("value class A{x:uint8=0;} function f(x:A){if(\"x\" in x){}}");
 });
 
 test("constant-key: dynamic-key", () => {
-  evaluated("class A{x:uint8=0;} function f(x:A,key:string){if(key in x){}}");
+  evaluated("value class A{x:uint8=0;} function f(x:A,key:string){if(key in x){}}");
 });
 
 test("constant-key: key-union", () => {
-  evaluated("class A{x:uint8=0;} function f(x:A,key:\"x\"|\"z\"){if(key in x){}}");
+  evaluated("value class A{x:uint8=0;} function f(x:A,key:\"x\"|\"z\"){if(key in x){}}");
 });
 
 test("constant-key: structural", () => {
@@ -248,35 +248,35 @@ test("constant-key: structural", () => {
 });
 
 test("constructor-origin: parenthesized", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){if(x instanceof (A)){if(x is B){}}} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B){if(x instanceof (A)){if(x is B){}}} }");
 });
 
 test("constructor-origin: same-class", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A){if(x instanceof (A)){}} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A){if(x instanceof (A)){}} }");
 });
 
 test("constructor-origin: alias", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}} }");
 });
 
 test("constructor-origin: do-while", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){do{if(x instanceof (A)){if(x is B){}}}while(false);} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B){do{if(x instanceof (A)){if(x is B){}}}while(false);} }");
 });
 
 test("constructor-origin: bare", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){if(x instanceof A){if(x is B){}}} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B){if(x instanceof A){if(x is B){}}} }");
 });
 
 test("constructor-origin: unknown-constructor", () => {
-  evaluated("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,C:any){if(x instanceof C){if(x is B){}}} }");
+  evaluated("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B,C:any){if(x instanceof C){if(x is B){}}} }");
 });
 
 test("constructor-origin: constructor-selection", () => {
-  evaluated("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,b:boolean){const C=b?A:B;if(x instanceof C){if(x is B){}}} }");
+  evaluated("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B,b:boolean){const C=b?A:B;if(x instanceof C){if(x is B){}}} }");
 });
 
 test("constructor-origin: subject-write", () => {
-  evaluated("{ class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,y:A|B){if(x instanceof (A)){x=y;if(x is B){}}} }");
+  evaluated("{ value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B,y:A|B){if(x instanceof (A)){x=y;if(x is B){}}} }");
 });
 
 test("scalar-truthiness: truthy-string", () => {
@@ -411,11 +411,11 @@ test("copy-closure-write", () => {
 });
 
 test("copy-field", () => {
-  expectStaticTypeError("class C{v:uint8|string=\"\";} function f(c:C){const y:uint8|string=c.v;if(y is uint8){if(c.v is string){}}}");
+  expectStaticTypeError("value class C{v:uint8|string=\"\";} function f(c:C){const y:uint8|string=c.v;if(y is uint8){if(c.v is string){}}}");
 });
 
 test("copy-field-call", () => {
-  evaluated("class C{v:uint8|string=\"\";} function f(c:C,g:any){const y:uint8|string=c.v;g();if(y is uint8){if(c.v is string){}}}");
+  evaluated("value class C{v:uint8|string=\"\";} function f(c:C,g:any){const y:uint8|string=c.v;g();if(y is uint8){if(c.v is string){}}}");
 });
 
 test("tag-number-collision", () => {
@@ -471,55 +471,55 @@ test("category-global-write", () => {
 });
 
 test("pattern-explicit-member", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";} function f(x:C){if(x is {tag:let v:uint8}){if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";} function f(x:C){if(x is {tag:let v:uint8}){if(x.tag is string){}}}");
 });
 
 test("pattern-nested", () => {
-  expectStaticTypeError("class D{tag:uint8|string=\"\";}class C{inner:D=new D();}function f(x:C){if(x is {inner:{tag:uint8}}){if(x.inner.tag is string){}}}");
+  expectStaticTypeError("value class D{tag:uint8|string=\"\";}value class C{inner:D=new D();}function f(x:C){if(x is {inner:{tag:uint8}}){if(x.inner.tag is string){}}}");
 });
 
 test("pattern-failure-ambiguous", () => {
-  evaluated("class C{a:uint8|string=\"\";b:uint8|string=\"\";}function f(x:C){if(x is {a:uint8,b:uint8}){}else{if(x.a is uint8){}}}");
+  evaluated("value class C{a:uint8|string=\"\";b:uint8|string=\"\";}function f(x:C){if(x is {a:uint8,b:uint8}){}else{if(x.a is uint8){}}}");
 });
 
 test("pattern-later-getter", () => {
-  evaluated("class C{a:uint8|string=\"\";get b():uint8|string{return \"\";}}function f(x:C){if(x is {a:uint8,b:uint8}){if(x.a is string){}}}");
+  evaluated("value class C{a:uint8|string=\"\";get b():uint8|string{return \"\";}}function f(x:C){if(x is {a:uint8,b:uint8}){if(x.a is string){}}}");
 });
 
 test("pattern-prefix-write", () => {
-  evaluated("class D{tag:uint8|string=\"\";}class C{inner:D=new D();}function f(x:C,y:D){if(x is {inner:{tag:uint8}}){x.inner=y;if(x.inner.tag is string){}}}");
+  evaluated("value class D{tag:uint8|string=\"\";}value class C{inner:D=new D();}function f(x:C,y:D){if(x is {inner:{tag:uint8}}){x.inner=y;if(x.inner.tag is string){}}}");
 });
 
 test("pattern-or", () => {
-  evaluated("class C{tag:uint8|string=\"\";}function f(x:C){if(x is {tag:uint8} or {tag:string}){if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";}function f(x:C){if(x is {tag:uint8} or {tag:string}){if(x.tag is string){}}}");
 });
 
 test("key-shadow", () => {
-  evaluated("class A{x:uint8=0;}function f(x:A,k:string){const key=\"x\";{let key:string=k;if(key in x){}}}");
+  evaluated("value class A{x:uint8=0;}function f(x:A,k:string){const key=\"x\";{let key:string=k;if(key in x){}}}");
 });
 
 test("key-singleton-alias", () => {
-  expectStaticTypeError("class A{x:uint8=0;}function f(x:A){const key:\"x\"=\"x\";if(key in x){}}");
+  expectStaticTypeError("value class A{x:uint8=0;}function f(x:A){const key:\"x\"=\"x\";if(key in x){}}");
 });
 
 test("key-value-query", () => {
-  evaluated("class A{x:uint8=0;}function f(x:A){const key=\"x\";return key in x;}");
+  evaluated("value class A{x:uint8=0;}function f(x:A){const key=\"x\";return key in x;}");
 });
 
 test("constructor-alias-chain", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B){const C=A;const D=C;if(x instanceof D){if(x is B){}}} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;}value class B{b:uint8=0;}function f(x:A|B){const C=A;const D=C;if(x instanceof D){if(x is B){}}} }");
 });
 
 test("constructor-shadow", () => {
-  evaluated("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B,C:any){const D=A;{const D=C;if(x instanceof D){if(x is B){}}}} }");
+  evaluated("{ value class A{a:uint8=0;}value class B{b:uint8=0;}function f(x:A|B,C:any){const D=A;{const D=C;if(x instanceof D){if(x is B){}}}} }");
 });
 
 test("constructor-custom-hook", () => {
-  evaluated("{ class A{a:uint8=0;static [Symbol.hasInstance](x:any):boolean{return true;}}class B{b:uint8=0;}function f(x:A|B){if(x instanceof (A)){if(x is B){}}} }");
+  evaluated("{ value class A{a:uint8=0;static [Symbol.hasInstance](x:any):boolean{return true;}}value class B{b:uint8=0;}function f(x:A|B){if(x instanceof (A)){if(x is B){}}} }");
 });
 
 test("constructor-hook-replaced", () => {
-  evaluated("{ class A{a:uint8=0;}class B{b:uint8=0;}Object.defineProperty(A,Symbol.hasInstance,{value:()=>true});function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}} }");
+  evaluated("{ value class A{a:uint8=0;}value class B{b:uint8=0;}Object.defineProperty(A,Symbol.hasInstance,{value:()=>true});function f(x:A|B){const C=A;if(x instanceof C){if(x is B){}}} }");
 });
 
 test("truthy-number-nan", () => {
@@ -563,7 +563,7 @@ test("yield-delegate-boolean", () => {
 });
 
 test("constructor-unknown-call", () => {
-  evaluated("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B,g:any){g();if(x instanceof (A)){if(x is B){}}} }");
+  evaluated("{ value class A{a:uint8=0;}value class B{b:uint8=0;}function f(x:A|B,g:any){g();if(x instanceof (A)){if(x is B){}}} }");
 });
 
 test("ordered-getter", () => {
@@ -623,27 +623,27 @@ test("runtime: 05-false-finite", () => {
 });
 
 test("runtime: 06-data-field", () => {
-  expect(evaluated("class C{tag:uint8|string=uint8(1);} function f(x:C){if(x is {tag:uint8})return String(x.tag is string);return \"outside\";} f(new C());")).toBe("false");
+  expect(evaluated("value class C{tag:uint8|string=uint8(1);} function f(x:C){if(x is {tag:uint8})return String(x.tag is string);return \"outside\";} f(new C());")).toBe("false");
 });
 
 test("runtime: 06-getter", () => {
-  expect(evaluated("class C{index:number=0;get tag():uint8|string{this.index++;return this.index===1 ? uint8(1):\"s\";}} function f(x:C){if(x is {tag:uint8})return String(x.tag is string);return \"outside\";} f(new C());")).toBe("true");
+  expect(evaluated("value class C{index:number=0;get tag():uint8|string{this.index++;return this.index===1 ? uint8(1):\"s\";}} function f(x:C){if(x is {tag:uint8})return String(x.tag is string);return \"outside\";} f(new C());")).toBe("true");
 });
 
 test("runtime: 07-key", () => {
-  expect(evaluated("class A{x:uint8=0;} function f(x:A){const key=\"x\";return String(key in x);} f(new A());")).toBe("true");
+  expect(evaluated("value class A{x:uint8=0;} function f(x:A){const key=\"x\";return String(key in x);} f(new A());")).toBe("true");
 });
 
 test("runtime: 07-dynamic", () => {
-  expect(evaluated("class A{x:uint8=0;} function f(x:A,key:string){return String(key in x);} f(new A(),\"x\")+\",\"+f(new A(),\"z\");")).toBe("true,false");
+  expect(evaluated("value class A{x:uint8=0;} function f(x:A,key:string){return String(key in x);} f(new A(),\"x\")+\",\"+f(new A(),\"z\");")).toBe("true,false");
 });
 
 test("runtime: 08-parentheses", () => {
-  expect(evaluated("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B){return String(x instanceof (A))+\",\"+String(x is B);} f(new A());")).toBe("true,false");
+  expect(evaluated("value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B){return String(x instanceof (A))+\",\"+String(x is B);} f(new A());")).toBe("true,false");
 });
 
 test("runtime: 08-selected-constructor", () => {
-  expect(evaluated("class A{a:uint8=0;} class B{b:uint8=0;} function f(x:A|B,b:boolean){const C=b?A:B;return String(x instanceof C)+\",\"+String(x is B);} f(new B(),false);")).toBe("true,true");
+  expect(evaluated("value class A{a:uint8=0;} value class B{b:uint8=0;} function f(x:A|B,b:boolean){const C=b?A:B;return String(x instanceof C)+\",\"+String(x is B);} f(new B(),false);")).toBe("true,true");
 });
 
 test("runtime: 09-truthy", () => {
@@ -683,5 +683,5 @@ test("category: unknown logical-not effect", () => {
 });
 
 test("constructor: negated grouped origin", () => {
-  expectStaticTypeError("{ class A{a:uint8=0;}class B{b:uint8=0;}function f(x:A|B){if(!(x instanceof (A))){if(x is A){}}} }");
+  expectStaticTypeError("{ value class A{a:uint8=0;}value class B{b:uint8=0;}function f(x:A|B){if(!(x instanceof (A))){if(x is A){}}} }");
 });

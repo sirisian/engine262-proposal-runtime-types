@@ -430,8 +430,8 @@ test.each([
     }
   ],
   [
-    "function f(){with({}){}class C{x:uint8=1;}}f();",
-    "function f(){with({}){}class C{x:uint8=1;}}f();",
+    "function f(){with({}){}value class C{x:uint8=1;}}f();",
+    "function f(){with({}){}value class C{x:uint8=1;}}f();",
     {
       "completion": "normal",
       "kind": null,

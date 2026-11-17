@@ -10,7 +10,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * Two conditions, and the second was missing at first:
  *
  *  - the source must reach the target through its base chain, AND
- *  - it must be WIDER. `class Q extends P { }` has `P`'s layout exactly, so
+ *  - it must be WIDER. `value class Q extends P { }` has `P`'s layout exactly, so
  *    storing a `Q` into a `P` loses nothing and stays legal. Refusing it was a
  *    defect of its own, introduced by the first half of this rule.
  *
@@ -19,38 +19,38 @@ import { evaluated, expectThrown } from '../harness.mts';
  * fixed storage to overflow, which is what keeps a library nominal - `class
  * MyErr extends Error {}` - assignable to `Error`.
  */
-const P = 'class P { x: uint32 = 1; } ';
+const P = 'value class P { x: uint32 = 1; } ';
 
 test('a wider subclass may not be stored in a base-typed position', () => {
-  expectThrown(`${P}class R extends P { y: uint32 = 2; }
-    class H { p: P = new P(); } const h = new H(); h.p = new R();`, 'is not assignable to');
-  expectThrown(`${P}class R extends P { y: uint32 = 2; }
+  expectThrown(`${P}value class R extends P { y: uint32 = 2; }
+    value class H { p: P = new P(); } const h = new H(); h.p = new R();`, 'is not assignable to');
+  expectThrown(`${P}value class R extends P { y: uint32 = 2; }
     const a: [2].<P>; a[0] = new R();`, 'is not assignable to');
 });
 
 test('a subclass arriving through `any` is refused by the same rule', () => {
   // The dynamic boundary needs no separate rule: it already admits a source only
   // where the target represents it exactly, and a wider subclass never does.
-  expectThrown(`${P}class R extends P { y: uint32 = 2; }
-    class H { p: P = new P(); } const h = new H(); const z: any = new R(); h.p = z;`,
+  expectThrown(`${P}value class R extends P { y: uint32 = 2; }
+    value class H { p: P = new P(); } const h = new H(); const z: any = new R(); h.p = z;`,
   'is not assignable to');
 });
 
 test('a subclass that adds no storage is still assignable', () => {
   // `Q` is `P`'s layout exactly. Nothing is lost, so nothing is refused.
-  expect(evaluated(`${P}class Q extends P { }
-    class H { p: P = new P(); } const h = new H(); h.p = new Q(); String(h.p.x);`)).toBe('1');
+  expect(evaluated(`${P}value class Q extends P { }
+    value class H { p: P = new P(); } const h = new H(); h.p = new Q(); String(h.p.x);`)).toBe('1');
 });
 
 test('the cases that must keep working do', () => {
-  expect(evaluated(`${P}class H { p: P = new P(); } const h = new H(); h.p = new P(); String(h.p.x);`)).toBe('1');
+  expect(evaluated(`${P}value class H { p: P = new P(); } const h = new H(); h.p = new P(); String(h.p.x);`)).toBe('1');
   // A library nominal has no fixed layout to overflow.
   expect(evaluated('class MyErr extends Error { } let e: Error = new MyErr(); String(e instanceof Error);')).toBe('true');
   // The subtype relation itself is untouched - only the store is refused.
-  expect(evaluated(`${P}class R extends P { y: uint32 = 2; } const r = new R();
+  expect(evaluated(`${P}value class R extends P { y: uint32 = 2; } const r = new R();
     String(r is P) + '/' + String(r instanceof P);`)).toBe('true/true');
   // And each concrete class keeps its own array.
-  expect(evaluated(`${P}class R extends P { y: uint32 = 2; }
+  expect(evaluated(`${P}value class R extends P { y: uint32 = 2; }
     const a: [2].<R>; a[0].y = 5; String(a[0].y);`)).toBe('5');
 });
 
@@ -66,7 +66,7 @@ test('the cases that must keep working do', () => {
  * that caused it. `requireAssignable` now refuses the same stores at the line
  * that writes them, using a width the DECLARATION can answer.
  */
-const PR = 'class P { x: uint32 = 1; } class R extends P { y: uint32 = 2; } class Q extends P { } ';
+const PR = 'value class P { x: uint32 = 1; } value class R extends P { y: uint32 = 2; } value class Q extends P { } ';
 
 test('a wider subclass is refused where no store would take it either', () => {
   expectThrown(`${PR}let p: P = new R();`, 'is not assignable to');
@@ -103,7 +103,7 @@ test('the keepers survive the static rule as well', () => {
  * overrides, and was then refused by every `P`-typed store: lossy AND stuck,
  * which is worse than either alone.
  */
-const PW = 'class P { x: uint32 = 1; } class R extends P { y: uint32 = 2; } class Q extends P { } ';
+const PW = 'value class P { x: uint32 = 1; } value class R extends P { y: uint32 = 2; } value class Q extends P { } ';
 
 test('a widening conversion produces a genuine base instance', () => {
   expect(evaluated(`${PW}const w = (new R()) := P;
@@ -115,13 +115,13 @@ test('the widened value stores where the base is declared', () => {
   // The point of the conversion: before this it produced something no `P`-typed
   // position would take, so the escape hatch the store rule points at did not
   // actually lead anywhere.
-  expect(evaluated(`${PW}class H { f: P = new P(); } const h = new H();
+  expect(evaluated(`${PW}value class H { f: P = new P(); } const h = new H();
     h.f = (new R()) := P; String(h.f.x);`)).toBe('1');
 });
 
 test('methods dispatch to the base after widening', () => {
-  expect(evaluated(`class P2 { x: uint32 = 1; n(): string { return "base"; } }
-    class R2 extends P2 { y: uint32 = 2; n(): string { return "sub"; } }
+  expect(evaluated(`value class P2 { x: uint32 = 1; n(): string { return "base"; } }
+    value class R2 extends P2 { y: uint32 = 2; n(): string { return "sub"; } }
     const w = (new R2()) := P2; w.n();`)).toBe('base');
 });
 
@@ -141,7 +141,7 @@ test('conversions that are not widenings are untouched', () => {
  * That made SoA the one position left where a subclass was reduced without the
  * program asking. It is asked once now, before the scatter.
  */
-const SP = 'class P { x: uint32 = 1; } class R extends P { y: uint32 = 2; } class Q extends P { } ';
+const SP = 'value class P { x: uint32 = 1; } value class R extends P { y: uint32 = 2; } value class Q extends P { } ';
 
 test('an SoA of the base refuses a wider subclass', () => {
   expectThrown(`${SP}const s = SoA.<P, 2>(new ArrayBuffer(64)); s[0] = new R();`,

@@ -119,15 +119,15 @@ test('Atomics: repeated operations on a shared binding behave the same', () => {
 });
 
 test('Atomics: a typed property keeps its type across operations too', () => {
-  expect(evaluated('class C { n: uint32 = 0; } var c = new C(); Atomics.add(c, "n", 5); Atomics.add(c, "n", 5); String(c.n);')).toBe('10');
+  expect(evaluated('value class C { n: uint32 = 0; } var c = new C(); Atomics.add(c, "n", 5); Atomics.add(c, "n", 5); String(c.n);')).toBe('10');
 });
 
 // -- The typed own data property shape -----------------------------------------
 test('Atomics: a typed own data property is a target', () => {
   // `Atomics.add(obj, 'count', v)`: the key takes argument position 1, so the
   // operand follows at 2.
-  expect(evaluated('class C { count: uint32 = 0; } var c = new C(); Atomics.add(c, "count", 5); String(c.count);')).toBe('5');
-  expect(evaluated('class C { n: uint32 = 1; } var c = new C(); Atomics.compareExchange(c, "n", 1, 9); String(c.n);')).toBe('9');
+  expect(evaluated('value class C { count: uint32 = 0; } var c = new C(); Atomics.add(c, "count", 5); String(c.count);')).toBe('5');
+  expect(evaluated('value class C { n: uint32 = 1; } var c = new C(); Atomics.compareExchange(c, "n", 1, 9); String(c.n);')).toBe('9');
 });
 
 test('Atomics: an untyped property is refused', () => {

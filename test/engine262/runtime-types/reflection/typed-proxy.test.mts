@@ -34,8 +34,8 @@ test('a layout-backed target cannot be proxied', () => {
   // Both halves of "an instance of a typed class or a typed array": a field or
   // element read is an offset load, so there is no point at which a trap could
   // correctly run.
-  expectStaticTypeError('class C { v: uint8 = 1; } new Proxy(new C(), {});');
-  expectThrown('class C { v: uint8 = 1; } function f(x:any){new Proxy(x,{});} f(new C());', 'typed class and cannot be proxied');
+  expectStaticTypeError('value class C { v: uint8 = 1; } new Proxy(new C(), {});');
+  expectThrown('value class C { v: uint8 = 1; } function f(x:any){new Proxy(x,{});} f(new C());', 'typed class and cannot be proxied');
   expectStaticTypeError('let a: [2].<uint8> = [1, 2]; new Proxy(a, {});');
   expectThrown('let a: [2].<uint8> = [1, 2]; function f(x:any){new Proxy(x,{});} f(a);', 'typed array and cannot be proxied');
   // An untyped target of either shape is untouched.
@@ -105,7 +105,7 @@ test('a callable type constrains what apply and construct hand back', () => {
   const F = 'type F = (x: uint8) => uint8; ';
   expectThrown(`${F}const p = new Proxy.<F>(function (x) { return x; }, { apply() { return "nope"; } }); p(1 := uint8);`, 'uint.<8>');
   expect(evaluated(`${F}const p = new Proxy.<F>(function (x) { return x; }, { apply() { return (7 := uint8); } }); \`\${p(1 := uint8)}\`;`)).toBe('7');
-  expectThrown('class A { v: uint8 = 1; } type G = () => A; const p = new Proxy.<G>(A, { construct() { return { nope: 1 }; } }); new p();', 'not assignable to "A"');
+  expectThrown('value class A { v: uint8 = 1; } type G = () => A; const p = new Proxy.<G>(A, { construct() { return { nope: 1 }; } }); new p();', 'not assignable to "A"');
 });
 
 test('ProxyHandler.<T> checks a handler where it is written', () => {

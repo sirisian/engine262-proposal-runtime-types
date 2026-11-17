@@ -58,7 +58,7 @@ test("a dynamic array's and a window's copies stay dynamic", () => {
 });
 
 test("a fixed-extent copy of value elements is the caller's own", () => {
-  expect(evaluated("class P { x: uint8; } const a: [2].<P> = [new P(), new P()]; a[0].x = 5; const b: [2].<P> = a.toReversed(); b[1].x = 9; b[1].x + '|' + a[0].x;")).toBe("9|5");
+  expect(evaluated("value class P { x: uint8; } const a: [2].<P> = [new P(), new P()]; a[0].x = 5; const b: [2].<P> = a.toReversed(); b[1].x = 9; b[1].x + '|' + a[0].x;")).toBe("9|5");
   expect(evaluated("const a: [3].<uint8> = [1,2,3]; (a.toSorted() === a) + '|' + (a.toReversed() === a) + '|' + (a.with(0, 1) === a);")).toBe("true|false|true");
 });
 

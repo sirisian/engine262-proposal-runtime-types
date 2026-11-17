@@ -46,7 +46,7 @@ test('a VALUE argument displays as it was written', () => {
   // `G.<4>` binds its parameter to the LITERAL TYPE of 4, not to the number, so
   // rendering the argument generically gave `G.<a literal type of number>` - a
   // reader had to decode the type before reading the complaint attached to it.
-  const G = 'class G<N: uint32> { b: [N].<uint8>; } ';
+  const G = 'value class G<N: uint32> { b: [N].<uint8>; } ';
   expect(evaluated(`${G} String(type G.<4>);`)).toBe('G.<4>');
   // The record was never wrong, which is what made this a rendering fix rather
   // than a canonicalization one.

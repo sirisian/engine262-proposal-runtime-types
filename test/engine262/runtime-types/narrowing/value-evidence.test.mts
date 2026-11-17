@@ -200,35 +200,35 @@ test("library-partition: write", () => {
 });
 
 test("presence-partition: else", () => {
-  expectStaticTypeError("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B){if(\"x\" in v){}else{if(v is A){}}}");
+  expectStaticTypeError("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B){if(\"x\" in v){}else{if(v is A){}}}");
 });
 
 test("presence-partition: and", () => {
-  expectStaticTypeError("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B){if(!(\"x\" in v) && (v is A)){}}");
+  expectStaticTypeError("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B){if(!(\"x\" in v) && (v is A)){}}");
 });
 
 test("presence-partition: for", () => {
-  expectStaticTypeError("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B){for(;!(\"x\" in v);){if(v is A){}break;}}");
+  expectStaticTypeError("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B){for(;!(\"x\" in v);){if(v is A){}break;}}");
 });
 
 test("presence-partition: for-in", () => {
-  expectStaticTypeError("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B,o:{a:uint8}){for(const k in o){if(!(\"x\" in v)){if(v is A){}}}}");
+  expectStaticTypeError("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B,o:{a:uint8}){for(const k in o){if(!(\"x\" in v)){if(v is A){}}}}");
 });
 
 test("presence-partition: known-member", () => {
-  expectStaticTypeError("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A){if(\"x\" in v){}}");
+  expectStaticTypeError("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A){if(\"x\" in v){}}");
 });
 
 test("presence-partition: present-both", () => {
-  evaluated("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B){if(\"x\" in v){if(v is B){}}}");
+  evaluated("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B){if(\"x\" in v){if(v is B){}}}");
 });
 
 test("presence-partition: unknown-key", () => {
-  evaluated("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B,k:string){if(k in v){}else{if(v is A){}}}");
+  evaluated("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B,k:string){if(k in v){}else{if(v is A){}}}");
 });
 
 test("presence-partition: write", () => {
-  evaluated("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B,w:A|B){if(\"x\" in v){}else{v=w;if(v is A){}}}");
+  evaluated("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B,w:A|B){if(\"x\" in v){}else{v=w;if(v is A){}}}");
 });
 
 test("literal-exclusion: else-if", () => {
@@ -372,7 +372,7 @@ test("store-and", () => {
 });
 
 test("store-changed-root", () => {
-  evaluated("class A{x:uint8|string=\"a\";}function f(a:A,b:A){a.x=(a=b,uint8(1));if(a.x is string){}}");
+  evaluated("value class A{x:uint8|string=\"a\";}function f(a:A,b:A){a.x=(a=b,uint8(1));if(a.x is string){}}");
 });
 
 test("coalesce-false-part", () => {
@@ -548,11 +548,11 @@ test("runtime: 06-shadow", () => {
 });
 
 test("runtime: 07-absence", () => {
-  expect(evaluated("class A{x:uint8=1;}class B{y:uint8=1;}function f(v:A|B){if(\"x\" in v)return true;return v is A;}String(f(new B()));")).toBe("false");
+  expect(evaluated("value class A{x:uint8=1;}value class B{y:uint8=1;}function f(v:A|B){if(\"x\" in v)return true;return v is A;}String(f(new B()));")).toBe("false");
 });
 
 test("runtime: 07-present-subclass", () => {
-  expect(evaluated("class A{x:uint8=1;}class B{y:uint8=1;}class C extends B{x:uint8=1;}function f(v:A|B){if(\"x\" in v)return v is B;return false;}String(f(new C()));")).toBe("true");
+  expect(evaluated("value class A{x:uint8=1;}value class B{y:uint8=1;}value class C extends B{x:uint8=1;}function f(v:A|B){if(\"x\" in v)return v is B;return false;}String(f(new C()));")).toBe("true");
 });
 
 test("runtime: 08-excluded-value", () => {
@@ -596,17 +596,17 @@ test("saved-participating", () => {
 });
 
 test("saved-data-property", () => {
-  expectStaticTypeError("class A{x:uint8|string=\"a\";}function f(a:A){const b:boolean=a.x is uint8;if(b){if(a.x is string){}}}");
+  expectStaticTypeError("value class A{x:uint8|string=\"a\";}function f(a:A){const b:boolean=a.x is uint8;if(b){if(a.x is string){}}}");
 });
 
 test("saved-property-write", () => {
-  evaluated("class A{x:uint8|string=\"a\";}function f(a:A,y:uint8|string){const b:boolean=a.x is uint8;a.x=y;if(b){if(a.x is string){}}}");
+  evaluated("value class A{x:uint8|string=\"a\";}function f(a:A,y:uint8|string){const b:boolean=a.x is uint8;a.x=y;if(b){if(a.x is string){}}}");
 });
 
 test("saved-property-alias", () => {
   // Two names for one object, so the class is one that is held by reference: two parameters of
   // a value type class are two copies, and a store to one of them that nothing reads is lost.
-  evaluated("reference class A{x:uint8|string=\"a\";}function f(a:A,c:A,y:uint8|string){const b:boolean=a.x is uint8;c.x=y;if(b){if(a.x is string){}}}");
+  evaluated("class A{x:uint8|string=\"a\";}function f(a:A,c:A,y:uint8|string){const b:boolean=a.x is uint8;c.x=y;if(b){if(a.x is string){}}}");
 });
 
 test("saved-varying-getter", () => {

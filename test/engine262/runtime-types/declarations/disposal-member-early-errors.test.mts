@@ -2,15 +2,15 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind, ok } from '../harness.mts';
 
 test('a declared numeric disposal member is rejected before acquisition', () => {
-  expectStaticTypeError('class C { [Symbol.dispose]: uint8 = 1; } function unused(c: C) { using r: C = c; }');
+  expectStaticTypeError('value class C { [Symbol.dispose]: uint8 = 1; } function unused(c: C) { using r: C = c; }');
   expectStaticTypeError('function unused(c: { [Symbol.dispose]: uint8 }) { using r: { [Symbol.dispose]: uint8 } = c; }');
   expectStaticTypeError('class C { get [Symbol.dispose](): uint8 { return 1; } } function unused(c: C) { using r: C = c; }');
 });
 
 test('disposal lookup includes inherited and specialized members', () => {
-  expectStaticTypeError('class B { [Symbol.dispose]: uint8 = 1; } class C extends B {} function unused(c: C) { using r: C = c; }');
-  expectStaticTypeError('class B<T: type> { [Symbol.dispose]: T; } function unused(c: B.<uint8>) { using r: B.<uint8> = c; }');
-  expectStaticTypeError('class B<T: type> { [Symbol.dispose]: T; } class C extends B.<uint8> {} function unused(c: C) { using r: C = c; }');
+  expectStaticTypeError('value class B { [Symbol.dispose]: uint8 = 1; } value class C extends B {} function unused(c: C) { using r: C = c; }');
+  expectStaticTypeError('value class B<T: type extends value> { [Symbol.dispose]: T; } function unused(c: B.<uint8>) { using r: B.<uint8> = c; }');
+  expectStaticTypeError('value class B<T: type extends value> { [Symbol.dispose]: T; } value class C extends B.<uint8> {} function unused(c: C) { using r: C = c; }');
 });
 
 test('computed object-type members retain the rest of their static shape', () => {

@@ -71,7 +71,7 @@ test('rebinding preserves the new location and its liveness checks', () => {
 });
 
 test('rebinding an SoA element keeps a live view rather than a gathered copy', () => {
-  const setup = 'class C { x: uint8; } const a = new SoA.<C>(); a.push({ x: 1 }); a.push({ x: 2 }); let ref p = a[0]; ref p = a[1]; ';
+  const setup = 'value class C { x: uint8; } const a = new SoA.<C>(); a.push({ x: 1 }); a.push({ x: 2 }); let ref p = a[0]; ref p = a[1]; ';
   expect(evaluated(`${setup}p.x = 3; String(a[1].x);`)).toBe('3');
   expectThrownKind(`${setup}a.reserve(64); p.x;`, 'TypeError');
   expectThrownKind(`${setup}a.pop(); p.x;`, 'TypeError');

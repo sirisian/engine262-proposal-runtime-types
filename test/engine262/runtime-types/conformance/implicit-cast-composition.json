@@ -381,7 +381,7 @@
     {
       "name": "field-boundary",
       "modules": {
-        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;class Box{x:float32.<{m:1,lo:2}>=source;}const b=new Box();if(String(b.x)!==\"8\")throw new Error(\"value\");if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
+        "main": "type D={m:int32};meta D{default={m:0};subtype(a,b){return a.m===b.m;}}type B={lo:int32};meta B{default={lo:0};subtype(a,b){return a.lo===b.lo;}}globalThis.calls=[];primitive float32{operator float32.<D>(){globalThis.calls.push(\"D\");return Number(this)+1;}operator float32.<B>(){globalThis.calls.push(\"B\");return Number(this)*2;}}const source:float32=3;value class Box{x:float32.<{m:1,lo:2}>=source;}const b=new Box();if(String(b.x)!==\"8\")throw new Error(\"value\");if(!(globalThis.calls.join(\",\")===\"D,B\"))throw new Error(\"result \"+globalThis.calls.join(\",\"));"
       },
       "expected": {
         "status": "fulfilled",

@@ -41,7 +41,7 @@ test('the clone KEEPS its type, which is what the signature is for', () => {
   // already defines, so it carries its type, its private state and its sealing -
   // giving a structured clone different semantics from an assignment, for one
   // kind of value, would have been the alternative.
-  const V = 'class P { x: uint8 = 0; } ';
+  const V = 'value class P { x: uint8 = 0; } ';
   expect(evaluated(`${V} const a = new P(); const b = structuredClone(a); String(Reflect.typeOf(b) === (type P));`)).toBe('true');
   expect(evaluated(`${V} const a = new P(); a.x = 1; const b = structuredClone(a); b.x = 9; String(a.x);`)).toBe('1');
   expect(evaluated('const a: [].<uint8> = [1, 2]; const b = structuredClone(a); String(b.length);')).toBe('2');
@@ -50,8 +50,8 @@ test('the clone KEEPS its type, which is what the signature is for', () => {
 test('the SIGNATURE is an identity, not a fixed result', () => {
   expect(ok('const a: [].<uint8> = [1]; let n: [].<uint8> = structuredClone(a);')).toBe(true);
   expectStaticTypeError('const a: [].<uint8> = [1]; let n: string = structuredClone(a);');
-  expect(ok('class P { x: uint8 = 0; } const a: P = new P(); let n: P = structuredClone(a);')).toBe(true);
-  expectStaticTypeError('class P { x: uint8 = 0; } const a: P = new P(); let n: string = structuredClone(a);');
+  expect(ok('value class P { x: uint8 = 0; } const a: P = new P(); let n: P = structuredClone(a);')).toBe(true);
+  expectStaticTypeError('value class P { x: uint8 = 0; } const a: P = new P(); let n: string = structuredClone(a);');
   // An untyped argument yields an untyped result, and a program that shadows the
   // name gets its own function.
   expect(ok('if (false) { const u = { x: 1 }; let n: uint8 = structuredClone(u); } 1;')).toBe(true);

@@ -4,7 +4,7 @@
       "name": "symbol key",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={[k]:choose(false)};const p=h[k];p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={[k]:choose(false)};const p=h[k];p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -707,7 +707,7 @@
       "name": "raw getter nominal true",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({get [k](){return choose(true);}})[k];}const p=use();p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({get [k](){return choose(true);}})[k];}const p=use();p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -721,7 +721,7 @@
       "name": "raw data nominal true",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({[k]:choose(true)})[k];}const p=use();p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({[k]:choose(true)})[k];}const p=use();p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -735,7 +735,7 @@
       "name": "raw getter copy nominal true",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({...{get [k](){return choose(true);}}})[k];}const p=use();p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({...{get [k](){return choose(true);}}})[k];}const p=use();p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -749,7 +749,7 @@
       "name": "bound getter nominal true",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={get [k](){return choose(true);}};const p=h[k];p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={get [k](){return choose(true);}};const p=h[k];p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -763,7 +763,7 @@
       "name": "raw getter nominal false",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({get [k](){return choose(false);}})[k];}const p=use();p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({get [k](){return choose(false);}})[k];}const p=use();p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -777,7 +777,7 @@
       "name": "raw data nominal false",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({[k]:choose(false)})[k];}const p=use();p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({[k]:choose(false)})[k];}const p=use();p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -791,7 +791,7 @@
       "name": "raw getter copy nominal false",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({...{get [k](){return choose(false);}}})[k];}const p=use();p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({...{get [k](){return choose(false);}}})[k];}const p=use();p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -805,7 +805,7 @@
       "name": "bound getter nominal false",
       "steps": [
         {
-          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={get [k](){return choose(false);}};const p=h[k];p.tag+\":\"+log;",
+          "source": "let log=\"\";function make(tag:string){value class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={get [k](){return choose(false);}};const p=h[k];p.tag+\":\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

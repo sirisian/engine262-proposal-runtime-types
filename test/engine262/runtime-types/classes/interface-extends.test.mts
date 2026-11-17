@@ -16,19 +16,19 @@ const heritage = (source: string): void => refused(source, 'rt-interface-heritag
 
 test('a value and a class reach a base through extends, across two levels', () => {
   expect(evaluated(`${B}const v: B = { a: 'x', b: 1 }; function f(x: A) { return x.a; } f(v);`)).toBe('x');
-  expect(evaluated(`${B}class C implements B { a: string = 'x'; b: uint8 = 1; } function f(x: A) { return x.a; } f(new C());`)).toBe('x');
-  expect(evaluated(`${B}interface C3 extends B { c: boolean; } class K implements C3 { a: string = 'x'; b: uint8 = 1; c: boolean = true; } function f(x: A) { return x.a; } f(new K());`)).toBe('x');
+  expect(evaluated(`${B}value class C implements B { a: string = 'x'; b: uint8 = 1; } function f(x: A) { return x.a; } f(new C());`)).toBe('x');
+  expect(evaluated(`${B}interface C3 extends B { c: boolean; } value class K implements C3 { a: string = 'x'; b: uint8 = 1; c: boolean = true; } function f(x: A) { return x.a; } f(new K());`)).toBe('x');
   expect(evaluated(`${B}String(Reflect.isAssignable(B, A)) + String(Reflect.isAssignable(A, B));`)).toBe('truefalse');
 });
 
 test('the edge is one-way, and declaration identity is kept', () => {
-  refused(`${B}class L implements A { a: string = 'x'; } function g(x: B) { return x.b; } g(new L());`, 'rt-assignability');
-  refused(`${B}interface B2 extends A { b: uint8; } class M implements B2 { a: string = 'x'; b: uint8 = 1; } function g(x: B) { return x.b; } g(new M());`, 'rt-assignability');
+  refused(`${B}value class L implements A { a: string = 'x'; } function g(x: B) { return x.b; } g(new L());`, 'rt-assignability');
+  refused(`${B}interface B2 extends A { b: uint8; } value class M implements B2 { a: string = 'x'; b: uint8 = 1; } function g(x: B) { return x.b; } g(new M());`, 'rt-assignability');
 });
 
 test('inherited members are members', () => {
   expect(evaluated(`${B}function h(c: B) { return c.a + String(c.b); } const v: B = { a: 'x', b: 2 }; h(v);`)).toBe('x2');
-  refused(`${B}class P implements B { b: uint8 = 1; }`, 'rt-implements-contract');
+  refused(`${B}value class P implements B { b: uint8 = 1; }`, 'rt-implements-contract');
   expect(evaluated(`${B}function isB(v: any) { return v is B; } const w: B = { a: 'x', b: 1 }; String(isB(w)) + String(isB({ b: 1 }));`)).toBe('truefalse');
 });
 
@@ -51,11 +51,11 @@ test('two bases that supply one member give the one that satisfies the other', (
 
 test('a member that arrives by two paths is one member', () => {
   expect(evaluated('interface Top { v: uint8; t(): uint8 | string; } interface Left extends Top { t(): uint8; } interface Right extends Top {} interface Bottom extends Left, Right {} '
-    + 'class D implements Bottom { v: uint8 = 1; t(): uint8 { return 2; } } function f(x: Top) { return x.v; } String(f(new D()));')).toBe('1');
+    + 'value class D implements Bottom { v: uint8 = 1; t(): uint8 { return 2; } } function f(x: Top) { return x.v; } String(f(new D()));')).toBe('1');
 });
 
 test('a generic base keeps its arguments, invariantly', () => {
-  const G = 'interface G<T: type> { v: T; } interface H<T: type> extends G.<T> { w: T; } class C implements H.<uint8> { v: uint8 = 1; w: uint8 = 2; } ';
+  const G = 'interface G<T: type> { v: T; } interface H<T: type> extends G.<T> { w: T; } value class C implements H.<uint8> { v: uint8 = 1; w: uint8 = 2; } ';
   expect(evaluated(`${G}function f(g: G.<uint8>): uint8 { return g.v; } String(f(new C()));`)).toBe('1');
   refused(`${G}function f(g: G.<uint16>) { return 1; } f(new C());`, 'rt-assignability');
 });
@@ -66,14 +66,14 @@ test('a callable interface is callable with its own signatures and its base\'s',
 });
 
 test('a base may be an object type, written through an alias', () => {
-  expect(evaluated("type CR = { name: string; }; interface Cls extends CR { tag: uint8; } class M implements Cls { name: string = 'm'; tag: uint8 = 1; } const m = new M(); m.name + String(m.tag);")).toBe('m1');
+  expect(evaluated("type CR = { name: string; }; interface Cls extends CR { tag: uint8; } value class M implements Cls { name: string = 'm'; tag: uint8 = 1; } const m = new M(); m.name + String(m.tag);")).toBe('m1');
   heritage("type CR = { name: string; }; interface Bad extends CR { name: uint8; }");
 });
 
 test('a base may be written in place, through an alias, or as an intersection', () => {
   expect(evaluated("interface Inline extends { a: string } { b: uint8; } const v: Inline = { a: 'x', b: 1 }; v.a;")).toBe('x');
   expect(evaluated("type CR = { name: string; }; type Both = CR & { extra: uint8 }; interface ViaBoth extends Both {} const v: ViaBoth = { name: 'n', extra: 1 }; v.name;")).toBe('n');
-  expect(evaluated(`${A}type Alias = A; interface ViaAlias extends Alias { z: uint8; } class C implements ViaAlias { a: string = 'x'; z: uint8 = 1; } String(Reflect.isAssignable(C, A));`)).toBe('true');
+  expect(evaluated(`${A}type Alias = A; interface ViaAlias extends Alias { z: uint8; } value class C implements ViaAlias { a: string = 'x'; z: uint8 = 1; } String(Reflect.isAssignable(C, A));`)).toBe('true');
   expect(evaluated('interface GD<T: type = uint8> { v: T; } interface H2 extends GD {} const v: H2 = { v: 1 }; String(v.v);')).toBe('1');
   expect(evaluated('function scoped() { interface Early extends Late { e: uint8; } interface Late { l: uint8; } const v: Early = { e: 1, l: 2 }; return v.l; } String(scoped());')).toBe('2');
 });
@@ -97,8 +97,8 @@ test('the early errors of an extends list', () => {
 });
 
 test('a class reaches a base at run time, and each activation has its own interfaces', () => {
-  expect(evaluated(`${B}class C implements B { a: string = 'x'; b: uint8 = 1; } String(Reflect.isAssignable(C, B)) + String(Reflect.isAssignable(C, A));`)).toBe('truetrue');
-  expect(evaluated("function make() { interface A { a: string; } interface B extends A { b: uint8; } class C implements B { a: string = 'x'; b: uint8 = 1; } return [C, A]; } "
+  expect(evaluated(`${B}value class C implements B { a: string = 'x'; b: uint8 = 1; } String(Reflect.isAssignable(C, B)) + String(Reflect.isAssignable(C, A));`)).toBe('truetrue');
+  expect(evaluated("function make() { interface A { a: string; } interface B extends A { b: uint8; } value class C implements B { a: string = 'x'; b: uint8 = 1; } return [C, A]; } "
     + 'const [C1, A1] = make(); const [C2, A2] = make(); String(Reflect.isAssignable(C1, A1)) + String(Reflect.isAssignable(C1, A2)) + String(Reflect.isAssignable(C2, A2));')).toBe('truefalsetrue');
 });
 
@@ -142,9 +142,9 @@ test('a base may be an array type or a tuple type', () => {
  */
 test('a declared relation outranks a structural one', () => {
   const picks = "interface A { a: string; } interface Other { a: string; } function pick(x: A): string { return 'A'; } function pick(x: Other): string { return 'Other'; } ";
-  expect(evaluated(`${picks}class C implements A { a: string = 'x'; } pick(new C());`)).toBe('A');
-  expect(evaluated(`${picks}interface B extends A { b: uint8; } class D implements B { a: string = 'x'; b: uint8 = 1; } pick(new D());`)).toBe('A');
-  expect(evaluated(`${picks}class E implements Other { a: string = 'x'; } pick(new E());`)).toBe('Other');
+  expect(evaluated(`${picks}value class C implements A { a: string = 'x'; } pick(new C());`)).toBe('A');
+  expect(evaluated(`${picks}interface B extends A { b: uint8; } value class D implements B { a: string = 'x'; b: uint8 = 1; } pick(new D());`)).toBe('A');
+  expect(evaluated(`${picks}value class E implements Other { a: string = 'x'; } pick(new E());`)).toBe('Other');
 });
 
 test('a contribution to a base reaches the interfaces that extend it', () => {
@@ -166,7 +166,7 @@ test('a reference back to the interface through a base is a recursive edge', () 
  * which of them it states itself. A class's record carries `implements`.
  */
 test('an interface is reflected through its own record', () => {
-  const C = `${A}interface B extends A { readonly b?: uint8; m(x: uint8): string; } class C implements B { a: string = 'x'; m(x: uint8): string { return 'y'; } } `;
+  const C = `${A}interface B extends A { readonly b?: uint8; m(x: uint8): string; } value class C implements B { a: string = 'x'; m(x: uint8): string { return 'y'; } } `;
   // The type's node exposes nothing of the declaration.
   expect(evaluated(`${C}Object.keys(Reflect.getReflection.<Reflect.Type>(B)).join(',');`)).toBe('kind,type,family');
   expect(evaluated(`${C}const r = Reflect.getReflection.<Reflect.Interface, B>(); Object.keys(r).join(',') + '|' + r.kind + '|' + r.name + '|' + String(r.type === B);`))

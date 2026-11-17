@@ -16,8 +16,8 @@ test('stored cases intern NaN and distinguish equally named nominal declarations
     const a: any = f.<string, NaN>; const b: any = f.<string, NaN>;
     String(a === b) + '|' + String(Object.is(a(), NaN));`)).toBe('true|true');
   expect(evaluated(`function f<string, T: type>(): type { return T; }
-    class C { x: uint8; } const outer = C; const a: any = f.<string, C>;
-    { class C { x: uint8; } const b: any = f.<string, C>;
+    value class C { x: uint8; } const outer = C; const a: any = f.<string, C>;
+    { value class C { x: uint8; } const b: any = f.<string, C>;
       globalThis.result = String(a === b) + '|' + String(a() === outer) + '|' + String(b() === C); }
     globalThis.result;`)).toBe('false|true|true');
   expect(evaluated(`function make() { function f<string, N: number>(): number { return N; } return f; }

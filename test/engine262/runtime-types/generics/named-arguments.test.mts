@@ -9,7 +9,7 @@ import { evaluated, expectThrown, expectStaticTypeError, expectEarlyError } from
 
 // A field over a parameter takes its value through the constructor: a plain
 // literal is not a value of an opaque parameter (generic-body-checking).
-const GRID = 'class Grid<T: type = float64, Cols: type = uint8> { t: T; c: Cols; constructor(t: T, c: Cols) { this.t = t; this.c = c; } }';
+const GRID = 'value class Grid<T: type extends value = float64, Cols: type extends value = uint8> { t: T; c: Cols; constructor(t: T, c: Cols) { this.t = t; this.c = c; } }';
 const BUFFER = "class Buffer<T: type = uint8, Size: uint32 = 256, Name: string = 'buf'> { size(): uint32 { return Size; } label(): string { return Name; } }";
 
 // A.B - classes.

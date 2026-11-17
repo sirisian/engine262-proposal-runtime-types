@@ -24,9 +24,9 @@ test('a declaration without a receiver may not read this', () => {
 });
 
 test('a method\'s clause reads its receiver, judged at the declaration and checked at each call', () => {
-  refused('class C { x: uint8 = 1; m() where this.x > 300 { return 1; } }', 'rt-numeric-range');
-  expect(evaluated('class C { x: uint8 = 6; m() where this.x > 5 { return 1; } } String(new C().m());')).toBe('1');
-  expect(observeScript('class C { x: uint8 = 1; m() where this.x > 5 { return 1; } } new C().m();')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+  refused('value class C { x: uint8 = 1; m() where this.x > 300 { return 1; } }', 'rt-numeric-range');
+  expect(evaluated('value class C { x: uint8 = 6; m() where this.x > 5 { return 1; } } String(new C().m());')).toBe('1');
+  expect(observeScript('value class C { x: uint8 = 1; m() where this.x > 5 { return 1; } } new C().m();')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
   expect(evaluated('class B { get y(): uint8 { return (1 := uint8); } } class D extends B { m() where super.y > 0 { return 1; } } String(new D().m());')).toBe('1');
 });
 

@@ -74,7 +74,7 @@ test('constructor reflection: enumeration includes it, and names stay declared n
 test('constructor reflection: the surrounding members are unaffected', () => {
   expect(evaluated("class A { constructor() {} m() {} } String(Reflect.getReflection.<Reflect.ClassMethod, A>('m').kind);"))
     .toBe('ClassMethod');
-  expect(evaluated("class A { x: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassField, A>('x').kind);"))
+  expect(evaluated("value class A { x: uint8 = 1; } String(Reflect.getReflection.<Reflect.ClassField, A>('x').kind);"))
     .toBe('ClassField');
   expect(evaluated("class B { m() {} } class C extends B {} String(Reflect.getReflection.<Reflect.ClassMethod, C>('m').kind);"))
     .toBe('ClassMethod');

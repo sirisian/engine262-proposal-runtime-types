@@ -128,7 +128,7 @@
     {
       "name": "imported value class conversion selection and copying",
       "modules": {
-        "dep": "export class P{x:uint8=1;}export const saved:any=new P();export class S{operator P(){return saved;}}",
+        "dep": "export value class P{x:uint8=1;}export const saved:any=new P();export class S{operator P(){return saved;}}",
         "main": "import {P,S,saved} from \"dep\";const raw:any=new S();const p:P=raw;p.x=9;const answer=String(saved.x)+\"/\"+String(p.x);if(answer!==\"1/9\")throw new Error(answer);"
       },
       "expected": {

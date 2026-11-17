@@ -18,14 +18,14 @@ const ASSERT_STRING = 'function makeAssert() { return Reflect.makeType({ kind: "
   + 'const assertS: A = (v) => { }; ';
 
 test('a test of a member path is judged against the type of the path', () => {
-  const C = 'class C { x: uint8 = (0 := uint8); k: "a" | "b" = "a"; } ';
+  const C = 'value class C { x: uint8 = (0 := uint8); k: "a" | "b" = "a"; } ';
   expectStaticTypeError(`${C} function f(c: C) { if (c.x is string) {} }`);
   expectStaticTypeError(`${C} function f(c: C) { if (typeof c.x === "string") {} }`);
   expectStaticTypeError(`${C} function f(c: C) { if (c.x == null) {} }`);
   expectStaticTypeError(`${C} function f(c: C) { if (c.k === "c") {} }`);
-  expectStaticTypeError('class C { k: "a" | "b" = "a"; m() { if (this.k === "c") {} } }');
+  expectStaticTypeError('value class C { k: "a" | "b" = "a"; m() { if (this.k === "c") {} } }');
   // A path that genuinely narrows does so in both branches.
-  expect(evaluated('class C { x: uint8 | string = (0 := uint8); } function f(c: C) { if (c.x is uint8) { let n: uint8 = c.x; } else { let s: string = c.x; } } "ok";')).toBe('ok');
+  expect(evaluated('value class C { x: uint8 | string = (0 := uint8); } function f(c: C) { if (c.x is uint8) { let n: uint8 = c.x; } else { let s: string = c.x; } } "ok";')).toBe('ok');
 });
 
 test('a test of an operand that is not a path is judged, and narrows nothing', () => {
@@ -51,7 +51,7 @@ test('a test nested in a guard decides the same branch', () => {
   expectStaticTypeError('function f(a: uint8) { do {} while (a is string); }');
   expectStaticTypeError('function f(a: uint8) { for (; a is string;) {} }');
   // The right operand is judged inside the narrowing its left operand makes.
-  expect(evaluated('{ class A { x: uint8 = 1; } function f(v: A | null) { return ((v instanceof A) && v.x === 1) ? "yes" : "no"; } f(new A()); }')).toBe('yes');
+  expect(evaluated('{ value class A { x: uint8 = 1; } function f(v: A | null) { return ((v instanceof A) && v.x === 1) ? "yes" : "no"; } f(new A()); }')).toBe('yes');
   // In a value position the right operand is the result, not a branch.
   expect(evaluated('function f(a: uint8, b: boolean) { let r = b && a instanceof uint8; return r; } String(f((1 := uint8), true));')).toBe('true');
 });
@@ -138,8 +138,8 @@ test('a typed catch clause that can never run is rejected', () => {
 
 test('the nullish forms and logical assignment read both ways', () => {
   expectStaticTypeError('function f(a: null) { return a?.x; }');
-  expectStaticTypeError('class C { cb: undefined = undefined; } function f(c: C) { return c.cb?.(); }');
-  expectStaticTypeError('class C { x: undefined = undefined; } function f(c: C) { c.x ??= undefined; }');
+  expectStaticTypeError('value class C { cb: undefined = undefined; } function f(c: C) { return c.cb?.(); }');
+  expectStaticTypeError('value class C { x: undefined = undefined; } function f(c: C) { c.x ??= undefined; }');
   expectStaticTypeError('function f(v: { x: uint8 } | null) { if (v === null) { v?.x; } }');
   expectStaticTypeError('function f(o: { x: uint8 }) { o ||= { x: (1 := uint8) }; }');
   expectStaticTypeError('function f(z: null) { z &&= null; }');
@@ -207,7 +207,7 @@ test('typeof is judged for the types whose tag is fixed', () => {
   expectStaticTypeError('function f(t: [uint8, string]) { if (typeof t === "function") {} }');
   expectStaticTypeError('function f(v: float32x4) { if (typeof v === "object") {} }');
   expectStaticTypeError('function f(z: complex) { if (typeof z === "object") {} }');
-  expectStaticTypeError('class K { a: uint8 = 1; } function f(k: K) { if (typeof k === "object") {} }');
+  expectStaticTypeError('value class K { a: uint8 = 1; } function f(k: K) { if (typeof k === "object") {} }');
   // A structural object type, an untyped class and a constructor type do not fix their tag.
   expect(evaluated('function f(o: { x: uint8 }) { if (typeof o === "object") {} } "ok";')).toBe('ok');
   expect(evaluated('class U { m() {} } function f(u: U, d: Date) { if (typeof u === "function") {} if (typeof d === "function") {} } "ok";')).toBe('ok');

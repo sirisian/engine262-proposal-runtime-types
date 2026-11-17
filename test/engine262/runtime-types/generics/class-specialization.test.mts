@@ -61,9 +61,9 @@ test('an application\'s layout is derived after selection, from the selected bod
   // replacement can differ". The case adds a uint32, so a field of its
   // application occupies 1 + 1 + 2 (padding) + 4 bytes, not the primary's 2 -
   // even when no instance of it exists yet.
-  const S = 'class Cell<T: type> { a: T; b: T; } class Cell<uint8> { a: uint8; b: uint8; c: uint32; } ';
-  expect(evaluated(`${S} class H { g: Cell.<uint8> = new Cell.<uint8>(); } String(H.byteLength);`)).toBe('8');
-  expect(evaluated(`${S} class H { g: Cell.<uint16> = new Cell.<uint16>(); } String(H.byteLength);`)).toBe('4');
+  const S = 'value class Cell<T: type extends value> { a: T; b: T; } value class Cell<uint8> { a: uint8; b: uint8; c: uint32; } ';
+  expect(evaluated(`${S} value class H { g: Cell.<uint8> = new Cell.<uint8>(); } String(H.byteLength);`)).toBe('8');
+  expect(evaluated(`${S} value class H { g: Cell.<uint16> = new Cell.<uint16>(); } String(H.byteLength);`)).toBe('4');
 });
 
 test('no program can replace a foreign or intrinsic family: a case needs its primary beside it', () => {

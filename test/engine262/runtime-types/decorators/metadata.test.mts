@@ -67,9 +67,9 @@ test('every class-family context carries metadata, and it READS BACK', () => {
   // Every context of the Class, Function, Object and Enum families carries `metadata`
   // (#sec-decorator-metadata). The class family is exercised here.
   const t = 'let t = "?"; function f(c) { t = typeof c.metadata; } ';
-  expect(evaluated(`${t} class A { @f a: uint8 = 1; } t;`)).toBe('object');
+  expect(evaluated(`${t} value class A { @f a: uint8 = 1; } t;`)).toBe('object');
   expect(evaluated(`${t} class A { @f m() {} } t;`)).toBe('object');
-  expect(evaluated(`${t} class A { @f accessor a: uint8 = 1; } t;`)).toBe('object');
+  expect(evaluated(`${t} value class A { @f accessor a: uint8 = 1; } t;`)).toBe('object');
 
   // `Reflect.getMetadata` reads back what a decorator wrote - THE SAME OBJECT,
   // not a copy, which is what makes metadata a channel rather than a snapshot.
@@ -78,7 +78,7 @@ test('every class-family context carries metadata, and it READS BACK', () => {
   expect(evaluated('const k = Symbol("k"); let seen; function f(c) { seen = c.metadata; } '
     + '@f class A {} String(seen === Reflect.getMetadata.<Reflect.Class, A>());')).toBe('true');
   expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "field"; } '
-    + 'class A { @f a: uint8 = 1; } String(Reflect.getMetadata.<Reflect.ClassField, A>("a")[k]);')).toBe('field');
+    + 'value class A { @f a: uint8 = 1; } String(Reflect.getMetadata.<Reflect.ClassField, A>("a")[k]);')).toBe('field');
 
   // A MEMBER's metadata is keyed by the CONSTRUCTOR, not by the home object it
   // was defined on - an instance member's home object is the prototype, so
@@ -86,11 +86,11 @@ test('every class-family context carries metadata, and it READS BACK', () => {
   // member of its own rather than redeclaring `a`, which #sec-typed-classes
   // refuses for an inherited typed field.
   expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "A"; } '
-    + 'class A { @f a: uint8 = 1; } class B extends A { b: uint8 = 2; } '
+    + 'value class A { @f a: uint8 = 1; } value class B extends A { b: uint8 = 2; } '
     + 'String(Reflect.getMetadata.<Reflect.ClassField, B>("a")[k]);')).toBe('A');
   // And two members do not share one object.
   expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "a"; } '
-    + 'class A { @f a: uint8 = 1; b: uint8 = 2; } String(Reflect.getMetadata.<Reflect.ClassField, A>("b")[k]);')).toBe('undefined');
+    + 'value class A { @f a: uint8 = 1; b: uint8 = 2; } String(Reflect.getMetadata.<Reflect.ClassField, A>("b")[k]);')).toBe('undefined');
   // The untyped call names no context and so names no metadata object.
   expect(evaluated('try { Reflect.getMetadata(); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 });
@@ -128,7 +128,7 @@ test('getMetadata serves every class-family MEMBER context', () => {
   // these need no cases of their own.
   const w = 'const k = Symbol("k"); function f(c) { c.metadata[k] = "v"; } ';
   expect(evaluated(`${w} class A { @f m() {} } String(Reflect.getMetadata.<Reflect.ClassMethod, A>("m")[k]);`)).toBe('v');
-  expect(evaluated(`${w} class A { @f accessor v: uint8 = 1; } String(Reflect.getMetadata.<Reflect.ClassAccessor, A>("v")[k]);`)).toBe('v');
+  expect(evaluated(`${w} value class A { @f accessor v: uint8 = 1; } String(Reflect.getMetadata.<Reflect.ClassAccessor, A>("v")[k]);`)).toBe('v');
   expect(evaluated(`${w} class A { @f get v(): uint8 { return 1; } } String(Reflect.getMetadata.<Reflect.ClassGetter, A>("v")[k]);`)).toBe('v');
   expect(evaluated(`${w} class A { @f set v(x: uint8) {} } String(Reflect.getMetadata.<Reflect.ClassSetter, A>("v")[k]);`)).toBe('v');
   // A context that names no class declaration is refused rather than answered

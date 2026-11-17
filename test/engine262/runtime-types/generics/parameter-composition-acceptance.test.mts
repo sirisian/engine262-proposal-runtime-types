@@ -58,7 +58,7 @@ test('the two RESOLVERS agree about the deferred case', () => {
   // of the walk. A class field is resolved by the runtime.
   okSrc('class Box<T: type, K: keyof T> { v: T[K]; }');
   okSrc('class Box<T: type> { v: keyof T; }');
-  okSrc('class Box<T: type> { v: T; }');
+  okSrc('value class Box<T: type extends value> { v: T; }');
 });
 
 test('and the concrete cases are untouched', () => {

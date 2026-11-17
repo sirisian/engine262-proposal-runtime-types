@@ -49,7 +49,7 @@ test('every position admits it', () => {
   expect(evaluated(`${L} let t: [L, uint8] = [5, 1]; String(Number(t[0]));`)).toBe('5');
   expect(evaluated(`${L} function f(x: L) { return Number(x); } String(f(5));`)).toBe('5');
   expect(evaluated(`${L} function g(): L { return 5; } String(Number(g()));`)).toBe('5');
-  expect(evaluated(`${L} class C { a: L = 5; } String(Number(new C().a));`)).toBe('5');
+  expect(evaluated(`${L} value class C { a: L = 5; } String(Number(new C().a));`)).toBe('5');
   expect(evaluated(`${L} let u: L | string = 5; String(Number(u));`)).toBe('5');
   // Nesting is NOT the limit. The clause's limit is that the reach "does not
   // re-base a written literal" - a different thing, and the one `uint8 & 5`

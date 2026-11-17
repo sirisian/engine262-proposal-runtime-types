@@ -21,7 +21,7 @@ test.each([
   "function outer(p: number) { function inner() { if ([]) {} } }",
   "function outer(p: number) { const inner = () => { if ([]) {} }; }",
   "let z: number = 1; function u() { if ([]) {} }",
-  "class K { a: number = 1; m() { if ([]) {} } }",
+  "value class K { a: number = 1; m() { if ([]) {} } }",
   "function m(c) { return c; } @m class D { n() { if ([]) {} } }",
   "class P { @m q() {} r() { if ([]) {} } } function m(v) { return v; }",
   "class R { operator +(rhs) { if ([]) {} return rhs; } }",

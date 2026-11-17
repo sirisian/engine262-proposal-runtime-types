@@ -206,7 +206,7 @@ test('a literal at a decimal type is read from its SOURCE TEXT', () => {
   expect(evaluated('let a: decimal128 = 1.0; let b: decimal128 = 1.00; '
     + 'const m = new Map(); m.set(a, "x"); String(m.get(b));')).toBe('x');
   // A FIELD initializer is a typed position too.
-  expect(evaluated('class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
+  expect(evaluated('value class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
 });
 
 test('a decimal belongs to the type of its own WIDTH', () => {
@@ -277,26 +277,26 @@ test('a decimal field has the IEEE 754 width and alignment', () => {
   // decimal128 is 16. **The width is a property of the TYPE, not of the
   // representation** - the interpreter holds a BigInt significand and an
   // exponent, and a laid-out field still occupies the format's bytes.
-  expect(evaluated(`class C { d: decimal32 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('4/4');
-  expect(evaluated(`class C { d: decimal64 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('8/8');
-  expect(evaluated(`class C { d: decimal128 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('16/16');
-  expect(evaluated(`class C { d: decimal128 = 1.0; } ${R('d', 'bitLength')};`)).toBe('128');
+  expect(evaluated(`value class C { d: decimal32 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('4/4');
+  expect(evaluated(`value class C { d: decimal64 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('8/8');
+  expect(evaluated(`value class C { d: decimal128 = 1.0; } ${R('d', 'byteLength')} + "/" + ${R('d', 'alignment')};`)).toBe('16/16');
+  expect(evaluated(`value class C { d: decimal128 = 1.0; } ${R('d', 'bitLength')};`)).toBe('128');
   // And it PARTICIPATES in the layout: a decimal64 after a uint32 aligns to 8.
-  expect(evaluated(`class C { x: uint32 = 0; d: decimal64 = 1.0; } ${R('d', 'offset')};`)).toBe('8');
+  expect(evaluated(`value class C { x: uint32 = 0; d: decimal64 = 1.0; } ${R('d', 'offset')};`)).toBe('8');
 });
 
 test('a decimal field stores and reads, cohort intact', () => {
   // The property that matters for a field: the significance survives storage,
   // which a double-backed field could not have given.
-  expect(evaluated('class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
-  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128.parse("2.50"); c.d.toString();')).toBe('2.50');
-  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128.parse("2.50"); '
+  expect(evaluated('value class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
+  expect(evaluated('value class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128.parse("2.50"); c.d.toString();')).toBe('2.50');
+  expect(evaluated('value class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128.parse("2.50"); '
     + 'String(Object.is(c.d, decimal128.parse("2.50")));')).toBe('true');
   // A wrong-width value is refused, as any typed field refuses one - and
   // refused EARLY, since #sec-type-errors makes a determinable type error an
   // Early Error and both the field's type and the value's are written down.
   // The script does not run, so there is nothing for a `try` to catch.
-  expectThrown('class C { d: decimal32 = 1.0; } const c = new C(); c.d = decimal128.parse("2.5"); "ok";',
+  expectThrown('value class C { d: decimal32 = 1.0; } const c = new C(); c.d = decimal128.parse("2.5"); "ok";',
     'is not assignable to');
 });
 
@@ -312,7 +312,7 @@ test('the buffer round-trip claim was measuring a DEFAULT', () => {
   // constructor so `b` and `0` were discarded too, and what came back was a fresh
   // instance holding the field's default. `new C(b, 0)` and `new C()` answer the
   // same, which is what shows the reading was of a default.
-  const C = 'class C { f: float64 = 1; } const b = new ArrayBuffer(64); ';
+  const C = 'value class C { f: float64 = 1; } const b = new ArrayBuffer(64); ';
   expect(evaluated(`${C}const c1 = new C(b, 0); c1.f = 7.25;`
     + ' const c2 = new C(b, 0); String(c2.f);')).toBe('1');
   expect(evaluated(`${C}String(new C().f);`)).toBe('1');

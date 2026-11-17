@@ -544,7 +544,7 @@ test('optional selection does not correlate successive receiver accessor results
 
 test('equality retains typed class data field facts', () => {
   expectStaticTypeError(`
-    class Box {value:uint8|string="s";}
+    value class Box {value:uint8|string="s";}
     function f(box:Box,y:uint8){if(box.value===y){if(box.value is string){}}}
   `);
 });

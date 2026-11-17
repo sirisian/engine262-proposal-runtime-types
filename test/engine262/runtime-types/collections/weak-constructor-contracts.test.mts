@@ -11,7 +11,7 @@ test("rejects weakref named bad", () => {
 });
 
 test("rejects weakref sealed", () => {
-  expectStaticTypeError("class C{x:uint8=1;} function unused(c:C){new WeakRef.<object>(c);}");
+  expectStaticTypeError("value class C{x:uint8=1;} function unused(c:C){new WeakRef.<object>(c);}");
 });
 
 test("rejects weakref typed wrong structural", () => {

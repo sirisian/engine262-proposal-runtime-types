@@ -17,8 +17,8 @@ test.each(corpus.cases)('$name', async ({ modules, expected }) => {
 
 test('a failed field check does not publish facts into another class check', async () => {
   const results = await observeModuleSequence({
-    bad: 'let n=0;class E{text:string=(n++,42);}const e=new E();',
-    good: 'let n=0;class E{text:string=(n++,"ok");}if(n!==0)throw new Error("before");const e=new E();if(n!==1)throw new Error("after");const q:string=e.text;',
+    bad: 'let n=0;value class E{text:string=(n++,42);}const e=new E();',
+    good: 'let n=0;value class E{text:string=(n++,"ok");}if(n!==0)throw new Error("before");const e=new E();if(n!==1)throw new Error("after");const q:string=e.text;',
   }, ['bad', 'bad', 'good', 'good', 'bad']);
   for (const index of [0, 1, 4]) {
     expect(results[index]).toMatchObject({ status: 'rejected', bodyEntries: [], errorClass: 'StaticTypeError',
@@ -30,7 +30,7 @@ test('a failed field check does not publish facts into another class check', asy
 
 test('a throwing initializer retains prior runtime effects and does not rerun a failed module', async () => {
   const results = await observeModuleSequence({
-    dep: 'export let n=0;function fail(){throw new Error("field");}export class E{text:string=(n++,fail());}',
+    dep: 'export let n=0;function fail(){throw new Error("field");}export value class E{text:string=(n++,fail());}',
     bad: 'import {E} from "dep";const e=new E();',
     good: 'import {n} from "dep";if(JSON.stringify([n])!=="[1]")throw new Error("effects");',
   }, ['bad', 'bad', 'good', 'good', 'bad']);

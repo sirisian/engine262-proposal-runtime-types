@@ -1732,7 +1732,7 @@
     {
       "name": "numeric-stores",
       "modules": {
-        "main": "function check(v:any,t:any){if(Reflect.typeOf(v)!==t)throw new Error(\"numeric\");}let n:uint8=0;const raw:any=7;n=raw;check(n,uint8);class C{n:uint16=0;}const c=new C();c.n=raw;check(c.n,uint16);const a:[].<uint8>=[0];a[0]=raw;check(a[0],uint8);const t:[uint16]=[0];t[0]=raw;check(t[0],uint16);"
+        "main": "function check(v:any,t:any){if(Reflect.typeOf(v)!==t)throw new Error(\"numeric\");}let n:uint8=0;const raw:any=7;n=raw;check(n,uint8);value class C{n:uint16=0;}const c=new C();c.n=raw;check(c.n,uint16);const a:[].<uint8>=[0];a[0]=raw;check(a[0],uint8);const t:[uint16]=[0];t[0]=raw;check(t[0],uint16);"
       },
       "script": true,
       "expected": {

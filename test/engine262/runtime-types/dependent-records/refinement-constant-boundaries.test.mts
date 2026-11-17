@@ -37,7 +37,7 @@ test('a return decides', () => {
 test('a field initializer decides, instance and static', () => {
   refused('class K { a: Small = 20; }');
   refused('class K { static a: Small = 20; }');
-  expect(evaluated(`${SMALL}class K { a: Small = 5; } String(new K().a);`)).toBe('5');
+  expect(evaluated(`${SMALL}value class K { a: Small = 5; } String(new K().a);`)).toBe('5');
 });
 
 test('an assignment and a conversion decide', () => {
@@ -105,7 +105,7 @@ const noDefault = (source: string): void => {
 
 test('a refinement the base default satisfies has that default', () => {
   expect(evaluated(`${SMALL}let x: Small; String(x);`)).toBe('0');
-  expect(evaluated(`${SMALL}class K { a: Small; } String(new K().a);`)).toBe('0');
+  expect(evaluated(`${SMALL}value class K { a: Small; } String(new K().a);`)).toBe('0');
   expect(evaluated("type Short = string where this.length < 3; let s: Short; String(s.length);")).toBe('0');
 });
 

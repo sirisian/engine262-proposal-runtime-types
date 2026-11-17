@@ -30,7 +30,7 @@ type Meter = float32.<{ m: 1 }>; type SqMeter = float32.<{ m: 2 }>;
 
 test('a decimal value crosses into a parameterization of its base', () => {
   expect(evaluated(`${DC}const d: decimal128 = 19.9; const p: Cents = d; String(p);`)).toBe('19.9');
-  expect(evaluated(`${DC}const d: decimal128 = 19.9; class K { p: Cents = d; } String(new K().p);`)).toBe('19.9');
+  expect(evaluated(`${DC}const d: decimal128 = 19.9; value class K { p: Cents = d; } String(new K().p);`)).toBe('19.9');
 });
 
 test('a decimal literal reaches one too, in both spellings', () => {

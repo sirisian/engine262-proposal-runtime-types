@@ -23,7 +23,7 @@ test('if else: a typed numeric zero is falsy, non-zero is truthy', () => {
 });
 
 test('if else: a typed object and a typed array are always truthy', () => {
-  expect(evaluated('class A { x: uint32 = (0 := uint32); } let a = new A(); if (a) { "truthy"; } else { "falsy"; }')).toBe('truthy');
+  expect(evaluated('value class A { x: uint32 = (0 := uint32); } let a = new A(); if (a) { "truthy"; } else { "falsy"; }')).toBe('truthy');
   // an empty array is truthy
   expect(evaluated('let a = []; if (a) { "truthy"; } else { "falsy"; }')).toBe('truthy');
 });

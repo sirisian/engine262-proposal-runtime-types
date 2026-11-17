@@ -30,5 +30,5 @@ test('every dynamic function constructor checks its source', () => {
 test('a valid typed dynamic function is constructed and runs', () => {
   expect(evaluated('String(new Function("let x: uint8 = 1; return x;")());')).toBe('1');
   expect(evaluated('String(Function("a: uint8", "return a;")(5));')).toBe('5');
-  expect(evaluated('class C { x: uint8 = 1; } String(new Function("let c: C = new C(); return c.x;")());')).toBe('1');
+  expect(evaluated('value class C { x: uint8 = 1; } String(new Function("let c: C = new C(); return c.x;")());')).toBe('1');
 });

@@ -31,7 +31,7 @@ const VALUE_BINDINGS: readonly (readonly [string, string])[] = [
   ['string', 'const q: string = "a"; let v: q = "b";'],
   ['boolean', 'const q: boolean = true; let v: q = false;'],
   ['an object type', 'const q: { a: uint8 } = { a: 1 }; let v: q = { a: 2 };'],
-  ['a class instance', 'class C { n: uint8 = 1; } const q: C = new C(); let v: q = new C();'],
+  ['a class instance', 'value class C { n: uint8 = 1; } const q: C = new C(); let v: q = new C();'],
   ['an array', 'const q: [].<uint8> = [1]; let v: q = [2];'],
 ];
 

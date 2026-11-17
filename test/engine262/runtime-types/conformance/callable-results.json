@@ -3,7 +3,7 @@
   "cases": [
     {
       "name": "interface receiver result: compatible",
-      "source": "interface I{m():string;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I{m():string;}value class C implements I{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -11,7 +11,7 @@
     },
     {
       "name": "interface receiver result: incompatible",
-      "source": "interface I{m():number;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I{m():number;}value class C implements I{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -26,7 +26,7 @@
     },
     {
       "name": "interface forward helper: compatible",
-      "source": "interface I{m():string;}class C implements I{m(){return this.f();}f(){return this.x;}x:string=\"s\";}",
+      "source": "interface I{m():string;}value class C implements I{m(){return this.f();}f(){return this.x;}x:string=\"s\";}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -34,7 +34,7 @@
     },
     {
       "name": "interface forward helper: incompatible",
-      "source": "interface I{m():number;}class C implements I{m(){return this.f();}f(){return this.x;}x:string=\"s\";}",
+      "source": "interface I{m():number;}value class C implements I{m(){return this.f();}f(){return this.x;}x:string=\"s\";}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -95,7 +95,7 @@
     },
     {
       "name": "interface inherited method: compatible",
-      "source": "interface I{m():string;}class B{x:string=\"s\";m(){return this.x;}}class C extends B implements I{}",
+      "source": "interface I{m():string;}value class B{x:string=\"s\";m(){return this.x;}}value class C extends B implements I{}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -103,7 +103,7 @@
     },
     {
       "name": "interface inherited method: incompatible",
-      "source": "interface I{m():number;}class B{x:string=\"s\";m(){return this.x;}}class C extends B implements I{}",
+      "source": "interface I{m():number;}value class B{x:string=\"s\";m(){return this.x;}}value class C extends B implements I{}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -118,7 +118,7 @@
     },
     {
       "name": "interface inherited field: compatible",
-      "source": "interface I{m():string;}class B{x:string=\"s\";}class C extends B implements I{m(){return this.x;}}",
+      "source": "interface I{m():string;}value class B{x:string=\"s\";}value class C extends B implements I{m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -126,7 +126,7 @@
     },
     {
       "name": "interface inherited field: incompatible",
-      "source": "interface I{m():number;}class B{x:string=\"s\";}class C extends B implements I{m(){return this.x;}}",
+      "source": "interface I{m():number;}value class B{x:string=\"s\";}value class C extends B implements I{m(){return this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -141,7 +141,7 @@
     },
     {
       "name": "specialized interface: compatible",
-      "source": "interface I<T:type>{m():T;}class C implements I.<string>{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I<T:type>{m():T;}value class C implements I.<string>{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -149,7 +149,7 @@
     },
     {
       "name": "specialized interface: incompatible",
-      "source": "interface I<T:type>{m():T;}class C implements I.<number>{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I<T:type>{m():T;}value class C implements I.<number>{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -187,7 +187,7 @@
     },
     {
       "name": "generic class interface: compatible",
-      "source": "interface I<T:type>{m():T;}class C<T:type> implements I.<T>{x:T;m(){return this.x;}}",
+      "source": "interface I<T:type>{m():T;}value class C<T:type extends value> implements I.<T>{x:T;m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -210,7 +210,7 @@
     },
     {
       "name": "interface async result: compatible",
-      "source": "interface I{m():Promise.<string>;}class C implements I{x:string=\"s\";async m(){return this.x;}}",
+      "source": "interface I{m():Promise.<string>;}value class C implements I{x:string=\"s\";async m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -218,7 +218,7 @@
     },
     {
       "name": "interface async result: incompatible",
-      "source": "interface I{m():Promise.<number>;}class C implements I{x:string=\"s\";async m(){return this.x;}}",
+      "source": "interface I{m():Promise.<number>;}value class C implements I{x:string=\"s\";async m(){return this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -233,7 +233,7 @@
     },
     {
       "name": "interface generator yield: compatible",
-      "source": "interface I{m():Generator.<string,undefined,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
+      "source": "interface I{m():Generator.<string,undefined,void>;}value class C implements I{x:string=\"s\";*m(){yield this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -241,7 +241,7 @@
     },
     {
       "name": "interface generator yield: incompatible",
-      "source": "interface I{m():Generator.<number,undefined,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
+      "source": "interface I{m():Generator.<number,undefined,void>;}value class C implements I{x:string=\"s\";*m(){yield this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -256,7 +256,7 @@
     },
     {
       "name": "interface async generator yield: compatible",
-      "source": "interface I{m():AsyncGenerator.<string,undefined,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
+      "source": "interface I{m():AsyncGenerator.<string,undefined,void>;}value class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -264,7 +264,7 @@
     },
     {
       "name": "interface async generator yield: incompatible",
-      "source": "interface I{m():AsyncGenerator.<number,undefined,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
+      "source": "interface I{m():AsyncGenerator.<number,undefined,void>;}value class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -279,7 +279,7 @@
     },
     {
       "name": "interface generator completion: compatible",
-      "source": "interface I{m(a:number):Generator.<number,string,void>;}class C implements I{x:string=\"s\";*m(a:number){yield a;return this.x;}}",
+      "source": "interface I{m(a:number):Generator.<number,string,void>;}value class C implements I{x:string=\"s\";*m(a:number){yield a;return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -287,7 +287,7 @@
     },
     {
       "name": "interface generator completion: incompatible",
-      "source": "interface I{m(a:number):Generator.<number,number,void>;}class C implements I{x:string=\"s\";*m(a:number){yield a;return this.x;}}",
+      "source": "interface I{m(a:number):Generator.<number,number,void>;}value class C implements I{x:string=\"s\";*m(a:number){yield a;return this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -588,7 +588,7 @@
     },
     {
       "name": "interface covariance to void",
-      "source": "interface I{m():void;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I{m():void;}value class C implements I{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -596,7 +596,7 @@
     },
     {
       "name": "interface covariance to any",
-      "source": "interface I{m():any;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I{m():any;}value class C implements I{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -604,7 +604,7 @@
     },
     {
       "name": "interface covariance to string|number",
-      "source": "interface I{m():string|number;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I{m():string|number;}value class C implements I{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -628,7 +628,7 @@
     },
     {
       "name": "void consumer ignores result",
-      "source": "interface I{m():void;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "source": "interface I{m():void;}value class C implements I{x:string=\"s\";m(){return this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -697,7 +697,7 @@
     },
     {
       "name": "executed interface implementation",
-      "source": "interface I{m():string;}class C implements I{x:string=\"s\";m(){return this.x;}}const c:I=new C();c.m();",
+      "source": "interface I{m():string;}value class C implements I{x:string=\"s\";m(){return this.x;}}const c:I=new C();c.m();",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

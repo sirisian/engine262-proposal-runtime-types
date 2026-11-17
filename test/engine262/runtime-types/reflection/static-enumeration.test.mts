@@ -133,7 +133,7 @@ test('a static and an instance member of one name stay distinct', () => {
 test('ClassAccessor names the accessor declaration and nothing else', () => {
   // It is the shape of the `accessor` KEYWORD, a declaration form of its own -
   // not a name for a getter and setter pair.
-  expect(evaluated('class B { accessor w: uint8 = (1 := uint8); } '
+  expect(evaluated('value class B { accessor w: uint8 = (1 := uint8); } '
     + 'Object.keys(Reflect.getReflection.<Reflect.ClassAccessor, B>()).join(",");')).toBe('w');
   expect(evaluated('class A { get v(): uint8 { return 1; } set v(x: uint8) {} } '
     + 'try { Reflect.getReflection.<Reflect.ClassAccessor, A>("v"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');

@@ -106,15 +106,15 @@ test('row 3: the operand of a return in a function with a declared return type',
 test('row 4a: a store to a declared class field', () => {
   // The declared type has to be recorded on the class structure and not only
   // by the reflection route, or `c.x = "str"` stores the string.
-  expect(evaluated('class C { x: uint8 = 1; } let c = new C(); c.x = 7; String(c.x) + "/" + String(c.x is uint8);')).toBe('7/true');
-  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); c.x = 300;')).toBe('RangeError');
-  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); c.x = "str";')).toBe('TypeError');
+  expect(evaluated('value class C { x: uint8 = 1; } let c = new C(); c.x = 7; String(c.x) + "/" + String(c.x is uint8);')).toBe('7/true');
+  expect(thrownKind('value class C { x: uint8 = 1; } let c = new C(); c.x = 300;')).toBe('RangeError');
+  expect(thrownKind('value class C { x: uint8 = 1; } let c = new C(); c.x = "str";')).toBe('TypeError');
 });
 
 test('row 4b: a store to a PRIVATE declared field, which stores elsewhere', () => {
-  expect(evaluated('class C { #p: uint8 = 1; set(v) { this.#p = v; return this.#p; } } String(new C().set(7) is uint8);')).toBe('true');
-  expect(thrownKind('class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set(300);')).toBe('RangeError');
-  expect(thrownKind('class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set("str");')).toBe('TypeError');
+  expect(evaluated('value class C { #p: uint8 = 1; set(v) { this.#p = v; return this.#p; } } String(new C().set(7) is uint8);')).toBe('true');
+  expect(thrownKind('value class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set(300);')).toBe('RangeError');
+  expect(thrownKind('value class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set("str");')).toBe('TypeError');
 });
 
 test('row 4c: a store to a property typed through a descriptor', () => {
@@ -177,21 +177,21 @@ test('the checker reports what the static types settle, at the store rows', () =
   // is. Assignability stays NOMINAL - two classes with identical fields are
   // not interchangeable - which is what the [[Structure]] channel keeps
   // separate from identity.
-  expectStatic('class C { x: uint8 = 1; } function nc(c: C) { c.x = 300; }');
-  expectStatic('class C { x: uint8 = 1; } function nc(c: C) { c.x = "s"; }');
+  expectStatic('value class C { x: uint8 = 1; } function nc(c: C) { c.x = 300; }');
+  expectStatic('value class C { x: uint8 = 1; } function nc(c: C) { c.x = "s"; }');
   // The stored-to copy is read afterwards: a store to a copy that nothing
   // reads is refused for its own reason (#sec-store-to-a-copy).
-  expect(evaluated('class C { x: uint8 = 1; } function nc(c: C) { c.x = 7; return c.x; } "ok";')).toBe('ok');
+  expect(evaluated('value class C { x: uint8 = 1; } function nc(c: C) { c.x = 7; return c.x; } "ok";')).toBe('ok');
   expect(evaluated('class C { y = 1; } function nc(c: C) { c.y = "anything"; } "ok";')).toBe('ok');
-  expectStatic('class A { x: uint8 = 1; } class B { x: uint8 = 1; } function nc(a: A) { let b: B = a; }');
+  expectStatic('value class A { x: uint8 = 1; } value class B { x: uint8 = 1; } function nc(a: A) { let b: B = a; }');
 });
 
 test('a class instance carries its declared fields into the checker', () => {
   // A class name in a type position has to resolve to the instance type, or
   // every value of a class type is ~any~: no field's type visible, no store to
   // one diagnosed, and no call passing one checked.
-  expectStatic('class C { x: uint8 = 1; } function nc(c: C) { let y: uint16 = c.x; }');
-  expectStatic('function nc(c: C) { c.x = 300; } class C { x: uint8 = 1; }');
+  expectStatic('value class C { x: uint8 = 1; } function nc(c: C) { let y: uint16 = c.x; }');
+  expectStatic('function nc(c: C) { c.x = 300; } value class C { x: uint8 = 1; }');
   // Fields that are not instance fields of the public shape stay invisible -
   // a static field is not on the instance, and a private field is not reachable
   // through a member expression at all - and BECAUSE they are invisible, a write
@@ -205,10 +205,10 @@ test('a class instance carries its declared fields into the checker', () => {
   // A class with a typed PRIVATE field IS sealed - the derivation counts public
   // and private alike - so a write of an undeclared name to one is refused where
   // it used to be left to the run time.
-  expectStatic('class C { #p: uint8 = 1; } function nc(c: C) { c.q = 300; }');
+  expectStatic('value class C { #p: uint8 = 1; } function nc(c: C) { c.q = 300; }');
   // And the diagnostic names the classes, which it could not do while nominal
   // types printed as the word "nominal".
-  const message = thrownMessage('class Apple { x: uint8 = 1; } class Orange { x: uint8 = 1; } function nc(a: Apple) { let b: Orange = a; } "unreachable";');
+  const message = thrownMessage('value class Apple { x: uint8 = 1; } value class Orange { x: uint8 = 1; } function nc(a: Apple) { let b: Orange = a; } "unreachable";');
   expect(message).toContain('Apple');
   expect(message).toContain('Orange');
 });
@@ -333,8 +333,8 @@ test('an interface is a type, and a class picks up what it implements', () => {
   // not declare itself...
   expectStatic('interface I { k: uint8 } class C implements I { } function nc(c: C) { c.k = 300; }');
   // ...and its OWN declaration wins where both describe a member.
-  expectStatic('interface I { k: string } class C implements I { k: uint8 = 1; } function nc(c: C) { c.k = 300; }');
-  expect(evaluated('interface I { k: uint8 } class C implements I { k: uint8 = 1; } String(new C().k is uint8);')).toBe('true');
+  expectStatic('interface I { k: string } value class C implements I { k: uint8 = 1; } function nc(c: C) { c.k = 300; }');
+  expect(evaluated('interface I { k: uint8 } value class C implements I { k: uint8 = 1; } String(new C().k is uint8);')).toBe('true');
 });
 
 test('a setter gives a property its write type', () => {
@@ -352,7 +352,7 @@ test('a setter gives a property its write type', () => {
 });
 
 test('a subclass instance carries what it inherits', () => {
-  const base = 'class A { x: uint8 = 1; m(v: uint8) { return v; } } class B extends A { y: uint8 = 2; } ';
+  const base = 'value class A { x: uint8 = 1; m(v: uint8) { return v; } } value class B extends A { y: uint8 = 2; } ';
   // Inherited fields and methods are part of the subclass's shape, which
   // is what the prototype chain gives at run time.
   expectStatic(`${base} function nc(b: B) { b.x = 300; }`);
@@ -362,8 +362,8 @@ test('a subclass instance carries what it inherits', () => {
   // Through more than one level, and regardless of declaration order: the
   // instance types are built lazily, so a class may name a superclass declared
   // later in the list.
-  expectStatic('class A { x: uint8 = 1; } class B extends A {} class C extends B {} function nc(c: C) { c.x = 300; }');
-  expectStatic('function nc(b: B) { b.x = 300; } class B extends A { } class A { x: uint8 = 1; }');
+  expectStatic('value class A { x: uint8 = 1; } value class B extends A {} value class C extends B {} function nc(c: C) { c.x = 300; }');
+  expectStatic('function nc(b: B) { b.x = 300; } class B extends A { } value class A { x: uint8 = 1; }');
   // An OVERRIDE wins over what it overrides, which is again what the prototype
   // chain does.
   expect(evaluated('class A { m(v: uint8) {} } class B extends A { m(v: string) {} } function nc(b: B) { b.m("s"); } "ok";')).toBe('ok');
@@ -371,7 +371,7 @@ test('a subclass instance carries what it inherits', () => {
   // A heritage clause that is not a class name leaves the base unknown, which
   // contributes nothing rather than guessing; and a heritage CYCLE must not
   // hang the checker, though it is a ReferenceError when the program runs.
-  expect(evaluated('function mixin(x) { return x; } class A { x: uint8 = 1; } class B extends mixin(A) {} function nc(b: B) { b.x = 300; } "ok";')).toBe('ok');
+  expect(evaluated('function mixin(x) { return x; } value class A { x: uint8 = 1; } value class B extends mixin(A) {} function nc(b: B) { b.x = 300; } "ok";')).toBe('ok');
   expect(run('class A extends B {} class B extends A {} "ok";')).toMatchObject({ Type: 'throw' });
   // The run time is untouched: inherited values are still typed.
   expect(evaluated(`${base} String(new B().x is uint8) + "/" + String(new B().y);`)).toBe('true/2');
@@ -386,11 +386,11 @@ test('a constructor is a construct signature, not a member of the instance', () 
   // be wrong twice over.
   expect(evaluated('class C { constructor(v: uint8) {} } function nc(c: C) { c.constructor(300); } "ok";')).toBe('ok');
   // `new C()` has the class's instance type, so a field read through it flows.
-  expectStatic('class C { x: uint8 = 1; } function nc() { let y: uint16 = new C().x; }');
+  expectStatic('value class C { x: uint8 = 1; } function nc() { let y: uint16 = new C().x; }');
   // An untyped or absent constructor leaves the call unchecked, and the
   // construction still runs.
   expect(evaluated('class C { constructor(v) {} } function nc() { new C(300); } "ok";')).toBe('ok');
-  expect(evaluated('class C { x: uint8 = 1; } function nc() { new C(300); } "ok";')).toBe('ok');
+  expect(evaluated('value class C { x: uint8 = 1; } function nc() { new C(300); } "ok";')).toBe('ok');
   expect(evaluated('class C { constructor(v: uint8) { this.v = v; } } String(new C((7 := uint8)).v);')).toBe('7');
 });
 
@@ -400,13 +400,13 @@ test('a field initializer is a store to that field, and is converted like one', 
   // a typed value, but a field with an initializer kept whatever the
   // initializer produced - so `new C().x is uint8` was FALSE until something
   // wrote to it, and became true afterwards.
-  expect(evaluated('class C { x: uint8 = 1; } String(new C().x is uint8);')).toBe('true');
-  expect(evaluated('class C { x: uint8 = 7; } String(new C().x);')).toBe('7');
-  expect(evaluated('class C { x: uint8; } String(new C().x is uint8);')).toBe('true');
-  expect(evaluated('function g() { return 5; } class C { x: uint8 = g(); } String(new C().x is uint8);')).toBe('true');
+  expect(evaluated('value class C { x: uint8 = 1; } String(new C().x is uint8);')).toBe('true');
+  expect(evaluated('value class C { x: uint8 = 7; } String(new C().x);')).toBe('7');
+  expect(evaluated('value class C { x: uint8; } String(new C().x is uint8);')).toBe('true');
+  expect(evaluated('function g() { return 5; } value class C { x: uint8 = g(); } String(new C().x is uint8);')).toBe('true');
   // An initializer whose value the type cannot represent is reported where the
   // initializer runs, and an untyped field is untouched.
-  expect(thrownKind('function g() { return 300; } class C { x: uint8 = g(); } new C();')).toBe('RangeError');
+  expect(thrownKind('function g() { return 300; } value class C { x: uint8 = g(); } new C();')).toBe('RangeError');
   expect(evaluated('class C { y = "s"; } String(new C().y);')).toBe('s');
 });
 
@@ -534,9 +534,9 @@ test('two typed operands of different types do not mix, exactly as BigInt does n
 // -- Row 7: a value crossing into a typed position through reflection ---------
 
 test('row 7: Reflect.set into a typed field and a typed element', () => {
-  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 300);')).toBe('RangeError');
+  expect(thrownKind('value class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 300);')).toBe('RangeError');
   expect(thrownKind('let a: [].<uint8> = [1]; Reflect.set(a, "0", "x");')).toBe('TypeError');
-  expect(evaluated('class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 7); String(c.x is uint8);')).toBe('true');
+  expect(evaluated('value class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 7); String(c.x is uint8);')).toBe('true');
 });
 
 test('row 7b: Reflect.defineProperty checks the value against the declared type', () => {
@@ -1213,13 +1213,13 @@ test('deleting a typed field, a typed element, or an interface-required member t
   // The first and third only started throwing when class fields began
   // recording their declared type: the rule reads a structure that is empty
   // for every declared field until they do.
-  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); delete c.x;')).toBe('TypeError');
+  expect(thrownKind('value class C { x: uint8 = 1; } let c = new C(); delete c.x;')).toBe('TypeError');
   // A typed ELEMENT is caught before the program runs, the index being a
   // constant into a typed array; the field and the interface member below are
   // still decided when the `delete` executes. Same rule, reported earlier where
   // it can be.
   expect(thrownKind('let a: [].<uint8> = [1,2]; delete a[0];')).toBe('StaticTypeError');
-  expect(thrownKind('interface I { m: uint8 } class C implements I { m: uint8 = 1; } let c = new C(); delete c.m;')).toBe('TypeError');
+  expect(thrownKind('interface I { m: uint8 } value class C implements I { m: uint8 = 1; } let c = new C(); delete c.m;')).toBe('TypeError');
   // An untyped property is still deletable, and so is a non-index property of
   // a typed array.
   expect(evaluated('class C { y = 1; } let c = new C(); delete c.y; "deleted";')).toBe('deleted');
@@ -1242,10 +1242,10 @@ test('the same operation runs at every row: one value, seven boundaries, one ver
     'function anyv() { return 300; } let x: uint8 = anyv();',
     'function f(v: uint8) {} function anyv() { return 300; } f(anyv());',
     'function anyv() { return 300; } function g(): uint8 { return anyv(); } g();',
-    'class C { x: uint8 = 1; } let c = new C(); c.x = 300;',
-    'class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set(300);',
+    'value class C { x: uint8 = 1; } let c = new C(); c.x = 300;',
+    'value class C { #p: uint8 = 1; set(v) { this.#p = v; } } new C().set(300);',
     'let a: [].<uint8> = [1]; function anyv() { return 300; } a[0] = anyv();',
-    'class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 300);',
+    'value class C { x: uint8 = 1; } let c = new C(); Reflect.set(c, "x", 300);',
   ];
   // Row 6's own form, asserted beside them: same operation, different fault.
   expect(thrownKind('function anyv() { return 300; } (1 := uint8) + anyv();')).toBe('TypeError');
@@ -1259,8 +1259,8 @@ test('a typed field survives a round trip, which is what the gap destroyed', () 
   // error arrives at the READ - an innocent boundary blaming a value the type
   // system
   // had admitted. Now the store is where it is reported.
-  expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); c.x = 300; let y: uint8 = c.x;')).toBe('RangeError');
-  expect(evaluated('class C { x: uint8 = 1; } let c = new C(); c.x = 200; let y: uint8 = c.x; String(y);')).toBe('200');
+  expect(thrownKind('value class C { x: uint8 = 1; } let c = new C(); c.x = 300; let y: uint8 = c.x;')).toBe('RangeError');
+  expect(evaluated('value class C { x: uint8 = 1; } let c = new C(); c.x = 200; let y: uint8 = c.x; String(y);')).toBe('200');
 });
 
 // -- Literal freshness (#sec-literal-freshness) -------------------------------
@@ -1489,7 +1489,7 @@ test('an alias resolves however it is declared relative to its use', () => {
 test('the neighbouring names were never affected', () => {
   // A CLASS or an INTERFACE name resolved all along, which is what said the
   // defect was aliases specifically rather than named types.
-  expectStatic('class C { x: uint8 = (1 := uint8); } function f(p: C) {} f(5);');
+  expectStatic('value class C { x: uint8 = (1 := uint8); } function f(p: C) {} f(5);');
   expectStatic('interface I { x: uint8 } function f(p: I) {} f(5);');
 });
 
@@ -1543,7 +1543,7 @@ test('a compound assignment is refused where its desugaring is', () => {
   expectStatic('let a: uint8 = 0; a += "s";');
   expectStatic('let a: uint8 = 0; a -= "s";');
   // A member and an element target, through the same paths `=` uses.
-  expectStatic('class C { v: uint8 = 0; } const c = new C(); c.v += 300;');
+  expectStatic('value class C { v: uint8 = 0; } const c = new C(); c.v += 300;');
   expectStatic('const arr: [4].<uint8> = new [4].<uint8>(); arr[0] += 300;');
 });
 

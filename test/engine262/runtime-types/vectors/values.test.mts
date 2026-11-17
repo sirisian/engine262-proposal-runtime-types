@@ -470,7 +470,7 @@ test('an alias of a vector type has its accessors and a wrapping class does not'
 
   // A class holding one is a distinct nominal type and does not acquire the
   // members of its field's type. The field itself is reached by name.
-  const C = 'class W { v: float32x4 = float32x4(1, 2, 3, 4); } const w = new W(); ';
+  const C = 'value class W { v: float32x4 = float32x4(1, 2, 3, 4); } const w = new W(); ';
   expect(evaluated(`${C}String(w.v);`)).toBe('(1, 2, 3, 4)');
   expect(evaluated(`${C}String(w.v.x);`)).toBe('1');
   expect(evaluated(`${C}String(w.x);`)).toBe('undefined');
@@ -630,5 +630,5 @@ test('withLane cannot take a computed index, which is why the write stays', () =
 test('an array permits writing through a value-type element', () => {
   // The consistency argument: refusing the vector case would be inconsistent with arrays. It is the weaker of
   // the two reasons, and is asserted because it is the one a reader arriving from arrays reaches for.
-  expect(evaluated('class P { x: uint8 = 0; } const a: [].<P> = [new P()]; a[0].x = 5; String(a[0].x);')).toBe('5');
+  expect(evaluated('value class P { x: uint8 = 0; } const a: [].<P> = [new P()]; a[0].x = 5; String(a[0].x);')).toBe('5');
 });

@@ -123,7 +123,7 @@ test('extending a library nominal relates to THAT one and no other', () => {
   expectThrown('class MyErr extends Map { } let e: Error = new MyErr();');
   // Still directional, and a class that extends nothing relates to nothing.
   expectThrown('class MyErr extends Error { } let m: MyErr = new Error("x");');
-  expectThrown('class Plain { x: uint8 = 1; } let e: Error = new Plain();');
+  expectThrown('value class Plain { x: uint8 = 1; } let e: Error = new Plain();');
 });
 
 // -- The drift guard -----------------------------------------------------------

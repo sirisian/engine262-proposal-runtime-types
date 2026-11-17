@@ -43,7 +43,7 @@ test('a class is replaced, and the BINDING is what takes it', () => {
   expect(evaluated('function nop(c) {} @nop class A { tag() { return "original"; } } (new A()).tag();')).toBe('original');
   // The ordering rule still holds around it: members apply before the class.
   expect(evaluated('const l = []; function m(c) { l.push("member"); } function cls(c) { l.push("class"); } '
-    + '@cls class A { @m x: uint8 = 1; } l.join(",");')).toBe('member,class');
+    + '@cls value class A { @m x: uint8 = 1; } l.join(",");')).toBe('member,class');
 });
 
 test('replacements CHAIN, innermost first', () => {
@@ -89,20 +89,20 @@ test('the FIELD row: the return is the initial VALUE, not an initializer', () =>
   // an initializer FUNCTION - and the difference is visible: a decorator runs once at class
   // definition while an initializer runs per instance, so the value is captured once and used for
   // every one.
-  expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } String(new A().a);')).toBe('99');
-  expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } '
+  expect(evaluated('function rep(c) { return 99; } value class A { @rep a: uint8 = 1; } String(new A().a);')).toBe('99');
+  expect(evaluated('function rep(c) { return 99; } value class A { @rep a: uint8 = 1; } '
     + 'const x = new A(), y = new A(); String(x.a) + "/" + String(y.a);')).toBe('99/99');
   // "The return type must be compatible with the original", so a replacement is
   // checked like any other store - out of range is the RangeError the split
   // gives, not a TypeError.
   expect(evaluated('function rep(c) { return 300; } '
-    + 'try { eval("class A { @rep a: uint8 = 1; } new A();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
-  expect(evaluated('function nop(c) {} class A { @nop a: uint8 = 1; } String(new A().a);')).toBe('1');
+    + 'try { eval("value class A { @rep a: uint8 = 1; } new A();"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
+  expect(evaluated('function nop(c) {} value class A { @nop a: uint8 = 1; } String(new A().a);')).toBe('1');
 });
 
 test('the ACCESSOR row: a pair replaces the pair, over the SAME slot', () => {
   expect(evaluated('function rep(c) { return { get() { return 42; }, set(v) {} }; } '
-    + 'class A { @rep accessor a: uint8 = 1; } String(new A().a);')).toBe('42');
+    + 'value class A { @rep accessor a: uint8 = 1; } String(new A().a);')).toBe('42');
   // THE ASSERTION THAT JUSTIFIES `access`: a replacement that DELEGATES reads
   // and writes the storage the layout already allotted, instead of closing over
   // storage of its own and leaving the slot dead. Doubling on read makes the
@@ -110,7 +110,7 @@ test('the ACCESSOR row: a pair replaces the pair, over the SAME slot', () => {
   // whatever it was last given, not twice it.
   expect(evaluated('function rep(c) { const a = c.access; '
     + 'return { get() { return a.get.call(this) * 2; }, set(v) { a.set.call(this, v); } }; } '
-    + 'class A { @rep accessor a: uint8 = 5; } const o = new A(); o.a = 4; String(o.a);')).toBe('8');
+    + 'value class A { @rep accessor a: uint8 = 5; } const o = new A(); o.a = 4; String(o.a);')).toBe('8');
 });
 
 test('the FUNCTION and OBJECT rows', () => {

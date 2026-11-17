@@ -1032,7 +1032,7 @@
     },
     {
       "name": "ordinary local receiver is independent of class receiver",
-      "source": "class C{x:string=\"s\";m(a:number){return g.call({x:1});function g(){return this.x;}}}const q:number=new C().m(1);String(q);",
+      "source": "value class C{x:string=\"s\";m(a:number){return g.call({x:1});function g(){return this.x;}}}const q:number=new C().m(1);String(q);",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -1041,7 +1041,7 @@
     },
     {
       "name": "arrow inside ordinary local inherits local receiver",
-      "source": "class C{x:string=\"s\";m(a:number){return g.call({x:1});function g(){const h=()=>this.x;return h();}}}const q:number=new C().m(1);String(q);",
+      "source": "value class C{x:string=\"s\";m(a:number){return g.call({x:1});function g(){const h=()=>this.x;return h();}}}const q:number=new C().m(1);String(q);",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -1068,7 +1068,7 @@
     },
     {
       "name": "lexical arrow keeps class receiver",
-      "source": "class C{x:string=\"s\";m(a:number){const g=()=>this.x;return g();}}const q:string=new C().m(1);q;",
+      "source": "value class C{x:string=\"s\";m(a:number){const g=()=>this.x;return g();}}const q:string=new C().m(1);q;",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

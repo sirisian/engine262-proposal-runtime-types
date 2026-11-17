@@ -956,7 +956,7 @@
       "name": "value copy in suffix acquisition",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[\"a\",p];const t:[...[].<string>,P]=raw;p.value=2;String(raw[1].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[\"a\",p];const t:[...[].<string>,P]=raw;p.value=2;String(raw[1].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -970,7 +970,7 @@
       "name": "value copy in rest acquisition",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p,true];const t:[...[].<P>,boolean]=raw;p.value=2;String(raw[0].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p,true];const t:[...[].<P>,boolean]=raw;p.value=2;String(raw[0].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

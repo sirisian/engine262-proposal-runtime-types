@@ -86,7 +86,7 @@ test('function runtime type: every callable shape reports a function type', () =
   expect(evaluated('function f() {} const p = new Proxy(f, {});'
     + ' String(Reflect.getReflection(Reflect.typeOf(p)).kind);')).toBe('function');
   // a class constructor is callable too, and used to answer `type {}`
-  expect(evaluated('class C { x: uint8 = 1; } String(Reflect.getReflection(Reflect.typeOf(C)).kind);')).toBe('function');
+  expect(evaluated('value class C { x: uint8 = 1; } String(Reflect.getReflection(Reflect.typeOf(C)).kind);')).toBe('function');
 });
 
 test('a class constructor reports what it constructs', () => {
@@ -95,16 +95,16 @@ test('a class constructor reports what it constructs', () => {
   // `void` is not what `new C(...)` produces, and reporting it left every class
   // with the same constructor parameters sharing ONE type: fixed for functions
   // and still live for classes.
-  expect(evaluated('class C { x: uint8 = 1; constructor(a: uint8) {} }'
+  expect(evaluated('value class C { x: uint8 = 1; constructor(a: uint8) {} }'
     + ' const s = Reflect.getReflection(Reflect.typeOf(C)).signatures[0];'
     + ' String((s.parameters[0].type === uint8) + ":" + (s.return.type === type C));')).toBe('true:true');
   // The same for classes: two classes are two types, even with identical parameters
-  expect(evaluated('class C { x: uint8 = 1; } class D { y: string = ""; }'
+  expect(evaluated('value class C { x: uint8 = 1; } value class D { y: string = ""; }'
     + ' String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('true');
   expect(evaluated('class C { constructor(a: uint8) {} } class D { constructor(a: uint8) {} }'
     + ' String(Reflect.typeOf(C) !== Reflect.typeOf(D));')).toBe('true');
   // a derived class reports itself, not its base
-  expect(evaluated('class A { a: uint8 = 1; } class B extends A { b: uint8 = 2; }'
+  expect(evaluated('value class A { a: uint8 = 1; } value class B extends A { b: uint8 = 2; }'
     + ' String(Reflect.getReflection(Reflect.typeOf(B)).signatures[0].return.type === type B);')).toBe('true');
   // and an ordinary function is untouched - the derivation is class-only
   expect(evaluated('function f() {}'
@@ -117,7 +117,7 @@ test('the value type and the declaration reflection answer different questions',
   // its VALUE's type a return, because a construction yields the class. Both
   // are right and they must not be collapsed into each other by a later edit
   // that notices they disagree - so they are asserted side by side.
-  const C = 'class C { x: uint8 = 1; constructor(a: uint8) {} } ';
+  const C = 'value class C { x: uint8 = 1; constructor(a: uint8) {} } ';
   expect(evaluated(`${C}String(Reflect.getReflection`
     + '.<Reflect.ClassMethod, C>("constructor").signatures[0].return === undefined);')).toBe('true');
   expect(evaluated(`${C}String(Reflect.getReflection(Reflect.typeOf(C))`

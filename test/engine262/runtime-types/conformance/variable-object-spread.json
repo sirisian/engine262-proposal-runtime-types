@@ -144,7 +144,7 @@
       "name": "new constructor",
       "steps": [
         {
-          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}const args={b:\"B\",a:\"A\"};new C(...args).a;",
+          "source": "value class C{a:string;constructor(a:string,b:string){this.a=a+b;}}const args={b:\"B\",a:\"A\"};new C(...args).a;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -158,7 +158,7 @@
       "name": "target typed new",
       "steps": [
         {
-          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}const args={b:\"B\",a:\"A\"};const x:C=new.(...args);x.a;",
+          "source": "value class C{a:string;constructor(a:string,b:string){this.a=a+b;}}const args={b:\"B\",a:\"A\"};const x:C=new.(...args);x.a;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -172,7 +172,7 @@
       "name": "super constructor",
       "steps": [
         {
-          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}class D extends C{constructor(args:any){super(...args);}}new D({b:\"B\",a:\"A\"}).a;",
+          "source": "value class C{a:string;constructor(a:string,b:string){this.a=a+b;}}value class D extends C{constructor(args:any){super(...args);}}new D({b:\"B\",a:\"A\"}).a;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -186,7 +186,7 @@
       "name": "super explicit names",
       "steps": [
         {
-          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}class D extends C{constructor(){super(b:\"B\",a:\"A\");}}new D().a;",
+          "source": "value class C{a:string;constructor(a:string,b:string){this.a=a+b;}}value class D extends C{constructor(){super(b:\"B\",a:\"A\");}}new D().a;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -284,7 +284,7 @@
       "name": "constructor overload",
       "steps": [
         {
-          "source": "class C{v:string;constructor(a:uint8,b:string){this.v=\"wrong\";}constructor(b:boolean,a:string){this.v=a+String(b);}}const args={b:true,a:\"A\"};new C(...args).v;",
+          "source": "value class C{v:string;constructor(a:uint8,b:string){this.v=\"wrong\";}constructor(b:boolean,a:string){this.v=a+String(b);}}const args={b:true,a:\"A\"};new C(...args).v;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

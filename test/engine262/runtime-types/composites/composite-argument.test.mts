@@ -15,7 +15,7 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
 test('the argument must be an object, tuple, array or interface type', () => {
   expectStaticTypeError('Composite.<uint8>;');
   expectStaticTypeError('let c: Composite.<uint8> | null = null;');
-  expectStaticTypeError('class K { x: uint8 = 0; } Composite.<K>;');
+  expectStaticTypeError('value class K { x: uint8 = 0; } Composite.<K>;');
 });
 
 test('the argument may not have a Symbol-keyed member', () => {

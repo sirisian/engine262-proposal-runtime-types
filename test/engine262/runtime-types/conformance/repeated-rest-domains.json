@@ -928,7 +928,7 @@
       "name": "tuple-suffix-storage: value copy in suffix acquisition",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[\"a\",p];const t:[...[].<string>,...[].<string>,P]=raw;p.value=2;String(raw[1].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[\"a\",p];const t:[...[].<string>,...[].<string>,P]=raw;p.value=2;String(raw[1].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

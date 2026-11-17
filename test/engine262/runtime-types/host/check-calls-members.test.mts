@@ -28,8 +28,8 @@ test.each([
   'class C<T: type> { constructor(x: T) {} } function f() { new C.<uint8>(1); }',
   'function f(x: { a: uint8 }) { x["a"] = 1; }',
   'function f(x: { a: uint8 } | null) { let v: uint8 | undefined = x?.a; }',
-  'class C { x: uint8; static x: string = ""; static m() { this.x = "s"; } }',
-  'class C { x: uint8; m() { function f() { this.x = "s"; } } }',
+  'value class C { x: uint8; static x: string = ""; static m() { this.x = "s"; } }',
+  'value class C { x: uint8; m() { function f() { this.x = "s"; } } }',
 ])('preserves a valid call or member form: %s', (source) => {
   expect(ok(source)).toBe(true);
 });

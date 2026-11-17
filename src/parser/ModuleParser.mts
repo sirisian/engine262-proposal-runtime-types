@@ -201,6 +201,10 @@ export abstract class ModuleParser extends StatementParser {
         default:
           if (this.test('async') && this.testAhead(Token.FUNCTION) && !this.peekAhead().hadLineTerminatorBefore) {
             node.HoistableDeclaration = this.scope.with({ default: true }, () => this.parseFunctionDeclaration(FunctionKind.ASYNC));
+          } else if (this.testClassModifierRun()) {
+            // proposal-runtime-types ClassDeclaration : ClassModifiers? `class` ... - `export default
+            // value class { }`, as a declaration is exported with no modifier.
+            node.ClassDeclaration = this.scope.with({ default: true }, () => this.parseClassDeclaration(null));
           } else {
             node.AssignmentExpression = this.parseAssignmentExpression();
             this.semicolon();
@@ -285,6 +289,13 @@ export abstract class ModuleParser extends StatementParser {
             this.scope.declare(node.Declaration, 'export');
           } else if (this.test('async') && this.testAhead(Token.FUNCTION) && !this.peekAhead().hadLineTerminatorBefore) {
             node.Declaration = this.parseHoistableDeclaration();
+            this.scope.declare(node.Declaration, 'export');
+          } else if (this.testClassModifierRun()) {
+            // proposal-runtime-types ClassDeclaration : ClassModifiers? `class` ... A class with a
+            // modifier - `export value class P { }`, `export sealed class Node { }` - is exported
+            // as a class with none is. It was a Syntax Error, so a module could export no class
+            // that said what kind it was.
+            node.Declaration = this.parseClassDeclaration(null);
             this.scope.declare(node.Declaration, 'export');
           } else {
             this.unexpected();

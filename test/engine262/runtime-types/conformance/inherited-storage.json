@@ -940,7 +940,7 @@
     {
       "name": "wider-value-class",
       "modules": {
-        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new R();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"width refusal\");if(out.a instanceof R)throw new Error(\"published wider value\");"
+        "main": "value class P { x:uint32=1; } value class R extends P { y:uint32=2; } value class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new R();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==true)throw new Error(\"width refusal\");if(out.a instanceof R)throw new Error(\"published wider value\");"
       },
       "script": true,
       "expected": {
@@ -953,7 +953,7 @@
     {
       "name": "same-width-value-class",
       "modules": {
-        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new Q();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
+        "main": "value class P { x:uint32=1; } value class R extends P { y:uint32=2; } value class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new Q();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
       },
       "script": true,
       "expected": {
@@ -966,7 +966,7 @@
     {
       "name": "same-value-class",
       "modules": {
-        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new P();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
+        "main": "value class P { x:uint32=1; } value class R extends P { y:uint32=2; } value class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=new P();let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
       },
       "script": true,
       "expected": {
@@ -979,7 +979,7 @@
     {
       "name": "explicit-value-class-widening",
       "modules": {
-        "main": "class P { x:uint32=1; } class R extends P { y:uint32=2; } class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=(new R()) := P;let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
+        "main": "value class P { x:uint32=1; } value class R extends P { y:uint32=2; } value class Q extends P {} const proto:any={a:new P()};const raw:any={};Object.setPrototypeOf(raw,proto);const out:{a:P}=raw;const candidate:any=(new R()) := P;let caught=false;try{proto.a=candidate;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(caught!==false)throw new Error(\"width refusal\");if(out.a!==candidate)throw new Error(\"wrong candidate\");"
       },
       "script": true,
       "expected": {

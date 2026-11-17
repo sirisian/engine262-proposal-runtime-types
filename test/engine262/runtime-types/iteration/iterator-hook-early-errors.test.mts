@@ -12,8 +12,8 @@ test.each([
 });
 
 test('nominal, inherited and specialized hooks contribute their declared types', () => {
-  expectStaticTypeError('class C { [Symbol.iterator]: uint8 = 1; } function unused(c: C) { for (const x of c) {} }');
-  expectStaticTypeError('class B<T: type> { [Symbol.iterator]: T; } class C extends B.<uint8> {} function unused(c: C) { [...c]; }');
+  expectStaticTypeError('value class C { [Symbol.iterator]: uint8 = 1; } function unused(c: C) { for (const x of c) {} }');
+  expectStaticTypeError('value class B<T: type extends value> { [Symbol.iterator]: T; } value class C extends B.<uint8> {} function unused(c: C) { [...c]; }');
 });
 
 test('async selection rejects a present numeric hook without sync fallback', () => {

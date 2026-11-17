@@ -6,7 +6,7 @@ import { evaluated, expectStaticTypeError, expectThrownKind, ok } from '../harne
 // or a construction that cannot run user code is not one, so it leaves a proved
 // operation elsewhere in the source judged.
 
-const P = 'class P { x: uint8 = 0; } let p: P = new P(); ';
+const P = 'value class P { x: uint8 = 0; } let p: P = new P(); ';
 
 test('an unrelated typed construction leaves a proved operation judged', () => {
   expectStaticTypeError(`${P}const m = new Map.<string, uint8>(); m.size = 3;`);
@@ -27,5 +27,5 @@ test('a construction that can run user code still withdraws the proof', () => {
 });
 
 test('a class annotation over a value that is not a construction of it withdraws the proof', () => {
-  expectThrownKind('class P { x: uint8 = 0; } function mk(): any { return new P(); } let p: P = mk(); const m = new Map.<string, uint8>(); m.size = 3;', 'TypeError');
+  expectThrownKind('value class P { x: uint8 = 0; } function mk(): any { return new P(); } let p: P = mk(); const m = new Map.<string, uint8>(); m.size = 3;', 'TypeError');
 });

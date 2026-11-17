@@ -22,11 +22,11 @@ test('a rational reports its width and alignment', () => {
 });
 
 test('a rational may be a field', () => {
-  expect(evaluated('class C { r: rational64; } String(C.byteLength);')).toBe('16');
-  expect(evaluated('class C { r: rational64; } String(C.isPlainData);')).toBe('true');
-  expect(evaluated('class C { r: rational64; } const c = new C(); String(c.r);')).toBe('0');
+  expect(evaluated('value class C { r: rational64; } String(C.byteLength);')).toBe('16');
+  expect(evaluated('value class C { r: rational64; } String(C.isPlainData);')).toBe('true');
+  expect(evaluated('value class C { r: rational64; } const c = new C(); String(c.r);')).toBe('0');
   // A narrower width lays out as two of it.
-  expect(evaluated('class C { r: rational.<32>; } String(C.byteLength);')).toBe('8');
+  expect(evaluated('value class C { r: rational.<32>; } String(C.byteLength);')).toBe('8');
 });
 
 test('a rational may be an array element', () => {
@@ -35,7 +35,7 @@ test('a rational may be an array element', () => {
 });
 
 test('a class carrying one is laid out', () => {
-  expect(evaluated('class C { r: rational64; n: uint8 = 0; } String(C.hasLayout);')).toBe('true');
+  expect(evaluated('value class C { r: rational64; n: uint8 = 0; } String(C.hasLayout);')).toBe('true');
 });
 
 test('the neighbouring pair type is unchanged', () => {

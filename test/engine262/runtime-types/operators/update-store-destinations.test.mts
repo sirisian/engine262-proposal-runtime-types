@@ -12,7 +12,7 @@ test("rejects index update object", () => {
 });
 
 test("rejects index update nominal", () => {
-  expectStaticTypeError("class D { n: uint8 = 0; } class C { get operator[](i: uint32): uint8 { return 0; } set operator[](i: uint32, v: D) {} } function unused(c: C) { c[0]++; }");
+  expectStaticTypeError("value class D { n: uint8 = 0; } class C { get operator[](i: uint32): uint8 { return 0; } set operator[](i: uint32, v: D) {} } function unused(c: C) { c[0]++; }");
 });
 
 test("accepts index update control", () => {

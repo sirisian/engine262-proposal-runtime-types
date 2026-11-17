@@ -7,14 +7,14 @@ import { evaluated, expectThrown } from '../harness.mts';
 // behavior. Specialized constructor inputs are covered in constructor-type-inputs.
 
 test('a class reflects through its constructor', () => {
-  expect(evaluated('class K { x: uint8 = 1; } String(Reflect.getReflection(K).kind);')).toBe('primitive');
+  expect(evaluated('value class K { x: uint8 = 1; } String(Reflect.getReflection(K).kind);')).toBe('primitive');
   expect(evaluated('class A { } class B extends A { } String(Reflect.getReflection(B).kind);')).toBe('primitive');
 });
 
 test('and `typeof` is untouched', () => {
   // Reflection admission must preserve ordinary constructor behavior.
   expect(evaluated('class K { } typeof K;')).toBe('function');
-  expect(evaluated('class Box<T: type> { v: T; } typeof Box;')).toBe('function');
+  expect(evaluated('value class Box<T: type extends value> { v: T; } typeof Box;')).toBe('function');
   // While every other type object reports "object", as the spec requires - in a
   // text that ADMITS. `#sec-type-names` excepts `typeof` from admitting, so a
   // probe alone leaves the name unbound, which is what keeps an existing
@@ -26,7 +26,7 @@ test('and `typeof` is untouched', () => {
 });
 
 test('a class still behaves as a class', () => {
-  expect(evaluated('class K { x: uint8 = 1; } String(new K().x);')).toBe('1');
+  expect(evaluated('value class K { x: uint8 = 1; } String(new K().x);')).toBe('1');
   expect(evaluated('class K { } String(new K() instanceof K);')).toBe('true');
 });
 

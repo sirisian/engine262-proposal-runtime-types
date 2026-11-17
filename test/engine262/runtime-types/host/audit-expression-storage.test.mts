@@ -69,9 +69,9 @@ test.each([
 test('private, super, bit-field, and nonlocation borrows reject early', () => {
   expectStaticTypeError('class C { #x = 1; f() { let ref p = this.#x; } }');
   expectStaticTypeError('class B { x = 1; } class C extends B { f() { let ref p = super.x; } }');
-  expectStaticTypeError('class C { x: uint.<4>; } function unused(c: C) { let ref p = c.x; }');
+  expectStaticTypeError('value class C { x: uint.<4>; } function unused(c: C) { let ref p = c.x; }');
   expectStaticTypeError('function unused() { let ref p = (1); }');
-  expect(ok('class C { #x: uint8 = 1; f() { this.#x++; } }')).toBe(true);
+  expect(ok('value class C { #x: uint8 = 1; f() { this.#x++; } }')).toBe(true);
 });
 
 test('dynamic properties, accessors, and local ref returns remain valid', () => {

@@ -26,5 +26,5 @@ test('shared operands are checked in aliases and nested declarations', () => {
   expectStaticTypeError('function unused() { let n: shared string; }');
   expect(ok('function unused(n: shared uint8) {}')).toBe(true);
   expect(ok('function unused(n: shared [2].<uint8>) {}')).toBe(true);
-  expect(ok('class C { n: uint8 = 1; } function unused(n: shared C) {}')).toBe(true);
+  expect(ok('value class C { n: uint8 = 1; } function unused(n: shared C) {}')).toBe(true);
 });

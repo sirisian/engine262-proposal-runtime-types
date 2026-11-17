@@ -15,7 +15,7 @@ import { evaluated, expectThrown, expectStaticTypeError } from '../harness.mts';
  * distinction is the whole of why four earlier attempts failed.
  */
 
-const V = 'class P { x: uint8 = 0; } ';
+const V = 'value class P { x: uint8 = 0; } ';
 
 test('a NAME or a READ copies', () => {
   // "Assigning a value of a value type, passing one as an argument, and
@@ -23,16 +23,16 @@ test('a NAME or a READ copies', () => {
   expect(evaluated(`${V} const a = new P(); a.x = 1; const b = a; b.x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; let b = new P(); b = a; b.x = 9; String(a.x);`)).toBe('1');
   // Into TYPED STORAGE, which is what a store copies into.
-  expect(evaluated(`${V} class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; h.p.x = 9; String(a.x);`)).toBe('1');
+  expect(evaluated(`${V} value class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; h.p.x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [1].<P> = [new P()]; arr[0] = a; arr[0].x = 9; String(a.x);`)).toBe('1');
   expect(evaluated(`${V} const a = new P(); a.x = 1; var b = a; b.x = 9; String(a.x);`)).toBe('1');
   // "A read of a field or an element into any of those positions is one of them,
   // so `e` in `let e: V = arr[0]` holds a copy and writing to it does not
   // disturb the element."
   expect(evaluated(`${V} const arr: [2].<P> = [new P(), new P()]; arr[0].x = 1; const d = arr[0]; d.x = 9; String(arr[0].x);`)).toBe('1');
-  expect(evaluated(`${V} class N { p: P = new P(); } const n = new N(); n.p.x = 1; const e = n.p; e.x = 9; String(n.p.x);`)).toBe('1');
+  expect(evaluated(`${V} value class N { p: P = new P(); } const n = new N(); n.p.x = 1; const e = n.p; e.x = 9; String(n.p.x);`)).toBe('1');
   // A field store and an argument, which already copied.
-  expect(evaluated(`${V} class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; a.x = 5; String(h.p.x);`)).toBe('1');
+  expect(evaluated(`${V} value class H { p: P = new P(); } const a = new P(); a.x = 1; const h = new H(); h.p = a; a.x = 5; String(h.p.x);`)).toBe('1');
   // The callee's parameter is a copy, and it is read after the store. A store
   // to it that nothing reads is refused where it is written, since it can have
   // no effect (#sec-store-to-a-copy); this asserted that form while it ran.
@@ -67,11 +67,11 @@ test('the copy carries what the instance carries', () => {
 test('nothing that is NOT a value type class is copied', () => {
   // A class that holds a reference, and a class declared `reference`, are held by reference.
   expect(evaluated('class Q { s: [].<string> = []; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x);')).toBe('9');
-  expect(evaluated('reference class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x);')).toBe('9');
+  expect(evaluated('class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x);')).toBe('9');
   // A class with a `string` field and no reference IS a value type class: a `string` is a value
   // type (#sec-value-types, "the existing primitive types are value types"), and a layout is not
   // part of the condition (#sec-typed-classes). It aliased while the engine asked for a layout.
-  expect(evaluated('class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x) + String(b.x);')).toBe('19');
+  expect(evaluated('value class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x) + String(b.x);')).toBe('19');
   expect(evaluated('const a = { x: 1 }; const b = a; b.x = 9; String(a.x);')).toBe('9');
   expect(evaluated('const a = [1, 2]; const b = a; b[0] = 9; String(a[0]);')).toBe('9');
   expect(evaluated('const m = new Map(); const n = m; n.set(1, 2); String(m.size);')).toBe('1');
@@ -87,14 +87,14 @@ test('a PRIVATE field is copied; a private METHOD is shared', () => {
   // ACCESSOR belongs to the CLASS and is shared by every instance, so its record
   // is carried across as it stands: duplicating one would give the copy a second
   // function object for a single declaration.
-  const W = 'class W { #s: uint8 = 0; get s() { return this.#s; } set s(v: uint8) { this.#s = v; } } ';
+  const W = 'value class W { #s: uint8 = 0; get s() { return this.#s; } set s(v: uint8) { this.#s = v; } } ';
   expect(evaluated(`${W} const a = new W(); a.s = (1 := uint8); const b = a; b.s = (9 := uint8); String(a.s);`)).toBe('1');
   expect(evaluated(`${W} const a = new W(); a.s = (1 := uint8); const b = a; String(b.s);`)).toBe('1');
   // A private method still works through the copy.
-  expect(evaluated('class M { #n: uint8 = 0; #twice() { return 2; } run() { return this.#twice(); } } '
+  expect(evaluated('value class M { #n: uint8 = 0; #twice() { return 2; } run() { return this.#twice(); } } '
     + 'const a = new M(); const b = a; String(b.run());')).toBe('2');
   // A class with BOTH copies both halves independently.
-  expect(evaluated('class X { #p: uint8 = 0; x: uint8 = 0; get p() { return this.#p; } set p(v: uint8) { this.#p = v; } } '
+  expect(evaluated('value class X { #p: uint8 = 0; x: uint8 = 0; get p() { return this.#p; } set p(v: uint8) { this.#p = v; } } '
     + 'const a = new X(); a.x = 1; a.p = (2 := uint8); const b = a; b.x = 9; b.p = (8 := uint8); '
     + 'String(a.x) + "/" + String(a.p);')).toBe('1/2');
 });
@@ -109,7 +109,7 @@ test('a TYPED array literal copies its elements', () => {
   // CONVERSION" - a literal BECOMING a value type, as in `{ … } := Matrix4` -
   // not a literal whose ELEMENTS are value type instances. Reading it the second
   // way would elide a copy the clause requires two sentences earlier.
-  const V = 'class P { x: uint8 = 0; } ';
+  const V = 'value class P { x: uint8 = 0; } ';
   expect(evaluated(`${V} const a = new P(); a.x = 1; const arr: [1].<P> = [a]; arr[0].x = 9; String(a.x);`)).toBe('1');
   // A DYNAMIC annotation reaches the stamp by a different path and needs the
   // rule said again - the third near-identical array branch it has taken.
@@ -119,7 +119,7 @@ test('a TYPED array literal copies its elements', () => {
 });
 
 test('the literal cases that must NOT copy still do not', () => {
-  const V = 'class P { x: uint8 = 0; } ';
+  const V = 'value class P { x: uint8 = 0; } ';
   // A literal of CONSTRUCTIONS builds in place, which the clause requires.
   expect(evaluated(`${V} const arr: [1].<P> = [new P()]; arr[0].x = 7; String(arr[0].x);`)).toBe('7');
   // An UNTYPED array literal is not a typed store: a plain Array holds a
@@ -146,7 +146,7 @@ test('an untyped destination does NOT copy', () => {
   // consequence was that `o.p = a` copied while `{ p: a }`, `m.set(k, a)` and
   // `arr.push(a)` aliased: one spelling of "put this value in that object"
   // behaving differently from the rest.
-  const V = 'class P { x: uint8 = 0; } const a = new P(); a.x = 1; ';
+  const V = 'value class P { x: uint8 = 0; } const a = new P(); a.x = 1; ';
   expect(evaluated(`${V} const o = {}; o.p = a; o.p.x = 9; String(a.x);`)).toBe('9');
   expect(evaluated(`${V} const arr = []; arr[0] = a; arr[0].x = 9; String(a.x);`)).toBe('9');
   // ...and the untyped routes that already aliased still do, so all four agree.
@@ -164,7 +164,7 @@ test('a copy carries PRIVATE fields', () => {
   // boundary - and a private field IS laid out, which is why `hasLayout` is
   // *true* for a class whose only field is private. The copy was dropping a
   // field the type says it has.
-  const C = 'class C { #v: uint8 = 7; pub: uint8 = 9; get v(): uint8 { return this.#v; } } ';
+  const C = 'value class C { #v: uint8 = 7; pub: uint8 = 9; get v(): uint8 { return this.#v; } } ';
   expect(evaluated(`${C} String((type C).hasLayout);`)).toBe('true');
   // A typed PARAMETER is the boundary that copies.
   expect(evaluated(`${C} function f(o: C) { return o.v; } String(Number(f(new C())));`)).toBe('7');
@@ -184,7 +184,7 @@ test('a binary operator can read the other operand\'s private field', () => {
   //
   // `this.#v` always worked and `o.#v` did not, which is the signature of a
   // copy losing the field rather than of an operator losing its scope.
-  expect(evaluated('class C { #v: uint8 = 7; operator ==(o: C) { return this.#v === o.#v; } }'
+  expect(evaluated('value class C { #v: uint8 = 7; operator ==(o: C) { return this.#v === o.#v; } }'
     + ' String(new C() == new C());')).toBe('true');
   expect(evaluated('class C { #v: uint8 = 1; constructor(n: uint8) { this.#v = n; }'
     + ' operator ==(o: C) { return this.#v === o.#v; } }'
@@ -203,21 +203,21 @@ test('a GENERIC class keeps its private field through a copy', () => {
   // from the TYPE's constructor while its private elements came from the VALUE would resolve `this.#b`
   // to one name while the element sat under another, and the copy's getter would fail: a
   // `FixedString.<32>` stored in a class field must read back.
-  const G = 'class G<N: uint32> { #b: [N].<uint8>; get first(): uint8 { return this.#b[0]; } } ';
-  expect(evaluated(`${G} class H { g: G.<4> = new G.<4>(); } String(Number(new H().g.first));`)).toBe('0');
+  const G = 'value class G<N: uint32> { #b: [N].<uint8>; get first(): uint8 { return this.#b[0]; } } ';
+  expect(evaluated(`${G} value class H { g: G.<4> = new G.<4>(); } String(Number(new H().g.first));`)).toBe('0');
   // The private field's TYPE is not what mattered - a scalar fails the same way,
   // so genericity alone was sufficient.
-  expect(evaluated('class G2<N: uint32> { #b: uint8 = 7; n: [N].<uint8>; get f(): uint8 { return this.#b; } }'
-    + ' class H { g: G2.<4> = new G2.<4>(); } String(Number(new H().g.f));')).toBe('7');
+  expect(evaluated('value class G2<N: uint32> { #b: uint8 = 7; n: [N].<uint8>; get f(): uint8 { return this.#b; } }'
+    + ' value class H { g: G2.<4> = new G2.<4>(); } String(Number(new H().g.f));')).toBe('7');
   // ...and a non-generic class was always fine, which is the pair that made it
   // diagnostic.
-  expect(evaluated('class G3 { #b: uint8 = 7; get f(): uint8 { return this.#b; } }'
-    + ' class H { g: G3 = new G3(); } String(Number(new H().g.f));')).toBe('7');
+  expect(evaluated('value class G3 { #b: uint8 = 7; get f(): uint8 { return this.#b; } }'
+    + ' value class H { g: G3 = new G3(); } String(Number(new H().g.f));')).toBe('7');
 
   // Two applications keep their own sizes across the same boundary - what would
   // break if the fix had reached for one shared prototype.
-  expect(evaluated('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return uint32(this.b.length); } }'
-    + ' class K { a: S.<4> = new S.<4>(); b: S.<8> = new S.<8>(); }'
+  expect(evaluated('value class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return uint32(this.b.length); } }'
+    + ' value class K { a: S.<4> = new S.<4>(); b: S.<8> = new S.<8>(); }'
     + ' const k = new K(); String(Number(k.a.len)) + "/" + String(Number(k.b.len));')).toBe('4/8');
 });
 
@@ -231,13 +231,13 @@ test('a class with a PRIVATE field has a default', () => {
   // The same conflation is recorded in ClassDefinitionEvaluation as one already
   // made and fixed for the LAYOUT: "a single `#x: uint8` gave its whole class no
   // layout". Only the absence of a TYPE disqualifies.
-  expect(evaluated('class P { #x: uint8 = 0; get v(): uint8 { return this.#x; } }'
+  expect(evaluated('value class P { #x: uint8 = 0; get v(): uint8 { return this.#x; } }'
     + ' let p: P; String(Number(p.v));')).toBe('0');
-  expect(evaluated('class P { a: uint8 = 0; #x: uint8 = 0; get v(): uint8 { return this.#x; } }'
+  expect(evaluated('value class P { a: uint8 = 0; #x: uint8 = 0; get v(): uint8 { return this.#x; } }'
     + ' let p: P; String(Number(p.a)) + "/" + String(Number(p.v));')).toBe('0/0');
   // A private field whose type genuinely has no default still disqualifies, so
   // the fix fills fields rather than manufacturing defaults for them.
-  expectThrown('class P { #u: uint8 | string; } let p: P;', 'has no default value');
+  expectThrown('value class P { #u: uint8 | string; } let p: P;', 'has no default value');
   // ...as does an untyped field, which is what the guard was always for.
   expectThrown('class P { x; } let p: P;', 'has no default value');
 });
@@ -247,7 +247,7 @@ test('a GENERIC class has a default, per application', () => {
   // extent is still `N` - a Type Record rather than a number - so the array had
   // no default and the class inherited none. The layout path already recomputes
   // per application; this arm read the declaration's fields directly.
-  const G = 'class G<N: uint32> { b: [N].<uint8>; } ';
+  const G = 'value class G<N: uint32> { b: [N].<uint8>; } ';
   expect(evaluated(`${G} let g: G.<4>; String(g.b.length);`)).toBe('4');
   // Each application gets its own, which is the point of substituting rather
   // than defaulting once.
@@ -255,24 +255,21 @@ test('a GENERIC class has a default, per application', () => {
     + ' String(a.b.length) + "/" + String(b.b.length);')).toBe('4/8');
   // Both gaps at once - a private field whose type mentions the parameter, which
   // is the shape `FixedString` has and why it hit both independently.
-  expect(evaluated('class F<N: uint32> { #b: [N].<uint8>; get len(): uint32 { return uint32(this.#b.length); } }'
+  expect(evaluated('value class F<N: uint32> { #b: [N].<uint8>; get len(): uint32 { return uint32(this.#b.length); } }'
     + ' let f: F.<4>; String(Number(f.len));')).toBe('4');
   // A generic whose fields do not mention the parameter always worked, and still does.
-  expect(evaluated('class G2<N: uint32> { x: uint8 = 0; } let g: G2.<4>; String(Number(g.x));')).toBe('0');
+  expect(evaluated('value class G2<N: uint32> { x: uint8 = 0; } let g: G2.<4>; String(Number(g.x));')).toBe('0');
 });
 
 test('a position of a value type holds a copy or refuses the value, and never aliases it', () => {
-  // The checking pass admits an instance of a `reference` subclass as its
-  // value type base, and the parameter, field and element boundaries refuse it
-  // when it arrives. An annotated binding and a `return` whose check was
-  // elided bound the object itself instead, so `const b: Base = d; b.x = 9`
-  // wrote `d`: a binding of a value type that was a second name for an
-  // object. They now decide it as the other boundaries do.
-  const classes = 'class Base { x: uint8; } reference class Derived extends Base {} const d = new Derived(); ';
-  expectThrown(`${classes}function f(p: Base): uint8 { p.x = 9; return p.x; } f(d);`, 'is not assignable');
-  expectThrown(`${classes}function f(): uint8 { const b: Base = d; b.x = 9; return b.x; } f();`, 'is not assignable');
-  expectThrown(`${classes}function g(): Base { return d; } g();`, 'is not assignable');
+  // Nothing with an identity can arrive at such a position: a class that extends a value class
+  // is one (#sec-value-classes), so a value type class has no subclass held by reference. There
+  // was one, declared `reference`, which the checking pass admitted as its base; the parameter,
+  // field and element boundaries refused it when it arrived, and an annotated binding and a
+  // `return` whose check was elided bound the object itself. The declaration is what is refused.
+  expectThrown('value class Base { x: uint8; } class Derived extends Base {} const d = new Derived();', 'is written `value class`');
+  expectThrown('value class Base { x: uint8; } sealed class Derived extends Base {}', 'is written `value class`');
   // A subclass with no storage of its own is stored as its base, and copied.
-  expect(evaluated('class Base { x: uint8; } class Derived extends Base {} const d = new Derived(); function f(): uint8 { const b: Base = d; b.x = 9; return b.x; } String(f()) + String(d.x);')).toBe('90');
-  expect(evaluated('class Base { x: uint8; } const a = new Base(); function f(): uint8 { const b: Base = a; b.x = 9; return b.x; } String(f()) + String(a.x);')).toBe('90');
+  expect(evaluated('value class Base { x: uint8; } value class Derived extends Base {} const d = new Derived(); function f(): uint8 { const b: Base = d; b.x = 9; return b.x; } String(f()) + String(d.x);')).toBe('90');
+  expect(evaluated('value class Base { x: uint8; } const a = new Base(); function f(): uint8 { const b: Base = a; b.x = 9; return b.x; } String(f()) + String(a.x);')).toBe('90');
 });

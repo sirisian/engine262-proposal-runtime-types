@@ -50,15 +50,15 @@ test('the CONTEXT lands last, and is not demanded of the call', () => {
   // wrong slot there; the final parameter being satisfied is the right model.
   expect(ok('let got = "never";'
     + ' function f(n: uint8, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); }'
-    + ' class A { @f(7) a: uint8; } got;')).toBe(true);
+    + ' value class A { @f(7) a: uint8; } got;')).toBe(true);
   expect(ok('const l = []; function f(c: Reflect.ClassField) { l.push(String(c.name)); }'
-    + ' class A { @f a: uint8; @f() b: uint8; } l.join(",");')).toBe(true);
+    + ' value class A { @f a: uint8; @f() b: uint8; } l.join(",");')).toBe(true);
 });
 
 test('a DEFAULT before the context still leaves the context last', () => {
   expect(ok('let got = "never";'
     + ' function f(n: uint8 = 5, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); }'
-    + ' class A { @f() a: uint8; } got;')).toBe(true);
+    + ' value class A { @f() a: uint8; } got;')).toBe(true);
 });
 
 test('a decorator that RETURNS a non-function is not a mistake', () => {
@@ -72,7 +72,7 @@ test('a decorator that RETURNS a non-function is not a mistake', () => {
   // factory model rather than this one. The run time accepts it, which is what
   // withdrew it.
   expect(ok('function g(): uint8 { return uint8(1); }'
-    + ' class B { @g() x: uint8 = uint8(1); } "ok";')).toBe(true);
+    + ' value class B { @g() x: uint8 = uint8(1); } "ok";')).toBe(true);
   expect(ok('function g(c: Reflect.ClassField): uint8 { return uint8(1); }'
-    + ' class B { @g x: uint8 = uint8(1); } "ok";')).toBe(true);
+    + ' value class B { @g x: uint8 = uint8(1); } "ok";')).toBe(true);
 });

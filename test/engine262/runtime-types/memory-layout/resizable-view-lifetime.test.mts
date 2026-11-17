@@ -16,7 +16,7 @@ test.each(corpus.cases)('$name', async ({ modules, expected }) => {
 
 test('regrowth repairs the byte view but does not reevaluate a failed module', async () => {
   const results = await observeModuleSequence({
-    dep: 'class P{x:uint8;}export const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);export const holder={v:a[0]};globalThis.effects=0;',
+    dep: 'value class P{x:uint8;}export const b=new ArrayBuffer(8,{maxByteLength:32});const a=Span.<P>(b,0,8);export const holder={v:a[0]};globalThis.effects=0;',
     bad: 'import {b,holder} from "dep";globalThis.effects++;b.resize(4);const copy=holder.v;',
     good: 'import {b,holder} from "dep";b.resize(8);holder.v.x=3;if(Number(new Uint8Array(b)[0])!==3||globalThis.effects!==1)throw new Error("recovery");',
   }, ['bad', 'bad', 'good', 'good', 'bad']);

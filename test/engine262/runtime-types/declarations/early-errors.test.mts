@@ -42,7 +42,7 @@ test('the arity rule stands down where the count decides nothing', () => {
   expect(ok('function d(t) { return t; } class C { @d m() {} }')).toBe(true);
   // An unannotated CONSTRUCTOR is the catch-all too, a typed field beside it
   // notwithstanding; `new C(1)` for `constructor() {}` is ordinary ECMAScript.
-  expect(ok('class C { x: uint8 = 1; constructor() {} } String(new C(1) instanceof C);')).toBe(true);
+  expect(ok('value class C { x: uint8 = 1; constructor() {} } String(new C(1) instanceof C);')).toBe(true);
   expect(ok('class C { constructor() {} } String(new C(1) instanceof C);')).toBe(true);
 });
 
@@ -131,14 +131,14 @@ test('implements verifies operator members', () => {
   // The clause's own example, whose parameter is the interface's own type
   // parameter and is bound by the `implements` application.
   const O = 'interface Ordered<T: type> { operator<(other: T): boolean; } ';
-  expectStaticTypeError(`${O}class V implements Ordered.<V> { n: uint8 = 1; }`);
-  expectStaticTypeError(`${O}class V implements Ordered.<V> { n: uint8 = 1; operator<(o: string): boolean { return true; } }`);
+  expectStaticTypeError(`${O}value class V implements Ordered.<V> { n: uint8 = 1; }`);
+  expectStaticTypeError(`${O}value class V implements Ordered.<V> { n: uint8 = 1; operator<(o: string): boolean { return true; } }`);
 });
 
 test('a class that declares its operators satisfies the interface', () => {
   expect(ok('interface I { operator+(o: I): I; } class A implements I { operator+(o: I): I { return this; } }')).toBe(true);
   expect(ok('interface Ordered<T: type> { operator<(other: T): boolean; } '
-    + 'class V implements Ordered.<V> { n: uint8 = 1; operator<(o: V): boolean { return this.n < o.n; } }')).toBe(true);
+    + 'value class V implements Ordered.<V> { n: uint8 = 1; operator<(o: V): boolean { return this.n < o.n; } }')).toBe(true);
   // An inherited operator satisfies a member as an inherited method does. `B`
   // declares `implements` itself so that `return this` satisfies the `I`
   // return - a class reaches an interface-typed position by declaring it
@@ -298,22 +298,22 @@ test('a declared zero must be a compile-time-evaluable value of its class', () =
   // if the declared zero is not a value of the class." Neither was judged, so
   // `static default = 5` was registered as the zero at evaluation and every
   // default-initialized binding of the class then held a Number.
-  expectStaticTypeError('class A { x: uint8 = 1; static default = 5; }');
-  expectStaticTypeError("class A { x: uint8 = 1; static default = 'x'; }");
-  expectStaticTypeError('class A { x: uint8 = 1; static default = function () { return 1; }; }');
+  expectStaticTypeError('value class A { x: uint8 = 1; static default = 5; }');
+  expectStaticTypeError("value class A { x: uint8 = 1; static default = 'x'; }");
+  expectStaticTypeError('value class A { x: uint8 = 1; static default = function () { return 1; }; }');
   expectEarlyError('class A { x: uint8 = 1; static default = Math.random(); }', 'SyntaxError');
   expectEarlyError('class A { x: uint8 = 1; static default = (globalThis.q = new A()); }', 'SyntaxError');
 });
 
 test('a declared zero of the class itself stands, generic or not', () => {
-  expect(ok('class A { x: uint8 = 1; static default = new A(); } let a: A; String(a.x);')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; static default = new A(); } let a: A; String(a.x);')).toBe(true);
   // A generic class's zero is judged at the specialization, where the
   // checker stands down and the run time's instance check decides.
-  expect(ok('class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } const f = Bx.<uint8>; String(f.default instanceof f);')).toBe(true);
+  expect(ok('value class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } const f = Bx.<uint8>; String(f.default instanceof f);')).toBe(true);
   // A static block assigning the zero is the other spelling.
-  expect(ok('class S { x: uint8 = 1; static { S.default = new S(); } } let s: S; String(s.x);')).toBe(true);
+  expect(ok('value class S { x: uint8 = 1; static { S.default = new S(); } } let s: S; String(s.x);')).toBe(true);
   // Any other static field is untouched by the rule.
-  expect(ok('class A { x: uint8 = 1; static count = 5; } String(A.count);')).toBe(true);
+  expect(ok('value class A { x: uint8 = 1; static count = 5; } String(A.count);')).toBe(true);
 });
 
 // ---- #sec-partial-classes ---------------------------------------------
@@ -335,8 +335,8 @@ test('a partial class must name a class and may add only methods and operators',
 });
 
 test('a partial class adds what it may', () => {
-  expect(evaluated('class A { x: uint8 = 1; } partial class A { m(): uint8 { return this.x; } } String(new A().m());')).toBe('1');
-  expect(evaluated('class A { x: uint8 = 1; } partial class A { operator+(o: A): A { return this; } } let a: A = new A(); String((a + a).x);')).toBe('1');
+  expect(evaluated('value class A { x: uint8 = 1; } partial class A { m(): uint8 { return this.x; } } String(new A().m());')).toBe('1');
+  expect(evaluated('value class A { x: uint8 = 1; } partial class A { operator+(o: A): A { return this; } } let a: A = new A(); String((a + a).x);')).toBe('1');
   expect(evaluated('class A {} partial class A { static make() { return new A(); } } String(A.make() instanceof A);')).toBe('true');
   expect(evaluated('interface I { a: uint8 } partial interface I { b: uint8 } let i: I = { a: 1, b: 2 }; String(i.b);')).toBe('2');
 });
@@ -447,10 +447,10 @@ test('an instanceof test against a class that can never fail is refused', () => 
   // succeed or can never fail." The impossible-test check resolved only
   // aliases and built-ins, so a CLASS operand was never judged. NarrowFrom of
   // a class by itself is ~empty~, so the else branch is dead.
-  expectStaticTypeError('{ class P { x: uint8 = 1; } let p: P = new P(); if (p instanceof P) { } else { } }');
+  expectStaticTypeError('{ value class P { x: uint8 = 1; } let p: P = new P(); if (p instanceof P) { } else { } }');
   // A primitive against a class is disjoint (#sec-aredisjoint), so it can
   // never succeed.
-  expectStaticTypeError('class P { x: uint8 = 1; } let x: uint8 = 1; if (x instanceof P) { }');
+  expectStaticTypeError('value class P { x: uint8 = 1; } let x: uint8 = 1; if (x instanceof P) { }');
 });
 
 test('instanceof between unrelated classes can never succeed', () => {
@@ -458,33 +458,33 @@ test('instanceof between unrelated classes can never succeed', () => {
   // other; NarrowTo now makes the same judgment, so the test that would narrow
   // to that intersection is the dead branch it is. AreDisjoint stays silent on
   // the interning path, as #sec-aredisjoint chooses.
-  expectStaticTypeError('{ class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+  expectStaticTypeError('{ value class P { x: uint8 = 1; } value class Q { y: uint8 = 1; } '
     + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; } }');
   // The `is` form judges a class too: class membership is an identity, which
   // no write to a field can change.
-  expectStaticTypeError('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+  expectStaticTypeError('value class P { x: uint8 = 1; } value class Q { y: uint8 = 1; } '
     + 'function unused(p: P) { if (p is Q) { return 1; } return 0; }');
-  expectStaticTypeError('class P { x: uint8 = 1; } let p: P = new P(); if (p is P) { } else { }');
+  expectStaticTypeError('value class P { x: uint8 = 1; } let p: P = new P(); if (p is P) { } else { }');
   // An object type stays open: a binding of one can stop satisfying it.
   expect(ok('type Pos = { a: uint8 }; let p: Pos = { a: 1 }; if (p is Pos) { } else { } String(1);')).toBe(true);
-  expect(ok('class P { x: uint8 = 1; } class S extends P { } function unused(p: P) { if (p is S) { return 1; } return 0; } String(1);')).toBe(true);
+  expect(ok('value class P { x: uint8 = 1; } value class S extends P { } function unused(p: P) { if (p is S) { return 1; } return 0; } String(1);')).toBe(true);
 });
 
 test('instanceof against a class stays legal where a value can be both', () => {
-  expect(ok('class P { x: uint8 = 1; } class S extends P { } '
+  expect(ok('value class P { x: uint8 = 1; } value class S extends P { } '
     + 'function unused(p: P) { if (p instanceof S) { return 1; } return 0; } String(1);')).toBe(true);
-  expect(ok('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+  expect(ok('value class P { x: uint8 = 1; } value class Q { y: uint8 = 1; } '
     + 'function unused(p: P | Q) { if (p instanceof Q) { return 1; } return 0; } String(1);')).toBe(true);
   // An interface stays open: a class may implement any number of them.
-  expect(ok('interface I { x: uint8; } class P { x: uint8 = 1; } '
+  expect(ok('interface I { x: uint8; } value class P { x: uint8 = 1; } '
     + 'function unused(i: I) { if (i instanceof P) { return 1; } return 0; } String(1);')).toBe(true);
   // A test that guards no branch is a question with a constant answer.
-  expect(ok('class P { x: uint8 = 1; } let p: P = new P(); String(p instanceof P);')).toBe(true);
+  expect(ok('value class P { x: uint8 = 1; } let p: P = new P(); String(p instanceof P);')).toBe(true);
 });
 
 // ---- #sec-this-adoption: a call that supplies no this -------------------
 
-const M = 'class C { x: uint8 = 1; m(): uint8 { return this.x; } static s(): uint8 { return 1; } } const c: C = new C(); ';
+const M = 'value class C { x: uint8 = 1; m(): uint8 { return this.x; } static s(): uint8 { return 1; } } const c: C = new C(); ';
 
 test('a method called without its object is refused', () => {
   // A signature with a [[ThisType]] "is usable nowhere a `this` is absent",
@@ -615,7 +615,7 @@ test('an enum of types proposes its enumerators, and the pass leaves it to the r
   // A same-source enum is uninitialized when the pass runs, which made the
   // trial a false early error; the run time now trials the enumerators, so a
   // call no enumerator fits names the enum rather than a missing inverse.
-  const E = 'class A { a: uint8 = 1; } class B { b: string = ""; } enum S: type { X = A, Y = B } ';
+  const E = 'value class A { a: uint8 = 1; } value class B { b: string = ""; } enum S: type { X = A, Y = B } ';
   expectThrown(`${E}${WRAP}function j<T: type extends S>(x: wrapOf(T)): string { return "x"; } j(1);`, 'no inhabitant of S');
 });
 
@@ -624,7 +624,7 @@ test('an enum of types proposes its enumerators, and the pass leaves it to the r
 test('a juxtaposed head naming a numeric const is refused with the rule\'s own message', () => {
   expectThrown('const T = 1; let x: uint8 = 1; match (x) { when T [let a]: 1; default: 0; };', 'a juxtaposed head must denote a type');
   // A class of that name shadowing it in an inner scope is a type.
-  expect(evaluated('const T = 1; class P { a: uint8 = 1; } function g(v: P) { class T { a: uint8 = 1; } '
+  expect(evaluated('const T = 1; value class P { a: uint8 = 1; } function g(v: P) { value class T { a: uint8 = 1; } '
     + 'return match (v) { when T { a: let a }: 1; default: 0; }; } String(g(new P()));')).toBe('0');
 });
 
@@ -633,7 +633,7 @@ test('a juxtaposed head naming a numeric const is refused with the rule\'s own m
 test('a compound or update store of a number into a string or boolean location is refused', () => {
   expectStaticTypeError("let s: string = 'a'; s -= 1;");
   expectStaticTypeError("let s: string = 'a'; s >>>= 1;");
-  expectStaticTypeError("class C { a: string = 'x'; } const c: C = new C(); c.a -= 1;");
+  expectStaticTypeError("value class C { a: string = 'x'; } const c: C = new C(); c.a -= 1;");
   expectStaticTypeError('function u(o: { a: uint8 } | { a: string }) { o.a -= 1; }');
   expectStaticTypeError("function u(o: { a: uint8, b: string }, k: 'a' | 'b') { o[k] -= 1; }");
   expectStaticTypeError('let b: boolean = true; b -= 1;');
@@ -663,11 +663,11 @@ test('a capture\'s written domain and position are checked at the declaration', 
 // ---- #sec-typed-classes: protected members ------------------------------
 
 test('a protected member read through destructuring is refused', () => {
-  const C = 'class C { protected x: uint8 = 1; } const c: C = new C(); ';
+  const C = 'value class C { protected x: uint8 = 1; } const c: C = new C(); ';
   expectStaticTypeError(`${C}const { x } = c;`);
   expectStaticTypeError(`${C}let x; ({ x } = c);`);
-  expectStaticTypeError('class C { protected x: uint8 = 1; } function u({ x }: C) { return x; }');
-  expect(evaluated('class C { protected x: uint8 = 1; } class D extends C { n(): uint8 { const { x } = this; return x; } } String(new D().n());')).toBe('1');
+  expectStaticTypeError('value class C { protected x: uint8 = 1; } function u({ x }: C) { return x; }');
+  expect(evaluated('value class C { protected x: uint8 = 1; } value class D extends C { n(): uint8 { const { x } = this; return x; } } String(new D().n());')).toBe('1');
 });
 
 // ---- #sec-void-type -----------------------------------------------------
@@ -706,7 +706,7 @@ test('a logical operator is a conditional selection', () => {
   const F = 'const f = (x: uint8): uint8 => x; const g = (y: uint8): uint8 => y; ';
   expectStaticTypeError(`${F}new (f && g)(1);`);
   expectStaticTypeError(`${F}const h = f && g; new h(1);`);
-  expectStaticTypeError('class K { x: uint8 = 1; } class L { y: uint8 = 1; } const D = K && L; D();');
+  expectStaticTypeError('value class K { x: uint8 = 1; } value class L { y: uint8 = 1; } const D = K && L; D();');
   expect(evaluated('function F() {} function G() {} const H = F && G; String(typeof new H());')).toBe('object');
 });
 
@@ -718,9 +718,9 @@ test('an && selection whose left operand can yield only a primitive falsy value 
   expectStaticTypeError(`${F}let b: boolean = true; new (b && f)(1);`);
   expectStaticTypeError(`${F}new (true && f)(1);`);
   expectStaticTypeError(`${F}let n: uint8 = 1; new (n && f)(1);`);
-  expectStaticTypeError('class C { x: uint8 = 1; } let b: boolean = true; (b && C)();');
+  expectStaticTypeError('value class C { x: uint8 = 1; } let b: boolean = true; (b && C)();');
   // A truthy left operand is never yielded: only `f` can be constructed here.
-  expectStaticTypeError(`class K { x: uint8 = 1; } ${F}new (K && f)(1);`);
+  expectStaticTypeError(`value class K { x: uint8 = 1; } ${F}new (K && f)(1);`);
   // A falsy part that may hold an Object is an unknown alternative.
   expectThrownKind(`${F}let x: any = 1; new (x && f)(1);`, 'TypeError');
   expect(evaluated('function F() {} let b: boolean = true; String(typeof new (b && F)());')).toBe('object');
@@ -765,9 +765,9 @@ test('a binding typed by a class of untyped fields has no default', () => {
   // A class with no instance field keeps its default.
   expect(evaluated('class K { } let k: K; typeof k;')).toBe('object');
   expect(evaluated('class K { m(): uint8 { return 1; } } let k: K; typeof k;')).toBe('object');
-  expect(evaluated('class K { x: uint8 = 1; } let k: K; String(k.x);')).toBe('0');
-  expect(evaluated('class B { x: uint8 = 1; } class K extends B { } let k: K; String(k.x);')).toBe('0');
-  expect(evaluated("class K { s: string = 'a'; } let k: K; JSON.stringify(k.s);")).toBe('""');
+  expect(evaluated('value class K { x: uint8 = 1; } let k: K; String(k.x);')).toBe('0');
+  expect(evaluated('value class B { x: uint8 = 1; } value class K extends B { } let k: K; String(k.x);')).toBe('0');
+  expect(evaluated("value class K { s: string = 'a'; } let k: K; JSON.stringify(k.s);")).toBe('""');
 });
 
 // ---- #sec-array-defaults-and-stores: tuple searches ---------------------
@@ -805,20 +805,20 @@ test('an anonymous class expression may begin its tail with implements', () => {
 // ---- #sec-operator-declarations: typed-class operands -------------------
 
 test('an update of a typed-class instance is refused before the program runs', () => {
-  const C = 'class C { x: uint8 = 1; } ';
+  const C = 'value class C { x: uint8 = 1; } ';
   expectStaticTypeError(`${C}let c: C = new C(); ++c;`);
   expectStaticTypeError(`${C}function u(c: C) { c--; }`);
-  expectStaticTypeError('class C { x: uint8 = 1; valueOf() { return 1; } } let c: C = new C(); c++;');
+  expectStaticTypeError('value class C { x: uint8 = 1; valueOf() { return 1; } } let c: C = new C(); c++;');
   expect(evaluated('let n: number = 1; n++; String(n);')).toBe('2');
 });
 
 test('a unary operator on a typed-class instance is refused', () => {
-  const C = 'class C { x: uint8 = 1; } ';
+  const C = 'value class C { x: uint8 = 1; } ';
   expectStaticTypeError(`${C}const c: C = new C(); -c;`);
   expectStaticTypeError(`${C}const c: C = new C(); ~c;`);
   expectStaticTypeError(`${C}const c: C = new C(); +c;`);
   expectStaticTypeError(`${C}function u(c: C) { return -c; }`);
-  expect(evaluated('class C { x: uint8 = 1; valueOf() { return 1; } } const c: C = new C(); String(-c);')).toBe('-1');
+  expect(evaluated('value class C { x: uint8 = 1; valueOf() { return 1; } } const c: C = new C(); String(-c);')).toBe('-1');
   expect(evaluated('class C { } const c = new C(); String(-c);')).toBe('NaN');
 });
 
@@ -856,19 +856,19 @@ test('a class extending a class-expression base meets the inheritance rules', ()
   expectStaticTypeError('const A = abstract class { abstract m(): uint8; }; class B extends A { }');
   expectStaticTypeError('class B extends (abstract class { abstract m(): uint8; }) { }');
   expectStaticTypeError("const B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } }");
-  expectStaticTypeError('const B = class { x: uint8 = 1; }; class D extends B { x: uint8 = 2; }');
-  expect(ok('interface I { a: uint8; } const B = class { a: uint8 = 1; }; class C extends B implements I { } String(1);')).toBe(true);
+  expectStaticTypeError('const B = value class { x: uint8 = 1; }; value class D extends B { x: uint8 = 2; }');
+  expect(ok('interface I { a: uint8; } const B = value class { a: uint8 = 1; }; value class C extends B implements I { } String(1);')).toBe(true);
   expectStaticTypeError("let B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } } String(1);");
   expect(ok("function f(B) { class D extends B { m(): string { return 'x'; } } } f(class {});")).toBe(true);
 });
 
 test('a class expression is checked as a class, and its instances are typed', () => {
-  expectStaticTypeError('const C = class { x: uint8 = 1; static default = 5; };');
-  expectStaticTypeError("const C = class { x: uint8 = 1; }; const c = new C(); c.x = 'a';");
+  expectStaticTypeError('const C = value class { x: uint8 = 1; static default = 5; };');
+  expectStaticTypeError("const C = value class { x: uint8 = 1; }; const c = new C(); c.x = 'a';");
   expectStaticTypeError('const C = class { m(a: uint8): uint8 { return a; } }; new C().m(1, 2);');
-  expectStaticTypeError('const C = class { protected x: uint8 = 1; }; const c = new C(); c.x;');
+  expectStaticTypeError('const C = value class { protected x: uint8 = 1; }; const c = new C(); c.x;');
   // The run time finds an anonymous class expression's constructor by its node.
-  expect(evaluated('const C = class { x: uint8 = 1; }; const c = new C(); c.x = 2; String(c.x);')).toBe('2');
+  expect(evaluated('const C = value class { x: uint8 = 1; }; const c = new C(); c.x = 2; String(c.x);')).toBe('2');
 });
 
 // ---- #sec-arithmetic-never-promotes: relational literals ----------------
@@ -913,12 +913,12 @@ test('a flatMap callback whose conditional arms are all primitive is refused', (
 // ---- #sec-typed-classes: protected members ------------------------------
 
 test('a protected field read through an object rest or spread is refused', () => {
-  const C = 'class C { protected x: uint8 = 1; y: uint8 = 2; } const c: C = new C(); ';
+  const C = 'value class C { protected x: uint8 = 1; y: uint8 = 2; } const c: C = new C(); ';
   expectStaticTypeError(`${C}const { ...r } = c;`);
   expectStaticTypeError(`${C}const { y, ...r } = c;`);
   expectStaticTypeError(`${C}const o = { ...c };`);
-  expect(evaluated('class P { y: uint8 = 2; } const p: P = new P(); const { ...r } = p; String(r.y);')).toBe('2');
-  expect(evaluated('class C { protected m(): uint8 { return 1; } y: uint8 = 2; } const c: C = new C(); const { ...r } = c; String(r.y);')).toBe('2');
+  expect(evaluated('value class P { y: uint8 = 2; } const p: P = new P(); const { ...r } = p; String(r.y);')).toBe('2');
+  expect(evaluated('value class C { protected m(): uint8 { return 1; } y: uint8 = 2; } const c: C = new C(); const { ...r } = c; String(r.y);')).toBe('2');
 });
 
 // ---- #sec-literalvalueintype --------------------------------------------
@@ -976,12 +976,12 @@ test('a constructor returning an instance of an ordinary class cannot meet a cal
 // ---- #sec-operator-declarations: typed-class operands -------------------
 
 test('an operator on a class-expression instance is refused as on a declared one', () => {
-  const K = 'const K = class { x: uint8 = 1; }; const k = new K(); ';
+  const K = 'const K = value class { x: uint8 = 1; }; const k = new K(); ';
   expectStaticTypeError(`${K}k + 1;`);
   expectStaticTypeError(`${K}1 - k;`);
   expectStaticTypeError(`${K}-k;`);
-  expectStaticTypeError('new (class { x: uint8 = 1; })() + 1;');
-  expect(evaluated('const K = class { x: uint8 = 1; valueOf() { return 1; } }; const k = new K(); String(k + 1);')).toBe('2');
+  expectStaticTypeError('new (value class { x: uint8 = 1; })() + 1;');
+  expect(evaluated('const K = value class { x: uint8 = 1; valueOf() { return 1; } }; const k = new K(); String(k + 1);')).toBe('2');
   expect(evaluated('const K = class { }; const k = new K(); String(k + 1);')).toBe('[object Object]1');
   expect(evaluated(`${K}String(k.x + 1);`)).toBe('2');
 });

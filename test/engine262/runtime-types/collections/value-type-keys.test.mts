@@ -44,8 +44,8 @@ import { evaluated, ok } from '../harness.mts';
  * moves any of these.
  */
 
-const V = 'class V { x: uint32; y: uint32; } ';
-const BitSet = 'class BitSet { readonly words: [4].<uint32>; } ';
+const V = 'value class V { x: uint32; y: uint32; } ';
+const BitSet = 'value class BitSet { readonly words: [4].<uint32>; } ';
 
 // ---------------------------------------------------------------------------
 // Equality - the root of it
@@ -138,7 +138,7 @@ test('comparison recurses by field KIND, not by byte image', () => {
   // "a value type field recursively and structurally, a fixed-length array field
   // element by element, since it's inline storage, and a reference field by
   // identity."
-  const nested = 'class Inner { a: uint8; } class Outer { i: Inner; b: uint8; } ';
+  const nested = 'value class Inner { a: uint8; } value class Outer { i: Inner; b: uint8; } ';
   expect(evaluated(`${nested} String(new Outer() === new Outer());`)).toBe('true');
   // A fixed-length array field is inline storage, so it compares element-wise.
   expect(evaluated(`${BitSet} String(new BitSet() === new BitSet());`)).toBe('true');
@@ -198,5 +198,5 @@ test('a class holding a reference field keeps identity, however it is spelled', 
   expect(evaluated(`dynamic class D { y = 1; } class C { d: D | null = null; }
     String(new C() === new C());`)).toBe('false');
   // A genuine value type class is untouched.
-  expect(evaluated('class V { x: uint8 = 1; } String(new V() === new V());')).toBe('true');
+  expect(evaluated('value class V { x: uint8 = 1; } String(new V() === new V());')).toBe('true');
 });

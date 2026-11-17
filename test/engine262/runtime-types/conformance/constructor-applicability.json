@@ -4,7 +4,7 @@
       "name": "defaulted constructor must prove applicability before displacing source",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();try{const p:P=raw;log+=\"/\"+String(p.x);}catch(e){log+=\"/\"+e.name;}log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();try{const p:P=raw;log+=\"/\"+String(p.x);}catch(e){log+=\"/\"+e.name;}log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -18,7 +18,7 @@
       "name": "overloaded constructors must prove applicability before displacing source",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"t\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();try{const p:P=raw;log+=\"/\"+String(p.x);}catch(e){log+=\"/\"+e.name;}log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"t\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();try{const p:P=raw;log+=\"/\"+String(p.x);}catch(e){log+=\"/\"+e.name;}log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -32,7 +32,7 @@
       "name": "defaulted constructor fallback at binding",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -46,7 +46,7 @@
       "name": "defaulted constructor fallback at cast",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p=raw:=P;log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p=raw:=P;log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -60,7 +60,7 @@
       "name": "defaulted constructor fallback at parameter",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();function f(v:P){return v;}const p=f(raw);log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();function f(v:P){return v;}const p=f(raw);log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -74,7 +74,7 @@
       "name": "defaulted constructor fallback at return",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();function f():P{return raw;}const p=f();log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();function f():P{return raw;}const p=f();log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -88,7 +88,7 @@
       "name": "defaulted constructor fallback at field",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();class Holder{value:P=raw;}const p=new Holder().value;log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();value class Holder{value:P=raw;}const p=new Holder().value;log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -102,7 +102,7 @@
       "name": "defaulted constructor fallback at array",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const values:[1].<P>=[raw];const p=values[0];log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const values:[1].<P>=[raw];const p=values[0];log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -116,7 +116,7 @@
       "name": "defaulted constructor fallback at tuple",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const values:[P,string]=[raw,\"ok\"];const p=values[0];log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const values:[P,string]=[raw,\"ok\"];const p=values[0];log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -130,7 +130,7 @@
       "name": "overload boolean reverse=False",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"s\";}}const raw:any=true;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"s\";}}const raw:any=true;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -144,7 +144,7 @@
       "name": "overload string reverse=False",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"s\";}}const raw:any=\"yes\";const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"s\";}}const raw:any=\"yes\";const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -158,7 +158,7 @@
       "name": "overload boolean reverse=True",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:string){log+=\"s\";}constructor(v:boolean){log+=\"b\";}}const raw:any=true;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:string){log+=\"s\";}constructor(v:boolean){log+=\"b\";}}const raw:any=true;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -172,7 +172,7 @@
       "name": "overload string reverse=True",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:string){log+=\"s\";}constructor(v:boolean){log+=\"b\";}}const raw:any=\"yes\";const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:string){log+=\"s\";}constructor(v:boolean){log+=\"b\";}}const raw:any=\"yes\";const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -186,7 +186,7 @@
       "name": "default executes only when supplied undefined",
       "steps": [
         {
-          "source": "let log=\"\";function initial():boolean{return true;}class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c/\"+String(v);}}const raw:any=undefined;const p:P=raw;log;",
+          "source": "let log=\"\";function initial():boolean{return true;}value class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c/\"+String(v);}}const raw:any=undefined;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -200,7 +200,7 @@
       "name": "present value does not run default",
       "steps": [
         {
-          "source": "let log=\"\";function initial():boolean{return true;}class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c/\"+String(v);}}const raw:any=false;const p:P=raw;log;",
+          "source": "let log=\"\";function initial():boolean{return true;}value class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c/\"+String(v);}}const raw:any=false;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -214,7 +214,7 @@
       "name": "inapplicable supplied value does not run default",
       "steps": [
         {
-          "source": "let log=\"\";function initial():boolean{return true;}class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
+          "source": "let log=\"\";function initial():boolean{return true;}value class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -228,7 +228,7 @@
       "name": "ordinary omitted construction still uses default",
       "steps": [
         {
-          "source": "let log=\"\";function initial():boolean{return true;}class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c\";}}new P();log;",
+          "source": "let log=\"\";function initial():boolean{return true;}value class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c\";}}new P();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -242,7 +242,7 @@
       "name": "selected default binding body failure retains destination",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";if(v)throw new Error(\"body\");}}let p:P=new P(false);p.x=8;log=\"\";const raw:any=undefined;try{p=raw;}catch(e){log+=\"/\"+e.message;}log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"c\";if(v)throw new Error(\"body\");}}let p:P=new P(false);p.x=8;log=\"\";const raw:any=undefined;try{p=raw;}catch(e){log+=\"/\"+e.message;}log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -256,7 +256,7 @@
       "name": "selected body failure cannot fall back to source",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:any=true){log+=\"c\";throw new Error(\"body\");}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();try{const p:P=raw;}catch(e){log+=\"/\"+e.message;}log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:any=true){log+=\"c\";throw new Error(\"body\");}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();try{const p:P=raw;}catch(e){log+=\"/\"+e.message;}log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -270,7 +270,7 @@
       "name": "optional supplied undefined is accepted",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v?:boolean){log+=String(v);}}const raw:any=undefined;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v?:boolean){log+=String(v);}}const raw:any=undefined;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -284,7 +284,7 @@
       "name": "optional inapplicable value leaves source available",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v?:boolean){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v?:boolean){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -298,7 +298,7 @@
       "name": "typed constructor outranks unannotated catchall",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v){log+=\"a\";}constructor(v:boolean){log+=\"b\";}}const raw:any=true;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v){log+=\"a\";}constructor(v:boolean){log+=\"b\";}}const raw:any=true;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -312,7 +312,7 @@
       "name": "catchall constructor precedes source",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v){log+=\"a\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean){log+=\"b\";}constructor(v){log+=\"a\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -340,7 +340,7 @@
       "name": "pure failing numeric candidate does not preempt wider candidate",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:uint8){log+=\"n\";}constructor(v:uint16){log+=\"w\";}}const raw:any=300;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:uint8){log+=\"n\";}constructor(v:uint16){log+=\"w\";}}const raw:any=300;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -368,7 +368,7 @@
       "name": "pure failure leaves viable inbound operator available",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:uint8=1){log+=\"c\";}operator P(v:any){log+=\"i\";return new P(1);}}const raw:any=300;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:uint8=1){log+=\"c\";}operator P(v:any){log+=\"i\";return new P(1);}}const raw:any=300;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -382,7 +382,7 @@
       "name": "exact typed match outranks numeric literal adaptation",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:uint16){log+=\"w\";}constructor(v:uint8){log+=\"n\";}}const raw:any=7:=uint8;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:uint16){log+=\"w\";}constructor(v:uint8){log+=\"n\";}}const raw:any=7:=uint8;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -396,7 +396,7 @@
       "name": "multi-parameter overload is not a converting constructor",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:any){log+=\"one\";}constructor(v:boolean,other:string=\"x\"){log+=\"two\";}}const raw:any=true;const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:any){log+=\"one\";}constructor(v:boolean,other:string=\"x\"){log+=\"two\";}}const raw:any=true;const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -410,7 +410,7 @@
       "name": "only multi-parameter constructor leaves source available",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:any,other:string=\"x\"){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true,\"x\");}}const raw:any=new S();const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:any,other:string=\"x\"){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true,\"x\");}}const raw:any=new S();const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -424,7 +424,7 @@
       "name": "existing member wins before defaults and overloads",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"s\";}}const saved:any=new P(true);log=\"\";const p:P=saved;p.x=9;log+\"/\"+String(saved.x)+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"s\";}}const saved:any=new P(true);log=\"\";const p:P=saved;p.x=9;log+\"/\"+String(saved.x)+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -438,7 +438,7 @@
       "name": "inbound remains after all constructors are inapplicable",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"s\";}operator P(v:any){log+=\"i\";return new P(true);}}const raw:any={};const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"s\";}operator P(v:any){log+=\"i\";return new P(true);}}const raw:any={};const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -452,7 +452,7 @@
       "name": "source wins before inbound after constructor refusal",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"t\";}operator P(v:any){log+=\"i\";return new P(true);}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
+          "source": "let log=\"\";value class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"t\";}operator P(v:any){log+=\"i\";return new P(true);}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -466,7 +466,7 @@
       "name": "selected body is retained before field effects",
       "steps": [
         {
-          "source": "let log=\"\";class A{label:string=\"a\";}class B extends A{}const raw:any=new B();class P{x:any=(log+=\"f\",Object.setPrototypeOf(raw,A.prototype),0);constructor(v:B){log+=\"b\";}constructor(v:A){log+=\"a\";}}let error=\"\";try{const p:P=raw;}catch(e){error=e.name;}error+\"/\"+log;",
+          "source": "let log=\"\";value class A{label:string=\"a\";}value class B extends A{}const raw:any=new B();class P{x:any=(log+=\"f\",Object.setPrototypeOf(raw,A.prototype),0);constructor(v:B){log+=\"b\";}constructor(v:A){log+=\"a\";}}let error=\"\";try{const p:P=raw;}catch(e){error=e.name;}error+\"/\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -480,7 +480,7 @@
       "name": "selected extra body retains fields private state and new target",
       "steps": [
         {
-          "source": "let log=\"\";class P{#x:uint8=4;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=String(this.#x)+\"/\"+String(new.target===P);}get x(){return this.#x;}}const raw:any=\"yes\";const p:P=raw;log+\"/\"+String(p.x);",
+          "source": "let log=\"\";value class P{#x:uint8=4;constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=String(this.#x)+\"/\"+String(new.target===P);}get x(){return this.#x;}}const raw:any=\"yes\";const p:P=raw;log+\"/\"+String(p.x);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -494,7 +494,7 @@
       "name": "captured parameter type does not use caller generic",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(raw:any){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}function use<T:type>(){const p:P=raw;return p;}return use.<boolean>();}make.<string>(\"yes\");log;",
+          "source": "let log=\"\";function make<T:type>(raw:any){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}function use<T:type>(){const p:P=raw;return p;}return use.<boolean>();}make.<string>(\"yes\");log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -508,7 +508,7 @@
       "name": "same-spelled parameter class is not a member",
       "steps": [
         {
-          "source": "let log=\"\";class A{x:string=\"a\";}class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:A){log+=\"a\";}}const raw:any=(()=>{class A{x:string=\"a\";}return new A();})();let error=\"\";try{const p:P=raw;}catch(e){error=e.name;}error+\"/\"+log;",
+          "source": "let log=\"\";value class A{x:string=\"a\";}value class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:A){log+=\"a\";}}const raw:any=(()=>{value class A{x:string=\"a\";}return new A();})();let error=\"\";try{const p:P=raw;}catch(e){error=e.name;}error+\"/\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -522,7 +522,7 @@
       "name": "identity-class target uses same overload proof",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:string=\"p\";constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"s\";}}class S{operator P(){log+=\"c\";return new P(true);}}const raw:any=new S();const p:P=raw;log+\"/\"+p.x;",
+          "source": "let log=\"\";value class P{x:string=\"p\";constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"s\";}}class S{operator P(){log+=\"c\";return new P(true);}}const raw:any=new S();const p:P=raw;log+\"/\"+p.x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -536,7 +536,7 @@
       "name": "ordered rest uses defaulted constructor proof",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:string=\"p\";constructor(v:boolean=true){log+=\"c\";}}const raw:any=[undefined,\"tail\"];const values:[...[].<P>,...[1].<string>]=raw;log+\"/\"+values.length;",
+          "source": "let log=\"\";value class P{x:string=\"p\";constructor(v:boolean=true){log+=\"c\";}}const raw:any=[undefined,\"tail\"];const values:[...[].<P>,...[1].<string>]=raw;log+\"/\"+values.length;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -550,7 +550,7 @@
       "name": "ordered rest overload selection retains required suffix",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:string=\"p\";constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"s\";}}const raw:any=[true,\"tail\"];const values:[...[].<P>,...[1].<string>]=raw;log+\"/\"+values.length;",
+          "source": "let log=\"\";value class P{x:string=\"p\";constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"s\";}}const raw:any=[true,\"tail\"];const values:[...[].<P>,...[1].<string>]=raw;log+\"/\"+values.length;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -564,7 +564,7 @@
       "name": "zero-item rest does not select ambiguous defaults",
       "steps": [
         {
-          "source": "let log=\"\";class P{x:string=\"p\";constructor(v:boolean=true){log+=\"b\";}constructor(v:string=\"s\"){log+=\"s\";}}const raw:any=[\"tail\"];const values:[...[].<P>,...[1].<string>]=raw;log+\"/\"+values.length;",
+          "source": "let log=\"\";value class P{x:string=\"p\";constructor(v:boolean=true){log+=\"b\";}constructor(v:string=\"s\"){log+=\"s\";}}const raw:any=[\"tail\"];const values:[...[].<P>,...[1].<string>]=raw;log+\"/\"+values.length;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -578,7 +578,7 @@
       "name": "effectful parameter default remains an early error",
       "steps": [
         {
-          "source": "let log=\"\";function initial():boolean{log+=\"d\";return true;}class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c\";}}const raw:any=undefined;const p:P=raw;",
+          "source": "let log=\"\";function initial():boolean{log+=\"d\";return true;}value class P{x:uint8=1;constructor(v:boolean=initial()){log+=\"c\";}}const raw:any=undefined;const p:P=raw;",
           "expected": {
             "completion": "throw",
             "bodyEntered": false,

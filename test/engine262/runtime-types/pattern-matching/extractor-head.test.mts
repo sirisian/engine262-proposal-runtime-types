@@ -75,7 +75,7 @@ test('a head mentioning a type parameter defers to the application', () => {
 });
 
 test('the other pattern forms are untouched', () => {
-  expect(evaluated('class Foo { k: uint8 = 1; } let x: any = new Foo(); '
+  expect(evaluated('value class Foo { k: uint8 = 1; } let x: any = new Foo(); '
     + 'let r = match (x) { when Foo: 1; default: 2; }; String(r);')).toBe('1');
   expect(evaluated('let x: any = { k: 1 }; let r = match (x) { when { k: let v }: v; default: 0; }; String(r);')).toBe('1');
 });

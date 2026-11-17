@@ -20,9 +20,9 @@ test('a field past the declared size is refused before the program runs', () => 
 });
 
 test('a layout that fits is unchanged', () => {
-  expect(evaluated('@size(8) class C { x: float64 = 0; } String((type C).byteLength);')).toBe('8');
-  expect(evaluated('@size(16) class D { x: float64 = 0; } String((type D).byteLength);')).toBe('16');
-  expect(evaluated('@packed @size(3) class K { a: uint8 = 0; b: uint16 = 0; } String((type K).byteLength);')).toBe('3');
+  expect(evaluated('@size(8) value class C { x: float64 = 0; } String((type C).byteLength);')).toBe('8');
+  expect(evaluated('@size(16) value class D { x: float64 = 0; } String((type D).byteLength);')).toBe('16');
+  expect(evaluated('@packed @size(3) value class K { a: uint8 = 0; b: uint16 = 0; } String((type K).byteLength);')).toBe('3');
 });
 
 test('what the checker cannot read is still the run time\'s', () => {

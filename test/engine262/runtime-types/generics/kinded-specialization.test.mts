@@ -62,7 +62,7 @@ test('value and type arguments are unchanged', () => {
   // The controls. A fix that reached these would be changing what was already
   // correct: only the kinded case was ever wrong.
   expect(evaluated('class G<N: uint32> { b: [N].<uint8>; } String(Reflect.typeOf(new G.<4>()));')).toBe('G.<4>');
-  expect(evaluated('class P<T: type> { v: T; } String(Reflect.typeOf(new P.<uint8>()));')).toBe('P.<uint.<8>>');
+  expect(evaluated('value class P<T: type extends value> { v: T; } String(Reflect.typeOf(new P.<uint8>()));')).toBe('P.<uint.<8>>');
 });
 
 test('kinded argument validation is unchanged', () => {

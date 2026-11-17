@@ -48,7 +48,7 @@ test("defers replaceable array iteration", () => {
 });
 
 test("retains readonly reference permissions", () => {
-  expectStaticTypeError("class C{readonly n:uint8=0;f(xs:Iterable.<uint8>){const ref p=this.n;[p]=xs;}}");
+  expectStaticTypeError("value class C{readonly n:uint8=0;f(xs:Iterable.<uint8>){const ref p=this.n;[p]=xs;}}");
 });
 
 

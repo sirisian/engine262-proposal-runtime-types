@@ -72,7 +72,7 @@ test('a window is a member of the array and tuple family', () => {
     + ' function w(s: Span.<uint32>) { return s; }'
     + ' let a: [].<uint32> = [1, 2]; String(f(w(a)));')).toBe('2');
   expect(evaluated('function f<T: type extends [].<any>>(p: T) { return p.length; }'
-    + ' class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+    + ' value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' String(f(s.fields.x));')).toBe('1');
   // the controls: what the bound admitted before must still be admitted, and
   // what it refused must still be refused
@@ -353,7 +353,7 @@ test('a window of the wrong element type is refused, not converted', () => {
   expectThrownKind('const b = new ArrayBuffer(4); const view:any = Span.<uint8>(b);'
     + ' function f(p: Span.<uint32>) { return p.length; } f(view);', 'TypeError');
   // A column projection preserves the same window contract.
-  expectStaticTypeError('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+  expectStaticTypeError('value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);');
 });
 
@@ -383,7 +383,7 @@ test('a column projection is a window at run time', () => {
   // #sec-structure-of-arrays. The projection has BEEN a window since before the
   // type had a name - it is stored the way a buffer view is - so this needed no
   // work in `SoA` at all. It follows from the window being a real value.
-  const s = 'class P { x: float32; y: float32; } const s = new SoA.<P>();'
+  const s = 'value class P { x: float32; y: float32; } const s = new SoA.<P>();'
     + ' s.push({ x: 1, y: 2 }); s.push({ x: 3, y: 4 }); ';
   expect(bool(`${s}String(s.fields.x is Span.<float32>);`)).toBe(true);
   expect(evaluated(`${s}String(s.fields.x.length);`)).toBe('2');
@@ -400,7 +400,7 @@ test('a column projection of the wrong element type is refused', () => {
   // `Span.<float32>`, a window's element type is invariant, and the checker can
   // see both. Asserting the catchable form would now be asserting that the
   // checker does NOT see it.
-  expectStaticTypeError('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+  expectStaticTypeError('value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);');
 });
 
@@ -411,14 +411,14 @@ test('fields is statically an object of windows', () => {
   // constructed, but a layout is not what this needs: the columns are one per
   // FIELD, and the checker already knows a class's fields and their types.
   expectStaticTypeError('let s: SoA.<float32> = new SoA.<float32>(); let z: string = s.fields;');
-  expectStaticTypeError('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); let z: string = s.fields;');
+  expectStaticTypeError('value class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); let z: string = s.fields;');
 });
 
 test('a column reads as a window of the field type', () => {
   // The hop that completes it: `s.fields` is an object of `Span.<F>` properties
   // and `s.fields.x` reads one, so a column is typed all the way down to its
   // elements rather than only at the projection.
-  const s = 'class P { x: float32; y: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1, y: 2 }); ';
+  const s = 'value class P { x: float32; y: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1, y: 2 }); ';
   expectStaticTypeError(`${s}let z: string = s.fields.x;`);
   expectStaticTypeError(`${s}let z: string = s.fields.x[0];`);
   // and the ELEMENT type is the field's, not merely "some number"
@@ -494,7 +494,7 @@ test('the check is on the ELEMENTS, so a fixed array still reaches a window', ()
     + ' let a: [].<uint32> = [1, 2]; String(f(a));')).toBe('2');
   expect(evaluated('const b = new ArrayBuffer(4);'
     + ' function f(p: Span.<uint8>) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
-  expect(evaluated('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+  expect(evaluated('value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));')).toBe('1');
 });
 
@@ -525,7 +525,7 @@ test('every count an array reports reads at the index type', () => {
   expect(bool('const b = new ArrayBuffer(4); String(Span.<uint8>(b).length is uint64);')).toBe(true);
   expect(bool('function w(s: Span.<uint32>) { return s; }'
     + ' let a: [].<uint32> = [1, 2]; String(w(a).length is uint64);')).toBe(true);
-  expect(bool('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+  expect(bool('value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' String(s.fields.x.length is uint64);')).toBe(true);
 });
 
@@ -534,7 +534,7 @@ test('typing the counts does not change what they report', () => {
   expect(evaluated('const b = new ArrayBuffer(4); String(Span.<uint8>(b).map((x) => x).length);')).toBe('4');
   expect(evaluated('const b = new ArrayBuffer(4); let n = 0;'
     + ' for (const x of Span.<uint8>(b)) { n += 1; } String(n);')).toBe('4');
-  expect(evaluated('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+  expect(evaluated('value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' String(s.fields.x.length);')).toBe('1');
 });
 
@@ -556,7 +556,7 @@ test('an out-of-range access raises through every window, however backed', () =>
     + ' let a: [].<uint32> = [1, 2, 3]; w(a)[100];', 'RangeError');
   expectThrownKind('let a: [].<float32> = [1, 2, 3]; a[9];', 'RangeError');
   expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; let i = 9; a[i];', 'RangeError');
-  expectThrownKind('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
+  expectThrownKind('value class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' s.fields.x[100];', 'RangeError');
 });
 
@@ -779,11 +779,11 @@ test('a fixed SoA projects columns that carry their length', () => {
   // #sec-structure-of-arrays: a fixed `SoA.<T, N>` has columns of exactly N, so
   // the projection states its length; a growable one projects a window whose
   // length follows the container and cannot be stated.
-  expect(evaluated('class P { x: float32; } let s: SoA.<P, 4> = new SoA.<P, 4>();'
+  expect(evaluated('value class P { x: float32; } let s: SoA.<P, 4> = new SoA.<P, 4>();'
     + ' function f(p: Span.<float32, 4>) { return p.length; } String(f(s.fields.x));')).toBe('4');
-  expectStaticTypeError('class P { x: float32; } let s: SoA.<P, 4> = new SoA.<P, 4>();'
+  expectStaticTypeError('value class P { x: float32; } let s: SoA.<P, 4> = new SoA.<P, 4>();'
     + ' function f(p: Span.<float32, 3>) { return p.length; } f(s.fields.x);');
-  expect(evaluated('class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
+  expect(evaluated('value class P { x: float32; } let s: SoA.<P> = new SoA.<P>(); s.push({ x: 1 });'
     + ' function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));')).toBe('1');
 });
 

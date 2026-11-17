@@ -20,7 +20,7 @@ import {
  */
 
 const GRAPH: Record<string, string> = {
-  'user.mts': 'export class User { name: string; }\n',
+  'user.mts': 'export value class User { name: string; }\n',
   'main.mts': 'import { User } from "user.mts";\ntype Page = { u: User };\ntype Secret = { k: string };\nexport { Page };\n',
 };
 

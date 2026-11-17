@@ -91,7 +91,7 @@ test('it is a value: the run-time test, liveness, and what it shows of the array
 });
 
 test('an element stored inline is the storage; an element that is a reference is not', () => {
-  const A = 'class A { a: uint8; b: uint8; total(): uint8 { return this.a + this.b; } } const as: [2].<A>; ';
+  const A = 'value class A { a: uint8; b: uint8; total(): uint8 { return this.a + this.b; } } const as: [2].<A>; ';
   refused(`${A}function f(xs: ReadonlySpan.<A>) { xs[0].a = 7; }`);
   refused(`${A}function f(xs: ReadonlySpan.<A>) { xs[0].a += 1; }`);
   refused('function f(xs: ReadonlySpan.<[uint8, uint8]>) { xs[0][1] = 5; }');
@@ -129,7 +129,7 @@ test('the table sorts every member of the array prototype', () => {
  * refused when it runs: the window hands out a read-only handle onto the
  * element, which is live, and of which a copy is the reader's own.
  */
-const A = 'class A { a: uint8; b: uint8; #p: uint8; bump(): void { this.a += 1; } poke(): void { this.#p += 1; } total(): uint8 { return this.a + this.b + this.#p; } } const as: [2].<A>; ';
+const A = 'value class A { a: uint8; b: uint8; #p: uint8; bump(): void { this.a += 1; } poke(): void { this.#p += 1; } total(): uint8 { return this.a + this.b + this.#p; } } const as: [2].<A>; ';
 
 test('a method that reads runs on an inline element, and one that stores throws', () => {
   expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): uint8 { return xs[0].total(); } as[0].a = 2; as[0].b = 3; String(f(as));`)).toBe('5');
@@ -137,7 +137,7 @@ test('a method that reads runs on an inline element, and one that stores throws'
   // A private field is a field of the element.
   expect(evaluated(`${A}function f(xs: ReadonlySpan.<A>): string { try { xs[0].poke(); return 'poked'; } catch (e) { return e.constructor.name; } } f(as) + String(as[0].total());`)).toBe('TypeError0');
   // A value type nested inline inside the element.
-  expect(evaluated('class In { n: uint8; } class Out { i: In; grow(): void { this.i.n += 1; } } const os: [1].<Out>; '
+  expect(evaluated('value class In { n: uint8; } value class Out { i: In; grow(): void { this.i.n += 1; } } const os: [1].<Out>; '
     + "function f(xs: ReadonlySpan.<Out>): string { try { xs[0].grow(); return 'grew'; } catch (e) { return e.constructor.name + String(os[0].i.n); } } f(os);")).toBe('TypeError0');
 });
 

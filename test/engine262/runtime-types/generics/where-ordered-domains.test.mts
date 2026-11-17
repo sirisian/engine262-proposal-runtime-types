@@ -21,7 +21,7 @@ test('floating clauses carry their order to the clauses after them', () => {
   impossible('function f(x: float32) where x > 0.1 where x < 0.1 { return x; }');
   impossible('function f(x: float64) where x > 5 && x < 3 { return x; }');
   impossible('function f(x: float64): float64 where return > 5 where return < 3 { return x; }');
-  impossible('class C { a: float64 = 0; m() where this.a > 5 where this.a < 3 { } }');
+  impossible('value class C { a: float64 = 0; m() where this.a > 5 where this.a < 3 { } }');
   impossible('function f<V: float64>() where V > 5 where V < 3 { return V; }');
 });
 

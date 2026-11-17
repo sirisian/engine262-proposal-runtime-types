@@ -21,14 +21,14 @@ test('a branded scalar reports its base layout', () => {
 
 test('a branded field costs what the base costs', () => {
   expect(evaluated(`${BRAND}type N = brand(uint32, 'N');
-    class Branded { key: uint32 = 0; l: N = N(0); r: N = N(0); }
-    class Plain { key: uint32 = 0; l: uint32 = 0; r: uint32 = 0; }
+    value class Branded { key: uint32 = 0; l: N = N(0); r: N = N(0); }
+    value class Plain { key: uint32 = 0; l: uint32 = 0; r: uint32 = 0; }
     Branded.byteLength + '/' + Plain.byteLength;`)).toBe('12/12');
 });
 
 test('a branded field is placed at the base type alignment', () => {
   expect(evaluated(`${BRAND}type N = brand(uint32, 'N');
-    class C { a: uint8 = 0; b: N = N(0); }
+    value class C { a: uint8 = 0; b: N = N(0); }
     [Reflect.getReflection.<Reflect.ClassFieldLayout, C>('b').offset,
      C.byteLength, C.alignment].join(',');`)).toBe('4,8,4');
 });
@@ -44,7 +44,7 @@ test('a parameterization of a base with no layout still has none', () => {
 });
 
 test('a brand over a value type class carries that class layout', () => {
-  expect(evaluated(`${BRAND}class C { x: uint8 = 1; }
+  expect(evaluated(`${BRAND}value class C { x: uint8 = 1; }
     type BC = brand(C, 'w');
     BC.hasLayout + '/' + BC.byteLength;`)).toBe('true/1');
 });

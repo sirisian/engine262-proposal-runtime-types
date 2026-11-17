@@ -14,7 +14,7 @@ test('a class over T: type constructs and checks its argument', () => {
   // Before explicit domains, `T: type` was read as a VALUE parameter whose
   // domain is `type`, and construction reported that uint.<8> "is not
   // assignable to type, the constraint of T".
-  expect(evaluated('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } String(new Box.<uint8>(3).v);')).toBe('3');
+  expect(evaluated('value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } } String(new Box.<uint8>(3).v);')).toBe('3');
   expectThrown('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } new Box.<uint8>(300);');
 });
 

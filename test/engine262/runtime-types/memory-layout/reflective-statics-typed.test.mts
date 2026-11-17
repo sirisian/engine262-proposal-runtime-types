@@ -18,7 +18,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * the design's own examples were missing, under every direction, and why they
  * were corrected rather than treated as evidence that these were mistyped.
  */
-const V = 'class V { x: uint32 = 0; y: uint32 = 0; } const a: [8].<uint8>; ';
+const V = 'value class V { x: uint32 = 0; y: uint32 = 0; } const a: [8].<uint8>; ';
 
 test('a reflective quantity combines with another', () => {
   expect(evaluated(`${V}String(a.length * V.byteLength);`)).toBe('64');
@@ -39,11 +39,11 @@ test('the untyped positions a static reaches still accept it', () => {
   expect(evaluated(`${V}V.byteLength + '/' + V.alignment;`)).toBe('8/4');
   expect(evaluated(`${V}String(V.byteLength === 8);`)).toBe('true');
   // And an array extent, the one place a static appears in a TYPE position.
-  expect(evaluated('class W { q: float32 = 0; } const b: [W.byteLength * 4].<uint8>; String(b.length);')).toBe('16');
+  expect(evaluated('value class W { q: float32 = 0; } const b: [W.byteLength * 4].<uint8>; String(b.length);')).toBe('16');
 });
 
 test('a narrower counter still writes the conversion', () => {
-  const M = 'class Vertex { x: float32 = 0; y: float32 = 0; z: float32 = 0; } const mesh: [120].<uint8>; ';
+  const M = 'value class Vertex { x: float32 = 0; y: float32 = 0; z: float32 = 0; } const mesh: [120].<uint8>; ';
   expectThrown(`${M}const count: uint8 = 2; Span.<uint8>(mesh).slice(0, count * Vertex.byteLength);`,
     'different numeric types');
   // The explicit conversion the previous assertion demands:
@@ -52,5 +52,5 @@ test('a narrower counter still writes the conversion', () => {
 });
 
 test('a type with no layout still has neither', () => {
-  expectThrown('class S { s: string = ""; } S.byteLength;', 'has no layout');
+  expectThrown('value class S { s: string = ""; } S.byteLength;', 'has no layout');
 });

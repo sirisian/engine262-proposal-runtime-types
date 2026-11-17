@@ -501,8 +501,8 @@
     {
       "name": "typed inherited field cannot be redeclared",
       "modules": {
-        "dep": "export class E{x:uint8=0;}",
-        "main": "import {E} from \"dep\";class D extends E{x:uint8=1;}"
+        "dep": "export value class E{x:uint8=0;}",
+        "main": "import {E} from \"dep\";value class D extends E{x:uint8=1;}"
       },
       "expected": {
         "status": "rejected",

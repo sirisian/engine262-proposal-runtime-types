@@ -81,7 +81,7 @@ async function inverse(steps: number, body: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ resolverCache: new ModuleCache(), typeEvaluationBudget: { steps } } as never);
   const source = `import { inverse } from 'std:types';
-    class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }
+    value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } }
     function unbox(B) { ${body} return Reflect.getReflection(B).generic.arguments[0]; }
     @inverse(unbox)
     function boxOf(T) { const t = T; return type Box.<t>; }

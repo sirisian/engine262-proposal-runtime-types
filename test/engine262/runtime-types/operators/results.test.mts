@@ -174,7 +174,7 @@ test('the other unary operators were already right', () => {
 // ---------------------------------------------------------------------------
 
 test('an overloaded operator checks its operand against the declaration', () => {
-  const V = 'class V { x: uint8 = 0; operator+(o: V): V { return this; } } const v = new V(); ';
+  const V = 'value class V { x: uint8 = 0; operator+(o: V): V { return this; } } const v = new V(); ';
   expectStaticTypeError(`${V} v + 5;`);
   expectStaticTypeError(`${V} v + "s";`);
   // The declared operand type is accepted.
@@ -183,7 +183,7 @@ test('an overloaded operator checks its operand against the declaration', () => 
 
 test('what the overload check leaves alone', () => {
   // A class with no overload for the token, and ordinary arithmetic.
-  expect(ok('class W { x: uint8 = 0; } const w = new W(); let a: uint8 = 1; let b: uint8 = 2; a + b;')).toBe(true);
+  expect(ok('value class W { x: uint8 = 0; } const w = new W(); let a: uint8 = 1; let b: uint8 = 2; a + b;')).toBe(true);
   expect(ok('let s: string = "a"; s + "b";')).toBe(true);
   // Deep nesting terminates - the regression the placement guards against.
   expect(ok('let a: uint8 = 1; a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a;')).toBe(true);

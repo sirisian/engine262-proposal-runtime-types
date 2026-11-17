@@ -134,12 +134,12 @@ test('a form WITHOUT a condition does not carry one', () => {
 
 test('`initial` and `initializer` are a VALUE and the EXPRESSION that produced it', () => {
   // Not two spellings of one thing.
-  expect(evaluated('let t; function g(c){ t=c.initial+"|"+c.initializer.toString(); } class A { @g x: uint8 = 3; } String(t);'))
+  expect(evaluated('let t; function g(c){ t=c.initial+"|"+c.initializer.toString(); } value class A { @g x: uint8 = 3; } String(t);'))
     .toBe('3|3');
   // The whole point of the pair (#sec-reflection-shape-rules): `initial` captures constants only,
   // and `initializer` carries the declaration either way. A non-constant initializer has no
   // `initial` and a perfectly readable `initializer`.
-  expect(evaluated('let t; function g(c){ t=String(c.initial)+"|"+c.initializer.toString(); } class A { @g x: uint8 = f(); } t;'))
+  expect(evaluated('let t; function g(c){ t=String(c.initial)+"|"+c.initializer.toString(); } value class A { @g x: uint8 = f(); } t;'))
     .toBe('undefined|f()');
   expect(evaluated('let t; function g(c){ t=String(c.initial)+"|"+c.initializer.toString(); } class A { m(@g p: uint32 = f()) {} } t;'))
     .toBe('undefined|f()');
@@ -148,7 +148,7 @@ test('`initial` and `initializer` are a VALUE and the EXPRESSION that produced i
 test('no initializer means no tokens, at both positions', () => {
   // An absent initializer is null in the parse node rather than undefined, and
   // both answer *undefined* here rather than throwing.
-  expect(evaluated('let t; function g(c){ t=String(c.initial)+"|"+String(c.initializer); } class A { @g x: uint8; } t;'))
+  expect(evaluated('let t; function g(c){ t=String(c.initial)+"|"+String(c.initializer); } value class A { @g x: uint8; } t;'))
     .toBe('0|undefined');
   expect(evaluated('let t; function g(c){ t=String(c.initial)+"|"+String(c.initializer); } class A { m(@g p: uint32) {} } t;'))
     .toBe('undefined|undefined');

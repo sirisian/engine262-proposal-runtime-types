@@ -29,13 +29,13 @@ test('Weak References: WeakMap and WeakSet accept object keys/values', () => {
 // A value of a value type has no identity, so a weak reference to it, a weak collection keyed on it, or a
 // finalization target of it is a TypeError (#sec-weak-references-and-typed-objects).
 test('Weak References: a WeakRef over a typed-class instance is a TypeError', () => {
-  expectThrown('class A { a: uint8 = (0 := uint8); } new WeakRef(new A());');
+  expectThrown('value class A { a: uint8 = (0 := uint8); } new WeakRef(new A());');
 });
 
 test('Weak References: a typed-class instance is rejected as a WeakMap key, WeakSet value, and finalization target', () => {
-  expectThrown('class A { a: uint8 = (0 := uint8); } new WeakMap().set(new A(), 1);');
-  expectThrown('class A { a: uint8 = (0 := uint8); } new WeakSet().add(new A());');
-  expectThrown('class A { a: uint8 = (0 := uint8); } new FinalizationRegistry(() => {}).register(new A());');
+  expectThrown('value class A { a: uint8 = (0 := uint8); } new WeakMap().set(new A(), 1);');
+  expectThrown('value class A { a: uint8 = (0 := uint8); } new WeakSet().add(new A());');
+  expectThrown('value class A { a: uint8 = (0 := uint8); } new FinalizationRegistry(() => {}).register(new A());');
 });
 
 test('Weak References: an untyped class instance can still be held weakly', () => {

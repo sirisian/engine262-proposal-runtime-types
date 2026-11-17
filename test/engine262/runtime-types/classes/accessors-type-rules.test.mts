@@ -28,31 +28,31 @@ const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringi
  */
 
 test('an accessor override must be invariant', () => {
-  const base = 'class B { accessor a: uint32 = 1; } ';
+  const base = 'value class B { accessor a: uint32 = 1; } ';
   // The same type is the only legal override.
-  expect(evaluated(`${base} class D extends B { accessor a: uint32 = 2; } String(new D().a);`)).toBe('2');
+  expect(evaluated(`${base} value class D extends B { accessor a: uint32 = 2; } String(new D().a);`)).toBe('2');
   // NARROWING breaks the setter half: the base's accepted every uint32, and a
   // uint8 setter would not.
-  expect(outcome(`${base} class D extends B { accessor a: uint8 = 2; }`)).toBe('StaticTypeError');
+  expect(outcome(`${base} value class D extends B { accessor a: uint8 = 2; }`)).toBe('StaticTypeError');
   // WIDENING breaks the getter half: the base's promised a uint32 reader no
   // more than a uint32, and a uint8 accessor promises less... in the other
   // direction. Both are refused, which is what invariance means - asserting
   // only one would pass against a rule that had implemented plain covariance.
-  expect(outcome('class B { accessor a: uint8 = 1; } class D extends B { accessor a: uint32 = 2; }')).toBe('StaticTypeError');
+  expect(outcome('value class B { accessor a: uint8 = 1; } value class D extends B { accessor a: uint32 = 2; }')).toBe('StaticTypeError');
 });
 
 test('the rule applies where it should and nowhere else', () => {
   // No heritage: nothing to be invariant against.
-  expect(evaluated('class D { accessor a: uint8 = 2; } String(new D().a);')).toBe('2');
+  expect(evaluated('value class D { accessor a: uint8 = 2; } String(new D().a);')).toBe('2');
   // A base that declares no such member: the accessor is new, not an override.
-  expect(evaluated('class B { b: uint8 = 1; } class D extends B { accessor a: uint8 = 2; } String(new D().a);')).toBe('2');
+  expect(evaluated('value class B { b: uint8 = 1; } value class D extends B { accessor a: uint8 = 2; } String(new D().a);')).toBe('2');
   // A plain FIELD override is not governed by this rule - the field/accessor
   // substitution rule is a separate one and is not implemented (see below).
   // Over an UNTYPED base field no rule applies at all.
   expect(evaluated('class B { a = 1; } class D extends B { a: uint32 = 2; } String(new D().a);')).toBe('2');
   // Over a TYPED one the redeclaration is refused, but by #sec-typed-classes's
   // one-declaration rule (inherited-field-redeclaration.test.mts), not this one.
-  expect(outcome('class B { a: uint32 = 1; } class D extends B { a: uint32 = 2; }')).toBe('StaticTypeError');
+  expect(outcome('value class B { a: uint32 = 1; } value class D extends B { a: uint32 = 2; }')).toBe('StaticTypeError');
 });
 
 test('a class NOTHING REFERENCES is checked, which is the infrastructure', () => {
@@ -60,7 +60,7 @@ test('a class NOTHING REFERENCES is checked, which is the infrastructure', () =>
   // naming the class, nothing that would have demanded its type. Before the
   // walk was forced this reported nothing at all, and every rule judged there
   // would have inherited that.
-  expect(outcome('class B { accessor a: uint32 = 1; } class D extends B { accessor a: uint8 = 2; } 1;')).toBe('StaticTypeError');
+  expect(outcome('value class B { accessor a: uint32 = 1; } value class D extends B { accessor a: uint8 = 2; } 1;')).toBe('StaticTypeError');
 });
 
 test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', () => {
@@ -83,7 +83,7 @@ test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', ()
   // An untyped pair is unjudged, and an `accessor` cannot violate the rule at
   // all - both halves come from one annotation.
   expect(outcome('class C { get x() { return 1; } set x(v) {} }')).toBe('ACCEPTED');
-  expect(outcome('class C { accessor x: uint8 = 1; }')).toBe('ACCEPTED');
+  expect(outcome('value class C { accessor x: uint8 = 1; }')).toBe('ACCEPTED');
 });
 
 test('a derived setter must be CONTRAVARIANT', () => {
@@ -117,7 +117,7 @@ test('the worked Shelter/Kennel example, both directions', () => {
 test('the one rule not implemented: field and accessor substitution', () => {
   // Field/accessor substitution, which needs the member KIND recorded on the
   // class type - only accessor keys are tracked, and only within one walk.
-  expect(outcome('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
+  expect(outcome('value class B { a: uint8 = 1; } value class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
   // NOT a gap: a value of one value type never implicitly becomes another, so
   // refusing this is correct - statically and, since the stricter-runtime
   // decision, at run time too. The run time used to CONVERT a typed value that
@@ -182,13 +182,13 @@ test('a derived getter must refine COVARIANTLY', () => {
 test('a readonly accessor installs a GETTER ONLY', () => {
   // Installing only the getter is what makes assignment fail, by the ordinary
   // rule for a getter-only property rather than by a check written for this.
-  expect(evaluated('class A { readonly accessor a: uint8 = 3; } '
+  expect(evaluated('value class A { readonly accessor a: uint8 = 3; } '
     + 'String(Object.getOwnPropertyDescriptor(A.prototype, "a").set);')).toBe('undefined');
-  expect(evaluated('class A { readonly accessor a: uint8 = 3; } '
+  expect(evaluated('value class A { readonly accessor a: uint8 = 3; } '
     + 'String(typeof Object.getOwnPropertyDescriptor(A.prototype, "a").get);')).toBe('function');
   // A NON-readonly accessor still has both, which says the change was narrowed
   // to the modifier rather than applied to every accessor.
-  expect(evaluated('class A { accessor a: uint8 = 3; } '
+  expect(evaluated('value class A { accessor a: uint8 = 3; } '
     + 'String(typeof Object.getOwnPropertyDescriptor(A.prototype, "a").set);')).toBe('function');
 });
 
@@ -198,36 +198,36 @@ test('assignment is refused, and the initializer still reaches the backing', () 
   // was the RUN TIME's refusal until a `readonly` class field began carrying its
   // modifier into the member's Property Type Record; the accessor form inherits
   // the earlier moment with it.
-  expect(outcome('"use strict"; class A { readonly accessor a: uint8 = 1; } const x = new A(); x.a = 2;')).toBe('StaticTypeError');
+  expect(outcome('"use strict"; value class A { readonly accessor a: uint8 = 1; } const x = new A(); x.a = 2;')).toBe('StaticTypeError');
   // ...and the sloppy-mode case is the one this most improves: a getter-only
   // property fails a write SILENTLY there, so before the static refusal the
   // program was simply wrong with no signal at all.
-  expect(outcome('class A { readonly accessor a: uint8 = 3; } const x = new A(); x.a = 9;')).toBe('StaticTypeError');
+  expect(outcome('value class A { readonly accessor a: uint8 = 3; } const x = new A(); x.a = 9;')).toBe('StaticTypeError');
   // The backing store is unaffected by the refused write - asserted through a
   // program that does not contain one.
-  expect(evaluated('class A { readonly accessor a: uint8 = 3; } const x = new A(); String(x.a);')).toBe('3');
+  expect(evaluated('value class A { readonly accessor a: uint8 = 3; } const x = new A(); String(x.a);')).toBe('3');
   // The INITIALIZER still works: DefineField writes the Private Name directly
   // and never goes through the setter, which is why removing the setter costs
   // nothing.
-  expect(evaluated('class A { readonly accessor a: uint8 = 3; } String(new A().a);')).toBe('3');
-  expect(evaluated('class A { readonly accessor a: uint8; } String(new A().a);')).toBe('0');
+  expect(evaluated('value class A { readonly accessor a: uint8 = 3; } String(new A().a);')).toBe('3');
+  expect(evaluated('value class A { readonly accessor a: uint8; } String(new A().a);')).toBe('0');
   // A non-readonly accessor is unaffected.
-  expect(evaluated('class A { accessor a: uint8 = 1; } const x = new A(); x.a = 5; String(x.a);')).toBe('5');
+  expect(evaluated('value class A { accessor a: uint8 = 1; } const x = new A(); x.a = 5; String(x.a);')).toBe('5');
 });
 
 test('the context REPORTS `readonly`', () => {
   expect(evaluated('let r; function f(c) { r = String(c.readonly); } '
-    + 'class A { @f readonly accessor a: uint8 = 1; } r;')).toBe('true');
+    + 'value class A { @f readonly accessor a: uint8 = 1; } r;')).toBe('true');
   expect(evaluated('let r; function f(c) { r = String(c.readonly); } '
-    + 'class A { @f accessor a: uint8 = 1; } r;')).toBe('false');
+    + 'value class A { @f accessor a: uint8 = 1; } r;')).toBe('false');
 });
 
 test('the LAYOUT is unaffected by the modifier', () => {
   // "An accessor participates in the memory layout exactly as a field does" -
   // and a readonly one is still a field's worth of storage, so removing the
   // setter must not remove the slot.
-  expect(evaluated('class A { readonly accessor a: uint32 = 1; } '
+  expect(evaluated('value class A { readonly accessor a: uint32 = 1; } '
     + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").byteLength);')).toBe('4');
-  expect(evaluated('class A { x: uint32 = 0; readonly accessor a: uint8 = 1; } '
+  expect(evaluated('value class A { x: uint32 = 0; readonly accessor a: uint8 = 1; } '
     + 'String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("a").offset);')).toBe('4');
 });

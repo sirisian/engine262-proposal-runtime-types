@@ -22,7 +22,7 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
 test('a default, declared zero or enumerator may not read a mutable binding', () => {
   expectStaticTypeError('let k = 5; type T = [uint8, uint8 = k];');
   expectStaticTypeError('let k = 5; type O = { a?: uint8 = k };');
-  expectStaticTypeError('let zz = 0; class V { x: uint8 = 0; static default = zz; }');
+  expectStaticTypeError('let zz = 0; value class V { x: uint8 = 0; static default = zz; }');
   expectStaticTypeError('let k = 5; enum E { A = k }');
   expectStaticTypeError('var k = 5; type T = [uint8, uint8 = k];');
 });

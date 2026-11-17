@@ -1501,7 +1501,7 @@
     {
       "name": "receiver-call-kept",
       "modules": {
-        "main": "class Box{value:string=\"s\";get(){return this.value;}}const b:Box=new Box();if(b.get?.()!==\"s\")throw new Error(\"receiver\");"
+        "main": "value class Box{value:string=\"s\";get(){return this.value;}}const b:Box=new Box();if(b.get?.()!==\"s\")throw new Error(\"receiver\");"
       },
       "script": true,
       "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
@@ -1604,7 +1604,7 @@
     {
       "name": "extracted-receiver-still-required",
       "modules": {
-        "main": "class Box{value:string=\"s\";get(){return this.value;}}const b:Box=new Box();const get=b.get;get?.();"
+        "main": "value class Box{value:string=\"s\";get(){return this.value;}}const b:Box=new Box();const get=b.get;get?.();"
       },
       "script": true,
       "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",

@@ -23,7 +23,7 @@ test('a field of no layout refuses the application', () => {
 });
 
 test('value type classes and primitives split as before', () => {
-  expect(evaluated('class P { x: float32 = 0; y: float32 = 0; } String((type SoA.<P, 4>).byteLength);')).toBe('32');
-  expect(evaluated('class V { x: float32 = 0; } class W { v: V = new V(); n: uint8 = 0; } type S = SoA.<W, 2>; "ok";')).toBe('ok');
+  expect(evaluated('value class P { x: float32 = 0; y: float32 = 0; } String((type SoA.<P, 4>).byteLength);')).toBe('32');
+  expect(evaluated('value class V { x: float32 = 0; } value class W { v: V = new V(); n: uint8 = 0; } type S = SoA.<W, 2>; "ok";')).toBe('ok');
   expect(evaluated('type S = SoA.<uint8, 4>; String((type S).byteLength);')).toBe('4');
 });

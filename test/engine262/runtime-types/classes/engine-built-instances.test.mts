@@ -20,19 +20,19 @@ import { evaluated } from '../harness.mts';
  * the run time does when it cannot.
  */
 
-const CLASSES = 'class A { a: uint8; } class B { p: A; q: [2].<uint8>; n: uint8; readonly k: uint8 = 3; } ';
+const CLASSES = 'value class A { a: uint8; } value class B { p: A; q: [2].<uint8>; n: uint8; readonly k: uint8 = 3; } ';
 const TRY = "let out = ''; const at = (f) => { try { f(); out += 'ok,'; } catch (e) { out += e.name + ','; } }; ";
 
 /** Each way an instance comes to exist, leaving it in `x`, typed `any`. */
 const BUILT: Record<string, string> = {
   'new': 'const y = new B(); const x: any = { y }.y;',
   'a default binding': 'let y: B; const x: any = { y }.y;',
-  'a default field': 'class H { b: B; } const h = new H(); const x: any = { h }.h.b;',
+  'a default field': 'value class H { b: B; } const h = new H(); const x: any = { h }.h.b;',
   'a default element': 'const xs: [2].<B>; const x: any = { xs }.xs[0];',
   'a parameter': 'let x: any; (function (y: B) { x = { y }; })(new B()); x = x.y;',
   'a typed binding': 'const src = new B(); let y: B = src; const x: any = { y }.y;',
   'a return': 'function mk(): B { const b = new B(); return b; } const y = mk(); const x: any = { y }.y;',
-  'a stored field': 'class H { b: B; } const h = new H(); h.b = new B(); const x: any = { h }.h.b;',
+  'a stored field': 'value class H { b: B; } const h = new H(); h.b = new B(); const x: any = { h }.h.b;',
   'a stored element': 'const xs: [].<B> = [new B()]; const x: any = { xs }.xs[0];',
 };
 
@@ -68,7 +68,7 @@ test('a default takes its zero for a readonly field, and a constructed instance 
 
 test('a readonly field of a default that holds a value is read-only in every part', () => {
   // #sec-readonly-inline-values, for an instance no constructor built.
-  const R = 'class A { a: uint8; } class R { readonly p: A; readonly q: [2].<uint8>; } ';
+  const R = 'value class A { a: uint8; } value class R { readonly p: A; readonly q: [2].<uint8>; } ';
   expect(evaluated(`${R}${TRY}let y: R; const x: any = { y }.y; at(() => { x.p.a = 4; }); at(() => { x.q[0] = 4; }); at(() => { x.q.fill(1); }); out + String(x.p.a) + String(x.q[0]);`))
     .toBe('TypeError,TypeError,TypeError,00');
   // A copy of it is the reader's own.
@@ -76,20 +76,20 @@ test('a readonly field of a default that holds a value is read-only in every par
 });
 
 test('a widening, a generic application and a subclass that adds no storage are recognised too', () => {
-  const W = 'class A { a: uint8; } class C extends A { c: uint8; } class Q extends A { get twice() { return this.a * 2; } } ';
+  const W = 'value class A { a: uint8; } value class C extends A { c: uint8; } value class Q extends A { get twice() { return this.a * 2; } } ';
   // `c := A` is a genuine `A`: it has the base's constructors and not the subclass's.
   expect(evaluated(`${W}${TRY}const y: A = new C() := A; const x: any = { y }.y; at(() => { new WeakRef(x); }); at(() => { new Proxy(x, {}); }); Object.freeze(x); at(() => { x.a = 4; }); out + String(x.a) + String(x instanceof C) + String(x instanceof A);`))
     .toBe('TypeError,TypeError,TypeError,0falsetrue');
   // A copy of a `Q` at a position of `A` is a `Q`.
   expect(evaluated(`${W}${TRY}let x: any; (function (y: A) { x = { y }; })(new Q()); x = x.y; at(() => { new WeakRef(x); }); Object.freeze(x); at(() => { x.a = 4; }); out + String(x.a) + String(x instanceof Q);`))
     .toBe('TypeError,TypeError,0true');
-  expect(evaluated(`${TRY}class G<T: type> { v: T; n: uint8; } let y: G.<uint8>; const x: any = { y }.y; at(() => { new WeakRef(x); }); Object.freeze(x); at(() => { x.n = 4; }); out + String(x.n);`))
+  expect(evaluated(`${TRY}value class G<T: type extends value> { v: T; n: uint8; } let y: G.<uint8>; const x: any = { y }.y; at(() => { new WeakRef(x); }); Object.freeze(x); at(() => { x.n = 4; }); out + String(x.n);`))
     .toBe('TypeError,TypeError,0');
 });
 
 test('an instance onto storage is recognised too', () => {
   // An element read through a buffer view, and an element of an SoA: each is a value of its class.
-  const S = 'class A { a: uint8; b: uint8; } ';
+  const S = 'value class A { a: uint8; b: uint8; } ';
   expect(evaluated(`${S}${TRY}const buf = new ArrayBuffer(8); const v = Span.<A>(buf); const x: any = { e: v[0] }.e; at(() => { new WeakRef(x); }); at(() => { new Proxy(x, {}); }); out + String(x.a);`))
     .toBe('TypeError,TypeError,0');
   expect(evaluated(`${S}${TRY}const s = new SoA.<A>(2); const x: any = { e: s[0] }.e; at(() => { new WeakRef(x); }); at(() => { new Proxy(x, {}); }); out + String(x.a);`))
@@ -100,7 +100,7 @@ test('an instance onto storage is recognised too', () => {
 
 test('a reference class is held by reference, and is still held weakly', () => {
   // The control: none of this reaches a class that has an identity.
-  expect(evaluated(`${TRY}reference class R { n: uint8; } const r = new R(); at(() => { new WeakRef(r); }); at(() => { new WeakMap().set(r, 1); }); out;`)).toBe('ok,ok,');
+  expect(evaluated(`${TRY}class R { n: uint8; } const r = new R(); at(() => { new WeakRef(r); }); at(() => { new WeakMap().set(r, 1); }); out;`)).toBe('ok,ok,');
 });
 
 test('a copy at a typed boundary of a frozen value is not frozen, and keeps its declared readonly fields', () => {
@@ -114,18 +114,18 @@ test('a copy at a typed boundary of a frozen value is not frozen, and keeps its 
 
 test('an instance the engine built is equal to one a constructor built, and has the same type', () => {
   // Recording how it was built changes nothing a program reads of the value.
-  expect(evaluated('class A { a: uint8; } let d: A; const c = new A(); String(d === c) + String(new Set([d]).has(c)) + String(Reflect.typeOf(d) === Reflect.typeOf(c)) + JSON.stringify(d) + String(Object.isExtensible(d));'))
+  expect(evaluated('value class A { a: uint8; } let d: A; const c = new A(); String(d === c) + String(new Set([d]).has(c)) + String(Reflect.typeOf(d) === Reflect.typeOf(c)) + JSON.stringify(d) + String(Object.isExtensible(d));'))
     .toBe('truetruetrue{"a":0}false');
 });
 
 test('a field with a symbol key is copied, compared and defaulted with the rest', () => {
   // A key that is not a string was taken for a private name, so a copy and a default of
   // `class B { [Symbol.dispose]: uint8; }` had no such property.
-  const S = 'class B { [Symbol.dispose]: uint8 = 5; x: uint8 = 1; } ';
+  const S = 'value class B { [Symbol.dispose]: uint8 = 5; x: uint8 = 1; } ';
   expect(evaluated(`${S}function f() { const b = new B(); const c = b; c[Symbol.dispose] = 6; return String(c[Symbol.dispose]) + String(c.x) + String(b[Symbol.dispose]); } f();`)).toBe('615');
   expect(evaluated(`${S}function g(c: B) { return String(c[Symbol.dispose]) + String(c.x); } g(new B());`)).toBe('51');
   expect(evaluated(`${S}let d: B; String(d[Symbol.dispose]) + String(d.x);`)).toBe('00');
   expect(evaluated(`${S}function f() { const a = new B(); const b = new B(); b[Symbol.dispose] = 6; const u: any = { a, b }; return String(u.a === u.b); } f();`)).toBe('false');
   // The form the member tests pin: a subclass of a generic class with such a field.
-  expect(evaluated('class B<T: type> { [Symbol.dispose]: T; } class C extends B.<uint8> {} let c: C = new C(); let n: uint8 = c[Symbol.dispose]; String(n);')).toBe('0');
+  expect(evaluated('value class B<T: type extends value> { [Symbol.dispose]: T; } value class C extends B.<uint8> {} let c: C = new C(); let n: uint8 = c[Symbol.dispose]; String(n);')).toBe('0');
 });

@@ -49,9 +49,9 @@ test('a class is here too, exported or not', () => {
   // non-empty and so never ran, an annotation naming the import did not resolve,
   // and the alias built over it was deleted by the rule that stops an unresolved
   // alias standing as an empty object type. Every step was right on its own.
-  expect(aliasesOf('export class U { a: uint8; }\n')).toEqual(['U']);
-  expect(aliasesOf('class U { a: uint8; }\n')).toEqual(['U']);
-  expect(aliasesOf('export class U { a: uint8; }\ntype P = { a: uint8 };\n')).toEqual(['P', 'U']);
+  expect(aliasesOf('export value class U { a: uint8; }\n')).toEqual(['U']);
+  expect(aliasesOf('value class U { a: uint8; }\n')).toEqual(['U']);
+  expect(aliasesOf('export value class U { a: uint8; }\ntype P = { a: uint8 };\n')).toEqual(['P', 'U']);
 });
 
 // A type over an imported name needs the module to be LINKED, since the pass that

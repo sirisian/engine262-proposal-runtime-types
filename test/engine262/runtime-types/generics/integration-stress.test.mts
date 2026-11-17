@@ -56,7 +56,7 @@ test('a pack infers from ref-rest arguments, and a ref run forwards', () => {
 });
 
 // ---- B.3 Typed event bus: generic signature records end to end ----
-const BUS = 'class Click { x: uint8 = 1; } class KeyDown {} function logAny<T: type>(e: T): void {} function route(e: Click): string { return "click"; } function route<T: type>(e: T): string { return "one"; } function route<...Es: [].<type>>(...es: Es): string { return "many"; }';
+const BUS = 'value class Click { x: uint8 = 1; } class KeyDown {} function logAny<T: type>(e: T): void {} function route(e: Click): string { return "click"; } function route<T: type>(e: T): string { return "one"; } function route<...Es: [].<type>>(...es: Es): string { return "many"; }';
 
 test('identity, the assignability directions, and the overload ladder compose', () => {
   expect(evaluated(`${BUS} type Handler = <T: type>(e: T) => void; String(Reflect.typeOf(logAny) === Handler);`)).toBe('true');

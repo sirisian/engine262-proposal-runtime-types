@@ -12,19 +12,19 @@ import { evaluated, expectStaticTypeError, expectThrown, ok } from '../harness.m
  */
 
 test('a successful instanceof narrows the branch it guards', () => {
-  expect(evaluated(`class A { x: uint8 = 1; }
+  expect(evaluated(`value class A { x: uint8 = 1; }
     function readV(): A | null { return new A(); } let v: A | null = readV();
     if (v instanceof A) { String(v.x); } else { 'no'; }`)).toBe('1');
 });
 
 test('the false branch subtracts the type', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+  expect(evaluated(`value class A { x: uint8 = 1; } value class B { y: uint8 = 2; }
     function readV(): A | B { return new B(); } let v: A | B = readV();
     if (v instanceof A) { String(v.x); } else { String(v.y); }`)).toBe('2');
 });
 
 test('a negated test narrows the other way', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+  expect(evaluated(`value class A { x: uint8 = 1; } value class B { y: uint8 = 2; }
     function readV(): A | B { return new A(); } let v: A | B = readV();
     if (!(v instanceof B)) { String(v.x); } else { String(v.y); }`)).toBe('1');
 });
@@ -34,12 +34,12 @@ test('it narrows a parameter and the right operand of &&', () => {
   // function's body has no origin to rely on, since a later Script may replace
   // the class before a future call; declared in a block, the class is a local
   // cell no later Script can reach, and the parameter narrows.
-  expect(evaluated(`{ class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+  expect(evaluated(`{ value class A { x: uint8 = 1; } value class B { y: uint8 = 2; }
     function f(v: A | B): uint8 { if (v instanceof A) { return v.x; } return v.y; }
     String(f(new A())); }`)).toBe('1');
-  expectStaticTypeError(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+  expectStaticTypeError(`value class A { x: uint8 = 1; } value class B { y: uint8 = 2; }
     function f(v: A | B): uint8 { if (v instanceof A) { return v.x; } return v.y; }`);
-  expect(evaluated(`class A { x: uint8 = 1; }
+  expect(evaluated(`value class A { x: uint8 = 1; }
     function readV(): A | null { return new A(); } let v: A | null = readV();
     ((v instanceof A) && v.x === 1) ? 'yes' : 'no';`)).toBe('yes');
 });
@@ -80,9 +80,9 @@ test('a sealed hierarchy dispatches through it', () => {
 });
 
 test('the other narrowing forms are unaffected', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
+  expect(evaluated(`value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
     if (v is A) { String(v.x); } else { 'no'; }`)).toBe('1');
-  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
+  expect(evaluated(`value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
     if (v !== null) { String(v.x); } else { 'no'; }`)).toBe('1');
   expect(evaluated(`function readV(): string | uint8 { return "hi"; } let v: string | uint8 = readV();
     if (typeof v === "string") { String(v.length); } else { String(v); }`)).toBe('2');
@@ -91,7 +91,7 @@ test('the other narrowing forms are unaffected', () => {
 test('a member expression narrows too, now that facts are keyed by place', () => {
   // This pinned the opposite while facts were keyed on a binding NAME. They are
   // keyed on a PATH now, so the form that could not produce a key does.
-  expect(evaluated(`class A { x: uint8 = 1; } class B { a: A | null = null; }
+  expect(evaluated(`value class A { x: uint8 = 1; } value class B { a: A | null = null; }
     const b = new B(); b.a = new A();
     if (b.a instanceof A) { String(b.a.x); } else { 'no'; }`)).toBe('1');
 });
@@ -104,8 +104,8 @@ test('a member expression narrows too, now that facts are keyed by place', () =>
  */
 
 test('a brand check narrows the branch it guards, and subtracts in the other', () => {
-  const src = (arg: string) => `class Other { y: uint8 = 3; }
-    class Tagged { #tag: uint8 = 1; x: uint8 = 2;
+  const src = (arg: string) => `value class Other { y: uint8 = 3; }
+    value class Tagged { #tag: uint8 = 1; x: uint8 = 2;
       static pick(v: Tagged | Other): uint8 { if (#tag in v) { return v.x; } return v.y; } }
     String(Tagged.pick(${arg}));`;
   expect(evaluated(src('new Tagged()'))).toBe('2');
@@ -113,8 +113,8 @@ test('a brand check narrows the branch it guards, and subtracts in the other', (
 });
 
 test('a negated brand check narrows the other way', () => {
-  expect(evaluated(`class Other { y: uint8 = 3; }
-    class Tagged { #tag: uint8 = 1; x: uint8 = 2;
+  expect(evaluated(`value class Other { y: uint8 = 3; }
+    value class Tagged { #tag: uint8 = 1; x: uint8 = 2;
       static pick(v: Tagged | Other): uint8 { if (!(#tag in v)) { return v.y; } return v.x; } }
     String(Tagged.pick(new Other()));`)).toBe('3');
 });
@@ -124,8 +124,8 @@ test('an ambiguous private name narrows nothing rather than guessing', () => {
   // not tracked where this is decided, so the declaring class is found by
   // scanning. Two classes declaring the same name make that scan ambiguous, and
   // narrowing to the wrong one would be unsound where narrowing to none is not.
-  expectStaticTypeError(`class Other { #tag: uint8 = 9; y: uint8 = 3; }
-    class Tagged { #tag: uint8 = 1; x: uint8 = 2;
+  expectStaticTypeError(`value class Other { #tag: uint8 = 9; y: uint8 = 3; }
+    value class Tagged { #tag: uint8 = 1; x: uint8 = 2;
       static pick(v: Tagged | Other): uint8 { if (#tag in v) { return v.x; } return v.y; } }
     Tagged.pick(new Tagged());`);
 });
@@ -148,22 +148,22 @@ test('the other relational forms are untouched', () => {
  */
 
 test('a discarded ternary narrows an additive arm', () => {
-  const H = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
+  const H = 'value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
   expect(evaluated(`${H}(v is A) ? ('' + v.x) : 'no';`)).toBe('1');
   expect(evaluated(`${H}(v instanceof A) ? (1 + v.x) : 0;`)).toBe('2');
   expect(evaluated(`${H}(v !== null) ? (1 + v.x) : 0;`)).toBe('2');
 });
 
 test('both arms of a discarded ternary are narrowed, and negation flips them', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+  expect(evaluated(`value class A { x: uint8 = 1; } value class B { y: uint8 = 2; }
     function readV(): A | B { return new B(); } let v: A | B = readV();
     (v is A) ? (1 + v.x) : (1 + v.y);`)).toBe('3');
-  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
+  expect(evaluated(`value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
     (!(v is A)) ? 0 : (1 + v.x);`)).toBe('2');
 });
 
 test('the positions that already narrowed still do', () => {
-  const H = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
+  const H = 'value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
   expect(evaluated(`${H}(v is A) ? v.x : 0;`)).toBe('1');
   expect(evaluated(`${H}const r: string = (v is A) ? ('' + v.x) : 'no'; r;`)).toBe('1');
   expect(evaluated(`${H}if (v is A) { '' + v.x; } else { 'no'; }`)).toBe('1');
@@ -173,7 +173,7 @@ test('a discarded expression is still checked', () => {
   // The case that added the arithmetic branch in the first place: a statement
   // never calls `staticType`, so these checks run from there or not at all.
   expectThrown('const a: [2].<uint8>; a[9];', 'is not an index of');
-  expectThrown(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); '' + v.x;`,
+  expectThrown(`value class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); '' + v.x;`,
     'is not declared by every member');
   expect(evaluated('let n: uint8 = 3; (n > 1) ? (1 + n) : 0;')).toBe('4');
 });

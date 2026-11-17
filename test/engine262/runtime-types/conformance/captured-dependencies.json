@@ -849,7 +849,7 @@
     },
     {
       "name": "receiver of captured initializer: string",
-      "source": "class C{x:string=\"s\";m(a:number){const f=(p:number)=>{return g();function g(){return s;}const s=this.x;};const q:string=f(1);}}",
+      "source": "value class C{x:string=\"s\";m(a:number){const f=(p:number)=>{return g();function g(){return s;}const s=this.x;};const q:string=f(1);}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -865,7 +865,7 @@
     },
     {
       "name": "receiver of captured initializer: number",
-      "source": "class C{x:string=\"s\";m(a:number){const f=(p:number)=>{return g();function g(){return s;}const s=this.x;};const q:number=f(1);}}",
+      "source": "value class C{x:string=\"s\";m(a:number){const f=(p:number)=>{return g();function g(){return s;}const s=this.x;};const q:number=f(1);}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

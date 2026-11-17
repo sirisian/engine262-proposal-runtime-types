@@ -676,7 +676,7 @@
       "name": "value copy on acquisition",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const a:[].<P>=raw;p.value=2;String(raw[0].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const a:[].<P>=raw;p.value=2;String(raw[0].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -690,7 +690,7 @@
       "name": "nested value copy on acquisition",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any={a:[p]};const o:{a:[].<P>}=raw;p.value=2;String(raw.a[0].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any={a:[p]};const o:{a:[].<P>}=raw;p.value=2;String(raw.a[0].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -704,7 +704,7 @@
       "name": "inherited value copy uses retained accessor",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const a:[].<P>=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const a:[].<P>=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -718,7 +718,7 @@
       "name": "value copy refuses nonwritable storage",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=Object.freeze([p]);let result=\"missed\";try{const a:[].<P>=raw;}catch(e){result=e.name;}result;",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=Object.freeze([p]);let result=\"missed\";try{const a:[].<P>=raw;}catch(e){result=e.name;}result;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -732,7 +732,7 @@
       "name": "inherited typed array view does not replace stored value",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const a:[].<P>=raw;const b:[].<P>=raw;String(reads)+\"/\"+String(writes);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const a:[].<P>=raw;const b:[].<P>=raw;String(reads)+\"/\"+String(writes);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -746,7 +746,7 @@
       "name": "explicit acquisition copies values",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const a=raw:=[].<P>;p.value=2;String(raw[0].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const a=raw:=[].<P>;p.value=2;String(raw[0].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

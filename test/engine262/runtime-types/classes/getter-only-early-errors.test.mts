@@ -40,8 +40,8 @@ test('getter reads work, and an unknown base keeps runtime checks', () => {
 
 test.each([
   'class C { static x: uint8 = 0; get x(): uint8 { return 1; } constructor() { this.x = 2; } }',
-  'class C { #x: uint8 = 0; get x(): uint8 { return 1; } constructor() { this.x = 2; } }',
-  'class C { x: uint8 = 0; get #x(): uint8 { return 1; } constructor() { this.#x = 2; } }',
+  'value class C { #x: uint8 = 0; get x(): uint8 { return 1; } constructor() { this.x = 2; } }',
+  'value class C { x: uint8 = 0; get #x(): uint8 { return 1; } constructor() { this.#x = 2; } }',
 ])('constructor permission requires the same instance field: %s', expectStaticTypeError);
 
 test.each([

@@ -519,7 +519,7 @@
     },
     {
       "name": "callerThis",
-      "source": "class C { v:string; m(){const q:number=g();function g(){return s;}const s=this.v;} }",
+      "source": "value class C { v:string; m(){const q:number=g();function g(){return s;}const s=this.v;} }",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -580,7 +580,7 @@
     },
     {
       "name": "consumerThis",
-      "source": "class C {v:string; m(){const q:number=(this.v,g());function g(){return s;}let u:string|number=\"s\";const s=u;} }",
+      "source": "value class C {v:string; m(){const q:number=(this.v,g());function g(){return s;}let u:string|number=\"s\";const s=u;} }",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

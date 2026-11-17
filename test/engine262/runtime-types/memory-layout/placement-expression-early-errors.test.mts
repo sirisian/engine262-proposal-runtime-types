@@ -5,7 +5,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 test.each([
   [
     "placement-inner-call",
-    "class C{x:uint8=0;}function f(n:uint8){return new (n()) C();}",
+    "value class C{x:uint8=0;}function f(n:uint8){return new (n()) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -17,7 +17,7 @@ test.each([
   ],
   [
     "placement-inner-arg",
-    "class C{x:uint8=0;}function g(x:uint8):ArrayBuffer{return new ArrayBuffer(8);}function f(){return new (g(\"bad\")) C();}",
+    "value class C{x:uint8=0;}function g(x:uint8):ArrayBuffer{return new ArrayBuffer(8);}function f(){return new (g(\"bad\")) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -29,7 +29,7 @@ test.each([
   ],
   [
     "placement-offset-call",
-    "class C{x:uint8=0;}function f(b:ArrayBuffer,n:uint8){return new (b,n()) C();}",
+    "value class C{x:uint8=0;}function f(b:ArrayBuffer,n:uint8){return new (b,n()) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -41,7 +41,7 @@ test.each([
   ],
   [
     "placement-count-call",
-    "class C{x:uint8=0;}function f(b:ArrayBuffer,n:uint8){return new (b,0,n()) C();}",
+    "value class C{x:uint8=0;}function f(b:ArrayBuffer,n:uint8){return new (b,0,n()) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -53,7 +53,7 @@ test.each([
   ],
   [
     "placement-inner-call-run",
-    "class C{x:uint8=0;}function f(n:uint8){return new (n()) C();}f(1);",
+    "value class C{x:uint8=0;}function f(n:uint8){return new (n()) C();}f(1);",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -65,7 +65,7 @@ test.each([
   ],
   [
     "placement-reference-state",
-    "class C{x:uint8=0;}let n:uint8=1;const ref r=n;function f(b:ArrayBuffer){return new (b,do {ref r=n;0;}) C();}",
+    "value class C{x:uint8=0;}let n:uint8=1;const ref r=n;function f(b:ArrayBuffer){return new (b,do {ref r=n;0;}) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -89,7 +89,7 @@ test.each([
   ],
   [
     "placement-control",
-    "class C{x:uint8=1;}const b=new ArrayBuffer(8);new (b) C();",
+    "value class C{x:uint8=1;}const b=new ArrayBuffer(8);new (b) C();",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -100,7 +100,7 @@ test.each([
   ],
   [
     "placement-arraybuffer-typed",
-    "class C{x:uint8=1;}function f(b:ArrayBuffer){return new (b) C();}f(new ArrayBuffer(8));",
+    "value class C{x:uint8=1;}function f(b:ArrayBuffer){return new (b) C();}f(new ArrayBuffer(8));",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -111,7 +111,7 @@ test.each([
   ],
   [
     "placement-target-run",
-    "class C {x:uint8=0;}function f(n:uint8){return new (n) C();}f(1);",
+    "value class C {x:uint8=0;}function f(n:uint8){return new (n) C();}f(1);",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -122,7 +122,7 @@ test.each([
   ],
   [
     "placement-symbol",
-    "class C{x:uint8=0;}function f(b:ArrayBuffer,n:symbol){return new (b,n) C();}f(new ArrayBuffer(8),Symbol());",
+    "value class C{x:uint8=0;}function f(b:ArrayBuffer,n:symbol){return new (b,n) C();}f(new ArrayBuffer(8),Symbol());",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -133,7 +133,7 @@ test.each([
   ],
   [
     "placement-bigint",
-    "class C{x:uint8=0;}function f(b:ArrayBuffer,n:bigint){return new (b,n) C();}f(new ArrayBuffer(8),1n);",
+    "value class C{x:uint8=0;}function f(b:ArrayBuffer,n:bigint){return new (b,n) C();}f(new ArrayBuffer(8),1n);",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -155,7 +155,7 @@ test.each([
   ],
   [
     "unreachable placement child still checked",
-    "class C{x:uint8=0;}function f(n:uint8){if(false){new (n()) C();}}",
+    "value class C{x:uint8=0;}function f(n:uint8){if(false){new (n()) C();}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -167,7 +167,7 @@ test.each([
   ],
   [
     "child typed operator error",
-    "class C{x:uint8=0;}function f(b:ArrayBuffer,s:symbol){return new (b,+s) C();}",
+    "value class C{x:uint8=0;}function f(b:ArrayBuffer,s:symbol){return new (b,+s) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -179,7 +179,7 @@ test.each([
   ],
   [
     "child type mismatch in nested function",
-    "class C{x:uint8=0;}function f(b:ArrayBuffer){return new(b,do {const g=()=>{let n:uint8=\"bad\";};0;}) C();}",
+    "value class C{x:uint8=0;}function f(b:ArrayBuffer){return new(b,do {const g=()=>{let n:uint8=\"bad\";};0;}) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -191,7 +191,7 @@ test.each([
   ],
   [
     "valid coercing offset unchanged",
-    "class C{x:uint8=1;}function f(b:ArrayBuffer,s:string){return new(b,s) C();}f(new ArrayBuffer(8),\"1\");",
+    "value class C{x:uint8=1;}function f(b:ArrayBuffer,s:string){return new(b,s) C();}f(new ArrayBuffer(8),\"1\");",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -200,7 +200,7 @@ test.each([
   ],
   [
     "dynamic placement child stays runtime",
-    "class C{x:uint8=0;}function f(n:any){return new(n()) C();}f(1);",
+    "value class C{x:uint8=0;}function f(n:any){return new(n()) C();}f(1);",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -209,7 +209,7 @@ test.each([
   ],
   [
     "placement effects happen exactly once",
-    "class C{x:uint8=1;}let count=0;function get():ArrayBuffer{count++;return new ArrayBuffer(8);}new(get()) C();globalThis.settled=String(count);",
+    "value class C{x:uint8=1;}let count=0;function get():ArrayBuffer{count++;return new ArrayBuffer(8);}new(get()) C();globalThis.settled=String(count);",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -219,7 +219,7 @@ test.each([
   ],
   [
     "dynamic capacity check retained",
-    "class C{x:uint8=1;}function f(b:ArrayBuffer,n:number){return new(b,n) C();}f(new ArrayBuffer(8),9);",
+    "value class C{x:uint8=1;}function f(b:ArrayBuffer,n:number){return new(b,n) C();}f(new ArrayBuffer(8),9);",
     {
       "completion": "throw",
       "bodyRan": "true",
@@ -228,7 +228,7 @@ test.each([
   ],
   [
     "R60-E01: nested generic body",
-    "class C{x:uint8=0;}function f<T: type>(b:ArrayBuffer){return new(b,do {function bad<U: type>(n:uint8){n();}0;}) C();}",
+    "value class C{x:uint8=0;}function f<T: type>(b:ArrayBuffer){return new(b,do {function bad<U: type>(n:uint8){n();}0;}) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -240,7 +240,7 @@ test.each([
   ],
   [
     "R60-E02: placement private lexical scope",
-    "class C{x:uint8=0;}class B{#x:uint8=1;f(b:ArrayBuffer,n:uint8){return new(b,n.#x) C();}}",
+    "value class C{x:uint8=0;}value class B{#x:uint8=1;f(b:ArrayBuffer,n:uint8){return new(b,n.#x) C();}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -252,7 +252,7 @@ test.each([
   ],
   [
     "R60-E03: all placement arguments execute once",
-    "class C{x:uint8=1;}let log=\"\";function b():ArrayBuffer{log+=\"b\";return new ArrayBuffer(8);}function n(s:string):number{log+=s;return 1;}new(b(),n(\"o\"),n(\"l\")) C();globalThis.settled=log;",
+    "value class C{x:uint8=1;}let log=\"\";function b():ArrayBuffer{log+=\"b\";return new ArrayBuffer(8);}function n(s:string):number{log+=s;return 1;}new(b(),n(\"o\"),n(\"l\")) C();globalThis.settled=log;",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -262,7 +262,7 @@ test.each([
   ],
   [
     "R60-E04: nested readonly ref store",
-    "class C{x:uint8=1;}class R{readonly x:uint8=1;}function f(b:ArrayBuffer,r:R){return new(b,do {let ref p=r.x;p=2;0;}) C();}",
+    "value class C{x:uint8=1;}value class R{readonly x:uint8=1;}function f(b:ArrayBuffer,r:R){return new(b,do {let ref p=r.x;p=2;0;}) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -274,7 +274,7 @@ test.each([
   ],
   [
     "R60-E05: constructor argument rebind governs placement write",
-    "class C{x:uint8=1;constructor(n:number){}}class R{readonly x:uint8=1;}let n:uint8=0;const r=new R();let ref p=n;new(new ArrayBuffer(8),do{p=2;0;}) C(do{ref p=r.x;0;});",
+    "value class C{x:uint8=1;constructor(n:number){}}value class R{readonly x:uint8=1;}let n:uint8=0;const r=new R();let ref p=n;new(new ArrayBuffer(8),do{p=2;0;}) C(do{ref p=r.x;0;});",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -286,7 +286,7 @@ test.each([
   ],
   [
     "R60-E06: constructor argument can restore writable placement alias",
-    "class C{x:uint8=1;constructor(n:number){}}class R{readonly x:uint8=1;}let n:uint8=0;const r=new R();let ref p=r.x;new(new ArrayBuffer(8),do{p=2;0;}) C(do{ref p=n;0;});globalThis.settled=String(n);",
+    "value class C{x:uint8=1;constructor(n:number){}}value class R{readonly x:uint8=1;}let n:uint8=0;const r=new R();let ref p=r.x;new(new ArrayBuffer(8),do{p=2;0;}) C(do{ref p=n;0;});globalThis.settled=String(n);",
     {
       "completion": "normal",
       "bodyRan": "true",

@@ -16,7 +16,7 @@ test('typed members and return contracts contribute to the judgment', () => {
   expectStaticTypeError('function unused(o: { x: symbol }) { -o.x; }');
   expectStaticTypeError('function unused(o: { x: symbol }) { const { x } = o; -x; }');
   expectStaticTypeError('function unused(a: [].<symbol>) { for (const x of a) { -x; } }');
-  expectStaticTypeError('class C { x: bigint = 1n; unused() { +this.x; } }');
+  expectStaticTypeError('value class C { x: bigint = 1n; unused() { +this.x; } }');
   expectStaticTypeError('function f(): bigint { return 1n; } function unused() { +f(); }');
   expectStaticTypeError('type B = bigint; function unused(x: B) { +x; }');
 });

@@ -62,7 +62,7 @@ test('the error names the argument, the generic, and what it holds weakly', () =
 });
 
 test('a typed (sealed) class is refused, its nullable union with it, as the clause says', () => {
-  const A = 'class A { a: uint8 = 0; } ';
+  const A = 'value class A { a: uint8 = 0; } ';
   expectStaticTypeError(`${A} const m = new WeakMap.<A, uint8>();`);
   expectStaticTypeError(`${A} const m = new WeakMap.<A | null, uint8>();`);
   expectStaticTypeError(`${A} const s = new WeakSet.<A>();`);
@@ -125,7 +125,7 @@ test('FinalizationRegistry: the held value is unconstrained; the target and toke
 // ---------------------------------------------------------------------------
 
 test('a typed-class instance passed to add/set/has/delete is refused statically, not at run time', () => {
-  const A = 'class A { a: uint8 = 0; } ';
+  const A = 'value class A { a: uint8 = 0; } ';
   expectStaticTypeError(`${A} const s = new WeakSet.<object>(); s.add(new A());`);
   expectStaticTypeError(`${A} const s = new WeakSet.<object>(); s.has(new A());`);
   expectStaticTypeError(`${A} const s = new WeakSet.<object>(); s.delete(new A());`);
@@ -143,14 +143,14 @@ test('a typed-class instance passed to add/set/has/delete is refused statically,
 });
 
 test('FinalizationRegistry.register and unregister check their target and token the same way', () => {
-  const A = 'class A { a: uint8 = 0; } const r = new FinalizationRegistry.<uint32>((h) => {}); ';
+  const A = 'value class A { a: uint8 = 0; } const r = new FinalizationRegistry.<uint32>((h) => {}); ';
   expectStaticTypeError(`${A} r.register(new A(), 1);`);
   expectStaticTypeError(`${A} r.register({}, 1, new A());`);
   expectStaticTypeError(`${A} r.unregister(new A());`);
 });
 
 test('the constructor\'s iterable argument is checked where its element type is known', () => {
-  const A = 'class A { a: uint8 = 0; } ';
+  const A = 'value class A { a: uint8 = 0; } ';
   expectStaticTypeError('new WeakSet.<object>([5]);');
   expectStaticTypeError('new WeakSet.<object>(["x", "y"]);');
   expectStaticTypeError(`${A} new WeakSet.<object>([new A()]);`);

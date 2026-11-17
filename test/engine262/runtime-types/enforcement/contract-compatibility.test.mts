@@ -30,9 +30,9 @@ test.each([
 ])("constructor declaration ambiguity includes omitted arguments: %s", (source) => expectStaticTypeError(source));
 
 test.each([
-  "function unused() { interface I{x:uint8;} class C implements I{readonly x:uint8=1;} }",
+  "function unused() { interface I{x:uint8;} value class C implements I{readonly x:uint8=1;} }",
   "function unused() { interface I{x:uint8;} class C implements I{get x():uint8{return 1;}} }",
-  "interface I{x:uint8;}class B{readonly x:uint8=1;}class C extends B implements I{}"
+  "interface I{x:uint8;}value class B{readonly x:uint8=1;}value class C extends B implements I{}"
 ])("interface properties require write capability: %s", (source) => expectStaticTypeError(source));
 
 test.each([
@@ -143,15 +143,15 @@ test.each([
   ],
   [
     "readonly implements good",
-    "interface I{readonly x:uint8;} class C implements I{readonly x:uint8=1;} const c:I=new C(); String(c.x);"
+    "interface I{readonly x:uint8;} value class C implements I{readonly x:uint8=1;} const c:I=new C(); String(c.x);"
   ],
   [
     "implements writable good",
-    "interface I{x:uint8;}class C implements I{x:uint8=1;}let c:I=new C();c.x=2;String(c.x);"
+    "interface I{x:uint8;}value class C implements I{x:uint8=1;}let c:I=new C();c.x=2;String(c.x);"
   ],
   [
     "implements readonly covariance",
-    "interface I{readonly x:number;}class C implements I{readonly x:1=1;}const c:I=new C();String(c.x);"
+    "interface I{readonly x:number;}value class C implements I{readonly x:1=1;}const c:I=new C();String(c.x);"
   ],
   [
     "object accessor good",
@@ -215,15 +215,15 @@ test.each([
   ],
   [
     "partial outer good",
-    "class Target{x:uint8=1;}function f(){partial class Target{m():uint8{return this.x;}}}f();String(new Target().m());"
+    "value class Target{x:uint8=1;}function f(){partial class Target{m():uint8{return this.x;}}}f();String(new Target().m());"
   ],
   [
     "partial shadow good",
-    "const Target:uint8=1;function f(){class Target{x:uint8=1;}partial class Target{m():uint8{return this.x;}}return String(new Target().m());}f();"
+    "const Target:uint8=1;function f(){value class Target{x:uint8=1;}partial class Target{m():uint8{return this.x;}}return String(new Target().m());}f();"
   ],
   [
     "partial alias class",
-    "class C{x:uint8=1;}const Target=C;function f(){partial class Target{m():uint8{return this.x;}}}f();String(new C().m());"
+    "value class C{x:uint8=1;}const Target=C;function f(){partial class Target{m():uint8{return this.x;}}}f();String(new C().m());"
   ],
   [
     "partial dynamic",

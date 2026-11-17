@@ -23,7 +23,7 @@ test('an inadmissible member is refused at every boundary, not just `is`', () =>
   expectThrown(`${P} ${o} function f(p: P.<boolean>) { return 1; } f(o);`);
   expectThrown(`${P} ${o} let q: P.<boolean> = o;`);
   expectThrown(`${P} ${o} function f(p: P.<boolean>): boolean { return p.x; } f(o);`);
-  expectThrown('interface GS<T: type> { x: T; } class GI implements GS.<uint8> { x: uint8; } '
+  expectThrown('interface GS<T: type> { x: T; } value class GI implements GS.<uint8> { x: uint8; } '
     + 'let h: GS.<string> = new GI();');
 });
 
@@ -60,7 +60,7 @@ test('what the fix must not disturb', () => {
   // A class implementing a generic interface still satisfies it. The
   // `implements` clause is REQUIRED - a class does not satisfy an interface by
   // shape alone.
-  expect(ok('interface GS2<T: type> { x: T; } class GI2 implements GS2.<uint8> { x: uint8; } '
+  expect(ok('interface GS2<T: type> { x: T; } value class GI2 implements GS2.<uint8> { x: uint8; } '
     + 'let g: GS2.<uint8> = new GI2();')).toBe(true);
   // A generic ALIAS was already correct and is untouched.
   expect(evaluated('type A<T: type> = { x: T }; let s = {}; s.x = (1 := uint8); String(s is A.<string>);')).toBe('false');

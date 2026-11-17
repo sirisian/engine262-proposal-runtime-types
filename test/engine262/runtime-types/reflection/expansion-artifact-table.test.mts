@@ -85,7 +85,7 @@ test('a nominal is carried by name, and nothing unencodable survives', () => {
   // live class - measured to be the ONLY two leaves a table cannot encode, and
   // both only here. Carrying the name instead is the whole of what stands
   // between this table and bytes.
-  const r = rootsOf('class User { name: string; }\nclass Account { owner: User; }\n', ['User', 'Account'])!;
+  const r = rootsOf('value class User { name: string; }\nvalue class Account { owner: User; }\n', ['User', 'Account'])!;
   const table = SerializeTypeTable(r.roots as never);
   const unencodable: string[] = [];
   const walk = (v: unknown): void => {
@@ -111,7 +111,7 @@ test('a table survives a real JSON round trip', () => {
     ['type A = "x"; type B = 42; type C = true; type D = 10n;', ['A', 'B', 'C', 'D']],
     ['type O = { a: uint8, b: string };', ['O']],
     ['type L = { next: L | null };', ['L']],
-    ['class U { name: string; }', ['U']],
+    ['value class U { name: string; }', ['U']],
     ['type P = string.<{ pattern: /^a$/ }>;', ['P']],
   ] as [string, string[]][]) {
     const r = rootsOf(program, names)!;
@@ -153,7 +153,7 @@ test('an unencodable leaf is refused, and the refusal names it', () => {
 test('an unresolvable name is declined, as a stale hash is', () => {
   // A consumer that does not have what the artifact names cannot read the table
   // and must evaluate. Declining is the same answer a hash mismatch gets.
-  const r = rootsOf('class User { name: string; }\n', ['User'])!;
+  const r = rootsOf('value class User { name: string; }\n', ['User'])!;
   expect(DeserializeTypeTable(SerializeTypeTable(r.roots as never), () => undefined)).toBe(undefined);
 });
 

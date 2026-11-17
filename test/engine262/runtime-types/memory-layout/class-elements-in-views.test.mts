@@ -11,7 +11,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * copies, because the copy happens where the binding is made rather than at the element read
  * (#sec-reference-values).
  */
-const V = 'class V { x: uint8 = 0; y: uint8 = 0; } ';
+const V = 'value class V { x: uint8 = 0; y: uint8 = 0; } ';
 
 test('a class element reads and writes through to the buffer', () => {
   expect(evaluated(`${V}const b = new ArrayBuffer(8); const s = Span.<V>(b); String(s[0].x);`)).toBe('0');
@@ -58,7 +58,7 @@ test('a nested class field reads and writes through too', () => {
   // `ReadPlacedField`, where `BufferElementType` answers only scalars and
   // nothing asked what else a field might be. A nested field now reads through
   // the same placement-backed instance a class ELEMENT gets.
-  const nested = 'class I { n: uint8 = 0; } class O { i: I; m: uint8 = 0; } ';
+  const nested = 'value class I { n: uint8 = 0; } value class O { i: I; m: uint8 = 0; } ';
   expect(evaluated(`${nested}const b = new ArrayBuffer(8); const s = Span.<O>(b);
     const ref e = s[0]; e.i.n = 5; String(new Uint8Array(b)[0]);`)).toBe('5');
   expect(evaluated(`${nested}const b = new ArrayBuffer(8);
@@ -84,8 +84,8 @@ test('a nested class field reads and writes through too', () => {
  * after the plumbing was correct.
  */
 test('@endian fixes a field\u2019s byte order', () => {
-  const big = `class W { @endian('big') v: uint16 = 0; } `;
-  const none = 'class W { v: uint16 = 0; } ';
+  const big = `value class W { @endian('big') v: uint16 = 0; } `;
+  const none = 'value class W { v: uint16 = 0; } ';
   const body = `const b = new ArrayBuffer(4); const s = Span.<W>(b);
     const ref e = s[0]; e.v = 258; const r = new Uint8Array(b); r[0] + '/' + r[1];`;
   expect(evaluated(big + body)).toBe('1/2');
@@ -93,9 +93,9 @@ test('@endian fixes a field\u2019s byte order', () => {
 });
 
 test('a field round-trips through its own order', () => {
-  expect(evaluated(`class W { @endian('big') v: uint16 = 0; }
+  expect(evaluated(`value class W { @endian('big') v: uint16 = 0; }
     const b = new ArrayBuffer(4); const s = Span.<W>(b); const ref e = s[0]; e.v = 258; String(e.v);`)).toBe('258');
-  expect(evaluated(`class W { @endian('big') v: uint32 = 0; }
+  expect(evaluated(`value class W { @endian('big') v: uint32 = 0; }
     const b = new ArrayBuffer(8); const s = Span.<W>(b); const ref e = s[0]; e.v = 1;
     const r = new Uint8Array(b); r[0] + '/' + r[3];`)).toBe('0/1');
 });
@@ -103,13 +103,13 @@ test('a field round-trips through its own order', () => {
 test('one class may mix orders, which is what a wire format needs', () => {
   // A class may mix native fields with big-endian network fields in one declaration
   // (#sec-layout-control: `endian`), which is what a wire format needs.
-  expect(evaluated(`class P { @endian('big') a: uint16 = 0; b: uint16 = 0; }
+  expect(evaluated(`value class P { @endian('big') a: uint16 = 0; b: uint16 = 0; }
     const b = new ArrayBuffer(8); const s = Span.<P>(b); const ref e = s[0]; e.a = 258; e.b = 258;
     const r = new Uint8Array(b); r[0] + '/' + r[1] + ' ' + r[2] + '/' + r[3];`)).toBe('1/2 2/1');
 });
 
 test('placement new honours it on the same path', () => {
-  expect(evaluated(`class W { @endian('big') v: uint16 = 0; }
+  expect(evaluated(`value class W { @endian('big') v: uint16 = 0; }
     const b = new ArrayBuffer(4); const w = new(b, 0) W(); w.v = 258;
     const r = new Uint8Array(b); r[0] + '/' + r[1];`)).toBe('1/2');
 });
@@ -120,8 +120,8 @@ test('the worked example runs', () => {
   // source. `buffer` is a `Uint8Array` rather than a `[100].<uint8>`: Divergence - the bytes of an owned
   // array are specified (#sec-array-views) but not reachable in this engine, which is a separate gap.
   expect(evaluated(`
-    @packed class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
-    @packed class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }
+    @packed value class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
+    @packed value class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }
     const buffer = new Uint8Array(100);
     const ref header = Span.<Header>(buffer)[0];
     header.c.a = 10;

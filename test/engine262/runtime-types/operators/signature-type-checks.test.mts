@@ -12,7 +12,7 @@ for (const reverse of [false, true]) {
 }
 
 test('a declared operator contributes its selected result', () => {
-  const classes = 'class P { x: uint8 = 1; } class M { operator+(v: uint8): P { return new P(); } }';
+  const classes = 'value class P { x: uint8 = 1; } class M { operator+(v: uint8): P { return new P(); } }';
   expectStaticTypeError(`${classes} function unused(m: M) { let s: string = m + 1; }`);
   expect(evaluated(`${classes} const m: M = new M(); const p: P = m + 1; String(p.x);`)).toBe('1');
 });
@@ -28,16 +28,16 @@ test('operator overload resolution uses the contextual return type at runtime to
 
 test('a declared compound can act through a readonly field without replacing it', () => {
   // The member holds a reference, so the operator updates the object it refers to.
-  const declarations = 'reference class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { readonly m: M = new M(); }';
+  const declarations = 'class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { readonly m: M = new M(); }';
   expect(evaluated(`${declarations} const h: H = new H(); const result: string = (h.m += 2); result + ":" + String(h.m.n);`)).toBe('ok:3');
   // #sec-readonly-inline-values: where the member holds a value, the value is
   // the member's storage, and the operator's store to `this` is refused.
-  const inline = 'class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { readonly m: M = new M(); }';
+  const inline = 'value class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } value class H { readonly m: M = new M(); }';
   expect(evaluated(`${inline} const h: H = new H(); let result = ''; try { result = (h.m += 2); } catch (e) { result = e.name; } result + ":" + String(h.m.n);`)).toBe('TypeError:1');
   // An operator that stores nothing is still invoked through the member.
-  expect(evaluated('class M { n: uint8 = 1; operator+=(v: uint8): string { return "ok" + String(this.n + v); } } class H { readonly m: M = new M(); } const h: H = new H(); const result: string = (h.m += 2); result;')).toBe('ok3');
+  expect(evaluated('value class M { n: uint8 = 1; operator+=(v: uint8): string { return "ok" + String(this.n + v); } } value class H { readonly m: M = new M(); } const h: H = new H(); const result: string = (h.m += 2); result;')).toBe('ok3');
   // A value that is not held in a readonly member is updated in place, as before.
-  expect(evaluated('class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } class H { m: M = new M(); } const h: H = new H(); const result: string = (h.m += 2); result + ":" + String(h.m.n);')).toBe('ok:3');
+  expect(evaluated('value class M { n: uint8 = 1; operator+=(v: uint8): string { this.n += v; return "ok"; } } value class H { m: M = new M(); } const h: H = new H(); const result: string = (h.m += 2); result + ":" + String(h.m.n);')).toBe('ok:3');
   expectStaticTypeError(`${declarations} function unused(h: H) { h.m += "s"; }`);
   expectStaticTypeError('class M { operator+(v: uint8): M { return this; } } class H { readonly m: M = new M(); } function unused(h: H) { h.m += 1; }');
 });
@@ -55,14 +55,14 @@ test('an index getter contributes its result and keeps string properties ordinar
 });
 
 test('an index setter checks its own signature without requiring a getter', () => {
-  const declaration = 'class M { n: uint8 = 0; set operator[](i: uint8, v: uint8) { this.n = v; } }';
+  const declaration = 'value class M { n: uint8 = 0; set operator[](i: uint8, v: uint8) { this.n = v; } }';
   expectStaticTypeError(`${declaration} function unused(m: M) { m[0] = "s"; }`);
   expectStaticTypeError(`${declaration} function unused(m: M) { m[300] = 1; }`);
   expect(evaluated(`${declaration} const m: M = new M(); m[0] = 2; String(m.n);`)).toBe('2');
 });
 
 test('an annotated reference index getter supplies the store type', () => {
-  const declaration = 'class M { n: uint8 = 1; operator[](i: uint8): ref uint8 { return ref this.n; } }';
+  const declaration = 'value class M { n: uint8 = 1; operator[](i: uint8): ref uint8 { return ref this.n; } }';
   expectStaticTypeError(`${declaration} function unused(m: M) { m[0] = "s"; }`);
   expect(evaluated(`${declaration} const m: M = new M(); m[0] = 2; String(m.n);`)).toBe('2');
 });
@@ -73,7 +73,7 @@ test('unknown index and operator arguments remain runtime decisions', () => {
 });
 
 test('index setter signatures also check destructuring and compound stores', () => {
-  const declarations = 'class M { n: uint8 = 1; operator[](i: uint8): uint8 { return this.n; } set operator[](i: uint8, v: uint8) { this.n = v; } }';
+  const declarations = 'value class M { n: uint8 = 1; operator[](i: uint8): uint8 { return this.n; } set operator[](i: uint8, v: uint8) { this.n = v; } }';
   expectStaticTypeError(`${declarations} function unused(m: M) { [m[0]] = ["s"]; }`);
   expectStaticTypeError(`${declarations} function unused(m: M) { m[0] += "s"; }`);
   expect(evaluated(`${declarations} const m: M = new M(); [m[0]] = [2]; m[0] += 3; String(m.n);`)).toBe('5');

@@ -87,7 +87,7 @@ import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import { ClassValueOrigins } from './class-value-origins.mts';
 import {
   iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType, GeneratorTypeOfProtocol } from './iteration-types.mts';
-import { HasUntypedBase, IsValueTypeClass } from './layout.mts';
+import { IsValueTypeClass } from './layout.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
   ComputeClassLayout, type ClassLayout, IsValueType,
@@ -11822,21 +11822,105 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const classLayoutsChecked = new WeakSet<object>();
+  /**
+   * #sec-value-classes. A class is a value type class where it is declared `value`, and the
+   * declaration is checked here against what it promises: a base that is a value class, and
+   * fields that each have a type, the type a value type. A class that extends a value class is
+   * one, and says so, so that the head of a class states its kind.
+   *
+   * A base this pass cannot name - a call, a parameter of a mixin - is judged where the class is
+   * evaluated, as is a field whose type it cannot resolve.
+   */
+  /**
+   * A type that certainly holds something a value class may not: a function, an object, an array
+   * that grows, `any`, an interface, or a class that is not declared `value`, at any depth of a
+   * union, a fixed-length array or a tuple. A type this pass cannot place - an alias with a
+   * `where` clause, a library type - is left to the class's evaluation, which has the type.
+   */
+  const certainlyNoValue = (type: Known, depth = 0): boolean => {
+    if (!type || depth > 50) return false;
+    if (certainlyNotValueType(type) || type.Kind === 'any') return true;
+    if (type.Kind === 'union') return type.Members.some((member) => certainlyNoValue(member, depth + 1));
+    if (type.Kind === 'array') return certainlyNoValue(type.Element, depth + 1);
+    if (type.Kind === 'tuple') return type.Elements.some((element) => !!element.Rest || certainlyNoValue(element.Type, depth + 1));
+    if (type.Kind !== 'nominal' || (type as { EnumMembers?: unknown }).EnumMembers !== undefined) return false;
+    const declaration = (type as { Declaration?: ParseNode }).Declaration as { type?: string, ClassModifiers?: readonly string[] | null } | undefined;
+    if (declaration?.type === 'ClassDeclaration' || declaration?.type === 'ClassExpression') return !declaration.ClassModifiers?.includes('value');
+    return declaration?.type === 'InterfaceDeclaration';
+  };
+  const checkValueClassDeclaration = (node: ParseNode): void => {
+    const declaration = node as ParseNode.ClassDeclaration | ParseNode.ClassExpression;
+    const modifiers = declaration.ClassModifiers ?? [];
+    if (modifiers.includes('partial')) return;
+    const isValue = modifiers.includes('value');
+    const className = declaration.BindingIdentifier?.name ?? '(anonymous class)';
+    const base = heritageClassOf(declaration) as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+    if (base) {
+      const baseIsValue = !!base.ClassModifiers?.includes('value');
+      if (isValue && !baseIsValue) {
+        reportType('rt-value-class', declaration, '$1 is declared a value class and its base is not one; a value class extends nothing or a value class', Value(className));
+      } else if (!isValue && baseIsValue) {
+        reportType('rt-value-class', declaration, '$1 extends a value class, so it is one, and is written `value class`', Value(className));
+      }
+    }
+    if (!isValue) return;
+    const scoped = declaration.TypeParameters ? pushTypeParameterScopeOf(declaration) : false;
+    const typedNames = new Set<string>();
+    try {
+      for (const element of classBodyOf(declaration)) {
+        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+        const key = (element as { ClassElementName?: { name?: string, value?: unknown, type?: string } }).ClassElementName;
+        const fieldName = key?.type === 'PrivateIdentifier' ? `#${key.name}` : (key?.name ?? (key?.value !== undefined ? String(key.value) : '[computed]'));
+        const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        if (!annotation) {
+          // A field declared again with no annotation keeps the type its first declaration gave it.
+          if (!typedNames.has(fieldName)) {
+            reportType('rt-value-class', element, '$1 is a value class, and its field $2 has no type', Value(className), Value(fieldName));
+          }
+          continue;
+        }
+        typedNames.add(fieldName);
+        const fieldType = resolveType(annotation.Type);
+        if (!fieldType || IsValueType(fieldType as TypeRecord)) continue;
+        if ((fieldType as { Kind?: string }).Kind === 'parameter') {
+          const parameterName = (fieldType as { Name?: string }).Name ?? displayType(fieldType as TypeRecord).replace(/:.*$/, '');
+          const written = (declaration.TypeParameters?.TypeParameterList ?? []).find((q) => q.BindingIdentifier?.name === parameterName)?.TypeParameterConstraint;
+          const constraint = (fieldType as { Constraint?: TypeRecord }).Constraint;
+          if (constraint && !certainlyNoValue(constraint)) continue;
+          // `value` and `plain` are names, and a binding of the same name nearer the class hides
+          // the type: `const value = ...` beside `T: type extends value` leaves `T` with a bound
+          // that is not a type at all. Say so, since the bound is there to be read.
+          const writtenBound = written ? (written as { sourceText?: string }).sourceText?.trim() : undefined;
+          if (!constraint && written) {
+            // A class expression's parameters are bound from their syntax where it is applied,
+            // so a bound that is written and not on the record is not a bound that failed.
+            if (declaration.type === 'ClassDeclaration' && (writtenBound === 'value' || writtenBound === 'plain')) {
+              reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type parameter $3, whose bound $4 does not name the type here: a binding of that name in scope hides it',
+                Value(className), Value(fieldName), Value(parameterName), Value(writtenBound));
+            }
+            continue;
+          }
+          reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type parameter $3, which is not bounded by a value type; bound it with `extends value`',
+            Value(className), Value(fieldName), Value(parameterName));
+        } else if (certainlyNoValue(fieldType)) {
+          reportType('rt-value-class', element, '$1 is a value class, and its field $2 has the type $3, which is not a value type', Value(className), Value(fieldName), Value(displayType(fieldType as TypeRecord)));
+        }
+      }
+    } finally {
+      if (scoped) typeParameterScopes.pop();
+    }
+  };
   const inlineFieldsOf = (type: TypeRecord): readonly InlineField[] | null | undefined => {
     if (type.Kind !== 'nominal') return undefined;
     const declaration = type.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression;
     if (declaration?.type !== 'ClassDeclaration' && declaration?.type !== 'ClassExpression') return undefined;
-    // A REFERENCE CLASS terminates the inline walk: its instances are reached
-    // through a pointer, so a field of its type is a reference position and a
-    // cycle passing through one is finite. This is what makes `reference class
-    // Node { next: Node | null; }` legal where the same declaration without the
-    // modifier has no finite layout - the inline optional of "Optional values"
-    // having removed the indirection `T | null` used to supply.
-    if (declaration.Decorators?.length
-      || declaration.ClassModifiers?.includes('dynamic')
-      || declaration.ClassModifiers?.includes('reference')
-      || declaration.ClassModifiers?.includes('sealed')
-      || declaration.ClassModifiers?.includes('abstract')) return null;
+    // A class that is NOT A VALUE CLASS terminates the inline walk: its instances are
+    // reached through a pointer, so a field of its type is a reference position and a
+    // cycle passing through one is finite. This is what makes `class Node { next: Node |
+    // null; }` legal where `value class Node` with that field has no finite layout - the
+    // inline optional of "Optional values" having removed the indirection `T | null` used
+    // to supply.
+    if (declaration.Decorators?.length || !declaration.ClassModifiers?.includes('value')) return null;
     // A GENERIC class has fields only as an APPLICATION whose arguments are all closed:
     // `Box.<uint8>` has `Box`'s fields with `T` bound to `uint8`. The class over its own
     // parameters, and an application at an open argument, are not known. Every generic class
@@ -15413,12 +15497,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkSharedOperand = (Target: TypeRecord): void => {
     // #sec-threading-shared-modifier: closed operands obey the runtime
-    // layout predicate. A class without evaluated layout metadata defers.
+    // layout predicate. A class without evaluated layout metadata defers,
+    // unless its head already answers: a class not declared `value` is not a
+    // value type whatever its fields turn out to be (#sec-value-classes).
     const pendingLayout = (type: TypeRecord, seen = new Set<TypeRecord>()): boolean => {
       if (seen.has(type)) return false;
       seen.add(type);
       if (mentionsTypeParameter(type) || type.Kind === 'deferred') return true;
       if (type.Kind === 'nominal') {
+        const declaration = (type as { Declaration?: { ClassTail?: unknown, ClassModifiers?: readonly string[] } }).Declaration;
+        if (!type.LibraryName && !type.Constructor && type.EnumMembers === undefined
+            && declaration?.ClassTail && !declaration.ClassModifiers?.includes('value')) {
+          return false;
+        }
         return (!type.LibraryName && !type.Constructor)
           || type.Arguments.some((arg) => typeof arg !== 'number' && pendingLayout(arg, seen));
       }
@@ -15571,7 +15662,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && (e as { static?: boolean }).static
       && (e as unknown as { ClassElementName?: { name?: string } }).ClassElementName?.name === 'default');
     if (hasDeclaredZero) return 'has';
-    if (((declaration as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('reference')) return 'none';
+    // A typed class that is not a value type class is held by reference, and a reference has no
+    // default (#sec-default-values); so has a `sealed` or an `abstract` class.
+    if (IsReferenceClass(type as TypeRecord)) return 'none';
     let verdict: DefaultVerdict = 'has';
     // #sec-typed-classes: "A class is typed when at least one of its public or
     // private fields, declared or inherited, carries a type annotation", and
@@ -15588,7 +15681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
       const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
       // A typed class over an untyped base has no default: its instances begin with what that
-      // base's constructor made (HasUntypedBase). The root of the chain is typed only by a field
+      // base's constructor made. The root of the chain is typed only by a field
       // of its own.
       if (at !== declaration && !heritage && annotatedFields > 0
           && !classBodyOf(at).some((element) => element.type === 'FieldDefinition' && !(element as { static?: boolean }).static
@@ -18737,51 +18830,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * Whether a value of this type is stored INSIDE the array or field that holds
    * it, so that a store to one of its fields is a store to that holder: a
-   * tuple, a fixed-length array, and a value type class (#sec-typed-classes:
-   * every instance field typed with a value type, and not a `reference`,
-   * `sealed` or `abstract` class). Read from the declaration, since the checker
-   * computes no layout.
+   * tuple, a fixed-length array, and a value type class (#sec-value-classes: a
+   * class declared `value`). The declaration says which, so nothing is walked.
    */
-  const storedInline = (type: Known, seen: Set<ParseNode> = new Set()): boolean => {
+  const storedInline = (type: Known): boolean => {
     if (!type) return false;
     if (type.Kind === 'tuple') return true;
     if (type.Kind === 'array') return typeof type.Extent === 'number';
-    if (type.Kind !== 'nominal') return false;
-    const declaration = type.Declaration as ParseNode | undefined;
-    if (!declaration || !/^Class/.test(declaration.type)) return false;
-    if (IsValueTypeClass(type as TypeRecord)) return true;
-    if (seen.has(declaration)) return true;
-    seen.add(declaration);
-    const modifiers = (declaration as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
-    if (modifiers.some((modifier) => modifier === 'reference' || modifier === 'sealed' || modifier === 'abstract')) return false;
-    // A class over a base that is not a typed class is no value type class (HasUntypedBase), and a
-    // base this pass cannot name is not known to be one: neither is judged to be stored inline.
-    if (HasUntypedBase(type as TypeRecord)) return false;
-    let fields = 0;
-    for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
-      const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: ParseNode | null } | null }).ClassTail?.ClassHeritage;
-      if (heritage && heritage.type !== 'NullLiteral' && !heritageClassOf(at)) return false;
-      const ownModifiers = (at as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
-      if (at !== declaration && ownModifiers.includes('dynamic')) return false;
-      let ownTyped = 0;
-      for (const element of classBodyOf(at)) {
-        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
-        ownTyped += 1;
-      }
-      // The root of the chain is typed only by a field of its own.
-      if (at !== declaration && !heritage && ownTyped === 0) return false;
-      for (const element of classBodyOf(at)) {
-        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
-        fields += 1;
-        const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-        if (!annotation) return false;
-        const fieldType = resolveType(annotation.Type);
-        const valueField = !!fieldType && ((fieldType.Kind === 'primitive' && !['object', 'symbol', 'function', 'any'].includes((fieldType as { Name?: string }).Name ?? ''))
-          || fieldType.Kind === 'literal' || storedInline(fieldType, seen));
-        if (!valueField) return false;
-      }
-    }
-    return fields > 0;
+    return type.Kind === 'nominal' && IsValueTypeClass(type as TypeRecord);
   };
 
   /**
@@ -18817,13 +18873,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (type.Kind === 'parameterized') return laidOutValueType((type as { Base?: TypeRecord }).Base ?? null, resolving);
     if (type.Kind === 'union') return type.Members.length > 0 && type.Members.every((member) => laidOutValueType(member, resolving));
     if (type.Kind === 'nominal' && (type as { EnumMembers?: unknown }).EnumMembers !== undefined) return true;
+    // A type parameter bounded by `value` names only value types (#sec-value-classes).
+    if ((type as { Kind?: string }).Kind === 'parameter') return IsValueType(type as TypeRecord);
     return holdsCopyType(type, resolving);
   };
 
   /**
    * The fields of a value type class by name, or null where the class is not
-   * certainly one: it has a modifier or type parameters, a field without a
-   * laid-out value type, or a base that is not such a class. Asked where a
+   * one this rule judges: it is not declared `value`, or it or a field of it
+   * carries a where clause or a decorator, or a field's type is not a value
+   * type this pass can show. Asked where a
    * store is checked, with the scopes of that place, and kept, so the pass at
    * the end resolves no type of its own.
    */
@@ -18838,29 +18897,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const answer = ((): ReadonlyMap<string, TypeRecord> | null => {
       const fields = new Map<string, TypeRecord>();
       for (let at: ParseNode | undefined = declaration; at;) {
-        if ((nodeField<readonly string[] | null>(at, 'ClassModifiers') ?? []).length > 0 || nodeField<unknown>(at, 'TypeParameters')) return null;
+        // #sec-value-classes: a class declared `value`, which every class it extends is too.
+        if (!(nodeField<readonly string[] | null>(at, 'ClassModifiers') ?? []).includes('value')) return null;
         // A where clause or a decorator can run code of the program's at a store, which is then not without effect.
         if ((nodeField<{ WhereClauses?: readonly unknown[] | null }>(at, 'ClassTail')?.WhereClauses ?? []).length > 0
           || (nodeField<readonly unknown[] | null>(at, 'Decorators') ?? []).length > 0) return null;
-        let own = 0;
-        for (const element of classBodyOf(at)) {
-          if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
-          if ((nodeField<readonly unknown[] | null>(element, 'Decorators') ?? []).length > 0) return null;
-          const annotation = nodeField<ParseNode.TypeAnnotation | null>(element, 'TypeAnnotation');
-          const fieldType = annotation ? resolveType(annotation.Type) : null;
-          if (!fieldType || !laidOutValueType(fieldType, resolving)) return null;
-          const name = nodeField<{ type?: string, name?: string }>(element, 'ClassElementName');
-          // A private or computed field is storage of the instance; it is counted and not addressed by a path.
-          fields.set(name?.type === 'IdentifierName' && typeof name.name === 'string' ? name.name : `#${fields.size}`, fieldType as TypeRecord);
-          own += 1;
+        // A generic class's fields are written in its parameters, which are in scope in its body
+        // and not where a store to an instance is checked.
+        const scoped = nodeField<unknown>(at, 'TypeParameters') ? pushTypeParameterScopeOf(at) : false;
+        try {
+          for (const element of classBodyOf(at)) {
+            if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+            if ((nodeField<readonly unknown[] | null>(element, 'Decorators') ?? []).length > 0) return null;
+            const annotation = nodeField<ParseNode.TypeAnnotation | null>(element, 'TypeAnnotation');
+            const fieldType = annotation ? resolveType(annotation.Type) : null;
+            if (!fieldType || !laidOutValueType(fieldType, resolving)) return null;
+            const name = nodeField<{ type?: string, name?: string }>(element, 'ClassElementName');
+            // A private or computed field is storage of the instance; it is counted and not addressed by a path.
+            fields.set(name?.type === 'IdentifierName' && typeof name.name === 'string' ? name.name : `#${fields.size}`, fieldType as TypeRecord);
+          }
+        } finally {
+          if (scoped) typeParameterScopes.pop();
         }
-        const heritage = nodeField<{ ClassHeritage?: { type?: string } | null } | null>(at, 'ClassTail')?.ClassHeritage;
-        const base: ParseNode | undefined = heritageClassOf(at);
-        if (heritage && heritage.type !== 'NullLiteral' && !base) return null;
-        // The root of a chain is a typed class only by a field of its own, and a class over an
-        // untyped base is held by reference (HasUntypedBase).
-        if (at !== declaration && !base && own === 0) return null;
-        at = base;
+        // A base this pass cannot name is a value class all the same, or the class is refused
+        // where it is evaluated: the fields this class declares are its own either way, and a
+        // store to one of them through a copy is as lost.
+        at = heritageClassOf(at);
       }
       return fields.size > 0 ? fields : null;
     })();
@@ -37531,6 +37593,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const layoutRoots = [...classNodes.values(), ...classExpressionNodes].filter((node) => !classLayoutsChecked.has(node));
     const cycle = FirstClassInlineCycle(layoutRoots.map((node) => instanceTypeOf(node)).filter((type): type is TypeRecord => type !== null), inlineFieldsOf);
     layoutRoots.forEach((node) => classLayoutsChecked.add(node));
+    layoutRoots.forEach(checkValueClassDeclaration);
     if (cycle) reportType('rt-layout', cycle.type.Kind === 'nominal' ? cycle.type.Declaration : root, '$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field));
     // #sec-type-alias-declarations states the same rule for an ALIAS: "It is a
     // type error if a cycle never [passes through a reference position], since
@@ -37803,6 +37866,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && !element.static && classElementKey(element.ClassElementName) === key);
       if (member) {
         if (member.type !== 'FieldDefinition' || !member.TypeAnnotation) return null;
+        // #sec-requireborrowablereference: a bit-field is a member "of a laid-out aggregate",
+        // and only a value class is laid out (#sec-value-classes). A small integer field of a
+        // class held by reference is a location, as one of a structural object is.
+        if (!declaration.ClassModifiers?.includes('value')) return null;
         const shape = structureOf(current);
         return shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === key)?.type ?? null : null;
       }
@@ -47427,6 +47494,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // every parameter it reads stands in a fixed position; its evaluation
         // and deferral are those of an application of the same arguments.
         const primaryClass = classes.find((candidate) => listOf(candidate) === primary);
+        // #sec-value-classes: a family is one kind of class at every application, so a
+        // specialization is a value class exactly when the family's primary declaration is,
+        // and says so as the primary does.
+        if (primaryClass && !IsPartialDeclaration(c)
+            && !!primaryClass.ClassModifiers?.includes('value') !== !!c.ClassModifiers?.includes('value')) {
+          reportType('rt-value-class', c, primaryClass.ClassModifiers?.includes('value')
+            ? '$1 is a specialization of a value class, so it is one, and is written `value class`'
+            : '$1 is a specialization of a class that is not a value class, so it is not declared `value`', Value(`class ${name}${list.sourceText}`));
+        }
         const primaryClauses = (primaryClass?.ClassTail as { WhereClauses?: readonly ParseNode.WhereClause[] | null } | undefined)?.WhereClauses ?? [];
         if (diagnostics.length === 0 && primaryClass && primaryClauses.length > 0) {
           const captureNames = new Set((list.Captures ?? []).map((capture) => capture.BindingIdentifier.name));

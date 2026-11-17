@@ -14,21 +14,21 @@ import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 // -- WeakRef -------------------------------------------------------------------
 test('a WeakRef over a typed-class instance is a TypeError', () => {
-  expectThrown('class A { x: uint8 = (1 := uint8); } new WeakRef(new A());');
+  expectThrown('value class A { x: uint8 = (1 := uint8); } new WeakRef(new A());');
 });
 
 // -- WeakMap and WeakSet -------------------------------------------------------
 test('a typed-class instance is rejected as a WeakMap key', () => {
-  expectThrown('class A { x: uint8 = (1 := uint8); } let m = new WeakMap(); m.set(new A(), 1);');
+  expectThrown('value class A { x: uint8 = (1 := uint8); } let m = new WeakMap(); m.set(new A(), 1);');
 });
 
 test('a typed-class instance is rejected as a WeakSet value', () => {
-  expectThrown('class A { x: uint8 = (1 := uint8); } let s = new WeakSet(); s.add(new A());');
+  expectThrown('value class A { x: uint8 = (1 := uint8); } let s = new WeakSet(); s.add(new A());');
 });
 
 // -- FinalizationRegistry ------------------------------------------------------
 test('a typed-class instance is rejected as a FinalizationRegistry target', () => {
-  expectThrown('class A { x: uint8 = (1 := uint8); } let r = new FinalizationRegistry(() => {}); r.register(new A());');
+  expectThrown('value class A { x: uint8 = (1 := uint8); } let r = new FinalizationRegistry(() => {}); r.register(new A());');
 });
 
 // -- Reference types are unaffected --------------------------------------------

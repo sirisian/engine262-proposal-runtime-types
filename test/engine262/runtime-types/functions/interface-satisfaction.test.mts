@@ -41,7 +41,7 @@ function value(source: string): string {
 
 
 const SMALL = 'interface Small { m(): uint8; } ';
-const RICH = 'class Rich { v: uint8 = 1; m(): uint8 { return (0 := uint8); } } ';
+const RICH = 'value class Rich { v: uint8 = 1; m(): uint8 { return (0 := uint8); } } ';
 
 test('an interface is answered STRUCTURALLY as a value question', () => {
   // #sec-interfaces-semantics: "an object that has the members satisfies an
@@ -77,7 +77,7 @@ test('a structural source reaches an interface, and an interface reaches a struc
 
 test('a shape that does not satisfy the interface is refused whatever the rule', () => {
   // The guard for any change to the subtype rule: these must stay refused.
-  expectThrows(`${SMALL}class Bad { z: uint8 = 1; } let s: Small = new Bad();`);
+  expectThrows(`${SMALL}value class Bad { z: uint8 = 1; } let s: Small = new Bad();`);
   expectThrows(`${SMALL}class Bad { m(): string { return "s"; } } let s: Small = new Bad();`);
 });
 

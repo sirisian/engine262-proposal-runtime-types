@@ -40,7 +40,7 @@ test.each([
   },
   {
     "name": "typed class target unused",
-    "source": "class C{n:uint8=1;}function f(c:C){new Proxy(c,{});}",
+    "source": "value class C{n:uint8=1;}function f(c:C){new Proxy(c,{});}",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -52,7 +52,7 @@ test.each([
   },
   {
     "name": "typed class target executed",
-    "source": "class C{n:uint8=1;}new Proxy(new C(),{});",
+    "source": "value class C{n:uint8=1;}new Proxy(new C(),{});",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -64,7 +64,7 @@ test.each([
   },
   {
     "name": "inherited layout",
-    "source": "class A{n:uint8=1;}class B extends A{}function f(c:B){new Proxy(c,{});}",
+    "source": "value class A{n:uint8=1;}value class B extends A{}function f(c:B){new Proxy(c,{});}",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -88,7 +88,7 @@ test.each([
   },
   {
     "name": "revocable uses same restriction",
-    "source": "class C{n:uint8=1;}function f(c:C){Proxy.revocable(c,{});}",
+    "source": "value class C{n:uint8=1;}function f(c:C){Proxy.revocable(c,{});}",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -196,7 +196,7 @@ test.each([
   },
   {
     "name": "all layout alternatives",
-    "source": "class C{n:uint8=1;}function f(a:[].<uint8>|C){new Proxy(a,{});}",
+    "source": "value class C{n:uint8=1;}function f(a:[].<uint8>|C){new Proxy(a,{});}",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -220,7 +220,7 @@ test.each([
   },
   {
     "name": "revocable executed",
-    "source": "class C{n:uint8=1;}Proxy.revocable(new C(),{});",
+    "source": "value class C{n:uint8=1;}Proxy.revocable(new C(),{});",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -232,7 +232,7 @@ test.each([
   },
   {
     "name": "dynamic subclass still inherits layout",
-    "source": "class A{n:uint8=1;}dynamic class B extends A{}function f(b:B){new Proxy(b,{});}f(new B());",
+    "source": "value class A{n:uint8=1;}dynamic class B extends A{}function f(b:B){new Proxy(b,{});}f(new B());",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -244,7 +244,7 @@ test.each([
   },
   {
     "name": "reference class storage is still not proxyable",
-    "source": "reference class C{n:uint8=1;}function f(c:C){new Proxy(c,{});}",
+    "source": "class C{n:uint8=1;}function f(c:C){new Proxy(c,{});}",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -256,7 +256,7 @@ test.each([
   },
   {
     "name": "reference class target executed",
-    "source": "reference class C{n:uint8=1;}new Proxy(new C(),{});",
+    "source": "class C{n:uint8=1;}new Proxy(new C(),{});",
     "expected": {
       "completion": "throw",
       "bodyRan": "false",
@@ -400,7 +400,7 @@ test.each([
   },
   {
     "name": "reference class remains weakly holdable",
-    "source": "reference class C{n:uint8=1;}new WeakRef(new C());",
+    "source": "class C{n:uint8=1;}new WeakRef(new C());",
     "expected": {
       "completion": "normal",
       "bodyRan": "true",

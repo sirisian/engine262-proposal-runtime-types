@@ -130,7 +130,7 @@
       "name": "lexical generic constructor shadows an outer declaration",
       "steps": [
         {
-          "source": "class P<T:type>{outer:boolean=true;}function make(){class P<T:type>{inner:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();if(f.<uint8>(1).inner!==true)throw new Error(\"lexical\");\"ok\";",
+          "source": "value class P<T:type>{outer:boolean=true;}function make(){value class P<T:type>{inner:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();if(f.<uint8>(1).inner!==true)throw new Error(\"lexical\");\"ok\";",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -144,7 +144,7 @@
       "name": "separate factory declarations keep same spelled constructors distinct",
       "steps": [
         {
-          "source": "function left(){class P<T:type>{left:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}function right(){class P<T:type>{right:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}const a=left(),b=right();if(!a.<uint8>(1).left||!b.<uint8>(1).right)throw new Error(\"lexical\");\"ok\";",
+          "source": "function left(){value class P<T:type>{left:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}function right(){value class P<T:type>{right:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}const a=left(),b=right();if(!a.<uint8>(1).left||!b.<uint8>(1).right)throw new Error(\"lexical\");\"ok\";",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

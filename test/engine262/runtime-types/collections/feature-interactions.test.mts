@@ -98,7 +98,7 @@ test('a collection cannot be shared, and says why', () => {
   expect(ok('let s: shared Set.<uint8> = new Set();')).toBe(false);
   // The contrast: a fixed array of a value type IS sharable, so the refusal is
   // about the collection rather than about `shared`.
-  expect(ok('class V { x: uint32; } let v: shared V = new V();')).toBe(true);
+  expect(ok('value class V { x: uint32; } let v: shared V = new V();')).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ test('a collection is a reference, so it has no layout and cannot be an SoA elem
   expect(ok('class C { m: Map.<string, uint8> = new Map(); x: uint8; } let s: SoA.<C, 4> = new SoA.<C, 4>();')).toBe(false);
   expect(ok('class C { m: Map.<string, uint8> = new Map(); } let v: shared C = new C();')).toBe(false);
   // The same class without the collection field IS a value type.
-  expect(ok('class C { x: uint8; } let v: shared C = new C();')).toBe(true);
+  expect(ok('value class C { x: uint8; } let v: shared C = new C();')).toBe(true);
 });
 
 // ---------------------------------------------------------------------------

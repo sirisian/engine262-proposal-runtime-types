@@ -109,7 +109,7 @@ test.each([
   ],
   [
     "inherited field",
-    "class B{v:bigint;}class C extends B{}function f(x:C){x.v >>> 1;}"
+    "value class B{v:bigint;}value class C extends B{}function f(x:C){x.v >>> 1;}"
   ],
   [
     "specialized field",

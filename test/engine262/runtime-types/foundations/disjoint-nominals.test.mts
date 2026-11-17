@@ -63,7 +63,7 @@ test('two unrelated CLASSES have no common value', () => {
 
   // A class against an INTERFACE is not this case: a class may implement any
   // number of them.
-  expect(ok(dead('interface I { a: uint8 } class K implements I { a: uint8 = uint8(1); }'
+  expect(ok(dead('interface I { a: uint8 } value class K implements I { a: uint8 = uint8(1); }'
     + ' let k: K = new K(); function f(i: I) { let q = k === i; }'))).toBe(true);
 });
 

@@ -33,7 +33,7 @@ test('the second declaration may be in a later source text', () => {
 });
 
 test('different pairs for one operator coexist and each dispatches', () => {
-  const classes = 'class A { x: float64 = 1; } class B { x: float64 = 2; } ';
+  const classes = 'value class A { x: float64 = 1; } value class B { x: float64 = 2; } ';
   expect(evaluated(`${classes} primitive number { operator*(rhs: A): string { return "A"; } `
     + 'operator*(rhs: B): string { return "B"; } } String(2 * new A()) + String(2 * new B());')).toBe('AB');
   expect(evaluated(`${classes} primitive number { operator*(rhs: A): string { return "A"; } } `
@@ -50,6 +50,6 @@ test('a different receiver or arity is a different pair', () => {
   // A unary definition in a block capturing metadata: one in `primitive number
   // { ... }` would redeclare number's own negation, refused since unary
   // definitions dispatch (operators/unary-blocks.test.mts).
-  expect(evaluated('type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } } class V { x: float64 = 1; } '
+  expect(evaluated('type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } } value class V { x: float64 = 1; } '
     + 'primitive float64<const X: D> { operator-(rhs: V): string { return "b"; } operator-(): float64.<X> { return this; } } "ok";')).toBe('ok');
 });

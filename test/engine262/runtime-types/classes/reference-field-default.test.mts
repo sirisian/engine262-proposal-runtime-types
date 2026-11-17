@@ -21,16 +21,16 @@ import { evaluated, expectThrown } from '../harness.mts';
  */
 
 test('a bare field of a reference type needs an initializer', () => {
-  expectThrown('reference class R { x: uint8 = 1; } class H { r: R; } new H();',
+  expectThrown('class R { x: uint8 = 1; } class H { r: R; } new H();',
     'has no default value');
-  expectThrown('reference class R { x: uint8 = 1; } let r: R;', 'has no default value');
+  expectThrown('class R { x: uint8 = 1; } let r: R;', 'has no default value');
 });
 
 test('the spellings that do have a default keep it', () => {
   // A nullable reference is how a program asks for the absent one.
-  expect(evaluated(`reference class R { x: uint8 = 1; } class H { r: R | null; }
+  expect(evaluated(`class R { x: uint8 = 1; } class H { r: R | null; }
     const h = new H(); String(h.r === null);`)).toBe('true');
-  expect(evaluated(`reference class R { x: uint8 = 1; } class H { r: R = new R(); }
+  expect(evaluated(`class R { x: uint8 = 1; } class H { r: R = new R(); }
     const h = new H(); String(h.r.x);`)).toBe('1');
 });
 
@@ -46,11 +46,11 @@ test('a value class field still takes its memberwise zero', () => {
   // "comes into existence without its constructor running", so it holds the
   // default of each field's TYPE rather than what the declaration writes.
   // Pinned because it looks like the same defect and is not.
-  expect(evaluated('class V { x: uint8 = 3; } class H { v: V; } const h = new H(); String(h.v.x);')).toBe('0');
+  expect(evaluated('value class V { x: uint8 = 3; } value class H { v: V; } const h = new H(); String(h.v.x);')).toBe('0');
 });
 
 test('the other defaults are untouched', () => {
-  expect(evaluated(`class H { a: uint8; b: string; c: boolean; d: [2].<uint8>; }
+  expect(evaluated(`value class H { a: uint8; b: string; c: boolean; d: [2].<uint8>; }
     const h = new H(); h.a + '/' + JSON.stringify(h.b) + '/' + h.c + '/' + h.d.length;`))
     .toBe('0/""/false/2');
   expectThrown('dynamic class D { y = 1; } class H { d: D; } new H();', 'has no default value');

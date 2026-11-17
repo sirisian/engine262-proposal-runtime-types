@@ -22,8 +22,8 @@ test('a class-typed declaration with no default is refused before the program ru
 });
 
 test('value type classes, declared zeros, nullable unions and dynamic arrays have defaults', () => {
-  expect(evaluated('class V { x: float32 = 0; } let e: [4].<V>; String(e[0].x);')).toBe('0');
-  expect(evaluated('class S { s: string = "a"; n: uint8 = 0; } let s: S; String(s.s.length);')).toBe('0');
+  expect(evaluated('value class V { x: float32 = 0; } let e: [4].<V>; String(e[0].x);')).toBe('0');
+  expect(evaluated('value class S { s: string = "a"; n: uint8 = 0; } let s: S; String(s.s.length);')).toBe('0');
   expect(evaluated('class Z { g: () => void = () => {}; static default = new Z(); } let z: Z; typeof z.g;')).toBe('function');
   expect(evaluated(`${Q} let q: Q | null; String(q);`)).toBe('null');
   expect(evaluated(`${Q} let d: [].<Q>; String(d.length);`)).toBe('0');

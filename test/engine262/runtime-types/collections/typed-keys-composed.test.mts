@@ -37,7 +37,7 @@ test('the two comparisons a type registry rests on are different ones', () => {
   // are visible in one program and they do not have to agree, which is worth
   // pinning because a reader expects them to.
   expect(evaluated('const s = new Set(); s.add(0); s.add(-0); String(s.size);')).toBe('1');
-  expect(evaluated('class A<N: type> { x: uint8; } String((type A.<0>) === (type A.<-0>));')).toBe('false');
+  expect(evaluated('value class A<N: type> { x: uint8; } String((type A.<0>) === (type A.<-0>));')).toBe('false');
 });
 
 // ---------------------------------------------------------------------------
@@ -119,5 +119,5 @@ test('`any` admits anything, and a collection of `any` is still a collection', (
 
 test('a class instance and an interface-shaped value as keys', () => {
   expect(evaluated('class C { x: uint8; o: object | null = null; } const k = new C(); const m = new Map.<C, string>(); m.set(k, "hit"); String(m.get(k));')).toBe('hit');
-  expectStaticTypeError('class C { x: uint8; } class D { x: uint8; } let m: Map.<C, string> = new Map(); m.set(new D(), "x");');
+  expectStaticTypeError('value class C { x: uint8; } value class D { x: uint8; } let m: Map.<C, string> = new Map(); m.set(new D(), "x");');
 });

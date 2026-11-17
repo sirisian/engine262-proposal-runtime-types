@@ -15,7 +15,7 @@ test('an object-literal method is judged against the literal', () => {
   refused("const o = { x: (1 := uint8), m() where this.x > 300 { return 1; } }; 'ok';", 'rt-numeric-range');
   expect(evaluated('const o = { x: (1 := uint8), m() where this.x > 0 { return 1; } }; String(o.m());')).toBe('1');
   expect(evaluated("const o = { x: (1 := uint8), m() where this.x > 0 { return 1; } }; const p = { x: (0 := uint8), m: o.m }; let r = 'none'; try { p.m(); r = 'ran'; } catch (e) { r = 'threw'; } r;")).toBe('threw');
-  expect(evaluated('class K { y: uint8 = 1; m() { const o = { x: (1 := uint8), n() where this.x > 0 { return 1; } }; return o.n(); } } String(new K().m());')).toBe('1');
+  expect(evaluated('value class K { y: uint8 = 1; m() { const o = { x: (1 := uint8), n() where this.x > 0 { return 1; } }; return o.n(); } } String(new K().m());')).toBe('1');
 });
 
 test('a signature is judged against its declaring type', () => {

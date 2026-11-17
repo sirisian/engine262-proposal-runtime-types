@@ -4,7 +4,7 @@
       "name": "escaped local class receiving annotation",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use<T:type>(){return convert(\"yes\");}use.<boolean>();log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use<T:type>(){return convert(\"yes\");}use.<boolean>();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -18,7 +18,7 @@
       "name": "escaped local class without generic parameters",
       "steps": [
         {
-          "source": "let log=\"\";function make(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make();function use(){return convert(\"yes\");}use();log;",
+          "source": "let log=\"\";function make(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:string){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make();function use(){return convert(\"yes\");}use();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -32,7 +32,7 @@
       "name": "direct escaped closure control",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();convert(\"yes\");log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();convert(\"yes\");log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -46,7 +46,7 @@
       "name": "caller class shadow",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();class P{constructor(v:string){log+=\"wrong\";}}function use<T:type>(){return convert(\"yes\");}use.<boolean>();log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();class P{constructor(v:string){log+=\"wrong\";}}function use<T:type>(){return convert(\"yes\");}use.<boolean>();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -60,7 +60,7 @@
       "name": "concise forwarding closure",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const use=()=>convert(\"yes\");use();log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const use=()=>convert(\"yes\");use();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -74,7 +74,7 @@
       "name": "two immutable forwarding dependencies",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const bridge=()=>convert(\"yes\");function use<T:type>(){return bridge();}use.<boolean>();log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const bridge=()=>convert(\"yes\");function use<T:type>(){return bridge();}use.<boolean>();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -88,7 +88,7 @@
       "name": "parenthesized forwarding dependency",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){return (convert)(\"yes\");}use();log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){return (convert)(\"yes\");}use();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -102,7 +102,7 @@
       "name": "throw does not replace captured generic frame",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use<T:type>(v:any){return convert(v);}try{use.<boolean>(1);}catch(e){log+=\"e\";}use.<boolean>(\"yes\");log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use<T:type>(v:any){return convert(v);}try{use.<boolean>(1);}catch(e){log+=\"e\";}use.<boolean>(\"yes\");log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -130,7 +130,7 @@
       "name": "independent factory activations",
       "steps": [
         {
-          "source": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return (v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function one(){return a(\"x\");}function two(){return b(\"x\");}one().tag+two().tag+one().tag;",
+          "source": "function make(tag:string){value class P{tag:string=tag;constructor(v:string){}}return (v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function one(){return a(\"x\");}function two(){return b(\"x\");}one().tag+two().tag+one().tag;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -144,7 +144,7 @@
       "name": "other activation is not admitted",
       "steps": [
         {
-          "source": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return (v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");const foreign:any=b(\"x\");let result=\"\";try{a(foreign);}catch(e){result=String(e instanceof TypeError);}result;",
+          "source": "function make(tag:string){value class P{tag:string=tag;constructor(v:string){}}return (v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");const foreign:any=b(\"x\");let result=\"\";try{a(foreign);}catch(e){result=String(e instanceof TypeError);}result;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -172,7 +172,7 @@
       "name": "same spelling from unrelated declaration is not a member",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();class P{}const wrong:any=new P();let result=\"\";try{convert(wrong);}catch(e){result=String(e instanceof TypeError);}result;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();class P{}const wrong:any=new P();let result=\"\";try{convert(wrong);}catch(e){result=String(e instanceof TypeError);}result;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -214,7 +214,7 @@
       "name": "nested function return is not forwarding evidence",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){function unused(){return convert(\"unused\");}return convert(\"yes\");}use();log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){function unused(){return convert(\"unused\");}return convert(\"yes\");}use();log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -256,7 +256,7 @@
       "name": "existing class return with no escaped dependency",
       "steps": [
         {
-          "source": "class P{x:string=\"ok\";}function use(){return new P();}use().x;",
+          "source": "value class P{x:string=\"ok\";}function use(){return new P();}use().x;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -270,7 +270,7 @@
       "name": "captured class used after factory frame exits",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const saved:any=convert(\"yes\");String(saved instanceof Object)+\"/\"+log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const saved:any=convert(\"yes\");String(saved instanceof Object)+\"/\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -284,7 +284,7 @@
       "name": "reflection retains escaped return identity",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const target=Reflect.getReflection(Reflect.typeOf(convert)).signatures[0].return.type;const raw:any=convert(\"yes\");String(raw instanceof target);",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const target=Reflect.getReflection(Reflect.typeOf(convert)).signatures[0].return.type;const raw:any=convert(\"yes\");String(raw instanceof target);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -298,7 +298,7 @@
       "name": "reflecting caller does not run its dependency",
       "steps": [
         {
-          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){return convert(\"yes\");}Reflect.typeOf(use);log;",
+          "source": "let log=\"\";function make<T:type>(){value class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){return convert(\"yes\");}Reflect.typeOf(use);log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

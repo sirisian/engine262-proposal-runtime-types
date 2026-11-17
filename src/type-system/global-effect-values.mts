@@ -47,13 +47,15 @@ const literalInitializer = (value: unknown): boolean => {
  * accessors and operators run only when invoked, and static elements when the
  * class is defined, so none of them belongs to construction. A literal stored
  * in an untyped or intrinsic field converts nothing. A generic, partial or
- * otherwise modified class is not judged from this one body.
+ * otherwise modified class is not judged from this one body; `value` says how
+ * an instance is held and not how one is constructed, so a value class is.
  */
 export function TransparentlyConstructedClass(node: ClassNode, intrinsicAdmission: (type: ParseNode.Type) => string | undefined,
   propertyKey: (node: ParseNode) => string | undefined, parentClass?: (heritage: ParseNode) => ClassNode | undefined,
   seen = new Set<ClassNode>()): boolean {
   const tail = node.ClassTail;
-  if (node.Decorators?.length || node.TypeParameters || node.ClassModifiers?.length || tail.WhereClauses?.length || seen.has(node)) return false;
+  if (node.Decorators?.length || node.TypeParameters || node.ClassModifiers?.some((modifier) => modifier !== 'value')
+    || tail.WhereClauses?.length || seen.has(node)) return false;
   // A default derived constructor runs only its parent's construction: it
   // reads its own prototype, an ordinary function's, and passes the
   // arguments through without the iterator protocol.

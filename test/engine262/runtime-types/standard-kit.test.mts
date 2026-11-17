@@ -216,7 +216,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['parameters', 'std.parameters(type (uint8, string) => void) === type [uint8, string]', ''],
   ['firstParameter', 'std.firstParameter(type (uint8, string) => void) === uint8', ''],
   ['returnType', 'std.returnType(type (uint8) => string) === string', ''],
-  ['constructorParameters', 'std.constructorParameters(type K) === type [uint8, string]', 'class K { x: uint8 = 1; constructor(a: uint8, b: string) {} }'],
+  ['constructorParameters', 'std.constructorParameters(type K) === type [uint8, string]', 'value class K { x: uint8 = 1; constructor(a: uint8, b: string) {} }'],
   // The absent case is `never`, not `any`: #sec-this-adoption says a signature
   // with none "supplies no `this` rather than accepting any", so the set of
   // receivers it admits is empty.
@@ -273,7 +273,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['stringPattern', 'accepts(std.stringPattern`a.b`, "a.b") && !accepts(std.stringPattern`a.b`, "axb")',
     'function accepts(T: type, value) { return value is T; }'],
   ['inverse', 'std.inverse.length === 2 && unpack(new Box.<uint8>(1)) === "uint.<8>"',
-    'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
+    'value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function unboxed(Bs) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Bs).elements.map((e) => ({ type: Reflect.getReflection(e.type).generic.arguments[0] })) }); }' + NL
     + '@std.inverse(unboxed)' + NL
     + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); }' + NL
@@ -312,7 +312,7 @@ test('agreement: `keys` IS `keyof`, including where reflection cannot see', asyn
   expect(await holds('std.keys(type { a: uint8, b: string }) === type keyof { a: uint8, b: string }')).toBe('ok');
   expect(await holds('std.keys(type { a: uint8 } | { a: string }) === type keyof ({ a: uint8 } | { a: string })')).toBe('ok');
   expect(await holds('std.keys(type { a: uint8 } & { b: string }) === type keyof ({ a: uint8 } & { b: string })')).toBe('ok');
-  expect(await holds('std.keys(type K) === type keyof K', 'class K { x: uint8 = 1; y: string = ""; }')).toBe('ok');
+  expect(await holds('std.keys(type K) === type keyof K', 'value class K { x: uint8 = 1; y: string = ""; }')).toBe('ok');
 });
 
 test('agreement: keyless is `never`, and the refusal lives at the USE', async () => {

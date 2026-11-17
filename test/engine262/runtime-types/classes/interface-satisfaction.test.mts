@@ -26,7 +26,7 @@ test('an object literal satisfies an interface by having its members', () => {
 test('a class satisfies an interface it declares', () => {
   expect(ok(`
     interface I { a: string; }
-    class C implements I { a: string = 's'; }
+    value class C implements I { a: string = 's'; }
     function f(x: I) {}
     f(new C());
   `)).toBe(true);
@@ -48,21 +48,21 @@ test('a class does NOT satisfy an interface it never declared', () => {
   // answered by the structural half, and that is the second assertion here.
   expectError(`
     interface I { a: string; }
-    class D { a: string = 's'; }
+    value class D { a: string = 's'; }
     function f(x: I) {}
     f(new D());
   `);
   // The same class reaches an OBJECT-typed position, which is where a shape is
   // what was asked for.
   expect(ok(`
-    class D { a: string = 's'; }
+    value class D { a: string = 's'; }
     function f(x: { a: string }) {}
     f(new D());
   `)).toBe(true);
   // And saying `implements` is all it takes to reach the interface.
   expect(ok(`
     interface I { a: string; }
-    class D implements I { a: string = 's'; }
+    value class D implements I { a: string = 's'; }
     function f(x: I) {}
     f(new D());
   `)).toBe(true);
@@ -73,7 +73,7 @@ test('a value of the wrong shape is refused', () => {
   // satisfaction were unchecked they would all pass and so would this.
   expectError(`
     interface I { a: string; }
-    class E { b: string = 's'; }
+    value class E { b: string = 's'; }
     function f(x: I) {}
     f(new E());
   `);
@@ -102,7 +102,7 @@ test('an interface and a class coexist in one script', () => {
   // the first. The test is kept so the claim stays falsifiable.
   expect(ok(`
     interface I { a: string; }
-    class C { a: string = 's'; }
+    value class C { a: string = 's'; }
   `)).toBe(true);
   expect(ok(`
     interface I { a: string; }
@@ -119,22 +119,22 @@ test('a class instance reaches an object-typed position by having the members', 
   // at run time and `is` agreed with the run time - the checker and the run
   // time disagreed, and no test covered it.
   expect(ok(`
-    class Point { x: uint8 = 1; y: uint8 = 2; }
+    value class Point { x: uint8 = 1; y: uint8 = 2; }
     function f(p: { x: uint8 }) {}
     f(new Point());
   `)).toBe(true);
-  expect(evaluated('class Point { x: uint8 = 1; y: uint8 = 2; } '
+  expect(evaluated('value class Point { x: uint8 = 1; y: uint8 = 2; } '
     + 'String(Reflect.isAssignable(type Point, type { x: uint8, y: uint8 }));')).toBe('true');
   // Width subtyping applies: a class with more members satisfies an object type
   // asking for fewer.
-  expect(evaluated('class Point { x: uint8 = 1; y: uint8 = 2; } '
+  expect(evaluated('value class Point { x: uint8 = 1; y: uint8 = 2; } '
     + 'String(Reflect.isAssignable(type Point, type { x: uint8 }));')).toBe('true');
 });
 
 test('a class only reaches an object type it actually satisfies', () => {
   // The assertions that keep the one above from passing vacuously.
-  expect(evaluated('class Wrong { z: uint8 = 1; } String(Reflect.isAssignable(type Wrong, type { x: uint8 }));')).toBe('false');
-  expect(evaluated('class Point { x: uint8 = 1; } String(Reflect.isAssignable(type Point, type { x: string }));')).toBe('false');
+  expect(evaluated('value class Wrong { z: uint8 = 1; } String(Reflect.isAssignable(type Wrong, type { x: uint8 }));')).toBe('false');
+  expect(evaluated('value class Point { x: uint8 = 1; } String(Reflect.isAssignable(type Point, type { x: string }));')).toBe('false');
   // A PRIVATE member is not reachable through a member expression, so no object
   // type can name it and the shape excludes it - the class below satisfies
   // `{ x: uint8 }` by its public `x`, not by `#s`.
@@ -142,7 +142,7 @@ test('a class only reaches an object type it actually satisfies', () => {
   // And the reverse direction stays refused: an object type is not a class.
   // "A class states a construction and an identity as well as a shape, and it is
   // the identity that its type is for."
-  expect(evaluated('class Point { x: uint8 = 1; } String(Reflect.isAssignable(type { x: uint8 }, type Point));')).toBe('false');
+  expect(evaluated('value class Point { x: uint8 = 1; } String(Reflect.isAssignable(type { x: uint8 }, type Point));')).toBe('false');
 });
 
 test('the implements clause is walked up the base chain', () => {
@@ -150,15 +150,15 @@ test('the implements clause is walked up the base chain', () => {
   // [[Base]] as well as the class's own clause.
   expect(ok(`
     interface I { x: uint8; }
-    class Declared implements I { x: uint8 = 1; }
-    class Sub extends Declared { y: uint8 = 2; }
+    value class Declared implements I { x: uint8 = 1; }
+    value class Sub extends Declared { y: uint8 = 2; }
     function f(p: I) {}
     f(new Sub());
   `)).toBe(true);
-  expect(evaluated('interface I { x: uint8; } class Declared implements I { x: uint8 = 1; } '
-    + 'class Sub extends Declared { y: uint8 = 2; } String(Reflect.isAssignable(type Sub, type I));')).toBe('true');
+  expect(evaluated('interface I { x: uint8; } value class Declared implements I { x: uint8 = 1; } '
+    + 'value class Sub extends Declared { y: uint8 = 2; } String(Reflect.isAssignable(type Sub, type I));')).toBe('true');
   // A sibling that inherits nothing declaring it does not satisfy.
-  expect(evaluated('interface I { x: uint8; } class Loose { x: uint8 = 1; } '
+  expect(evaluated('interface I { x: uint8; } value class Loose { x: uint8 = 1; } '
     + 'String(Reflect.isAssignable(type Loose, type I));')).toBe('false');
 });
 
@@ -169,9 +169,9 @@ test('an empty interface is satisfied by a value, not by any class', () => {
   // keeps `implements` meaningful for a marker interface, the case TypeScript's
   // `{}` cannot express.
   expect(evaluated('interface Marker {} String(Reflect.isAssignable(type { q: string }, type Marker));')).toBe('true');
-  expect(evaluated('interface Marker {} class C { q: string = "s"; } '
+  expect(evaluated('interface Marker {} value class C { q: string = "s"; } '
     + 'String(Reflect.isAssignable(type C, type Marker));')).toBe('false');
-  expect(evaluated('interface Marker {} class C implements Marker { q: string = "s"; } '
+  expect(evaluated('interface Marker {} value class C implements Marker { q: string = "s"; } '
     + 'String(Reflect.isAssignable(type C, type Marker));')).toBe('true');
 });
 
@@ -183,25 +183,25 @@ test('a class expression carries the same relations as a declaration', () => {
   // [[Structure]]. Expressions are now collected by NODE - an anonymous one has
   // no name to key on - and forced after the declarations, since an expression
   // may extend a declared class.
-  const base = 'class Base { a: uint8 = 1; } interface I { a: uint8 } ';
-  expect(evaluated(`${base} const Anon = class extends Base { c: uint8 = 3; }; `
+  const base = 'value class Base { a: uint8 = 1; } interface I { a: uint8 } ';
+  expect(evaluated(`${base} const Anon = value class extends Base { c: uint8 = 3; }; `
     + 'String(Reflect.isAssignable(type Anon, type Base));')).toBe('true');
   // The NAMED form too: they behaved identically before, and a name-keyed fix
   // would have split them silently.
-  expect(evaluated(`${base} const Named = class N extends Base { c: uint8 = 3; }; `
+  expect(evaluated(`${base} const Named = value class N extends Base { c: uint8 = 3; }; `
     + 'String(Reflect.isAssignable(type Named, type Base));')).toBe('true');
   // And into an object type, the structural rule applied to the same record.
-  expect(evaluated(`${base} const Loose = class { a: uint8 = 1; }; `
+  expect(evaluated(`${base} const Loose = value class { a: uint8 = 1; }; `
     + 'String(Reflect.isAssignable(type Loose, type { a: uint8 }));')).toBe('true');
   // A class expression that declares `implements` satisfies the interface - the
   // arm named only |ClassDeclaration|, which is the same omission one layer up.
-  expect(evaluated(`${base} const Decl = class D implements I { a: uint8 = 1; }; `
+  expect(evaluated(`${base} const Decl = value class D implements I { a: uint8 = 1; }; `
     + 'String(Reflect.isAssignable(type Decl, type I));')).toBe('true');
   // One that declares nothing does not, exactly as for a declaration.
-  expect(evaluated(`${base} const Loose = class { a: uint8 = 1; }; `
+  expect(evaluated(`${base} const Loose = value class { a: uint8 = 1; }; `
     + 'String(Reflect.isAssignable(type Loose, type I));')).toBe('false');
   // And the reverse direction stays refused.
-  expect(evaluated(`${base} const Anon = class extends Base { c: uint8 = 3; }; `
+  expect(evaluated(`${base} const Anon = value class extends Base { c: uint8 = 3; }; `
     + 'String(Reflect.isAssignable(type { a: uint8, c: uint8 }, type Anon));')).toBe('false');
 });
 

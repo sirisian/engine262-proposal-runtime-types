@@ -57,12 +57,12 @@ test('Implementing Interfaces: a class implements an interface', () => {
   // combined with extends
   expect(evaluated('interface A { a: uint32; } class B {} class C extends B implements A { a = (1 := uint32); } typeof C;')).toBe('function');
   // an instance is created normally
-  expect(evaluated('interface A { a: uint32; } class C implements A { a: uint32; } let c = new C(); typeof c;')).toBe('object');
+  expect(evaluated('interface A { a: uint32; } value class C implements A { a: uint32; } let c = new C(); typeof c;')).toBe('object');
   // The interface example: `C` declares `a` and inherits `b`'s host from `B`.
   expect(evaluated('interface A { a: uint32; b(uint32): uint32; } class B {} class C extends B implements A { a: uint32; b(a) { return a; } } const x = new C(); x.a = x.b(5); String(x.a);')).toBe('5');
   // A member is DECLARED if the class or a class it extends declares it: an
   // inherited member satisfies the interface as an own one does.
-  expect(evaluated('interface A { a: uint32; } class B { a: uint32 = 0; } class C extends B implements A { } typeof C;')).toBe('function');
+  expect(evaluated('interface A { a: uint32; } value class B { a: uint32 = 0; } value class C extends B implements A { } typeof C;')).toBe('function');
   // What does NOT declare a member: a constructor assignment, or an assignment on the instance after construction. A
   // class states its members; `this.a = ...` creates a property on one object. Both forms are refused for the same
   // reason, and the field must be declared.
@@ -106,7 +106,7 @@ test('Interfaces: an interface has the members of every type it extends, and is 
   // README: "Where the base is an interface the relation is declared, so a class that implements `B` is an `A`
   // without naming it." This test once pinned the opposite, from when the grammar had no interface heritage
   // clause; the specification's |InterfaceHeritage| and classes/interface-extends.test.mts are the present rule.
-  const AB = "interface A { a: string; } interface B extends A { b: uint8; } class C implements B { a: string = 'x'; b: uint8 = 1; } function f(x: A) { return x.a; } ";
+  const AB = "interface A { a: string; } interface B extends A { b: uint8; } value class C implements B { a: string = 'x'; b: uint8 = 1; } function f(x: A) { return x.a; } ";
   expect(evaluated(`${AB}f(new C());`)).toBe('x');
   expect(evaluated(`${AB}String(Reflect.isAssignable(B, A)) + String(Reflect.isAssignable(A, B));`)).toBe('truefalse');
 });

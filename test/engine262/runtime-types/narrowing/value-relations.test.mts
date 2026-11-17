@@ -172,23 +172,23 @@ test("operator results: narrowed", () => {
 });
 
 test("data destructuring: copy", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";}function f(x:C){const {tag}=x;if(tag is uint8){if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";}function f(x:C){const {tag}=x;if(tag is uint8){if(x.tag is string){}}}");
 });
 
 test("data destructuring: rename", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";}function f(x:C){const {tag:y}=x;if(y is uint8){if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";}function f(x:C){const {tag:y}=x;if(y is uint8){if(x.tag is string){}}}");
 });
 
 test("data destructuring: incoming-type", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";}function f(x:C){if(x.tag is uint8){const {tag}=x;if(tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";}function f(x:C){if(x.tag is uint8){const {tag}=x;if(tag is string){}}}");
 });
 
 test("data destructuring: incoming-exclusion", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";}function f(x:C){if(x.tag!==\"\"){const {tag}=x;if(tag===\"\"){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";}function f(x:C){if(x.tag!==\"\"){const {tag}=x;if(tag===\"\"){}}}");
 });
 
 test("data destructuring: label", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";}function f(x:C){out:{const {tag}=x;if(tag is string)break out;if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";}function f(x:C){out:{const {tag}=x;if(tag is string)break out;if(x.tag is string){}}}");
 });
 
 test("object results: match-all", () => {
@@ -244,7 +244,7 @@ test("operator results: control", () => {
 });
 
 test("data destructuring: control", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";}function f(x:C){if(x is {tag:uint8}){if(x.tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";}function f(x:C){if(x is {tag:uint8}){if(x.tag is string){}}}");
 });
 
 test("object results: control", () => {
@@ -348,11 +348,11 @@ test("operator results: live-body-inference", () => {
 });
 
 test("data destructuring: live-later-getter", () => {
-  evaluated("class C{tag:uint8|string=\"\";get other(){this.tag=\"changed\";return 0;}}function f(x:C){const {tag,other}=x;if(tag is uint8){if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";get other(){this.tag=\"changed\";return 0;}}function f(x:C){const {tag,other}=x;if(tag is uint8){if(x.tag is string){}}}");
 });
 
 test("data destructuring: live-write", () => {
-  evaluated("class C{tag:uint8|string=\"\";}function f(x:C,y:uint8|string){const {tag}=x;x.tag=y;if(tag is uint8){if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";}function f(x:C,y:uint8|string){const {tag}=x;x.tag=y;if(tag is uint8){if(x.tag is string){}}}");
 });
 
 test("data destructuring: live-getter-source", () => {
@@ -384,7 +384,7 @@ test("relation unequal", () => {
 });
 
 test("relation property alias", () => {
-  evaluated("class C{tag:uint8|string=\"\";}function f(a:C,b:C,g:any){if(a.tag===b.tag){g();if(a.tag is uint8){if(b.tag is string){}}}}");
+  evaluated("value class C{tag:uint8|string=\"\";}function f(a:C,b:C,g:any){if(a.tag===b.tag){g();if(a.tag is uint8){if(b.tag is string){}}}}");
 });
 
 test("relation shadow", () => {
@@ -476,23 +476,23 @@ test("operator derived query", () => {
 });
 
 test("destructure nested", () => {
-  expectStaticTypeError("class I{tag:uint8|string=\"\";}class O{inner:I=new I();}function f(x:O){const {inner:{tag}}=x;if(tag is uint8){if(x.inner.tag is string){}}}");
+  expectStaticTypeError("value class I{tag:uint8|string=\"\";}value class O{inner:I=new I();}function f(x:O){const {inner:{tag}}=x;if(tag is uint8){if(x.inner.tag is string){}}}");
 });
 
 test("destructure computed effect", () => {
-  evaluated("class C{tag:uint8|string=\"\";other:string=\"\";}function f(x:C,g:any){const {tag,[g()]:other}=x;if(tag is uint8){if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";other:string=\"\";}function f(x:C,g:any){const {tag,[g()]:other}=x;if(tag is uint8){if(x.tag is string){}}}");
 });
 
 test("destructure default effect", () => {
-  evaluated("class C{tag:uint8|string=\"\";other:string|undefined=undefined;}function f(x:C,g:any){const {tag,other=g()}=x;if(tag is uint8){if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";other:string|undefined=undefined;}function f(x:C,g:any){const {tag,other=g()}=x;if(tag is uint8){if(x.tag is string){}}}");
 });
 
 test("destructure rest effect", () => {
-  evaluated("class C{tag:uint8|string=\"\";}function f(x:C){const {tag,...rest}=x;if(tag is uint8){if(x.tag is string){}}}");
+  evaluated("value class C{tag:uint8|string=\"\";}function f(x:C){const {tag,...rest}=x;if(tag is uint8){if(x.tag is string){}}}");
 });
 
 test("destructure snapshot", () => {
-  expectStaticTypeError("class C{tag:uint8|string=\"\";get other():string{this.tag=\"s\";return \"\";}}function f(x:C){if(x.tag is uint8){const {tag,other}=x;if(tag is string){}}}");
+  expectStaticTypeError("value class C{tag:uint8|string=\"\";get other():string{this.tag=\"s\";return \"\";}}function f(x:C){if(x.tag is uint8){const {tag,other}=x;if(tag is string){}}}");
 });
 
 test("destructure array conservative", () => {
@@ -524,11 +524,11 @@ test("operator equality object", () => {
 });
 
 test("operator effects", () => {
-  evaluated("class C{tag:uint8|string=\"\";operator+(rhs:uint8):boolean{this.tag=\"s\";return true;}}function f(c:C){const {tag}=c;if(c+uint8(1)){if(tag is uint8){if(c.tag is string){}}}}");
+  evaluated("value class C{tag:uint8|string=\"\";operator+(rhs:uint8):boolean{this.tag=\"s\";return true;}}function f(c:C){const {tag}=c;if(c+uint8(1)){if(tag is uint8){if(c.tag is string){}}}}");
 });
 
 test("operator negation effects", () => {
-  evaluated("class C{tag:uint8|string=\"\";operator!():boolean{this.tag=\"s\";return true;}}function f(c:C){const {tag}=c;if(!c){if(tag is uint8){if(c.tag is string){}}}}");
+  evaluated("value class C{tag:uint8|string=\"\";operator!():boolean{this.tag=\"s\";return true;}}function f(c:C){const {tag}=c;if(!c){if(tag is uint8){if(c.tag is string){}}}}");
 });
 
 test("runtime: short circuit: established-truth", () => {
@@ -628,19 +628,19 @@ test("runtime: operator results: compound-does-not-rebind", () => {
 });
 
 test("runtime: operator results: boolean-both", () => {
-  expect(evaluated("class C{b:boolean=false;operator+(x:uint8):boolean{return this.b;}}function f(c:C){return String(c+uint8(1));}const c:C=new C();const first=f(c);c.b=true;first+\",\"+f(c);")).toBe("false,true");
+  expect(evaluated("value class C{b:boolean=false;operator+(x:uint8):boolean{return this.b;}}function f(c:C){return String(c+uint8(1));}const c:C=new C();const first=f(c);c.b=true;first+\",\"+f(c);")).toBe("false,true");
 });
 
 test("runtime: data destructuring: data-copy", () => {
-  expect(evaluated("class C{tag:uint8|string=\"\";}function f(x:C){const {tag}=x;if(tag is uint8)return String(x.tag is string);return \"other\";}const c:C=new C();c.tag=uint8(1);f(c);")).toBe("false");
+  expect(evaluated("value class C{tag:uint8|string=\"\";}function f(x:C){const {tag}=x;if(tag is uint8)return String(x.tag is string);return \"other\";}const c:C=new C();c.tag=uint8(1);f(c);")).toBe("false");
 });
 
 test("runtime: data destructuring: later-getter", () => {
-  expect(evaluated("class C{tag:uint8|string=\"\";get other(){this.tag=\"changed\";return 0;}}function f(x:C){const {tag,other}=x;if(tag is uint8)return String(x.tag is string);return \"other\";}const c:C=new C();c.tag=uint8(1);f(c);")).toBe("true");
+  expect(evaluated("value class C{tag:uint8|string=\"\";get other(){this.tag=\"changed\";return 0;}}function f(x:C){const {tag,other}=x;if(tag is uint8)return String(x.tag is string);return \"other\";}const c:C=new C();c.tag=uint8(1);f(c);")).toBe("true");
 });
 
 test("runtime: data destructuring: source-write", () => {
-  expect(evaluated("class C{tag:uint8|string=\"\";}function f(x:C,y:uint8|string){const {tag}=x;x.tag=y;if(tag is uint8)return String(x.tag is string);return \"other\";}const c:C=new C();c.tag=uint8(1);f(c,\"changed\");")).toBe("true");
+  expect(evaluated("value class C{tag:uint8|string=\"\";}function f(x:C,y:uint8|string){const {tag}=x;x.tag=y;if(tag is uint8)return String(x.tag is string);return \"other\";}const c:C=new C();c.tag=uint8(1);f(c,\"changed\");")).toBe("true");
 });
 
 test("runtime: object results: empty-collection", () => {
@@ -664,7 +664,7 @@ test("runtime: equality result conversion", () => {
 });
 
 test("runtime: overloaded not result", () => {
-  expect(evaluated("class C{flag:boolean=false;constructor(flag:boolean){this.flag=flag;}operator!():boolean{return this.flag;}}function f(c:C){if(!c)return \"yes\";return \"no\";}f(new C(true))+\",\"+f(new C(false));")).toBe("yes,no");
+  expect(evaluated("value class C{flag:boolean=false;constructor(flag:boolean){this.flag=flag;}operator!():boolean{return this.flag;}}function f(c:C){if(!c)return \"yes\";return \"no\";}f(new C(true))+\",\"+f(new C(false));")).toBe("yes,no");
 });
 
 test("relation zero domain", () => {

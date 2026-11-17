@@ -92,7 +92,7 @@ test('an accessor is an abstract member; four other forms are not', () => {
   // The contract an abstract async method would express stays writable.
   expect(ok('abstract class H { m(): Promise.<uint8>; }')).toBe(true);
   // A field is still a field, not a nullary method.
-  expect(ok('class I2 { x: uint8; }')).toBe(true);
+  expect(ok('value class I2 { x: uint8; }')).toBe(true);
 });
 
 test('a concrete class must implement what it inherits with no body', () => {

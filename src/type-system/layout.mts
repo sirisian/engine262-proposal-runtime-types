@@ -163,34 +163,70 @@ function isNullOrUndefinedPrimitive(t: { Kind?: string, Name?: string }): boolea
 }
 
 /**
- * proposal-runtime-types #sec-reference-classes: a class is a REFERENCE TYPE when
- * it is declared `reference`, `sealed` or `abstract`. Its instances are held and
- * passed by reference, so a field of its type is a pointer rather than inline
- * storage, assigning one aliases rather than copies, and it closes a recursive
- * cycle that the inline optional of the "Optional values" rules no longer
- * closes.
+ * proposal-runtime-types #sec-value-classes: a class is a VALUE TYPE CLASS when it is declared
+ * `value`, and only then. The declaration decides; the fields do not. Its conditions - every field
+ * of a value type, a base that is a value class - are what the declaration is checked against,
+ * where it is checked and where it is evaluated, so a class that is declared one and exists is one.
  *
- * `sealed` and `abstract` are here because the main proposal already declares
- * them reference types - "A sealed class is a reference type: its instances are
- * held and passed by reference, which is what lets a `Node`-typed field ... hold
- * any subclass" - and the engine had implemented neither, laying a sealed class
- * out inline and refusing `sealed class Node { next: Node; }` as an infinite
- * layout. `reference` is the modifier an OPEN, non-abstract class needs, since
- * sealing itself to become a reference type refuses the extension it exists to
- * offer.
+ * It was inferred: a typed class every field of which had a value type was a value type class. So
+ * the last annotation added to a class, a field added later, a base, a type argument, and in
+ * `class K extends pick(c)` a value computed while the program ran each decided whether `const b =
+ * a` copied, and each of those edits changed a result somewhere else with no diagnostic.
+ */
+export function IsDeclaredValueClass(t: TypeRecord): boolean {
+  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined) {
+    return false;
+  }
+  const declaration = (t as { Declaration?: ClassShape }).Declaration;
+  return !!declaration?.ClassTail && !!declaration.ClassModifiers?.includes('value');
+}
+
+/**
+ * Whether a class is TYPED (#sec-typed-classes): it is declared `value`, or one of its fields,
+ * declared or inherited, carries a type annotation, and it is not `dynamic`. An evaluated class
+ * says so itself; before that the declarations are walked, and a heritage the checking pass could
+ * not resolve leaves the class's own fields to decide.
+ */
+function isTypedClass(t: TypeRecord, depth = 0): boolean {
+  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined || depth > 1000) {
+    return false;
+  }
+  const evaluated = (t as { Constructor?: { SealInstances?: boolean } }).Constructor;
+  if (evaluated !== undefined && evaluated !== null && typeof evaluated === 'object' && typeof evaluated.SealInstances === 'boolean') {
+    return evaluated.SealInstances;
+  }
+  const declaration = (t as { Declaration?: ClassShape }).Declaration;
+  if (!declaration?.ClassTail || declaration.ClassModifiers?.includes('dynamic')) {
+    return false;
+  }
+  if (declaration.ClassModifiers?.includes('value') || declaresInstanceField(declaration, true)) {
+    return true;
+  }
+  const base = (t as { Base?: TypeRecord }).Base;
+  return base !== undefined && isTypedClass(base, depth + 1);
+}
+
+/**
+ * proposal-runtime-types #sec-typed-classes: a typed class that is not a value type class is a
+ * REFERENCE TYPE. Its instances are held and passed by reference, so a field of its type is a
+ * pointer rather than inline storage, assigning one aliases rather than copies, and a field of its
+ * own type closes a cycle.
  *
- * `dynamic` is deliberately NOT here. It is already excluded everywhere this
- * predicate is consulted, and it makes a different claim - unsealed, no fixed
- * layout - from being reached through a reference.
+ * This is every typed class that is not declared `value`, and a `sealed` or an `abstract` class
+ * whether or not it declares a typed field: "A sealed class is a reference type: its instances are
+ * held and passed by reference, which is what lets a `Node`-typed field ... hold any subclass".
+ *
+ * There was a modifier for it, `reference`, because a class of value-typed fields was a value
+ * unless it said otherwise. A class now says when it IS a value, so the modifier restated the
+ * default and is gone.
+ *
+ * `dynamic` is deliberately NOT here. It is already excluded everywhere this predicate is
+ * consulted, and it makes a different claim - unsealed, no fixed layout - from being reached
+ * through a reference. An untyped class is not here either: nothing declares what it holds.
  */
 export function IsReferenceClass(t: TypeRecord): boolean {
-  // The BASE CHAIN is walked, not just the declaration, because the kind is
-  // inherited: "an abstract class is never a value type and NEITHER IS A
-  // SUBCLASS REACHED THROUGH IT". Reading the modifiers of `t` alone let a
-  // subclass of a reference class be copied at every site that asks, which is
-  // exactly what the polymorphic field exists to prevent - the value stored
-  // into a `Shape | null` field is a `Circle`, and it is `Circle` this is asked
-  // about.
+  // The BASE CHAIN is walked for `sealed` and `abstract`, because the kind is inherited: "an
+  // abstract class is never a value type and NEITHER IS A SUBCLASS REACHED THROUGH IT".
   let current: TypeRecord | undefined = t;
   for (let depth = 0; current !== undefined && depth < 1000; depth += 1) {
     if (current.Kind !== 'nominal' || current.EnumMembers !== undefined) {
@@ -198,13 +234,12 @@ export function IsReferenceClass(t: TypeRecord): boolean {
     }
     const declaration = (current as { Declaration?: { ClassModifiers?: readonly string[] | null } }).Declaration;
     const modifiers = declaration?.ClassModifiers;
-    if (modifiers
-      && (modifiers.includes('reference') || modifiers.includes('sealed') || modifiers.includes('abstract'))) {
+    if (modifiers && (modifiers.includes('sealed') || modifiers.includes('abstract'))) {
       return true;
     }
     current = (current as { Base?: TypeRecord }).Base;
   }
-  return false;
+  return !IsDeclaredValueClass(t) && isTypedClass(t);
 }
 
 type ClassShape = {
@@ -227,57 +262,6 @@ function declaresInstanceField(declaration: ClassShape, typed: boolean): boolean
     }
   }
   return false;
-}
-
-/**
- * Whether a class is built on a base that is not a typed class: an untyped class, a `dynamic` one, a
- * function, or a built-in such as `Error`, `Map` or `HTMLElement`.
- *
- * Such a class is typed and sealed, and it is NOT a value type class (#sec-typed-classes: "applying
- * one to a dynamic or untyped base produces an ordinary reference type" is how the design states it
- * of a mixin, and "`Error` and its subclasses are reference types" of an error). An instance of it
- * holds what the base's constructor made - own properties no declaration names, and for a built-in
- * its internal slots - and a copy runs no constructor (#sec-value-type-copying), so a copy would be
- * its typed fields and nothing else. `class E extends Error { status: uint16; }` was copied at every
- * typed position: the copy had no `message` and no `stack` and was no Error, and two of them with
- * different messages were `===`.
- *
- * At run time the evaluated constructor says so. Before a class is evaluated the declarations are
- * walked: every class between this one and the root inherits the root's fields, so they are typed
- * exactly when the root declares a typed field. A heritage the checking pass could not resolve is
- * UNKNOWN and answers *false* here - the run time, which has the constructor, decides it.
- */
-export function HasUntypedBase(t: TypeRecord): boolean {
-  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined) {
-    return false;
-  }
-  const evaluated = (t as { Constructor?: { UntypedBase?: boolean } }).Constructor;
-  if (evaluated !== undefined && evaluated !== null && typeof evaluated === 'object' && evaluated.UntypedBase === true) {
-    return true;
-  }
-  let current: TypeRecord = t;
-  for (let depth = 0; depth < 1000; depth += 1) {
-    const declaration = (current as { Declaration?: ClassShape }).Declaration;
-    const tail = declaration?.ClassTail;
-    if (current !== t) {
-      if (current.Kind !== 'nominal' || !declaration || !tail || declaration.ClassModifiers?.includes('dynamic')) {
-        return true;
-      }
-      if (declaresInstanceField(declaration, false)) {
-        return true;
-      }
-    }
-    const base = (current as { Base?: TypeRecord }).Base;
-    if (base === undefined) {
-      const heritage = tail?.ClassHeritage;
-      if (heritage !== undefined && heritage !== null && heritage.type !== 'NullLiteral') {
-        return (current as { UnresolvedHeritage?: boolean }).UnresolvedHeritage !== true;
-      }
-      return current !== t && !!declaration && !declaresInstanceField(declaration, true);
-    }
-    current = base;
-  }
-  return true;
 }
 
 /** The layout a reference occupies: this implementation's 64-bit pointer. */
@@ -511,6 +495,13 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
       return !!elements && elements.length > 0
         && elements.every((element) => !element.Rest && valueTypeWalk(element.Type, depth + 1));
     }
+    case 'parameter': {
+      // A type parameter is at least its constraint (#sec-issubtype), so one bounded by `value`,
+      // by `plain`, or by a type that is a value type names only value types. This is what lets
+      // `value class Box<T: type extends value> { value: T; }` state its field's type.
+      const constraint = (t as { Constraint?: TypeRecord }).Constraint;
+      return constraint !== undefined && constraint !== null && valueTypeWalk(constraint, depth + 1);
+    }
     case 'nominal':
       break;
     default:
@@ -519,82 +510,12 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
   if (t.EnumMembers !== undefined) {
     return true;
   }
-  if (IsReferenceClass(t)) {
-    return false;
-  }
-  // A class over an untyped base holds what that base's constructor made, which no
-  // copy can make again.
-  if (HasUntypedBase(t)) {
-    return false;
-  }
-  // Read from the DECLARATION, not from the constructor. This question is asked
-  // by the STATIC constraint check, which runs before a class is evaluated, so a
-  // walk over `Constructor.Fields` found nothing there and refused every value
-  // class - while `Reflect.isAssignable` at run time, where the fields exist,
-  // said the opposite about the same type.
-  const declaration = (t as {
-    Declaration?: {
-      ClassModifiers?: readonly string[] | null,
-      ClassTail?: { ClassBody?: readonly unknown[] | null } | null,
-    },
-  }).Declaration;
-  if (!declaration?.ClassTail || declaration.ClassModifiers?.includes('dynamic')) {
-    return false;
-  }
-  const body = declaration.ClassTail.ClassBody ?? [];
-  // An APPLICATION of a generic class reads its base and its declared field types with its
-  // arguments bound. Before a class is evaluated both are the declaration's, written in its
-  // parameters, so `class Derived extends Middle.<uint8> {}` over `class Middle<T> extends
-  // Base.<T> {}` over `class Base<T> { x: T; }` reached a field of type `T` and was not known
-  // to be a value type.
-  const applied = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
-  const bind = (type: TypeRecord): TypeRecord => (applied && applied.length > 0 && substituteForLayout !== null
-    ? substituteForLayout(type, declaration, applied) : type);
-  let typedFields = 0;
-  for (const element of body) {
-    const el = element as { type?: string, static?: boolean, TypeAnnotation?: unknown };
-    if (el.type !== 'FieldDefinition' || el.static) {
-      continue;
-    }
-    // An UNTYPED instance field disqualifies the class outright, which is the
-    // same rule that denies it a layout.
-    if (el.TypeAnnotation === undefined || el.TypeAnnotation === null) {
-      return false;
-    }
-    typedFields += 1;
-  }
-  if (typedFields === 0) {
-    // #sec-typed-classes: "A class is typed when at least one of its public or
-    // private fields, DECLARED OR INHERITED, carries a type annotation", and a
-    // typed class every field of which has a value type is a value type
-    // class. A subclass that declares no field of its own has its base's
-    // fields and its base's layout, so it is a value type exactly when its
-    // base is. Answering *false* here left `class Q extends B {}` with a
-    // layout and no value semantics: `const c = q; c.x = 4` wrote `q`, and a
-    // `[Q]` bound as a `[B]` - which is accepted, since `Q` adds no storage -
-    // was the same tuple under two names.
-    const base = (t as { Base?: TypeRecord }).Base;
-    return base !== undefined && valueTypeWalk(bind(base), depth + 1);
-  }
-  // The field TYPES are walked, which an earlier revision declined to do for want
-  // of a resolver and called a case "a class is unlikely to reach by accident".
-  // `class R { o: object | null; }` reaches it directly: every field is annotated,
-  // so a declaration-shape test alone calls R a value type class, and R then
-  // compares structurally when it should keep identity. The resolver that makes
-  // plainness answerable statically answers this too.
-  // The layout's fields, or for an evaluated class with no layout the fields it
-  // declares and inherits: a class with a `string` field has none of the first.
-  const fields = ValueFieldsOf(t);
-  if (fields !== null) {
-    return fields.every((field) => valueTypeWalk(field.type, depth + 1));
-  }
-  const declared = staticFieldsOfDeclaration?.(t);
-  if (declared === undefined) {
-    // No resolver wired: fall back to the declaration shape, which is what this
-    // could answer before. Weaker, never wrong in the other direction.
-    return true;
-  }
-  return declared !== null && declared.every((field) => valueTypeWalk(bind(field.type), depth + 1));
+  // #sec-value-classes: the declaration decides, and nothing else is asked. The fields, the base
+  // and the type arguments are what a declared value class is CHECKED against - where it is
+  // checked, and where it is evaluated - so they are not consulted again here, and the answer is
+  // the same before a class is evaluated and after, for a generic class at every argument, and
+  // for a class whose base is computed.
+  return IsDeclaredValueClass(t);
 }
 
 export function IsPlainData(t: TypeRecord): boolean {
@@ -767,8 +688,8 @@ export function LayoutOf(t: TypeRecord): Layout | null {
   if (t.Kind === 'nominal') {
     // A REFERENCE CLASS is reached through a pointer, so a field of its type
     // occupies a reference's width and the field walk below never runs - which
-    // is also what stops the recursion for `reference class Node { next: Node
-    // | null; }`. This mirrors the nullable-union arm at the end of this
+    // is also what stops the recursion for `class Node { next: Node | null; }`,
+    // which is not a value class. This mirrors the nullable-union arm at the end of this
     // function, which already answers a reference's width for the same reason.
     //
     // The RELFECTIVE reading of this is wrong and knowingly so:
@@ -883,8 +804,8 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     //
     // The comment above describes what this used to do for both, and the reason
     // it gave was sound while the optional WAS the indirection that closed a
-    // recursive cycle. It no longer is: a cycle is closed by declaring the class
-    // `reference` (#sec-reference-classes), and the optional pays for storage it
+    // recursive cycle. It no longer is: a cycle is closed by a class that is not a
+    // value class (#sec-value-classes), and the optional pays for storage it
     // does not need. A one-byte payload cost eight bytes and a separate
     // allocation with a header; it now costs two.
     if (IsReferenceClass(payload)) {
@@ -1321,6 +1242,12 @@ export function SoAColumnsOf(element: TypeRecord): SoAColumn[] | null {
   if (element.Kind !== 'nominal') {
     return null;
   }
+  // "`T` must be a value type class": a class that is not one is held by reference, and a
+  // column of references to instances is not the instances split into columns. A typed class
+  // is laid out whether or not it is a value, so the layout alone admitted every one of them.
+  if (!IsDeclaredValueClass(element)) {
+    return null;
+  }
   const constructor = element.Constructor as { InstanceLayout?: ClassLayout | null } | undefined;
   const instance = constructor?.InstanceLayout;
   if (!instance) {
@@ -1372,7 +1299,10 @@ export function IsSharableValueType(t: TypeRecord): boolean {
     }
     return SoAColumnsOf(element) !== null;
   }
-  return LayoutOf(t) !== null;
+  // "The admitted set is the value types". A field of a reference type has a layout, a pointer's
+  // width, so the layout alone admitted `shared C` for a class held by reference - which is
+  // shared already, there being one heap.
+  return IsValueType(t) && LayoutOf(t) !== null;
 }
 
 /**

@@ -327,7 +327,7 @@ test('three same-named methods form one group, not nested sets', () => {
 });
 
 // Class operators, selected by the right operand.
-const OPS = `class V { x: float64; constructor(x: float64) { this.x = x; }
+const OPS = `value class V { x: float64; constructor(x: float64) { this.x = x; }
   operator +.<T: type>(rhs: T): string { return 'g'; }
   operator +.<uint8>(rhs: uint8): 'u' { return 'u'; }
   operator +.<uint.<const N>>(rhs: uint.<N>): string { return 'n' + String(N); } }`;
@@ -364,7 +364,7 @@ test('a case whose where filter does not hold is not applicable; selection moves
 });
 
 test('an extracted method application binds no receiver', () => {
-  expect(evaluated(`class W { tag: string = 'w'; write<T: type>(v: T): string { return 'g'; }
+  expect(evaluated(`value class W { tag: string = 'w'; write<T: type>(v: T): string { return 'g'; }
     write<boolean>(v: boolean): string { return this.tag; } }
     const w = new W(); const m = w.write.<boolean>;
     function callErased(f: any) { try { return f(true); } catch (e) { return 'no receiver'; } }
@@ -419,24 +419,24 @@ test('a case forwards an argument over its own capture through the owner (rule 7
 // A generic class's bare name in its own body (#sec-generics).
 test('the bare name in a type position is the class over its own parameters', () => {
   // `return this` under a bare return type, for a non-default specialization.
-  expect(evaluated(`class B<T: type = string> { v: T; constructor(v: T) { this.v = v; } self(): B { return this; } }
+  expect(evaluated(`value class B<T: type extends value = string> { v: T; constructor(v: T) { this.v = v; } self(): B { return this; } }
     String(Reflect.typeOf(new B.<uint8>((3 := uint8)).self()));`)).toBe('B.<uint.<8>>');
   // With no defaults.
-  expect(evaluated(`class Box<T: type> { v: T; constructor(v: T) { this.v = v; } self(): Box { return this; } }
+  expect(evaluated(`value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } self(): Box { return this; } }
     String(Reflect.typeOf(new Box.<uint8>((3 := uint8)).self()));`)).toBe('Box.<uint.<8>>');
   // A static member, per specialization.
   expect(evaluated(`class S<T: type = string> { static make(): S { return new S(); } }
     String(Reflect.typeOf(S.<uint8>.make())) + '|' + String(Reflect.typeOf(S.make()));`)).toBe('S.<uint.<8>>|S.<string>');
   // A nested function inside a member.
-  expect(evaluated(`class W<T: type = string> { v: T; constructor(v: T) { this.v = v; }
+  expect(evaluated(`value class W<T: type extends value = string> { v: T; constructor(v: T) { this.v = v; }
     get(): string { const f = (): W => this; return String(Reflect.typeOf(f())); } }
     new W.<uint8>((1 := uint8)).get();`)).toBe('W.<uint.<8>>');
 });
 
 test('a same-type parameter is this specialization; outside the body, the defaults', () => {
-  expectEarlyError(`class N<T: type = string> { v: T; constructor(v: T) { this.v = v; } link(o: N): string { return 'ok'; } }
+  expectEarlyError(`value class N<T: type extends value = string> { v: T; constructor(v: T) { this.v = v; } link(o: N): string { return 'ok'; } }
     new N.<uint8>((1 := uint8)).link(new N.<string>('x'));`, 'StaticTypeError');
-  expect(evaluated(`class B<T: type = string> { v: T; constructor(v: T) { this.v = v; } }
+  expect(evaluated(`value class B<T: type extends value = string> { v: T; constructor(v: T) { this.v = v; } }
     function outside(x: B): string { return String(Reflect.typeOf(x)); } outside(new B('s'));`)).toBe('B.<string>');
 });
 
@@ -583,7 +583,7 @@ test('f.<...Rest>() and f.<...Us>() type through a variadic owner\'s contract; a
 test('readAll as method cases: a standalone spread list takes the whole run', () => {
   // Matched standalone at run time; ordered by one label per entry, and
   // matched a position per entry, the run was refused on both counts.
-  expect(evaluated(`class R { k: uint32 = 0; read<T: type>(): T { this.k += 1; return T(this.k); }
+  expect(evaluated(`value class R { k: uint32 = 0; read<T: type>(): T { this.k += 1; return T(this.k); }
     readAll<...Ts: type>(): Ts; readAll<>(): [] { return []; }
     readAll<const T, ...const Rest>(): [T, ...Rest] { const first = this.read.<T>(); return [first, ...this.readAll.<...Rest>()]; } }
     const [a, b, c] = new R().readAll.<uint8, uint16, uint32>();

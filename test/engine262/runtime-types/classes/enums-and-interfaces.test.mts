@@ -119,8 +119,8 @@ test('a typed class is sealed and its prototype frozen', () => {
   // instance half was already right; the prototype half was described in a
   // comment beside it and never performed, so a typed class's prototype was an
   // ordinary mutable object.
-  expect(evaluated('class A { a: uint8; } String(Object.isFrozen(A.prototype));')).toBe('true');
-  expect(evaluated('class A { a: uint8; } String(Object.isExtensible(new A()));')).toBe('false');
+  expect(evaluated('value class A { a: uint8; } String(Object.isFrozen(A.prototype));')).toBe('true');
+  expect(evaluated('value class A { a: uint8; } String(Object.isExtensible(new A()));')).toBe('false');
   // ONE typed field is the condition, not every field: sealing is what makes a
   // field's type a fact about the layout at all, which one field already asks
   // for.
@@ -130,20 +130,20 @@ test('a typed class is sealed and its prototype frozen', () => {
   expect(evaluated('class U { u; } String(Object.isFrozen(U.prototype));')).toBe('false');
   // What sealing does NOT do: a field may still be written, since "a field's
   // type is what constrains it", and the store check still applies.
-  expect(evaluated('class A { a: uint8; } const x = new A(); x.a = 7; String(x.a);')).toBe('7');
+  expect(evaluated('value class A { a: uint8; } const x = new A(); x.a = 7; String(x.a);')).toBe('7');
   // Written through a `let`, because a `const` bound to a CONSTRUCTION now takes
   // that construction's type and `x.a = 300` becomes an Early Error - the
   // store check moving from run time to compile time, which is the checker doing
   // its job. The run-time check is what this line is about, so it is reached
   // through a binding the checker does not type.
-  expect(evaluated('class A { a: uint8; } let x = new A(); try { x.a = 300; "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expect(evaluated('value class A { a: uint8; } let x = new A(); try { x.a = 300; "no"; } catch (e) { "caught"; }')).toBe('caught');
   // ...and the same store through a typed binding is refused EARLY.
-  expect(ok('class A { a: uint8; } const x = new A(); x.a = 300;')).toBe(false);
+  expect(ok('value class A { a: uint8; } const x = new A(); x.a = 300;')).toBe(false);
   // Methods and inheritance are undisturbed, and a subclass freezes too.
-  expect(evaluated('class A { a: uint8; m() { return 1; } } String(new A().m());')).toBe('1');
-  expect(evaluated('class B { a: uint8; } class S extends B { b: uint8; } String(Object.isFrozen(S.prototype)) + "/" + String(Object.isFrozen(B.prototype));')).toBe('true/true');
+  expect(evaluated('value class A { a: uint8; m() { return 1; } } String(new A().m());')).toBe('1');
+  expect(evaluated('value class B { a: uint8; } value class S extends B { b: uint8; } String(Object.isFrozen(S.prototype)) + "/" + String(Object.isFrozen(B.prototype));')).toBe('true/true');
   // A program cannot add to the prototype afterwards, which is the point.
-  expect(evaluated('class A { a: uint8; } try { Object.defineProperty(A.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expect(evaluated('value class A { a: uint8; } try { Object.defineProperty(A.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
 
 test('a partial class still extends a typed class', () => {
@@ -155,9 +155,9 @@ test('a partial class still extends a typed class', () => {
   // after the fact; a partial declaration is part of how the class is declared,
   // spread across modules. The merge therefore lifts the freeze and restores
   // it, evaluating no user code in between.
-  expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } String(new C().m());')).toBe('1');
-  expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } String(Object.isFrozen(C.prototype));')).toBe('true');
-  expect(evaluated('class C { a: uint8; } partial class C { m() { return 1; } } try { Object.defineProperty(C.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expect(evaluated('value class C { a: uint8; } partial class C { m() { return 1; } } String(new C().m());')).toBe('1');
+  expect(evaluated('value class C { a: uint8; } partial class C { m() { return 1; } } String(Object.isFrozen(C.prototype));')).toBe('true');
+  expect(evaluated('value class C { a: uint8; } partial class C { m() { return 1; } } try { Object.defineProperty(C.prototype, "z", { value: 1 }); "no"; } catch (e) { "caught"; }')).toBe('caught');
 });
 
 test('the two decorator proposals are mutually exclusive', () => {
@@ -662,10 +662,10 @@ test('an enumerator keys a Map and a Set by its own identity', () => {
 });
 
 test('an enum types a class field, and lays out as its underlying type', () => {
-  expect(evaluated('enum C { Zero, One } class K { c: C = C.One; } String(new K().c === 1);')).toBe('true');
+  expect(evaluated('enum C { Zero, One } value class K { c: C = C.One; } String(new K().c === 1);')).toBe('true');
   // #sec-memory-layout: the field costs what the underlying type costs.
-  expect(evaluated('enum C: uint8 { Zero } class K { c: C = C.Zero; } String((type K).byteLength);')).toBe('1');
-  expect(evaluated('enum C: uint32 { Zero } class K { c: C = C.Zero; } String((type K).byteLength);')).toBe('4');
+  expect(evaluated('enum C: uint8 { Zero } value class K { c: C = C.Zero; } String((type K).byteLength);')).toBe('1');
+  expect(evaluated('enum C: uint32 { Zero } value class K { c: C = C.Zero; } String((type K).byteLength);')).toBe('4');
 });
 
 test('an enum types an array element, and a bare literal does not reach it', () => {

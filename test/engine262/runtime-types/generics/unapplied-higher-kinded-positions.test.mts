@@ -17,6 +17,6 @@ test('is and := targets and alias right-hand sides are type positions', () => {
 });
 
 test('forwarding to a higher-kinded slot and an applied use stay valid', () => {
-  expect(evaluated('class Box<T: type> { v: T; } function g<G<_>: type>() {} function f<F<_>: type>() { g.<F>(); } f.<Box>(); \'ok\';')).toBe('ok');
+  expect(evaluated('value class Box<T: type extends value> { v: T; } function g<G<_>: type>() {} function f<F<_>: type>() { g.<F>(); } f.<Box>(); \'ok\';')).toBe('ok');
   expect(evaluated('function f<F<_>: type>() { type A = F.<uint8>; } \'ok\';')).toBe('ok');
 });

@@ -78,7 +78,7 @@ test('an INTERFACE is reached; a class instance type is not', () => {
   // properties this form reads, and a class instance type does not.
   expect(evaluated('interface I { n: uint8; } type A = I["n"]; String(A === uint8);')).toBe('true');
   // Early, since the checker reads the annotation before anything runs.
-  expectError('class C { n: uint8 = 1; } type A = C["n"];');
+  expectError('value class C { n: uint8 = 1; } type A = C["n"];');
 });
 
 test('IndexedTypeOf distributes over a union operand and a union key', () => {

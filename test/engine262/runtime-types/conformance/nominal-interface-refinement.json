@@ -37,7 +37,7 @@
     },
     {
       "name": "ordinary generic arguments remain invariant",
-      "source": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{value:T;constructor(v:T){this.value=v;}get():T{return this.value;}}String(Reflect.isAssignable(type E.<uint8>,Has.<uint8>))+\"|\"+String(Reflect.isAssignable(type E.<uint8>,Has.<string>));",
+      "source": "interface Has<T:type>{get():T;} value class E<T:type extends value> implements Has.<T>{value:T;constructor(v:T){this.value=v;}get():T{return this.value;}}String(Reflect.isAssignable(type E.<uint8>,Has.<uint8>))+\"|\"+String(Reflect.isAssignable(type E.<uint8>,Has.<string>));",
       "value": "true|false"
     },
     {

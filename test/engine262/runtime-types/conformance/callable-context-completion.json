@@ -948,7 +948,7 @@
     },
     {
       "name": "class receiver string consumer string",
-      "source": "class C{value:string=\"s\";outer(flag:boolean,other:boolean,subject,kind:string){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "source": "value class C{value:string=\"s\";outer(flag:boolean,other:boolean,subject,kind:string){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -956,7 +956,7 @@
     },
     {
       "name": "class receiver string consumer number",
-      "source": "class C{value:string=\"s\";outer(flag:boolean,other:boolean,subject,kind:string){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "source": "value class C{value:string=\"s\";outer(flag:boolean,other:boolean,subject,kind:string){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -992,7 +992,7 @@
     },
     {
       "name": "class receiver number consumer string",
-      "source": "class C{value:number=1;outer(flag:boolean,other:boolean,subject,kind:string){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "source": "value class C{value:number=1;outer(flag:boolean,other:boolean,subject,kind:string){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1006,7 +1006,7 @@
     },
     {
       "name": "class receiver number consumer number",
-      "source": "class C{value:number=1;outer(flag:boolean,other:boolean,subject,kind:string){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "source": "value class C{value:number=1;outer(flag:boolean,other:boolean,subject,kind:string){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=this.value;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1141,7 +1141,7 @@
     },
     {
       "name": "same names independent receivers",
-      "source": "class A{value:string=\"s\";read(){const t=this.value;return t;}}class B{value:number=1;read(){const t=this.value;return t;}}const a:string=new A().read();const b:number=new B().read();a+String(b);",
+      "source": "value class A{value:string=\"s\";read(){const t=this.value;return t;}}value class B{value:number=1;read(){const t=this.value;return t;}}const a:string=new A().read();const b:number=new B().read();a+String(b);",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

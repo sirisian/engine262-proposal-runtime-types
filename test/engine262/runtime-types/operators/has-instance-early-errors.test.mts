@@ -24,7 +24,7 @@ test.each([
   ],
   [
     "edge: inherited generic unused",
-    "class B<T: type>{[Symbol.hasInstance]:T;}class C extends B.<number>{}function f(x:C){({}) instanceof x;}"
+    "value class B<T: type extends value>{[Symbol.hasInstance]:T;}value class C extends B.<number>{}function f(x:C){({}) instanceof x;}"
   ],
   [
     "edge: typed hook method contract unused",

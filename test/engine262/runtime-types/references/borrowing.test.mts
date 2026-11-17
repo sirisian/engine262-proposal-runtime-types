@@ -292,7 +292,7 @@ test('a built-in function boundary decays, which covers the reflective calls', (
 });
 
 // -- #sec-reference-liveness: the two-tier model ------------------------------
-const soa = 'class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
+const soa = 'value class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
 
 test('the loop rule refuses a length change at the operation', () => {
   // every container a ref loop can iterate, refused where it happens
@@ -311,7 +311,7 @@ test('a standalone reference survives growth that does not relocate', () => {
   // The push fit in the existing allocation, so nothing moved
   expect(evaluated(`${soa} const ref e = s[0]; s.push({ a: 2, b: 2.5 }); String(e.a);`)).toBe('1');
   // and a capacity reserved up front is exactly how a program avoids the move
-  expect(evaluated('class P { a: uint8; } const s = SoA.withCapacity.<P>(8); s.push({ a: 1 }); const ref e = s[0]; s.push({ a: 2 }); String(e.a);')).toBe('1');
+  expect(evaluated('value class P { a: uint8; } const s = SoA.withCapacity.<P>(8); s.push({ a: 1 }); const ref e = s[0]; s.push({ a: 2 }); String(e.a);')).toBe('1');
 });
 
 test('relocation invalidates a standalone reference, caught at the next use', () => {
@@ -321,7 +321,7 @@ test('relocation invalidates a standalone reference, caught at the next use', ()
   expectThrownKind(`${soa} const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2.5 }); e.a = 7;`, 'TypeError');
   // the capacity operations participate, which is the case no length rule sees
   expectThrownKind(`${soa} const ref e = s[0]; s.reserve(64); e.a;`, 'TypeError');
-  expectThrownKind('class P { a: uint8; } const s = SoA.withCapacity.<P>(2); s.push({ a: 1 }); const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2 }); e.a;', 'TypeError');
+  expectThrownKind('value class P { a: uint8; } const s = SoA.withCapacity.<P>(2); s.push({ a: 1 }); const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2 }); e.a;', 'TypeError');
   // a reserve inside a loop is not a length change, so the loop rule does not
   // fire - the relocation rule refuses the loop's own reference at its next use
   expectThrownKind(`${soa} s.push({ a: 2, b: 2 }); for (const ref p of s) { s.reserve(64); p.a; }`, 'TypeError');
@@ -417,7 +417,7 @@ test('borrowing a member does not require borrowing the object', () => {
 });
 
 // -- #sec-soa-references: one borrow representation --------------------------
-const soaP = 'class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
+const soaP = 'value class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 }); ';
 
 test('a borrow of an SoA element is a reference like any other', () => {
   // the ref ARGUMENT form, which previously refused an SoA element outright
@@ -432,7 +432,7 @@ test('a borrow of an SoA element is a reference like any other', () => {
 test('the callback idiom composes over an SoA', () => {
   // A `zip` over the container the value-type story exists for
   expect(evaluated(
-    'class P { x: uint8; } const s1 = new SoA.<P>(); s1.push({ x: 1 });'
+    'value class P { x: uint8; } const s1 = new SoA.<P>(); s1.push({ x: 1 });'
     + ' const s2 = new SoA.<P>(); s2.push({ x: 10 });'
     + ' function zip(a, b, cb) { for (let i = 0; i < a.length; i++) cb(ref a[i], ref b[i]); }'
     + ' zip(s1, s2, (ref p, ref q) => { p.x = p.x + q.x; }); String(s1[0].x);',
@@ -445,7 +445,7 @@ test('an SoA borrow decays to a gathered copy at a value boundary', () => {
   // while a parameter ANNOTATED as a reference type receives the borrow, which
   // is what makes one function work over either storage layout
   expect(evaluated(
-    'class P { x: float32; } function move(p: ref P) { p.x = Number(p.x) + 1; }'
+    'value class P { x: float32; } function move(p: ref P) { p.x = Number(p.x) + 1; }'
     + ' const s = new SoA.<P, 1>(); const seed = new P(); seed.x = 10; s[0] = seed;'
     + ' move(ref s[0]); String(Number(s[0].x));',
   )).toBe('11');
@@ -589,7 +589,7 @@ test('any callee shape that returns a borrow may be assigned through', () => {
   // a property borrow, a typed element, and a whole SoA element
   expect(evaluated('function fx(o) { return ref o.x; } let o = { x: 1 }; fx(o) = 5; String(o.x);')).toBe('5');
   expect(evaluated('function ft(t) { return ref t[0]; } const a: [].<uint32> = [1]; ft(a) = 9; String(a[0]);')).toBe('9');
-  expect(evaluated('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+  expect(evaluated('value class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
     + ' function elem(c) { return ref c[0]; } elem(s) = { a: 4, b: 4.5 }; String(s[0].a);')).toBe('4');
 });
 
@@ -620,14 +620,14 @@ test('assigning through a call obeys the liveness and store rules', () => {
   // the store is checked against the referent's type
   expectThrown('function ft(t) { return ref t[0]; } const a: [].<uint8> = [1]; ft(a) = 300;');
   // and an invalidated borrow refuses the store
-  expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+  expectThrownKind('value class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
     + ' const ref e = s[0]; for (let i = 0; i < 8; i++) s.push({ a: 2, b: 2 }); e.a = 1;', 'TypeError');
   expectThrownKind('const a: [].<uint32> = [1]; let ref b = a[0]; a.reserve(64); b = 5;', 'TypeError');
   // a borrow of an element that has been removed refuses the store
-  expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+  expectThrownKind('value class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
     + ' s.push({ a: 5, b: 5 }); const ref e = s[1]; s.pop(); e.a = 3;', 'TypeError');
   // and the loop rule still fires when the body resizes the container
-  expectThrownKind('class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
+  expectThrownKind('value class P { a: uint8; b: float32; } const s = new SoA.<P>(); s.push({ a: 1, b: 1.5 });'
     + ' function elem(c) { return ref c[0]; }'
     + ' for (const ref p of s) { elem(s) = { a: 2, b: 2 }; s.push({ a: 9, b: 9 }); }', 'TypeError');
 });
@@ -729,7 +729,7 @@ test('a write through a ref binding is refused exactly as the direct write is', 
   expect(evaluated('let a: uint8 = 0; let ref b = a; b = 7; String(a) + " " + String(a is uint8);')).toBe('7 true');
   // The same for the other things a ref may alias.
   expectStaticTypeError('const arr: [4].<uint8> = new [4].<uint8>(); let ref e = arr[0]; e = 300;');
-  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); let ref f = c.v; f = 300;');
+  expectStaticTypeError('value class C { v: uint8 = 0; } const c = new C(); let ref f = c.v; f = 300;');
   expectStaticTypeError('function f(ref x: uint8) { x = 300; } let a: uint8 = 0; f(ref a);');
   // A run-time value the checker cannot see is refused at the boundary.
   expectThrown('function g() { return 300; } let a: uint8 = 0; let ref b = a; b = g();');
@@ -744,7 +744,7 @@ test('a ref binding has the Static Type of the location it aliases', () => {
   expectStaticTypeError('let a: uint8 = 0; let ref b = a; let s: string = b;');
   expectStaticTypeError('let a: uint8 = 0; const ref b = a; let s: string = b;');
   expectStaticTypeError('const arr: [4].<uint8> = new [4].<uint8>(); let ref e = arr[0]; let s: string = e;');
-  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); let ref f = c.v; let s: string = f;');
+  expectStaticTypeError('value class C { v: uint8 = 0; } const c = new C(); let ref f = c.v; let s: string = f;');
   // The forms that already worked, unchanged.
   expectStaticTypeError('function f(ref x: uint8) { let s: string = x; } let a: uint8 = 0; f(ref a);');
   expectStaticTypeError('let a: uint8 = 0; let ref b: uint8 = a; let s: string = b;');

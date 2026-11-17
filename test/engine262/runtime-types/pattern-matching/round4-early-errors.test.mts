@@ -25,7 +25,7 @@ test.each([
 test.each([
   "const f: (x: uint8) => uint8 = (x: uint8): uint8 => x; if (typeof f === 'function') {}",
   "const f: (x: uint8) => uint8 = (x: uint8): uint8 => x; if (typeof f === 'object') {}",
-  "class K { a: uint8 = 1; } const k: K = new K(); if (typeof k === 'function') {}",
+  "value class K { a: uint8 = 1; } const k: K = new K(); if (typeof k === 'function') {}",
 ])('a typeof test on a function type or typed class instance that cannot go both ways is refused: %s', expectStaticTypeError);
 
 test.each([

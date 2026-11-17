@@ -3,7 +3,7 @@ import { evaluated, expectThrown, expectStaticTypeError } from '../harness.mts';
 
 for (const field of ['x: C;', '#x: C;', 'x: [2].<C>;']) {
   test(`an unused class cannot contain an inline cycle through ${field}`, () => {
-    expectStaticTypeError(`function unused() { class C { ${field} } }`);
+    expectStaticTypeError(`function unused() { value class C { ${field} } }`);
   });
 }
 
@@ -17,17 +17,17 @@ test('a dynamic-array edge ends inline recursion, a nullable one no longer does'
   // (#sec-optional-values), so it no longer ends the recursion; `reference` is
   // where the indirection moved to. A dynamic-length array still ends it, its
   // elements living in storage held elsewhere.
-  expectThrown('class C { x: C | null; } String(new C().x);', 'contains itself');
-  expect(evaluated('reference class C { x: C | null; } String(new C().x);')).toBe('null');
+  expectThrown('value class C { x: C | null; } String(new C().x);', 'contains itself');
+  expect(evaluated('class C { x: C | null; } String(new C().x);')).toBe('null');
   expect(evaluated('class C { x: [].<C> = []; } String(new C().x.length);')).toBe('0');
 });
 
 test('finite nested classes and static fields are not inline cycles', () => {
-  expect(evaluated('class P { x: uint8 = 2; } class C { p: P = new P(); } String(new C().p.x);')).toBe('2');
-  expect(evaluated(`function unused() { class C { static x: C; n: uint8 = 2; } } 'ok';`)).toBe('ok');
+  expect(evaluated('value class P { x: uint8 = 2; } value class C { p: P = new P(); } String(new C().p.x);')).toBe('2');
+  expect(evaluated(`function unused() { value class C { static x: C; n: uint8 = 2; } } 'ok';`)).toBe('ok');
 });
 
 test('generic and dynamic class layouts retain their resolution stage', () => {
-  expect(evaluated('class C<T: type> { x: T; } String(new C.<uint8>().x);')).toBe('0');
+  expect(evaluated('value class C<T: type extends value> { x: T; } String(new C.<uint8>().x);')).toBe('0');
   expect(evaluated('dynamic class C { x: C | null = null; } String(new C().x);')).toBe('null');
 });

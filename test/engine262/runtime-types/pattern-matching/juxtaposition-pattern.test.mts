@@ -25,7 +25,7 @@ import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.m
  * the bracketed spellings do today so a later decision starts from fact.
  */
 
-const P = 'class P { x: uint8 = (1 := uint8); y: uint8 = (2 := uint8); } let v: any = new P(); ';
+const P = 'value class P { x: uint8 = (1 := uint8); y: uint8 = (2 := uint8); } let v: any = new P(); ';
 
 test('a juxtaposition binds through its shape', () => {
   expect(evaluated(`${P}let r = match (v) { when P { x: let n }: n; default: 0; }; String(r);`)).toBe('1');
@@ -39,7 +39,7 @@ test('a juxtaposition binds through its shape', () => {
 test('the head is a membership test, which is the point of writing it', () => {
   // A value of the same SHAPE but a different type does not match. Without the
   // head's test this would be indistinguishable from a bare object pattern.
-  expect(evaluated('class P { x: uint8 = (1 := uint8); } class Q { x: uint8 = (1 := uint8); } '
+  expect(evaluated('value class P { x: uint8 = (1 := uint8); } value class Q { x: uint8 = (1 := uint8); } '
     + 'let v: any = new Q(); let r = match (v) { when P { x: let n }: "y"; default: "n"; }; r;')).toBe('n');
 });
 
@@ -49,7 +49,7 @@ test('`P {}` agrees with `P`, which is the overlap rule holding', () => {
 });
 
 test('every spelling of a MatchNamePattern heads it', () => {
-  expect(evaluated('const Ns = { P: class { x: uint8 = (1 := uint8); } }; let v: any = new Ns.P(); '
+  expect(evaluated('const Ns = { P: value class { x: uint8 = (1 := uint8); } }; let v: any = new Ns.P(); '
     + 'let r = match (v) { when Ns.P { x: let n }: n; default: 0; }; String(r);')).toBe('1');
   expect(evaluated('class Box<T: type> { v: T | null = null; } let b: any = new Box.<uint8>(); '
     + 'let r = match (b) { when Box.<uint8> { v: _ }: "y"; default: "n"; }; r;')).toBe('y');
@@ -80,8 +80,8 @@ test('a head that denotes a value is the type error the clause states', () => {
 test('a head that denotes a type stays legal, however it is named', () => {
   // "Resolves to a binding" is read as a binding that does not denote a type:
   // every name resolves to some binding, a class declaration's included.
-  expect(evaluated('class P { a: uint8 = 1; } const v: P = new P(); String(match (v) { when P { a: let a }: a; default: 0; });')).toBe('1');
-  expect(evaluated('class P { a: uint8 = 1; } const Q = P; const v: P = new P(); String(match (v) { when Q { a: let a }: a; default: 0; });')).toBe('1');
+  expect(evaluated('value class P { a: uint8 = 1; } const v: P = new P(); String(match (v) { when P { a: let a }: a; default: 0; });')).toBe('1');
+  expect(evaluated('value class P { a: uint8 = 1; } const Q = P; const v: P = new P(); String(match (v) { when Q { a: let a }: a; default: 0; });')).toBe('1');
 });
 
 test('it composes with the rest of the pattern grammar', () => {

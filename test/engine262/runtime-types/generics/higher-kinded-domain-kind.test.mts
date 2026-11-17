@@ -19,6 +19,6 @@ test('a higher-kinded parameter whose domain is not written `type` is a type err
 });
 
 test('a higher-kinded parameter written `W<_>: type` is unchanged', () => {
-  expect(evaluated('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } '
+  expect(evaluated('value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } } '
     + 'function f<W<_>: type>(x: W.<uint8>): W.<uint8> { return x; } String(f.<Box>(new Box.<uint8>(2)).v);')).toBe('2');
 });

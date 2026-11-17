@@ -1158,7 +1158,7 @@
     {
       "name": "alias-forward-nominal",
       "modules": {
-        "main": "type A={c:C};class C{x:uint8=1;}const a:A={c:new C()};if(a.c.x!==1)throw new Error(\"nominal\");const raw:any={c:{x:1}};let caught=false;try{const b:A=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"admission\");"
+        "main": "type A={c:C};value class C{x:uint8=1;}const a:A={c:new C()};if(a.c.x!==1)throw new Error(\"nominal\");const raw:any={c:{x:1}};let caught=false;try{const b:A=raw;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"admission\");"
       },
       "script": true,
       "expected": {

@@ -157,7 +157,7 @@ test('only a class method or a function declaration may be a bodyless owner', ()
 });
 
 test('class operators: cases are declarations; a binary use selects', () => {
-  const V = `class V { x: float64; constructor(x: float64) { this.x = x; }
+  const V = `value class V { x: float64; constructor(x: float64) { this.x = x; }
     operator +.<T: type>(rhs: T): string { return 'g'; }
     operator +.<uint8>(rhs: uint8): string { return 'u'; } }`;
   expect(evaluated(`${V} 'declared';`)).toBe('declared');
@@ -170,7 +170,7 @@ test('class operators: cases are declarations; a binary use selects', () => {
   expectThrown(`class U { operator +.<T: type>(rhs: T): string { return 'g'; }
     operator +.<uint8>(rhs: uint8): number { return 1; } }`, 'number is not a subtype of it');
   // Operators without cases are untouched.
-  expect(evaluated(`class W { x: float64; constructor(x: float64) { this.x = x; }
+  expect(evaluated(`value class W { x: float64; constructor(x: float64) { this.x = x; }
     operator +(rhs: W): string { return 'plain'; } } String(new W(1) + new W(2));`)).toBe('plain');
 });
 

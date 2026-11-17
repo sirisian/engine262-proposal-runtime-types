@@ -12,7 +12,7 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
  * position, and not where explicit arguments bind a generic function.
  */
 
-const BOX = 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } ';
+const BOX = 'value class Box<T: type extends value> { v: T; constructor(v: T) { this.v = v; } } ';
 
 test('a higher-kinded parameter named unapplied is refused in its declaration', () => {
   expectStaticTypeError('function f<W<_>: type>(x: W) { return x; }');

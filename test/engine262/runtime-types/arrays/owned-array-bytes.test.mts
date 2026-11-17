@@ -34,7 +34,7 @@ test('the values are there, and are the bytes', () => {
 });
 
 test('a window may now be taken over owned storage', () => {
-  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+  expect(evaluated(`value class V { x: uint8 = 0; y: uint8 = 0; }
     const buf: [8].<uint8>; const s = Span.<V>(buf.buffer); String(s.length);`)).toBe('4');
 });
 
@@ -43,8 +43,8 @@ test('the worked example runs over an owned array', () => {
   // leaves `buffer[3]` at 10. `.buffer` is written explicitly here - the reinterpreting COERCION
   // `const s: Span.<Header> = buffer` is a separate question.
   expect(evaluated(`
-    @packed class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
-    @packed class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }
+    @packed value class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
+    @packed value class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }
     const buffer: [100].<uint8>;
     const ref header = Span.<Header>(buffer.buffer)[0];
     header.c.a = 10;
@@ -69,36 +69,36 @@ test('a dynamic array still reports the limit', () => {
  */
 
 test('a fixed owned array may be viewed directly', () => {
-  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+  expect(evaluated(`value class V { x: uint8 = 0; y: uint8 = 0; }
     const buf: [8].<uint8>; String(Span.<V>(buf).length);`)).toBe('4');
   // The same window either way.
-  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+  expect(evaluated(`value class V { x: uint8 = 0; y: uint8 = 0; }
     const buf: [8].<uint8>; String(Span.<V>(buf.buffer).length);`)).toBe('4');
   // And it is a window over the array, not a copy of it.
-  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+  expect(evaluated(`value class V { x: uint8 = 0; y: uint8 = 0; }
     const buf: [8].<uint8>; const s = Span.<V>(buf);
     const ref e = s[0]; e.x = 7; String(buf[0]);`)).toBe('7');
-  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+  expect(evaluated(`value class V { x: uint8 = 0; y: uint8 = 0; }
     const buf: [8].<uint8>; String(Span.<V>(buf, 2).length);`)).toBe('3');
 });
 
 test('a dynamic array is still not a view source', () => {
-  expectThrown('class V { x: uint8 = 0; y: uint8 = 0; } let buf: [].<uint8> = [1,2,3,4]; Span.<V>(buf);',
+  expectThrown('value class V { x: uint8 = 0; y: uint8 = 0; } let buf: [].<uint8> = [1,2,3,4]; Span.<V>(buf);',
     'a view needs an ArrayBuffer');
 });
 
 test('the coercion still refuses to reinterpret', () => {
-  expectThrown('class V { x: uint8 = 0; y: uint8 = 0; } const buf: [8].<uint8>; const s: Span.<V> = buf;',
+  expectThrown('value class V { x: uint8 = 0; y: uint8 = 0; } const buf: [8].<uint8>; const s: Span.<V> = buf;',
     'is not assignable to');
   // Same element type re-describes nothing and is unaffected.
-  expect(evaluated('class A { x: uint8 = 1; } const p: [4].<A>; const s: Span.<A> = p; String(s.length);')).toBe('4');
+  expect(evaluated('value class A { x: uint8 = 1; } const p: [4].<A>; const s: Span.<A> = p; String(s.length);')).toBe('4');
 });
 
 test('a view holds whole elements, and the remainder is not one', () => {
   // Documented in `sec-array-views` rather than left to be discovered: the count
   // is the floor of the available bytes over the stride, measured from
   // `byteOffset`, so a trailing partial element is simply not in the view.
-  const V = 'class V { x: uint8 = 0; y: uint8 = 0; } ';
+  const V = 'value class V { x: uint8 = 0; y: uint8 = 0; } ';
   expect(evaluated(`${V}const buf: [7].<uint8>; String(Span.<V>(buf).length);`)).toBe('3');
   expect(evaluated(`${V}const buf: [8].<uint8>; String(Span.<V>(buf).length);`)).toBe('4');
   expect(evaluated(`${V}const buf: [9].<uint8>; String(Span.<V>(buf).length);`)).toBe('4');

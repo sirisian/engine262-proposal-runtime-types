@@ -32,8 +32,8 @@ test('the declared field must not read `undefined`', () => {
 });
 
 test('`return this` and bare `return` survive', () => {
-  expect(evaluated('class C { z: uint8 = 7; constructor() { return this; } } String((new C()).z);')).toBe('7');
-  expect(evaluated('class C { z: uint8 = 7; constructor() { if (false) { return; } } }'
+  expect(evaluated('value class C { z: uint8 = 7; constructor() { return this; } } String((new C()).z);')).toBe('7');
+  expect(evaluated('value class C { z: uint8 = 7; constructor() { if (false) { return; } } }'
     + ' String((new C()).z);')).toBe('7');
 });
 
@@ -59,7 +59,7 @@ test('the side-effecting early exit is the pattern this costs', () => {
     + ' class C { x: uint8 = 1; constructor() { if (bad) { return log("bad"); } } }');
   // the replacement runs
   expect(evaluated('let bad = true; function log(s) { return s; }'
-    + ' class C { x: uint8 = 1; constructor() { if (bad) { log("bad"); return; } } }'
+    + ' value class C { x: uint8 = 1; constructor() { if (bad) { log("bad"); return; } } }'
     + ' String((new C()).x);')).toBe('1');
 });
 
@@ -89,12 +89,12 @@ test('the refusal does not over-reach to the neighbouring member forms', () => {
   // A scoped refusal is exactly the kind of rule that catches its neighbours.
   // A method and a getter keep their return annotations; an object literal's
   // method NAMED `constructor` is an ordinary method and keeps its too.
-  expect(evaluated('class C { x: uint8 = 1; m(): uint8 { return 1; } } String((new C()).m());')).toBe('1');
-  expect(evaluated('class C { x: uint8 = 1; get g(): uint8 { return 2; } } String((new C()).g);')).toBe('2');
+  expect(evaluated('value class C { x: uint8 = 1; m(): uint8 { return 1; } } String((new C()).m());')).toBe('1');
+  expect(evaluated('value class C { x: uint8 = 1; get g(): uint8 { return 2; } } String((new C()).g);')).toBe('2');
   expect(evaluated('const o = { constructor(): uint8 { return 3; } }; String(o.constructor());')).toBe('3');
   // a setter declares no return type of its own accord (#sec-published-return-types),
   // and still works
-  expect(evaluated('class C { x: uint8 = 1; set s(v: uint8) { this.x = v; } }'
+  expect(evaluated('value class C { x: uint8 = 1; set s(v: uint8) { this.x = v; } }'
     + ' const c = new C(); c.s = 5; String(c.x);')).toBe('5');
 });
 
@@ -102,10 +102,10 @@ test('the guarantee: `new C() instanceof C` holds, and so does the private brand
   // The two invariants this broke, restored by construction rather than by a
   // check at `new`.
   const shapes = [
-    'class C { x: uint8 = 1; }',
-    'class C { x: uint8 = 1; constructor() {} }',
-    'class C { x: uint8 = 1; constructor(a) { this.x = a; } }',
-    'class C { x: uint8 = 1; constructor() { return this; } }',
+    'value class C { x: uint8 = 1; }',
+    'value class C { x: uint8 = 1; constructor() {} }',
+    'value class C { x: uint8 = 1; constructor(a) { this.x = a; } }',
+    'value class C { x: uint8 = 1; constructor() { return this; } }',
   ];
   for (const shape of shapes) {
     expect(evaluated(`${shape} String(new C(1) instanceof C);`), shape).toBe('true');
@@ -125,7 +125,7 @@ test('only a SYNTACTIC `this` is exempt, even where the operand can only be `thi
   //
   // The replacement is the same as everywhere else and costs one line.
   early('class C { x: uint8 = 1; constructor() { return 1 === 1 ? this : this; } }');
-  expect(evaluated('class C { x: uint8 = 1; constructor() { if (1 === 1) { return; } } }'
+  expect(evaluated('value class C { x: uint8 = 1; constructor() { if (1 === 1) { return; } } }'
     + ' String((new C()) instanceof C);')).toBe('true');
 });
 
@@ -159,8 +159,8 @@ test('`super()` is unaffected - a base constructor yields a not-yet-`B`', () => 
   // The rule must not reach the ordinary case it resembles. During `super()`
   // the object under construction is legitimately not yet a `B`, and nothing
   // about that is a `return`.
-  expect(evaluated('class A { a: uint8 = 1; constructor(v) { this.a = v; } }'
-    + ' class B extends A { b: uint8 = 2; constructor() { super(4); } }'
+  expect(evaluated('value class A { a: uint8 = 1; constructor(v) { this.a = v; } }'
+    + ' value class B extends A { b: uint8 = 2; constructor() { super(4); } }'
     + ' const x = new B(); String(x.a + ":" + x.b + ":" + (x instanceof B));')).toBe('4:2:true');
 });
 
@@ -169,13 +169,13 @@ test('a class always reflects exactly one constructor signature', () => {
     + " String(r.signatures.length + ':' + r.signatures[0].parameters.length"
     + " + ':' + (r.signatures[0].return === undefined));";
   // the IMPLICIT constructor of a class that writes none
-  expect(evaluated(sig('class C { x: uint8 = 1; }'))).toBe('1:0:true');
+  expect(evaluated(sig('value class C { x: uint8 = 1; }'))).toBe('1:0:true');
   // written, unannotated, no parameters
-  expect(evaluated(sig('class C { x: uint8 = 1; constructor() {} }'))).toBe('1:0:true');
+  expect(evaluated(sig('value class C { x: uint8 = 1; constructor() {} }'))).toBe('1:0:true');
   // written, unannotated, with a parameter
-  expect(evaluated(sig('class C { x: uint8 = 1; constructor(y) {} }'))).toBe('1:1:true');
+  expect(evaluated(sig('value class C { x: uint8 = 1; constructor(y) {} }'))).toBe('1:1:true');
   // annotated - unchanged, which the fix must not disturb
-  expect(evaluated(sig('class C { x: uint8 = 1; constructor(y: uint8) {} }'))).toBe('1:1:true');
+  expect(evaluated(sig('value class C { x: uint8 = 1; constructor(y: uint8) {} }'))).toBe('1:1:true');
   // an UNTYPED class too: reflection describes what a thing IS, and an untyped
   // class is constructible. Only the `return` RULE is scoped to typed classes.
   expect(evaluated(sig('class C { constructor() {} }'))).toBe('1:0:true');
@@ -184,8 +184,8 @@ test('a class always reflects exactly one constructor signature', () => {
 test('a derived parameter carries its name and `any`; a declared one its type', () => {
   const p = (decl: string) => `${decl} const s = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor').signatures[0];`
     + " String(s.parameters[0].name + ':' + (s.parameters[0].type === any));";
-  expect(evaluated(p('class C { x: uint8 = 1; constructor(y) {} }'))).toBe('y:true');
-  expect(evaluated('class C { x: uint8 = 1; constructor(y: uint8) {} }'
+  expect(evaluated(p('value class C { x: uint8 = 1; constructor(y) {} }'))).toBe('y:true');
+  expect(evaluated('value class C { x: uint8 = 1; constructor(y: uint8) {} }'
     + " const s = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor').signatures[0];"
     + " String(s.parameters[0].name + ':' + (s.parameters[0].type === uint8));")).toBe('y:true');
 });
@@ -195,10 +195,10 @@ test('no constructor signature carries a `return` slot', () => {
   // can be written either. Asserted across every shape above so a
   // later change that starts synthesising one has to fail here.
   for (const decl of [
-    'class C { x: uint8 = 1; }',
-    'class C { x: uint8 = 1; constructor() {} }',
-    'class C { x: uint8 = 1; constructor(y) {} }',
-    'class C { x: uint8 = 1; constructor(y: uint8) {} }',
+    'value class C { x: uint8 = 1; }',
+    'value class C { x: uint8 = 1; constructor() {} }',
+    'value class C { x: uint8 = 1; constructor(y) {} }',
+    'value class C { x: uint8 = 1; constructor(y: uint8) {} }',
     'class C { constructor() {} }',
   ]) {
     expect(evaluated(`${decl} const r = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor');`

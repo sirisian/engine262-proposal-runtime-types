@@ -186,7 +186,7 @@
       "name": "defaulted tuple acquisition copies value element",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p,1];const t:[P,number=7]=raw;p.value=2;String(raw[0].value);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p,1];const t:[P,number=7]=raw;p.value=2;String(raw[0].value);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -200,7 +200,7 @@
       "name": "later view does not recopy value elements",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p,1];const t:[P,number=7]=raw;const held:any=raw[0];const again:[P,number=7]=raw;String(held===raw[0]);",
+          "source": "value class P{value:uint8=1;}const p:P=new P();const raw:any=[p,1];const t:[P,number=7]=raw;const held:any=raw[0];const again:[P,number=7]=raw;String(held===raw[0]);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

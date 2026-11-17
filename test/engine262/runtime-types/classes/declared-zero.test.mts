@@ -5,13 +5,13 @@ test('a class may declare the zero its bindings hold', () => {
   // #sec-declared-zero: a class may declare "the
   // value its bindings hold before assignment, in place of the one
   // DefaultValueOf derives field by field", as a static field named `default`.
-  expect(evaluated('class Z { x: uint8; static default = new Z(); } let z: Z; String(z.x);')).toBe('0');
+  expect(evaluated('value class Z { x: uint8; static default = new Z(); } let z: Z; String(z.x);')).toBe('0');
   // A class declaring NONE keeps the derived, field-by-field zero. This is the
   // case a REPLACEMENT rule breaks if it fires unconditionally.
-  expect(evaluated('class P { x: uint8; } let p: P; String(p.x);')).toBe('0');
+  expect(evaluated('value class P { x: uint8; } let p: P; String(p.x);')).toBe('0');
   // #sec-declared-zero: "it is a type error if the declared zero is not a value
   // of the class."
-  expectThrown('class B { x: uint8; static default = 5; } let b: B;');
+  expectThrown('value class B { x: uint8; static default = 5; } let b: B;');
 });
 
 test('a static block may set the declared zero, and is what registration sees', () => {
@@ -24,7 +24,7 @@ test('a static block may set the declared zero, and is what registration sees', 
     + 'let v: S; String(v.x) + "/" + String(S.default.x);')).toBe('9/9');
   // And a block assigning something the class rejects is CAUGHT. Reading before
   // the block would have snapshotted the valid instance and let this escape.
-  expectThrown('class S2 { x: uint8; static default = new S2(); static { S2.default = null; } } let v: S2;');
+  expectThrown('value class S2 { x: uint8; static default = new S2(); static { S2.default = null; } } let v: S2;');
 });
 
 test('an unspecialized generic keeps its DERIVED zero', () => {
@@ -38,10 +38,10 @@ test('an unspecialized generic keeps its DERIVED zero', () => {
   // Measured before the guard: this reported "undefined is not assignable to
   // Box.<uint.<8>>". It now falls back to the derived zero, which is where it
   // was before the feature existed.
-  expect(evaluated('class Box<T: type> { x: uint8; static default = new Box(); } '
+  expect(evaluated('value class Box<T: type> { x: uint8; static default = new Box(); } '
     + 'let b: Box.<uint8>; String(b.x);')).toBe('0');
   // The same class with no declared zero was always fine, and still is.
-  expect(evaluated('class Box2<T: type> { x: uint8; } let b: Box2.<uint8>; String(b.x);')).toBe('0');
+  expect(evaluated('value class Box2<T: type> { x: uint8; } let b: Box2.<uint8>; String(b.x);')).toBe('0');
   // NOT a bug, and asserted so a later reader does not "fix" it: an
   // unspecialized generic's static field is undefined, and its APPLICATION has
   // the value. Static METHODS are unaffected, which is the tell that this is
@@ -58,7 +58,7 @@ test('a GENERIC class may declare a zero, once its application exists', () => {
   //
   // The zero may name its own specialization: the type-parameter frame is
   // pushed during the application's re-entry, so `new Bx.<T>()` resolves.
-  const Bx = 'class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } ';
+  const Bx = 'value class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } ';
   expect(evaluated(`${Bx} const f = Bx.<uint8>; f.default.x = (9 := uint8); `
     + 'let b: Bx.<uint8>; String(b.x);')).toBe('9');
   // The hazard a single-key registry hides: one DECLARATION serves every
@@ -69,7 +69,7 @@ test('a GENERIC class may declare a zero, once its application exists', () => {
     + 'let a: Bx.<uint8>; let c: Bx.<string>; String(a.x) + "/" + String(c.x);')).toBe('7/0');
   // An application never evaluated has no registered zero, and falls back to the
   // DERIVED one rather than to undefined - the guard above, still held.
-  expect(evaluated('class Bx2<T: type> { x: uint8; static default = new Bx2.<T>(); } '
+  expect(evaluated('value class Bx2<T: type> { x: uint8; static default = new Bx2.<T>(); } '
     + 'let b: Bx2.<uint8>; String(b.x);')).toBe('0');
 });
 
@@ -91,9 +91,9 @@ test('a declared zero may not write, and the floor is narrower than the rule', (
   // closed: a plain call to a function that could do anything. Refusing it needs
   // the resolution the clause describes and the parser does not have.
   expect(ok('function side() { return 1; } '
-    + 'class E3 { x: uint8; static default = (side(), new E3()); }')).toBe(true);
+    + 'value class E3 { x: uint8; static default = (side(), new E3()); }')).toBe(true);
   // A valid zero is unaffected.
-  expect(ok('class E5 { x: uint8; static default = new E5(); }')).toBe(true);
+  expect(ok('value class E5 { x: uint8; static default = new E5(); }')).toBe(true);
 });
 
 test('a static initializer may apply the class being specialized', () => {
@@ -104,13 +104,13 @@ test('a static initializer may apply the class being specialized', () => {
   // generic function" - while the same expression in a static METHOD, run after
   // the association, worked. The constructor is now matched to its declaration
   // by source text through the in-progress registry.
-  const Bx = 'class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } ';
+  const Bx = 'value class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } ';
   // `T` bound to the application's own argument names the class under
   // construction, which answers ITSELF rather than re-entering: the zero is an
   // instance of the specialization it belongs to, and identity is cached.
   expect(evaluated(`${Bx} const f = Bx.<uint8>; String(f.default instanceof f);`)).toBe('true');
   expect(evaluated(`${Bx} String(Bx.<uint8> === Bx.<uint8>);`)).toBe('true');
   // A DIFFERENT key from inside the body is a different specialization.
-  expect(evaluated('class Bx<T: type> { x: uint8; static other = Bx.<string>; } '
+  expect(evaluated('value class Bx<T: type> { x: uint8; static other = Bx.<string>; } '
     + 'const f = Bx.<uint8>; String(f.other === Bx.<string> && f.other !== f);')).toBe('true');
 });

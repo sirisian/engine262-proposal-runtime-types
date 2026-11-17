@@ -28,16 +28,16 @@ test('every form of the declaration parses and works', () => {
   // All four forms of the accessor grammar, plus the two the shape implies: an accessor need not be
   // typed, and need not be initialized. Each is asserted by its RESULT - a parse-only assertion would
   // pass against a declaration that parsed and did nothing.
-  expect(evaluated('class A { accessor a: uint32 = 5; } String(new A().a);')).toBe('5');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } String(new A().a);')).toBe('5');
   expect(evaluated('class A { static accessor count: uint32 = 3; } String(A.count);')).toBe('3');
   expect(evaluated('class A { accessor a = 5; } String(new A().a);')).toBe('5');
-  expect(evaluated('class A { accessor a: uint32; } String(new A().a);')).toBe('0');
+  expect(evaluated('value class A { accessor a: uint32; } String(new A().a);')).toBe('0');
   // A decoration in front of one parses and fires - the CONTEXT it fires with
   // is asserted in accessors-decorator-context.test.mts.
-  expect(evaluated('let n = 0; function f(c) { n += 1; } class A { @f accessor a: uint32 = 5; } String(n);')).toBe('1');
+  expect(evaluated('let n = 0; function f(c) { n += 1; } value class A { @f accessor a: uint32 = 5; } String(n);')).toBe('1');
   // A PRIVATE accessor is admitted too - see the desugaring section below for
   // what it becomes.
-  expect(outcome('class A { accessor #internal: int32 = 0; }')).toBe('ACCEPTED');
+  expect(outcome('value class A { accessor #internal: int32 = 0; }')).toBe('ACCEPTED');
 });
 
 test('the positions the design refuses stay refused', () => {
@@ -58,7 +58,7 @@ test('`accessor` is still an ordinary identifier, which is the hazard', () => {
   // only because the lookahead is right, which is what makes them worth
   // having.
   expect(evaluated('class A { accessor = 1; } String(new A().accessor);')).toBe('1');
-  expect(evaluated('class A { accessor: uint8 = 7; } String(new A().accessor);')).toBe('7');
+  expect(evaluated('value class A { accessor: uint8 = 7; } String(new A().accessor);')).toBe('7');
   expect(evaluated('class A { accessor() { return "m"; } } (new A()).accessor();')).toBe('m');
   expect(evaluated('const accessor = 3; String(accessor);')).toBe('3');
   expect(evaluated('class A { static accessor = 9; } String(A.accessor);')).toBe('9');
@@ -109,7 +109,7 @@ test('the contexts that DO come from the member dispatch still do', () => {
   // A field takes the FieldDefinition arm and never consults the member
   // dispatch at all - which is exactly why the accessor decision has to live
   // there when the grammar lands, and not where it used to be written.
-  expect(evaluated(`${k} class A { @f a: uint8 = 1; } k;`)).toBe('ClassField');
+  expect(evaluated(`${k} value class A { @f a: uint8 = 1; } k;`)).toBe('ClassField');
 });
 
 test('an operator still takes its contexts from the class-body interception', () => {
@@ -125,7 +125,7 @@ test('the grammar exists and desugars, which the removed branches predate', () =
   // A public accessor round-trips. The sections above and below own the
   // detailed assertions; this is the one line saying the declaration form
   // exists at all.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); o.a = 9; String(o.a);')).toBe('9');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const o = new A(); o.a = 9; String(o.a);')).toBe('9');
   expect(evaluated('typeof Reflect.ClassAccessor;')).toBe('object');
 });
 
@@ -136,7 +136,7 @@ test('`accessor` is an ordinary identifier and must stay one', () => {
   // named `accessor` and `accessor \n x` is too. They pass only if that
   // lookahead was copied correctly.
   expect(evaluated('class A { accessor = 1; } String(new A().accessor);')).toBe('1');
-  expect(evaluated('class A { accessor: uint8 = 7; } String(new A().accessor);')).toBe('7');
+  expect(evaluated('value class A { accessor: uint8 = 7; } String(new A().accessor);')).toBe('7');
   expect(evaluated('const accessor = 3; String(accessor);')).toBe('3');
   expect(evaluated('class A { accessor() { return "method"; } } (new A()).accessor();')).toBe('method');
 });
@@ -156,16 +156,16 @@ test('`accessor` is an ordinary identifier and must stay one', () => {
  */
 
 test('an accessor round-trips, per instance', () => {
-  expect(evaluated('class A { accessor a: uint32 = 5; } String(new A().a);')).toBe('5');
-  expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); o.a = 9; String(o.a);')).toBe('9');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } String(new A().a);')).toBe('5');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const o = new A(); o.a = 9; String(o.a);')).toBe('9');
   // THE ASSERTION THAT MATTERS FOR STORAGE: two instances do not share it. A
   // round trip on one object passes against a backing stored on the prototype,
   // which is the mistake a "private field" that is not per-instance would make.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const x = new A(), y = new A(); x.a = 1; y.a = 2; String(x.a) + "/" + String(y.a);')).toBe('1/2');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const x = new A(), y = new A(); x.a = 1; y.a = 2; String(x.a) + "/" + String(y.a);')).toBe('1/2');
   // And the storage is PRIVATE: the instance has no own property, so the
   // backing is not reachable by name, by enumeration, or by `Object.keys`.
-  expect(evaluated('class A { accessor a: uint32 = 5; } String(Object.getOwnPropertyNames(new A()).length);')).toBe('0');
-  expect(evaluated('class A { accessor a: uint32 = 5; } JSON.stringify(Object.keys(new A()));')).toBe('[]');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } String(Object.getOwnPropertyNames(new A()).length);')).toBe('0');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } JSON.stringify(Object.keys(new A()));')).toBe('[]');
 });
 
 test('the accessor is TYPED, and the setter enforces it', () => {
@@ -176,15 +176,15 @@ test('the accessor is TYPED, and the setter enforces it', () => {
   // the setter's range check is reached at COMPILE time and the run-time kind
   // this line asserts never happens. Both are asserted, the early error being
   // the better answer.
-  expectThrownKind('class A { accessor a: uint8 = 1; } let o = new A(); o.a = 300;', 'RangeError');
-  expect(ok('class A { accessor a: uint8 = 1; } const o = new A(); o.a = 300;')).toBe(false);
-  expectThrownKind('class A { accessor a: uint8 = 1; } let o = new A(); o.a = "s";', 'TypeError');
-  expect(ok('class A { accessor a: uint8 = 1; } const o = new A(); o.a = "s";')).toBe(false);
+  expectThrownKind('value class A { accessor a: uint8 = 1; } let o = new A(); o.a = 300;', 'RangeError');
+  expect(ok('value class A { accessor a: uint8 = 1; } const o = new A(); o.a = 300;')).toBe(false);
+  expectThrownKind('value class A { accessor a: uint8 = 1; } let o = new A(); o.a = "s";', 'TypeError');
+  expect(ok('value class A { accessor a: uint8 = 1; } const o = new A(); o.a = "s";')).toBe(false);
   // In range still works, so the check is a check and not a refusal.
-  expect(evaluated('class A { accessor a: uint8 = 1; } const o = new A(); o.a = 255; String(o.a);')).toBe('255');
+  expect(evaluated('value class A { accessor a: uint8 = 1; } const o = new A(); o.a = 255; String(o.a);')).toBe('255');
   // A typed accessor with NO initializer takes its type's default, the same
   // rule a typed field follows - not undefined.
-  expect(evaluated('class A { accessor a: uint32; } String(new A().a);')).toBe('0');
+  expect(evaluated('value class A { accessor a: uint32; } String(new A().a);')).toBe('0');
   // An untyped accessor is untyped, and stores what it is given.
   expect(evaluated('class A { accessor a = 5; } const o = new A(); o.a = "s"; o.a;')).toBe('s');
 });
@@ -192,14 +192,14 @@ test('the accessor is TYPED, and the setter enforces it', () => {
 test('the pair is a real getter and setter on the home object', () => {
   // An instance accessor's pair goes on the PROTOTYPE, where a hand-written
   // `get`/`set` pair goes, and is not enumerable.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const d = Object.getOwnPropertyDescriptor(A.prototype, "a"); typeof d.get + "/" + typeof d.set + "/" + String(d.enumerable);')).toBe('function/function/false');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const d = Object.getOwnPropertyDescriptor(A.prototype, "a"); typeof d.get + "/" + typeof d.set + "/" + String(d.enumerable);')).toBe('function/function/false');
   // A static accessor's pair goes on the CONSTRUCTOR, and its backing is the
   // constructor's - so it is one storage rather than one per instance.
   expect(evaluated('class A { static accessor count: uint32 = 3; } A.count = 7; String(A.count);')).toBe('7');
   expect(evaluated('class A { static accessor count: uint32 = 3; } const d = Object.getOwnPropertyDescriptor(A, "count"); typeof d.get + "/" + typeof d.set;')).toBe('function/function');
   // The getter reads through `this`, so it follows the receiver rather than
   // closing over one instance.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); o.a = 2; const g = Object.getOwnPropertyDescriptor(A.prototype, "a").get; String(g.call(o));')).toBe('2');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const o = new A(); o.a = 2; const g = Object.getOwnPropertyDescriptor(A.prototype, "a").get; String(g.call(o));')).toBe('2');
 });
 
 test('an accessor initializes where a field does, in declaration order', () => {
@@ -208,12 +208,12 @@ test('an accessor initializes where a field does, in declaration order', () => {
   // catches an implementation that ran all fields and then all accessors, which
   // a check on the accessor alone would not.
   const order = 'const l = []; function t(n) { l.push(n); return n; } '
-    + 'class A { a: uint8 = t(1); accessor b: uint8 = t(2); c: uint8 = t(3); } new A(); ';
+    + 'value class A { a: uint8 = t(1); accessor b: uint8 = t(2); c: uint8 = t(3); } new A(); ';
   expect(evaluated(`${order} l.join(",");`)).toBe('1,2,3');
   // And it runs once per instance, not once per class.
   expect(evaluated(`${order} new A(); l.join(",");`)).toBe('1,2,3,1,2,3');
   // The initializer sees `this`, as a field's does.
-  expect(evaluated('class A { a: uint8 = 4; accessor b: uint8 = this.a; } String(new A().b);')).toBe('4');
+  expect(evaluated('value class A { a: uint8 = 4; accessor b: uint8 = this.a; } String(new A().b);')).toBe('4');
 });
 
 test('what the desugaring does not settle', () => {
@@ -221,7 +221,7 @@ test('what the desugaring does not settle', () => {
 
   // A decorated accessor fires with `ClassAccessor`;
   // accessors-decorator-context.test.mts owns the assertions.
-  expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } class A { @f accessor a: uint32 = 5; } k;')).toBe('ClassAccessor');
+  expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } value class A { @f accessor a: uint32 = 5; } k;')).toBe('ClassAccessor');
 
   // Nothing here asserts LAYOUT: the backing is a private field, so whatever a private field does is
   // what it does. accessors-layout.test.mts covers whether an accessor occupies a layout slot.
@@ -235,22 +235,22 @@ test('a PRIVATE accessor desugars to a backing field AND a private pair', () => 
   // one evaluation yields two things: it RETURNS the field record, which
   // allocates the backing slot, and CARRIES the pair for the class to install
   // beside every other private element.
-  expect(evaluated('class A { accessor #p: int32 = 7; } "ok";')).toBe('ok');
-  expect(evaluated('class A { accessor #p: int32 = 7; get v() { return this.#p; } } String(new A().v);')).toBe('7');
-  expect(evaluated('class A { accessor #p: int32 = 7; set w(x) { this.#p = x; } get v() { return this.#p; } } '
+  expect(evaluated('value class A { accessor #p: int32 = 7; } "ok";')).toBe('ok');
+  expect(evaluated('value class A { accessor #p: int32 = 7; get v() { return this.#p; } } String(new A().v);')).toBe('7');
+  expect(evaluated('value class A { accessor #p: int32 = 7; set w(x) { this.#p = x; } get v() { return this.#p; } } '
     + 'const a = new A(); a.w = 9; String(a.v);')).toBe('9');
   // THE TYPE IS ENFORCED, which is the point of the desugaring being REAL: the
   // backing is an ordinary typed field on a Private Name, so `PrivateSet` does
   // the checking and the setter checks nothing itself.
-  expect(evaluated('class A { accessor #p: int32 = 7; set w(x) { this.#p = x; } } '
+  expect(evaluated('value class A { accessor #p: int32 = 7; set w(x) { this.#p = x; } } '
     + 'const a = new A(); try { a.w = "s"; "NO-CHECK"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
   // A STATIC private accessor works the same way.
   expect(evaluated('class A { static accessor #t: uint32 = 3; static get v() { return A.#t; } } String(A.v);')).toBe('3');
   // And nothing leaks: the backing Private Name is unnameable, so an instance
   // has no own property for it.
-  expect(evaluated('class A { accessor #p: int32 = 7; } String(Object.getOwnPropertyNames(new A()).length);')).toBe('0');
+  expect(evaluated('value class A { accessor #p: int32 = 7; } String(Object.getOwnPropertyNames(new A()).length);')).toBe('0');
   // A PUBLIC accessor is unchanged.
-  expect(evaluated('class A { accessor p: int32 = 5; } String(new A().p);')).toBe('5');
+  expect(evaluated('value class A { accessor p: int32 = 5; } String(new A().p);')).toBe('5');
 });
 
 // -- Inlining --------------------------------------------------------------------
@@ -283,28 +283,28 @@ test('the observable shape does NOT depend on decoration', () => {
   // differ, and every one of them is a thing a program can branch on.
   const shape = 'const d = Object.getOwnPropertyDescriptor(A.prototype, "a"); '
     + 'typeof d.get + "/" + typeof d.set + "/" + String(d.enumerable) + "/" + String(d.value); ';
-  expect(evaluated(`class A { accessor a: uint32 = 5; } ${shape}`)).toBe('function/function/false/undefined');
-  expect(evaluated(`function f(c) {} class A { @f accessor a: uint32 = 5; } ${shape}`)).toBe('function/function/false/undefined');
+  expect(evaluated(`value class A { accessor a: uint32 = 5; } ${shape}`)).toBe('function/function/false/undefined');
+  expect(evaluated(`function f(c) {} value class A { @f accessor a: uint32 = 5; } ${shape}`)).toBe('function/function/false/undefined');
   // Own-property enumeration is the same question from the instance's side: the
   // storage is private either way, so nothing is enumerable and nothing leaks.
-  expect(evaluated('class A { accessor a: uint32 = 5; } JSON.stringify(Object.getOwnPropertyNames(new A()));')).toBe('[]');
-  expect(evaluated('function f(c) {} class A { @f accessor a: uint32 = 5; } JSON.stringify(Object.getOwnPropertyNames(new A()));')).toBe('[]');
-  expect(evaluated('class A { accessor a: uint32 = 5; } JSON.stringify(Object.keys(new A()));')).toBe('[]');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } JSON.stringify(Object.getOwnPropertyNames(new A()));')).toBe('[]');
+  expect(evaluated('function f(c) {} value class A { @f accessor a: uint32 = 5; } JSON.stringify(Object.getOwnPropertyNames(new A()));')).toBe('[]');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } JSON.stringify(Object.keys(new A()));')).toBe('[]');
 });
 
 test('an accessor is observably an ACCESSOR, not a field', () => {
   // The contrast that gives the test above its meaning: a plain field IS an own
   // data property with a value, and the accessor is neither. Under reading 2 an
   // undecorated accessor would have looked exactly like this.
-  expect(evaluated('class A { a: uint32 = 5; } const e = Object.getOwnPropertyDescriptor(new A(), "a"); typeof e.get + "/" + String(e.value);')).toBe('undefined/5');
-  expect(evaluated('class A { accessor a: uint32 = 5; } String(Object.getOwnPropertyDescriptor(new A(), "a"));')).toBe('undefined');
+  expect(evaluated('value class A { a: uint32 = 5; } const e = Object.getOwnPropertyDescriptor(new A(), "a"); typeof e.get + "/" + String(e.value);')).toBe('undefined/5');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } String(Object.getOwnPropertyDescriptor(new A(), "a"));')).toBe('undefined');
   // The pair lives on the prototype, where a hand-written one lives, so it is
   // inherited and shared rather than per instance.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const x = new A(), y = new A(); '
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const x = new A(), y = new A(); '
     + 'String(Object.getOwnPropertyDescriptor(A.prototype, "a").get === Object.getOwnPropertyDescriptor(A.prototype, "a").get);')).toBe('true');
   // And it still round-trips per instance through that shared pair,
   // which is what says the storage is separate from the pair.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const x = new A(), y = new A(); x.a = 1; y.a = 2; String(x.a) + "/" + String(y.a);')).toBe('1/2');
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const x = new A(), y = new A(); x.a = 1; y.a = 2; String(x.a) + "/" + String(y.a);')).toBe('1/2');
 });
 
 test('the pair is reachable, which reading 2 would have forbidden', () => {
@@ -312,9 +312,9 @@ test('the pair is reachable, which reading 2 would have forbidden', () => {
   // callback, or reading it as a property is a TypeError. An accessor's generated pair is NOT marked
   // `inline` and is not subject to that: the getter can be read off the descriptor and called. Pinned
   // because it is the sharpest observable difference between the two readings above.
-  expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); o.a = 7; '
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const o = new A(); o.a = 7; '
     + 'const g = Object.getOwnPropertyDescriptor(A.prototype, "a").get; String(g.call(o));')).toBe('7');
-  expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); '
+  expect(evaluated('value class A { accessor a: uint32 = 5; } const o = new A(); '
     + 'const s = Object.getOwnPropertyDescriptor(A.prototype, "a").set; s.call(o, 3); String(o.a);')).toBe('3');
 });
 

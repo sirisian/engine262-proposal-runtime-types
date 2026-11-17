@@ -477,7 +477,7 @@
     {
       "name": "class argument",
       "modules": {
-        "main": "class I<T:type>{value:T;}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+        "main": "value class I<T:type extends value>{value:T;}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
       },
       "expected": {
         "status": "fulfilled",

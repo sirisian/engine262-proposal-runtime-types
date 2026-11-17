@@ -28,7 +28,7 @@ test('a float16 place is ordered in every clause position, its constants rounded
   impossible('function f(x: float16) where x is 1..=2 where x > 3 { return x; }');
   impossible('class C { m(x: float16) where x > 5 where x < 3 { return x; } }');
   impossible('interface I { m(x: float16): void where x > 5 where x < 3; }');
-  impossible('class D { x: float16 = 0; m() where this.x > 5 where this.x < 3 { return 1; } }');
+  impossible('value class D { x: float16 = 0; m() where this.x > 5 where this.x < 3 { return 1; } }');
   // 0.09998 and 0.09997 both round to 0.0999755859375, so the clauses admit it.
   accepted('function f(x: float16) where x >= 0.09998 where x <= 0.09997 { return x; }');
   expect(evaluated('let y: float16 = 0.09998; let z: float16 = 0.09997; String(y === z) + " " + String(y === 0.1);')).toBe('true true');

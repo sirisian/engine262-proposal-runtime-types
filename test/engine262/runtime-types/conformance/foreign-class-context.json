@@ -115,7 +115,7 @@
       "name": "field-good",
       "modules": {
         "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=new E().x;",
-        "dep": "type Hidden=string;export class E{x:Hidden=\"ok\";}"
+        "dep": "type Hidden=string;export value class E{x:Hidden=\"ok\";}"
       },
       "expected": {
         "status": "fulfilled",
@@ -129,7 +129,7 @@
       "name": "field-bad",
       "modules": {
         "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=new E().x;",
-        "dep": "type Hidden=string;export class E{x:Hidden=\"ok\";}"
+        "dep": "type Hidden=string;export value class E{x:Hidden=\"ok\";}"
       },
       "expected": {
         "status": "rejected",

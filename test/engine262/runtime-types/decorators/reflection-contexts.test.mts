@@ -26,11 +26,11 @@ const kindOf = (program: string): string => evaluated(`${COUNT}${program} global
 
 test('the CLASS family', () => {
   expect(kindOf('@count class A {}')).toBe('Class');
-  expect(kindOf('class A { @count x: uint8 = 1; }')).toBe('ClassField');
+  expect(kindOf('value class A { @count x: uint8 = 1; }')).toBe('ClassField');
   expect(kindOf('class A { @count m() {} }')).toBe('ClassMethod');
   expect(kindOf('class A { @count get g() { return 1; } }')).toBe('ClassGetter');
   expect(kindOf('class A { @count set s(v) {} }')).toBe('ClassSetter');
-  expect(kindOf('class A { @count accessor a: uint8 = 1; }')).toBe('ClassAccessor');
+  expect(kindOf('value class A { @count accessor a: uint8 = 1; }')).toBe('ClassAccessor');
 });
 
 test('the SUB-TARGET family - parameters and returns', () => {
@@ -102,7 +102,7 @@ function rejectionKind(source: string): string {
 
 test('a decorator parameter annotated with its context works, at every family', () => {
   // The form the specification defines, at one context per family.
-  expect(evaluated('let k = "never"; function f(c: Reflect.ClassField) { k = String(c.name); } class A { @f a: uint8; } k;')).toBe('a');
+  expect(evaluated('let k = "never"; function f(c: Reflect.ClassField) { k = String(c.name); } value class A { @f a: uint8; } k;')).toBe('a');
   expect(evaluated('let k = "never"; function f(c: Reflect.Class) { k = String(c.name); } @f class Named {} k;')).toBe('Named');
   expect(evaluated('let k = "never"; function f(c: Reflect.ClassMethod) { k = String(c.name); } class A { @f m() {} } k;')).toBe('m');
   expect(evaluated('let k = "never"; function f(c: Reflect.ClassMethodParameter) { k = String(c.index); } class A { m(@f p: uint8) {} } k;')).toBe('0');
@@ -131,8 +131,8 @@ test('a reflection context is a STRUCTURAL type, as the design writes it', () =>
   // `Reflect.ClassField` an interface extending it (#sec-reflection-shape-rules) - so membership
   // reads the value's own discriminant rather than a brand. `kind` is what every reflection
   // object this engine builds sets.
-  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.ClassField); } class A { @f a: uint8; } r;')).toBe('true');
-  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.Class); } class A { @f a: uint8; } r;')).toBe('false');
+  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.ClassField); } value class A { @f a: uint8; } r;')).toBe('true');
+  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.Class); } value class A { @f a: uint8; } r;')).toBe('false');
   // An object of the wrong shape is not of the type, so the judgment is doing
   // work rather than admitting any object.
   // A DECIDABLE violation is an Early Error, not a catchable TypeError:
@@ -167,9 +167,9 @@ test('the rest of #sec-decorator-application', () => {
   // form: the argument form is no longer a factory, and selection by context
   // type happens. application-overload-selection.test.mts owns the assertions;
   // what stays here is that a reader of the old pins finds the new answer.
-  expect(evaluated('let got = "never"; function f(n: uint8, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); } class A { @f(7) a: uint8; } got;')).toBe('7:a');
+  expect(evaluated('let got = "never"; function f(n: uint8, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); } value class A { @f(7) a: uint8; } got;')).toBe('7:a');
   const decls = 'const l = []; function f(c: Reflect.ClassField) { l.push("field"); } function f(c: Reflect.Class) { l.push("class"); } ';
-  expect(evaluated(`${decls} class A { @f a: uint8; } l.join(",");`)).toBe('field');
+  expect(evaluated(`${decls} value class A { @f a: uint8; } l.join(",");`)).toBe('field');
   expect(evaluated(`${decls} @f class N {} l.join(",");`)).toBe('class');
   // Ordinary overload resolution, unchanged throughout.
   expect(evaluated('function g(x: uint8) { return "u8"; } function g(x: string) { return "str"; } g("s") + "/" + g(1);')).toBe('str/u8');
@@ -197,7 +197,7 @@ test('a decorator SELECTS on the context it is given', () => {
   expect(evaluated('const l = []; '
     + 'function f(c: Reflect.ClassField) { l.push("field"); } '
     + 'function f(c: Reflect.ClassMethod) { l.push("method"); } '
-    + 'class A { @f a: uint8 = 1; @f m() {} } l.join(",");')).toBe('field,method');
+    + 'value class A { @f a: uint8 = 1; @f m() {} } l.join(",");')).toBe('field,method');
 });
 
 test('each member position selects its OWN context, not a sibling\'s', () => {
@@ -207,11 +207,11 @@ test('each member position selects its OWN context, not a sibling\'s', () => {
     + 'function f(c: Reflect.ClassGetter) { l.push("getter"); } '
     + 'function f(c: Reflect.ClassSetter) { l.push("setter"); } '
     + 'function f(c: Reflect.ClassAccessor) { l.push("accessor"); } ';
-  expect(evaluated(`${decls} class A { @f a: uint8 = 1; } l.join(",");`)).toBe('field');
+  expect(evaluated(`${decls} value class A { @f a: uint8 = 1; } l.join(",");`)).toBe('field');
   expect(evaluated(`${decls} class A { @f m() {} } l.join(",");`)).toBe('method');
   expect(evaluated(`${decls} class A { @f get g() { return 1; } } l.join(",");`)).toBe('getter');
   expect(evaluated(`${decls} class A { @f set s(v) {} } l.join(",");`)).toBe('setter');
-  expect(evaluated(`${decls} class A { @f accessor c: uint8 = 1; } l.join(",");`)).toBe('accessor');
+  expect(evaluated(`${decls} value class A { @f accessor c: uint8 = 1; } l.join(",");`)).toBe('accessor');
   // ALL FIVE in one class, in declaration order - the whole point of an
   // all-positions fixture, and safe here because each position is ALSO asserted
   // alone above. The caveat: a fixture that decorates every position at once
@@ -249,7 +249,7 @@ test('a CLASS and a FUNCTION select their own contexts', () => {
   // A decorated class whose FIELD is also decorated fires both, members first
   // (#sec-decorator-application), asserted through context selection rather than through a
   // shared counter.
-  expect(evaluated(`${decls} @f class A { @f a: uint8 = 1; } l.join(",");`)).toBe('field,class');
+  expect(evaluated(`${decls} @f value class A { @f a: uint8 = 1; } l.join(",");`)).toBe('field,class');
 });
 
 // -- Contexts that were missing, and the rule that selects them ------------------
@@ -353,5 +353,5 @@ test('the two reflection types stay APART', () => {
   // A decorator context is unaffected. An arm placed ABOVE `IsOfType`'s
   // dereferencing arms turned this FALSE during an earlier attempt, though its
   // guard could not match the name.
-  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.ClassField); } class A { @f a: uint8; } r;')).toBe('true');
+  expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.ClassField); } value class A { @f a: uint8; } r;')).toBe('true');
 });

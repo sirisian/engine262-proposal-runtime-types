@@ -68,11 +68,11 @@ test.each([
   ],
   [
     "member unused",
-    "class C{v:boolean=true;} function unused(c:C){++c.v;}"
+    "value class C{v:boolean=true;} function unused(c:C){++c.v;}"
   ],
   [
     "member executed",
-    "class C{v:boolean=true;} function unused(c:C){++c.v;} unused(new C());"
+    "value class C{v:boolean=true;} function unused(c:C){++c.v;} unused(new C());"
   ],
   [
     "ref unused",
@@ -151,11 +151,11 @@ test.each([
   ],
   [
     "readonly",
-    "class C{readonly x:uint8=1;}function f(c:C){c.x++;}"
+    "value class C{readonly x:uint8=1;}function f(c:C){c.x++;}"
   ],
   [
     "private",
-    "class C{#x:boolean=true;f(){this.#x++;}}"
+    "value class C{#x:boolean=true;f(){this.#x++;}}"
   ],
   [
     "super setter",

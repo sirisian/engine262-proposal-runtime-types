@@ -4,12 +4,12 @@ import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame, RetainTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord, IsOfType } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
-import { displayType, typeParameterRecordsOf, parameterFromDeclaration } from '../type-system/records.mts';
+import { displayType, typeParameterRecordsOf, parameterFromDeclaration, mentionsTypeParameter } from '../type-system/records.mts';
 import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
-import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
+import { ComputeClassLayout, IsValueType, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { Descriptor } from '../value.mts';
 import {
@@ -1505,24 +1505,38 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // `class B { } class C extends B { }` untyped with no annotation anywhere,
       // and `dynamic` still disqualifies either way.
       const baseIsTyped = (constructorParent as { SealInstances?: boolean } | undefined)?.SealInstances === true;
-      (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped) && !isDynamic;
-      // proposal-runtime-types #sec-reference-classes: a `reference`, `sealed` or
-      // `abstract` class is a REFERENCE TYPE, so its instances have identity.
-      // [[SealInstances]] alone cannot say so - it is *true* for every typed
-      // class, which is what makes an instance unholdable weakly - and a
-      // reference class is typed AND has an identity to observe. The kind is
-      // inherited for the reason it is inherited in the type system: a subclass
-      // reached through a reference class is one too.
-      // A typed class over a base that is not one - an untyped class, a `dynamic` one, a
-      // function, a built-in such as `Error` - is sealed and is no value type class
-      // (HasUntypedBase): its instances hold what the base's constructor made. The flag is
-      // inherited, as the base's fields are.
+      // #sec-value-classes: a class is a value type class where it is declared `value`. The
+      // declaration decides; its base and its fields are what it is checked against, here and
+      // below where the fields' types are known. A value class is typed by being one, whether
+      // or not it declares a field.
+      const isValue = modifiers.includes('value');
+      const baseIsValue = (constructorParent as { ValueClass?: boolean } | undefined | null)?.ValueClass === true;
+      if (isValue && constructorParent !== surroundingAgent.intrinsic('%Function.prototype%') && !baseIsValue) {
+        return Throw.TypeError('$1 is declared a value class and its base is not one; a value class extends nothing or a value class', className as Value);
+      }
+      if (!isValue && baseIsValue) {
+        return Throw.TypeError('$1 extends a value class, so it is one, and is written `value class`', className as Value);
+      }
+      (F as { ValueClass?: boolean }).ValueClass = isValue;
+      (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped || isValue) && !isDynamic;
+      // proposal-runtime-types #sec-value-classes: a typed class that is not a value type
+      // class is a REFERENCE TYPE, and so is a `sealed` or an `abstract` one, so its
+      // instances have identity. [[SealInstances]] alone cannot say so - it is *true* for
+      // every typed class, a value class included - and [[ReferenceKind]] is what tells an
+      // instance that may be held weakly from one that may not.
+      // A typed class over a base that is not a typed class - an untyped class, a `dynamic`
+      // one, a function, a built-in such as `Error` - holds what that base's constructor
+      // made, so it has no layout of its own to report. The flag is inherited, as the base's
+      // fields are.
       const hasSuperclass = constructorParent !== surroundingAgent.intrinsic('%Function.prototype%');
       (F as { UntypedBase?: boolean }).UntypedBase = hasSuperclass
         && (!baseIsTyped || (constructorParent as { UntypedBase?: boolean }).UntypedBase === true);
+      // A typed class that is not a value type class is a reference type, and so is a `sealed`
+      // or an `abstract` one whether or not it declares a typed field.
       const baseIsReference = (constructorParent as { ReferenceKind?: boolean } | undefined)?.ReferenceKind === true;
-      (F as { ReferenceKind?: boolean }).ReferenceKind = baseIsReference
-        || modifiers.includes('reference') || modifiers.includes('sealed') || modifiers.includes('abstract');
+      (F as { ReferenceKind?: boolean }).ReferenceKind = !isValue && (baseIsReference
+        || modifiers.includes('sealed') || modifiers.includes('abstract')
+        || (F as { SealInstances?: boolean }).SealInstances === true);
       // proposal-runtime-types (spec sec-abstract-classes): an abstract class
       // cannot be instantiated - its constructor's [[Construct]] throws a
       // TypeError when NewTarget is that constructor itself, while super() from a
@@ -1706,6 +1720,21 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           controls: fieldControls,
         });
       }
+      // #sec-value-classes: every field of a value class has a type, and the type is a value
+      // type. A field whose type reads a type parameter - `T`, `[N].<uint8>` - is judged by the
+      // parameter's bound where the class is checked, and by its argument where the class is
+      // applied; a generic class is evaluated once with its parameters unbound.
+      if ((F as { ValueClass?: boolean }).ValueClass === true) {
+        const fieldName = (key: string | PrivateName): Value => Value(typeof key === 'string' ? key : `#${String((key as { Description?: { stringValue?(): string } }).Description?.stringValue?.() ?? '').replace(/^#/, '')}`);
+        if (!complete) {
+          return Throw.TypeError('$1 is a value class, and one of its fields has no type', className as Value);
+        }
+        for (const { key, type } of laidOut) {
+          if (!mentionsTypeParameter(type) && !IsValueType(type)) {
+            return Throw.TypeError('$1 is a value class, and its field $2 has a type that is not a value type', className as Value, fieldName(key));
+          }
+        }
+      }
       // #sec-specialization-lists: layout is derived AFTER selection. A field whose type
       // applies a family with cases takes its layout from the selected body,
       // which exists once the application is materialized - so materialize it
@@ -1734,7 +1763,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           Value(String(computed.overflow.need)),
         );
       }
-      (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = computed;
+      // #sec-value-classes and #table-layout-by-type: a class that is not a value class is a
+      // reference type and has no layout. The walk above still runs for it, so a cycle and a
+      // `size` its fields exceed are reported, but what it found is not kept: it was read by
+      // a placement `new`, which put an object with an identity onto a buffer, by the layout
+      // reflection of a field and by a field decorator's `offset`, each of which answered for
+      // a class whose `hasLayout` is *false*.
+      (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = (F as { ValueClass?: boolean }).ValueClass === true ? computed : null;
       // The fields a value of this class is made of, the base's first, whether or not they
       // have a layout: what a copy and a comparison walk where the class has none
       // (ValueFieldsOf). *null* where the list is not whole - an untyped field, or a base that

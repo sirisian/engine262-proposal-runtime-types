@@ -187,7 +187,7 @@ test('primitive metadata: a default crosses, so both spellings of a declaration 
   // And the requirement the model was chosen for: a value type class whose
   // fields are unit-typed is zero-fillable, which #sec-typed-classes needs for
   // `let d: [10].<A>;` to hold ten zero-filled instances.
-  const vec = `${dims}${castD} type Meter = float64.<{ m: 1 }>; class Vec3 { x: Meter; y: Meter; z: Meter; } `;
+  const vec = `${dims}${castD} type Meter = float64.<{ m: 1 }>; value class Vec3 { x: Meter; y: Meter; z: Meter; } `;
   expect(evaluated(`${vec} const v = new Vec3(); String(Number(v.x) + Number(v.y) + Number(v.z));`)).toBe('0');
   expect(evaluated(`${vec} let d: [10].<Vec3>; String(Number(d.length)) + ":" + String(Number(d[0].x));`)).toBe('10:0');
   expect(evaluated(`${dims}${castD} let m: [4].<float64.<{ m: 1 }>>; String(Number(m[3]));`)).toBe('0');

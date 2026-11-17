@@ -154,13 +154,13 @@ test('a position with no default leaves the tuple without one', () => {
 test('each position is its own instance', () => {
   // The fixed-extent array case gives the reason: a class default is an object,
   // and a write through one position must not show at another.
-  expect(value('class P { a: uint8; } let d: [P, P]; d[0].a = (1 := uint8); String(d[1].a);')).toBe('0');
+  expect(value('value class P { a: uint8; } let d: [P, P]; d[0].a = (1 := uint8); String(d[1].a);')).toBe('0');
 });
 
 test('a class field of tuple type takes the default', () => {
   // This threw - "undefined is not assignable" - so a value type class holding
   // a tuple field could not be instantiated at all.
-  expect(value('class C { t: [uint8, uint8]; } const c = new C(); `${c.t.length}:${c.t[0]}`;')).toBe('2:0');
+  expect(value('value class C { t: [uint8, uint8]; } const c = new C(); `${c.t.length}:${c.t[0]}`;')).toBe('2:0');
 });
 
 test('a typed property descriptor of tuple type takes the default', () => {
@@ -245,7 +245,7 @@ test('rational defaults to zero', () => {
 test('a class field of these types takes the default', () => {
   // This threw - "undefined is not assignable to decimal128" - so a value type
   // class holding a decimal or a vector field could not be instantiated.
-  expect(value('class H { d: decimal128; v: float32x4; }'
+  expect(value('value class H { d: decimal128; v: float32x4; }'
     + ' const h = new H(); `${h.d.toString()}:${h.v.x}`;')).toBe('0:0');
 });
 
@@ -305,24 +305,24 @@ test('a class with methods is not read as having undefaultable members', () => {
   // A class record carries its methods and accessors alongside its fields, and
   // their function types have no default. Reading them as fields would refuse
   // this ordinary program, so the rule consults the FIELDS.
-  expectOk('class P { a: uint8; m() { return 1; } get g(): uint8 { return 2; } } let p: P;');
-  expect(value('class P { a: uint8; m() { return 1; } } let p: P; String(p.a);')).toBe('0');
+  expectOk('value class P { a: uint8; m() { return 1; } get g(): uint8 { return 2; } } let p: P;');
+  expect(value('value class P { a: uint8; m() { return 1; } } let p: P; String(p.a);')).toBe('0');
 });
 
 test('a field of a type with no default is refused, at the declaration it names', () => {
   // This threw before too, but from RequireType inside the constructor and
   // saying "undefined is not assignable to symbol" - the symptom rather than
   // the reason.
-  expectTypeError('class C { s: symbol; } new C();');
-  expectOk('class C { s: symbol = Symbol("x"); } new C();');
+  expectTypeError('value class C { s: symbol; } new C();');
+  expectOk('value class C { s: symbol = Symbol("x"); } new C();');
 });
 
 test('a generic parameter is exempt', () => {
   // Nothing is known about what an application will bind, so the declaration
   // stands; the check belongs at the specialization, which this engine does not
   // reach.
-  expectOk('class Box<T: type> { value: T; }');
-  expectOk('class Box<T: type> { value: T; } const b = new Box.<uint8>();');
+  expectOk('value class Box<T: type extends value> { value: T; }');
+  expectOk('value class Box<T: type extends value> { value: T; } const b = new Box.<uint8>();');
 });
 
 test('a registered meta default does NOT satisfy the rule', () => {
@@ -397,10 +397,10 @@ test('a write through a ref inherits the binding it aliases', () => {
 test('the storage kinds that already worked are unchanged', () => {
   // Each carries its declared type on the object and checked its store, which
   // is what an environment binding now does too.
-  expect(value('class P { x: uint8 = (1 := uint8); } const p = new P(); p.x = 3; String(p.x is uint8);')).toBe('true');
+  expect(value('value class P { x: uint8 = (1 := uint8); } const p = new P(); p.x = 3; String(p.x is uint8);')).toBe('true');
   expect(value('type O = { x: uint8 }; let o: O = { x: 1 }; o.x = 3; String(o.x is uint8);')).toBe('true');
   expect(value('let a: [].<uint8> = [1]; a[0] = 3; String(a[0] is uint8);')).toBe('true');
-  expectTypeError('let a: any = 300; class P { x: uint8 = (1 := uint8); } const p = new P(); p.x = a;');
+  expectTypeError('let a: any = 300; value class P { x: uint8 = (1 := uint8); } const p = new P(); p.x = a;');
 });
 
 test('a binding whose type needs no conversion is untouched', () => {
@@ -501,5 +501,5 @@ test('the pass does not answer where it has not processed what supplies the defa
   // A value type class's default is an INSTANCE, which exists only once the
   // class has evaluated; a class declaration is not among the declarations the
   // pass pre-processes. So a tuple of them is left to the run time too.
-  expect(value('class P { a: uint8; } let d: [P, P]; d[0].a = (1 := uint8); String(d[1].a);')).toBe('0');
+  expect(value('value class P { a: uint8; } let d: [P, P]; d[0].a = (1 := uint8); String(d[1].a);')).toBe('0');
 });

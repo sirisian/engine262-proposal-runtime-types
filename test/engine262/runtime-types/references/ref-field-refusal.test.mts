@@ -22,17 +22,17 @@ test('a ref field is refused with its reason', () => {
 
 test('the spellings that are not a ref field are untouched', () => {
   // An ordinary field of the same type.
-  expect(evaluated('class A { x: uint8 = 1; } class H { r: A; } String(new H().r.x);')).toBe('0');
+  expect(evaluated('value class A { x: uint8 = 1; } value class H { r: A; } String(new H().r.x);')).toBe('0');
   // A field whose NAME is `ref`, which is an ordinary identifier.
-  expect(evaluated('class H { ref: uint8 = 1; } String(new H().ref);')).toBe('1');
+  expect(evaluated('value class H { ref: uint8 = 1; } String(new H().ref);')).toBe('1');
 });
 
 test('references themselves still work where they may live', () => {
   // A binding, which does not outlive the borrow.
-  expect(evaluated(`class A { x: uint8 = 1; } const arr: [1].<A>;
+  expect(evaluated(`value class A { x: uint8 = 1; } const arr: [1].<A>;
     const ref e = arr[0]; e.x = 5; String(arr[0].x);`)).toBe('5');
   // A parameter, which is the borrow this form is built around.
-  expect(evaluated(`class A { x: uint8 = 1; }
+  expect(evaluated(`value class A { x: uint8 = 1; }
     function f(ref a: A): uint8 { return a.x; }
     const arr: [1].<A>; arr[0].x = 3; String(f(ref arr[0]));`)).toBe('3');
 });

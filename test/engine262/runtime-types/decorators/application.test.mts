@@ -13,28 +13,28 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  */
 
 test('a decorator on a class field is found and called', () => {
-  expect(evaluated('const log = []; function f(c) { log.push("f:" + String(c.name)); } class A { @f a: uint8; } log.join(",");')).toBe('f:a');
+  expect(evaluated('const log = []; function f(c) { log.push("f:" + String(c.name)); } value class A { @f a: uint8; } log.join(",");')).toBe('f:a');
   // #sec-decorator-application: "`@f` and `@f()` are ONE FORM: both resolve
   // with no explicit argument." Not because the empty call is evaluated and its
   // result applied - that was the TC39 FACTORY model, which this clause exists
   // to replace - but because a decoration calls its decorator ONCE, with the
   // written arguments and the context last, and `@f()` writes none.
   const oneForm = 'const l = []; function g(c) { l.push("called:" + String(c.name)); } ';
-  expect(evaluated(`${oneForm} class B { @g() x: uint8; } l.join(",");`)).toBe('called:x');
-  expect(evaluated(`${oneForm} class B { @g x: uint8; } l.join(",");`)).toBe('called:x');
+  expect(evaluated(`${oneForm} value class B { @g() x: uint8; } l.join(",");`)).toBe('called:x');
+  expect(evaluated(`${oneForm} value class B { @g x: uint8; } l.join(",");`)).toBe('called:x');
   // The factory shape is no longer special: `@g()` calls `g` with the context
   // like any other decoration, so a `g` that ignores it and returns a function
   // has returned a value nobody asked for. Pinned because this is the behaviour
   // that CHANGED, and a reader of the old test should find the new answer where
   // the old one was.
-  expect(evaluated('const l = []; function g() { return (c) => l.push("factory"); } class B { @g() x: uint8; } l.join(",");')).toBe('');
+  expect(evaluated('const l = []; function g() { return (c) => l.push("factory"); } value class B { @g() x: uint8; } l.join(",");')).toBe('');
   // The context identifies what was decorated. The rest of the ClassField reflection
   // (#sec-reflection-shape-class) - type, static, private, readonly, initial, offset,
   // metadata - is in reflection-shapes.test.mts; `kind` and `name` are what shows the right
   // declaration reached the right decorator.
-  expect(evaluated('let k; function f(c) { k = c.kind; } class A { @f a: uint8; } k;')).toBe('ClassField');
+  expect(evaluated('let k; function f(c) { k = c.kind; } value class A { @f a: uint8; } k;')).toBe('ClassField');
   // Each field's own decoration, in document order.
-  expect(evaluated('const log = []; function f(c) { log.push(String(c.name)); } class A { @f a: uint8; @f b: uint8; } log.join(",");')).toBe('a,b');
+  expect(evaluated('const log = []; function f(c) { log.push(String(c.name)); } value class A { @f a: uint8; @f b: uint8; } log.join(",");')).toBe('a,b');
 });
 
 test('decorators evaluate top-down and apply bottom-up', () => {
@@ -51,7 +51,7 @@ test('decorators evaluate top-down and apply bottom-up', () => {
   // order.
   const stacked = 'const log = []; function ev(n) { log.push("eval:" + n); return n; } '
     + 'function tag(n, c) { log.push("apply:" + n); } '
-    + 'class A { @tag(ev("outer")) @tag(ev("inner")) a: uint8; } ';
+    + 'value class A { @tag(ev("outer")) @tag(ev("inner")) a: uint8; } ';
   expect(evaluated(`${stacked} log.join(",");`)).toBe('eval:outer,eval:inner,apply:inner,apply:outer');
 });
 
@@ -61,14 +61,14 @@ test('a reserved layout control and a user decorator share one field', () => {
   // evaluate. That is what lets one field carry both, and NEITHER MAY CONSUME
   // THE OTHER: the control still places the field and the decorator still fires.
   const both = 'const log = []; function audit(c) { log.push("audit:" + String(c.name)); } '
-    + 'class A { @align(4) @audit a: uint8; b: uint32; } ';
+    + 'value class A { @align(4) @audit a: uint8; b: uint32; } ';
   expect(evaluated(`${both} log.join(",");`)).toBe('audit:a');
   expect(evaluated(`${both} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);`)).toBe('4');
   // A control alone still evaluates no expression - there is no binding named
   // `packed` and it does not need one. (`packed` is a CLASS control, so it goes
   // on the class; a class control written in a field position is simply not the
   // control, which is why the byteLength below is the packed 3 and not 4.)
-  expect(evaluated('@packed class A { a: uint8; b: uint16; } String((type A).byteLength);')).toBe('3');
+  expect(evaluated('@packed value class A { a: uint8; b: uint16; } String((type A).byteLength);')).toBe('3');
 });
 
 test('what the decorator call does not open', () => {
@@ -96,12 +96,12 @@ test('the class family: contexts exist and carry their declaration', () => {
   const field = 'let c; function f(x) { c = x; } class A { @f static s: uint8; } ';
   expect(evaluated(`${field} Object.getOwnPropertyNames(c).join(",");`)).toBe('kind,name,static,private,protected,readonly,type,initial,initializer,offset,byteLength,metadata,classContext,addInitializer');
   expect(evaluated(`${field} String(c.static) + "/" + String(c.private) + "/" + String(c.type === uint8);`)).toBe('true/false/true');
-  expect(evaluated('let c; function f(x) { c = x; } class B { @f #p: uint8; } String(c.private);')).toBe('true');
+  expect(evaluated('let c; function f(x) { c = x; } value class B { @f #p: uint8; } String(c.private);')).toBe('true');
 
   // "classContext: Reflect.Class.<TClass>" - a member's context carries its
   // class's, which is what lets one decorator reach the declaration it belongs
   // to without the class having to pass itself.
-  expect(evaluated('let c; function f(x) { c = x; } class Named { @f a: uint8; } c.classContext.kind + ":" + String(c.classContext.name);')).toBe('Class:Named');
+  expect(evaluated('let c; function f(x) { c = x; } value class Named { @f a: uint8; } c.classContext.kind + ":" + String(c.classContext.name);')).toBe('Class:Named');
 });
 
 test('members apply before their container, in document order', () => {
@@ -113,13 +113,13 @@ test('members apply before their container, in document order', () => {
   const both = 'const log = []; '
     + 'function cls(c) { log.push("class:" + String(c.name)); } '
     + 'function fld(c) { log.push("field:" + String(c.name) + "@" + String(c.classContext.name)); } '
-    + '@cls class B { @fld b: uint8; @fld c: uint8; } ';
+    + '@cls value class B { @fld b: uint8; @fld c: uint8; } ';
   expect(evaluated(`${both} log.join(",");`)).toBe('field:b@B,field:c@B,class:B');
 
   // And the two rules compose: reverse source order WITHIN a declaration,
   // document order ACROSS declarations, container last.
   const composed = 'const log = []; function tag(n, c) { log.push(n); } '
-    + '@tag("C2") @tag("C1") class A { @tag("f2") @tag("f1") a: uint8; @tag("g") b: uint8; } ';
+    + '@tag("C2") @tag("C1") value class A { @tag("f2") @tag("f1") a: uint8; @tag("g") b: uint8; } ';
   expect(evaluated(`${composed} log.join(",");`)).toBe('f1,f2,g,C1,C2');
 });
 
@@ -142,7 +142,7 @@ test('each member position takes its own context', () => {
   // is the composition the ordering rule promises across kinds rather than
   // within one.
   const mixed = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
-    + '@tag("C") class A { @tag("f") a: uint8; @tag("m") m() {} @tag("g") get g() { return 1; } } ';
+    + '@tag("C") value class A { @tag("f") a: uint8; @tag("m") m() {} @tag("g") get g() { return 1; } } ';
   expect(evaluated(`${mixed} log.join(",");`)).toBe('f(ClassField),m(ClassMethod),g(ClassGetter),C(Class)');
 });
 

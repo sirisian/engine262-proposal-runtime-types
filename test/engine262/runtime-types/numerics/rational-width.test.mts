@@ -285,7 +285,7 @@ test('rational.<bigint>: a type of its own, with bigint parts and no layout', ()
   expect(outcome(`Math.floor(${B}(-(2n ** 100n) - 1n, 2n))`)).toBe(`${-(2n ** 99n) - 1n}`);
   expect(outcome(`Reflect.typeOf(Math.abs(${B}(-1, 3)))`)).toBe('rational.<bigint>');
   expect(outcome(`${B}.byteLength`)).toBe('TypeError');
-  expect(outcome(`(() => { class Q { q: ${B} = 0; } return Q.byteLength; })()`)).toBe('TypeError');
+  expect(outcome(`(() => { value class Q { q: ${B} = 0; } return Q.byteLength; })()`)).toBe('TypeError');
 });
 
 test('rational.<bigint>: any literal fits, and parse reads any size', () => {
@@ -383,8 +383,8 @@ test('a rational.<N> is laid out as a record of its two int.<N> fields', () => {
   // `int.<12>` take 4, not 3. The oracle is the engine's own record layout: a class of two `int.<N>` fields,
   // packed by the bit where sub-byte and padded to the part's alignment where not.
   for (const n of [1, 2, 3, 4, 5, 7, 8, 12, 16, 24, 40, 100, 128, 200, 65536]) {
-    expect(evaluated(`class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([${T(n)}.byteLength, ${T(n)}.alignment]);`), T(n))
-      .toBe(evaluated(`class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([P.byteLength, P.alignment]);`));
+    expect(evaluated(`value class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([${T(n)}.byteLength, ${T(n)}.alignment]);`), T(n))
+      .toBe(evaluated(`value class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([P.byteLength, P.alignment]);`));
   }
   expect(outcome(`${T(7)}.byteLength`)).toBe('2');
   expect(outcome(`${T(12)}.byteLength`)).toBe('4');

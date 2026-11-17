@@ -897,7 +897,7 @@
     {
       "name": "class-field",
       "modules": {
-        "main": "class Box{value:number|string=1;}const raw:any=new Box();let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+        "main": "value class Box{value:number|string=1;}const raw:any=new Box();let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
       },
       "script": true,
       "expected": {
@@ -910,7 +910,7 @@
     {
       "name": "generic-class-field",
       "modules": {
-        "main": "const seed:any=1;class Box<T:type>{value:T=seed;}const raw:any=new Box.<number|string>();let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
+        "main": "const seed:any=1;value class Box<T:type extends value>{value:T=seed;}const raw:any=new Box.<number|string>();let calls=0;function f(ref n:number){calls++;}const invoke:any=f;let caught=false;try{invoke(ref raw.value);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||calls!==0)throw new Error(\"admitted incompatible location\");"
       },
       "script": true,
       "expected": {
