@@ -670,6 +670,8 @@ export class VectorValue extends PrimitiveValue {
   static {
     Object.defineProperty(this.prototype, 'type', { value: 'Vector' });
   }
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is VectorValue;
 }
 
 export class TypedNumberValue extends PrimitiveValue {
@@ -719,6 +721,8 @@ export class TypedNumberValue extends PrimitiveValue {
   static {
     Object.defineProperty(this.prototype, 'type', { value: 'TypedNumber' });
   }
+
+  declare static [Symbol.hasInstance]: (value: unknown) => value is TypedNumberValue;
 }
 
 /** https://tc39.es/ecma262/#sec-numberbitwiseop */
@@ -1189,7 +1193,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const declaring = recorded.get(P instanceof JSStringValue ? P.stringValue() : P);
       if (declaring !== undefined && surroundingAgent.executionContextStack.at(-1)?.Function !== declaring) {
         const current = OrdinaryGetOwnProperty(this as unknown as OrdinaryObject, P);
-        const rewrites = !(current instanceof UndefinedValue) && (Desc.Get !== undefined || Desc.Set !== undefined
+        const rewrites = !(current instanceof UndefinedValue) && (Desc.Getter !== undefined || Desc.Setter !== undefined
           || (Desc.Value !== undefined && (current.Value === undefined || !SameValue(Desc.Value, current.Value))));
         if (rewrites) {
           if ((declaring as { staticReadonlyField?: boolean }).staticReadonlyField === true) {

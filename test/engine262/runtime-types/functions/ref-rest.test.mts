@@ -36,6 +36,10 @@ test('the second-class rule: a run is never stored, passed whole, or indexed out
   expectThrown(`function h(z: any): void {} function f(ref ...xs: [].<uint32>): void { h(xs); } ${AB} f(ref a);`, 'binds no array');
   expectThrown(`function f(ref ...xs: [].<uint32>): uint32 { return xs[5]; } ${AB} String(f(ref a));`, 'in range');
   expectThrown(`function f(ref ...xs: [].<uint32>): void { xs.length = 0; } ${AB} f(ref a);`, 'constant');
+  // A conversion of the run is the same escape, to a Number as to a String. `Number(xs)` reached
+  // the exhaustive check at the end of ToNumber, which is an error of the host and not a TypeError.
+  expectThrown(`function f(ref ...xs): string { return String(xs); } ${AB} f(ref a);`, 'binds no array');
+  expectThrown(`function f(ref ...xs): number { return Number(xs); } ${AB} f(ref a);`, 'binds no array');
 });
 
 test('a ref rest requires ref arguments', () => {

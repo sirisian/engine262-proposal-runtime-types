@@ -18,6 +18,7 @@ import {
   TypedNumberValue,
   VectorValue,
   ReferenceValue,
+  ReferenceRunValue,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-throw-an-exception */
@@ -212,6 +213,10 @@ export function format(arg: Formattable): string {
       return `[${arg.map(format).join(', ')}]`;
     case arg instanceof ReferenceValue:
       return '[reference]';
+    case arg instanceof ReferenceRunValue:
+      // The run a `ref` rest collects (#sec-function-types). A message that
+      // names one reached the exhaustive check below, which is a host error.
+      return '[ref rest]';
     default:
       throw OutOfRange.exhaustive(arg);
   }

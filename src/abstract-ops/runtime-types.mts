@@ -41,7 +41,6 @@ import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWh
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, TuplePositionsAre, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver, IsValueType, ValueFieldsOf } from '../type-system/layout.mts';
-import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { CreateRationalValue, isRationalObject, ToRational } from '../intrinsics/Rational.mts';
@@ -6082,7 +6081,7 @@ function* EvaluateContractPredicate(predicate: ParseNode): ValueEvaluator {
     if (predicate.Alternate) return Q(yield* EvaluateContractPredicate(predicate.Alternate as ParseNode));
     return Value.true;
   }
-  let core = predicate;
+  let core: ParseNode = predicate;
   while (core.type === 'ParenthesizedExpression') core = core.Expression as ParseNode;
   if (core.type === 'MatchExpression') implicitFalseDefaultMatches.add(core);
   return Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));

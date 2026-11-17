@@ -67,7 +67,7 @@ import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setL
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
-  iterationInterfaceRecord, protocolInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
+  protocolInterfaceRecord, identityRecord, getParsedIdentityDeclaration, isIterationInterfaceName,
 } from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';

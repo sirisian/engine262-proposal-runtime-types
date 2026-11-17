@@ -345,6 +345,10 @@ test('a definition that gives a readonly field another value is refused', () => 
   // The declaring constructor assigns as before, and a static field is covered.
   expect(evaluated('value class H { readonly n: uint8; constructor(n: uint8) { this.n = n; } } String(new H(4).n);')).toBe('4');
   expect(evaluated(`${TRY}class H { static readonly n: uint8 = 1; } at(() => { Object.defineProperty(H, 'n', { value: 5 }); return 'defined'; }) + String(H.n);`)).toBe('TypeError1');
+  // "...or makes it an accessor". A typed field was refused for its declared type; a field with
+  // no annotation was not refused at all, the test reading descriptor fields of another name.
+  expect(evaluated(`${TRY}class H { readonly n = 1; } const h = new H(); [at(() => { Object.defineProperty(h, 'n', { get() { return 9; } }); return 'getter'; }), at(() => { Object.defineProperty(h, 'n', { set(v) { } }); return 'setter'; }), String(h.n)].join();`)).toBe('TypeError,TypeError,1');
+  expect(evaluated(`${TRY}class H { static readonly n = 1; } at(() => { Object.defineProperty(H, 'n', { get() { return 9; } }); return 'getter'; }) + String(H.n);`)).toBe('TypeError1');
 });
 
 // Freezing is an act on one object. A copy is another value, the reader's own.

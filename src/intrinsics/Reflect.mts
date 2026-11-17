@@ -18,7 +18,7 @@ import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
 import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord, displayType } from '../type-system/records.mts';
-import { RuntimeTypeOf, SubstituteTypeArguments } from '../type-system/runtime.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { invalidTupleRest } from '../type-system/tuple-rests.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from '../type-system/library-type-arguments.mts';
 import { IsAssignable } from '../type-system/relations.mts';

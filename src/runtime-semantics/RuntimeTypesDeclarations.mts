@@ -44,7 +44,7 @@ import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/f
 import { IsBudgetExhausted, EvaluateWithTypeBudget } from '../type-system/budget.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { GetValue } from '../abstract-ops/all.mts';
-import { iterationInterfaceRecord, protocolInterfaceRecord } from '../type-system/iteration-types.mts';
+import { protocolInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import { InjectedClassOf, instantiatePartialClassSelf, mentionsTypeParameter, substituteFreeTypeParameters, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';

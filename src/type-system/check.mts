@@ -86,7 +86,7 @@ import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts'
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import { ClassValueOrigins } from './class-value-origins.mts';
 import {
-  iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType, GeneratorTypeOfProtocol } from './iteration-types.mts';
+  iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType, GeneratorTypeOfProtocol } from './iteration-types.mts';
 import { IsValueTypeClass } from './layout.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
@@ -2693,7 +2693,7 @@ function sealedWithDeclaredMembers(t: TypeRecord): boolean {
     })) {
       return false;
     }
-    const base = (current as { Base?: TypeRecord }).Base;
+    const base: TypeRecord | undefined = (current as { Base?: TypeRecord }).Base;
     if (decl.ClassTail.ClassHeritage && !base) return false;
     current = base;
   }
@@ -2967,18 +2967,15 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
     }
     case 'toReversed':
     case 'toSorted':
-      // #sec-intrinsic-array-contracts: on an array of fixed length the copy
-      // has that length, so it is the receiver's own type. A window's copy is
-      // an owned array of no stated length, as `slice` below says.
-      if (receiver.Kind === 'array' && typeof receiver.Extent === 'number') {
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0),
-          Return: { Kind: 'array', Element: element, Extent: receiver.Extent }, Untyped: false }] } as unknown as Known;
-      }
-    // falls through
-    case 'slice':
+    case 'slice': {
       // #sec-span-type: copying methods produce an owned array, including on a window.
+      // #sec-intrinsic-array-contracts: `toReversed` and `toSorted` on an array
+      // of fixed length give a copy of that length, so the receiver's own type.
+      // A window's copy, and every `slice`, is an owned array of no stated length.
+      const keepsLength = name !== 'slice' && receiver.Kind === 'array' && typeof receiver.Extent === 'number';
       return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0),
-        Return: { Kind: 'array', Element: element, Extent: 'dynamic' }, Untyped: false }] } as unknown as Known;
+        Return: { Kind: 'array', Element: element, Extent: keepsLength ? receiver.Extent : 'dynamic' }, Untyped: false }] } as unknown as Known;
+    }
     case 'reverse':
     case 'sort':
       return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0), Return: receiver, Untyped: false }] } as unknown as Known;
@@ -19500,7 +19497,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const user = top.parent;
         if (whole && path.length === 0 && asksOnlyPresence(use)) continue;
         let reached: TypeRecord | 'length' | null = path.length > 0 ? rootType : null;
-        for (const member of path) reached = reached && reached !== 'length' ? stepIntoCopy(reached, member) : null;
+        for (const member of path) reached = reached && typeof reached !== 'string' ? stepIntoCopy(reached, member) : null;
         const plainStore = !!user && ((user.type === 'AssignmentExpression' && (user as ParseNode.AssignmentExpression).LeftHandSideExpression === top)
           || (user.type === 'UpdateExpression' && (nodeField<ParseNode>(user, 'LeftHandSideExpression') === top || nodeField<ParseNode>(user, 'UnaryExpression') === top)));
         if (!whole || !user || reached === null) {
@@ -19539,7 +19536,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let current: ParseNode = target;
     for (;;) {
       if (current.type !== 'MemberExpression' || !(current as ParseNode.MemberExpression).MemberExpression) return null;
-      const base = patternExpression((current as ParseNode.MemberExpression).MemberExpression as ParseNode) ?? (current as ParseNode.MemberExpression).MemberExpression as ParseNode;
+      const base: ParseNode = patternExpression((current as ParseNode.MemberExpression).MemberExpression as ParseNode) ?? (current as ParseNode.MemberExpression).MemberExpression as ParseNode;
       const baseType = staticType(base);
       if (isReadonlySpanReceiver(baseType as TypeRecord | null)) return baseType as TypeRecord;
       const inline = storedInline(baseType);
@@ -20702,7 +20699,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node && contextual && expressionViewTypes.has(node) && isTemplateArgumentType(expressionViewTypes.get(node)!)) {
       const wanted = ArrayWithMembers(contextual as TypeRecord);
       if (wanted && wanted.members.every((member) => IsAssignable(templateMembersType(), member))) {
-        const strings = staticType(node, wanted.array as Known);
+        const strings = staticTypeIn(node, wanted.array as Known);
         if (strings && IsAssignable(strings as TypeRecord, wanted.array)) return contextual;
       }
     }
@@ -30630,7 +30627,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const key of parts.slice(1)) receiver = patternMember(receiver, key);
         const written = lookup(name) ?? staticType(receiver);
         if (!written) continue;
-        const clauses: { predicate: ParseNode, bindings: ReadonlyMap<string, TypeRecord>, declarations: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] }[] = [];
+        const clauses: { predicate: ParseNode, bindings: ReadonlyMap<string, TypeRecord>, declarations: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[],
+          constants?: Map<ParseNode.TypeParameter, TypeRecord> }[] = [];
         const baseOf = (type: TypeRecord): TypeRecord => {
           const seen = new Set<TypeRecord>();
           while (!seen.has(type)) {
@@ -30882,7 +30880,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             typeParameterScopes.push(scope);
             try {
               if (whereClauseWalkDepth > 0 && pass === 0) {
-                const appliedConstants = (clause as { constants?: Map<ParseNode.TypeParameter, TypeRecord> }).constants;
+                const appliedConstants = clause.constants;
                 const priorConstants = retainedParameterConstants;
                 if (appliedConstants?.size) retainedParameterConstants = new Map([...(priorConstants ?? []), ...appliedConstants]);
                 try {
@@ -32546,22 +32544,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const above: [bigint | null, bigint | null] = [split + 1n, c.max];
     const satisfied = c.op === '<' || c.op === '<=' ? below : above;
     return outcome ? satisfied : (satisfied === below ? above : below);
-  };
-  /**
-   * The keys an edge of an ordered test leaves its place, within the current
-   * keys: a comparison's edge is one interval, and a range pattern's false
-   * edge is one only where the range covers an end of the current keys; it is
-   * `null` where it would be two.
-   */
-  const edgeInterval = (c: OrderedComparison, outcome: boolean, lo: bigint | null, hi: bigint | null): [bigint | null, bigint | null] | null => {
-    const [rlo, rhi] = c.range ?? comparisonRegion(c, outcome);
-    if (!c.range || outcome) return [higherLow(rlo, lo), lowerHigh(rhi, hi)];
-    const coversLow = rlo === null || (lo !== null && rlo <= lo);
-    const coversHigh = rhi === null || (hi !== null && rhi >= hi);
-    if (coversLow && coversHigh) return [1n, 0n];
-    if (coversLow) return [higherLow(rhi! + 1n, lo), hi];
-    if (coversHigh) return [lo, lowerHigh(rlo! - 1n, hi)];
-    return null;
   };
   /**
    * #sec-narrowing-flow: a comparison of a String place with a String constant,

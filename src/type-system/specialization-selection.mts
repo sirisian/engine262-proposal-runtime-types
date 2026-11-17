@@ -597,7 +597,9 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
     const mine = attached.filter((a) => a.Owner === owner).map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
     for (const [a, b] of FindDuplicateCases(mine, owner.Parameters ?? [], host)) {
       // Two cases whose clauses no application satisfies together are not duplicates.
-      if (casesDisjoint ? casesDisjoint(a.Declaration, b.Declaration) : CasesAreDisjoint(a.Declaration, b.Declaration)) continue;
+      // A case with no declaration is disjoint from nothing: none was recorded for it.
+      const [first, second] = [a.Declaration, b.Declaration];
+      if (first && second && (casesDisjoint ? casesDisjoint(first, second) : CasesAreDisjoint(first, second))) continue;
       diagnostics.push({ kind: 'duplicate', message: `${a.Label} and ${b.Label} specialize ${owner.Label} for the same applications`, node: b.Declaration });
     }
   }

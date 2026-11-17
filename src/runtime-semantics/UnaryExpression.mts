@@ -9,6 +9,7 @@ import {
   VectorValue,
   isTypedNumber,
   ReferenceValue,
+  ReferenceRunValue,
 } from '../value.mts';
 import { typedUnary } from '../type-system/arithmetic.mts';
 import { isClassTypeObject, isTypeObject } from '../type-system/intern.mts';
@@ -214,9 +215,11 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
     }
     return Value('object');
   }
-  if (val instanceof ReferenceValue) {
+  if (val instanceof ReferenceValue || val instanceof ReferenceRunValue) {
     // proposal-runtime-types (references extension): a reference value never
-    // reaches typeof; every read that could carry one dereferences first.
+    // reaches typeof; every read that could carry one dereferences first. Nor
+    // does the run a `ref` rest collects: `typeof refs` is refused before the
+    // source runs (#sec-function-types).
     throw OutOfRange.nonExhaustive(val);
   }
   if (val instanceof VectorValue) {

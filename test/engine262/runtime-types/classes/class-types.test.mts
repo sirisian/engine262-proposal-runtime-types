@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError, expectThrown as expectThrownWith } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
-import { expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-typed-classes (Typed Classes) - a class name in a type position.
@@ -312,7 +312,7 @@ test('what the static merge does not claim', () => {
   // The store `d.nope = 1` is left to the seal: the base is `dynamic`, and its constructor may
   // have given the instance a property that no declaration names (#sec-typed-storage).
   expect(evaluated('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } const d = new D6(); String(Object.isExtensible(d)) + String(Object.isExtensible(new B6()));')).toBe('falsetrue');
-  expectThrown('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } function f() { "use strict"; const d = new D6(); d.nope = 1; } f();', 'Cannot set property');
+  expectThrownWith('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } function f() { "use strict"; const d = new D6(); d.nope = 1; } f();', 'Cannot set property');
   // The INSTANCE path is a separate merge and is untouched.
   expectStatic('value class B7 { v: uint8 = 0; } value class D7 extends B7 { } const d = new D7(); let s: string = d.v;');
 });

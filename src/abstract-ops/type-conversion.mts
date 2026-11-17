@@ -240,6 +240,13 @@ export function* ToNumber(argument: Value): ValueEvaluator<NumberValue> {
     const referent = Q(yield* GetValue(argument.Location));
     return Q(yield* ToNumber(referent));
   }
+  if (argument instanceof ReferenceRunValue) {
+    // proposal-runtime-types #sec-function-types: a `ref` rest binds no array;
+    // converting the run is the escape a reference never survives. ToString
+    // below says the same. `Number(refs)` reached the exhaustive check at the
+    // end of this function instead, which is a host error and not a TypeError.
+    return Throw.TypeError('$1', Value('a ref rest binds no array: forward it with `...`, or index it with a constant'));
+  }
   if (argument instanceof VectorValue) {
     // proposal-runtime-types #sec-vector-types: a vector is N lanes, and no
     // rule says which one a number conversion would take. The conversion a

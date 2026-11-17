@@ -157,8 +157,9 @@ export function endpointOf(v: RangeEndpoint | undefined): number | bigint | unde
   // compared through `operator<` rather than converted. Every caller here wants
   // a number - `length`, `scale`, the numeric comparisons - and each is
   // arithmetic that `Ordered` does not carry, which is the same reason `scale`
-  // lives on the `Scalable` instantiations only.
-  if (v instanceof ObjectValue) {
+  // lives on the `Scalable` instantiations only. A String endpoint, of
+  // `'a'..='z'`, is ordered and has no mathematical value either.
+  if (v instanceof ObjectValue || v instanceof JSStringValue) {
     return undefined;
   }
   return R(v);
