@@ -30,9 +30,11 @@ test('Object.is compares a value type class field-wise, as === does', () => {
 });
 
 test('nothing else changes', () => {
-  // A class that is NOT a value type class - `string` is not a value type, so
-  // #sec-typed-classes does not make its instances values.
-  expect(evaluated('class Q { s: string = ""; } const a = new Q(); const b = new Q(); String(Object.is(a, b));')).toBe('false');
+  // A class that is NOT a value type class: it holds a reference, so its instances are objects.
+  expect(evaluated('class Q { s: [].<string> = []; } const a = new Q(); const b = new Q(); String(Object.is(a, b));')).toBe('false');
+  // A class of `string` fields IS one - "the existing primitive types are value types"
+  // (#sec-value-types), and a layout is not part of the condition (#sec-typed-classes).
+  expect(evaluated('class Q { s: string = ""; } const a = new Q(); const b = new Q(); String(Object.is(a, b)) + String(a === b);')).toBe('truetrue');
   expect(evaluated('const a = { x: 1 }; const b = { x: 1 }; String(Object.is(a, b));')).toBe('false');
   // `Object.is`'s own distinguishing cases are untouched.
   expect(evaluated('String(Object.is(NaN, NaN));')).toBe('true');

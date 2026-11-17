@@ -7,6 +7,7 @@ import {
   ObjectValue,
   TypedNumberValue,
   Value,
+  VectorValue,
   wellKnownSymbols,
   unwrapToNumber,
   Descriptor,
@@ -15,11 +16,12 @@ import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { OrdinaryObjectCreate, OrdinaryGetPrototypeOf } from './all.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { IsValueType, IsValueTypeClass, LayoutOf, type ClassLayout } from '../type-system/layout.mts';
+import { IsValueType, IsValueTypeClass, ValueFieldsOf } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { PlacementBackingOf, RequirePlacementLive } from './placement.mts';
 import { isRationalObject, rationalEquals, rationalSameWidth, rationalCompare } from '../intrinsics/Rational.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, float128SameValue, Float128ToBinary128 } from '../intrinsics/Float128.mts';
@@ -215,7 +217,63 @@ function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boole
   return NumberValue.sameValue(xn, yn) === Value.true;
 }
 
+/**
+ * Two SIMD vectors, compared lane by lane.
+ *
+ * #sec-which-operations-each-family-defines gives the vector family `equal`, `sameValue` and
+ * `sameValueZero`, "applied lane-wise", and a vector "is a value type ... it has no identity". So
+ * two vectors of one type are `===` exactly when each lane is, are the same value to `Object.is`
+ * when each lane is the same value, and are one key of a Map likewise. Nothing here asked the lanes:
+ * a vector fell through to the comparison of two objects, so `v === w` was *false* for two vectors
+ * holding the same lanes, and two instances of a value type class with a vector field were never
+ * equal.
+ *
+ * A vector is never equal to a value that is not one, nor to a vector of another type.
+ */
+function vectorEquals(x: Value, y: Value, lane: (a: Value, b: Value) => boolean): boolean {
+  if (!(x instanceof VectorValue) || !(y instanceof VectorValue)) {
+    return false;
+  }
+  if (!SameTypeRecord(x.TypeRecord as TypeRecord, y.TypeRecord as TypeRecord) || x.lanes.length !== y.lanes.length) {
+    return false;
+  }
+  return x.lanes.every((value, index) => lane(value, y.lanes[index]!));
+}
+
+/**
+ * Two ranges, compared by what they are made of.
+ *
+ * #sec-ranges: "A range is a value type class over an ordered element type and a bound at each
+ * endpoint it has". So two ranges are `===` exactly when they are of one shape and one element type
+ * and each endpoint they carry is equal, as two instances of any value type class are when their
+ * fields are. A range was compared as an object, so `0..<3 === 0..<3` was *false* and an equal range
+ * was a second key of a Map.
+ */
+function rangeEquals(x: Value, y: Value, endpoint: (a: Value, b: Value) => boolean): boolean {
+  if (!isRangeObject(x) || !isRangeObject(y)) {
+    return false;
+  }
+  if (x.RangeStartBound !== y.RangeStartBound || x.RangeEndBound !== y.RangeEndBound) {
+    return false;
+  }
+  if ((x.RangeStart === undefined) !== (y.RangeStart === undefined) || (x.RangeEnd === undefined) !== (y.RangeEnd === undefined)) {
+    return false;
+  }
+  if ((x.RangeElementType === undefined) !== (y.RangeElementType === undefined)
+    || (x.RangeElementType !== undefined && !SameTypeRecord(x.RangeElementType, y.RangeElementType!))) {
+    return false;
+  }
+  return (x.RangeStart === undefined || endpoint(x.RangeStart, y.RangeStart!))
+    && (x.RangeEnd === undefined || endpoint(x.RangeEnd, y.RangeEnd!));
+}
+
 export function SameValue(x: Value, y: Value): boolean {
+  if (x instanceof VectorValue || y instanceof VectorValue) {
+    return vectorEquals(x, y, SameValue);
+  }
+  if (surroundingAgent.feature('runtime-types') && (isRangeObject(x) || isRangeObject(y))) {
+    return rangeEquals(x, y, SameValue);
+  }
   // A VALUE TYPE CLASS compares by its fields here as it does at
   // `IsStrictlyEqual` and `SameValueZero`. #sec-value-types: "two values
   // of the same value type that are the same value are indistinguishable", and
@@ -410,10 +468,13 @@ export function* CopyValueClassInstance(v: Value): ValueEvaluator {
   if (t.Kind !== 'nominal' || t.EnumMembers !== undefined || !IsValueTypeClass(t)) {
     return v;
   }
-  const layout = LayoutOf(t) as ClassLayout | null;
-  if (layout === null || layout.fields === undefined) {
+  // Its fields, by the layout where it has one and as declared where it has none
+  // (ValueFieldsOf): a class with a `string` field is a value with no layout.
+  const valueFields = ValueFieldsOf(t);
+  if (valueFields === null) {
     return v;
   }
+  const layout = { fields: valueFields };
   const source = v as unknown as {
     ConstructedBy?: unknown[],
     TypedProperties?: Map<unknown, object>,
@@ -639,10 +700,11 @@ function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefine
   if (!IsValueTypeClass(xt)) {
     return undefined;
   }
-  const layout = LayoutOf(xt) as ClassLayout | null;
-  if (layout === null || layout.fields === undefined) {
+  const valueFields = ValueFieldsOf(xt);
+  if (valueFields === null) {
     return undefined;
   }
+  const layout = { fields: valueFields };
   // Distinct classes are distinct types: two matching layouts are not one type.
   if (!SameTypeRecord(xt, yt)) {
     return false;
@@ -710,6 +772,12 @@ function fieldEquals(xv: Value, yv: Value, t: TypeRecord, zero: boolean): boolea
 }
 
 export function SameValueZero(x: Value, y: Value): boolean {
+  if (x instanceof VectorValue || y instanceof VectorValue) {
+    return vectorEquals(x, y, SameValueZero);
+  }
+  if (surroundingAgent.feature('runtime-types') && (isRangeObject(x) || isRangeObject(y))) {
+    return rangeEquals(x, y, SameValueZero);
+  }
   const asValueClass = valueClassEquals(x, y, true);
   if (asValueClass !== undefined) {
     return asValueClass;
@@ -1200,6 +1268,12 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
 
 /** https://tc39.es/ecma262/#sec-isstrictlyequal */
 export function IsStrictlyEqual(x: Value, y: Value): boolean {
+  if (x instanceof VectorValue || y instanceof VectorValue) {
+    return vectorEquals(x, y, IsStrictlyEqual);
+  }
+  if (surroundingAgent.feature('runtime-types') && (isRangeObject(x) || isRangeObject(y))) {
+    return rangeEquals(x, y, IsStrictlyEqual);
+  }
   const asValueClass = valueClassEquals(x, y, false);
   if (asValueClass !== undefined) {
     return asValueClass;

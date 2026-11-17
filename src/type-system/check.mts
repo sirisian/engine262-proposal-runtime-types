@@ -2679,7 +2679,7 @@ function classHasOwnSealedStorage(t: TypeRecord): boolean {
  * type - yes; `symbol` - yes (a registered symbol is the run time's, as the
  * README says); `any` - yes (unknown, so the run time decides); a union - only
  * if every arm is; a value type, a literal, `null`, `undefined`, `string`,
- * `number`, `boolean`, `bigint` - no; a typed sealed class - no, and so its
+ * `number`, `boolean`, `bigint` - no; a value type class - no, and so its
  * nullable union `A | null`, which the clause does not carve out.
  */
 function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
@@ -2719,7 +2719,9 @@ function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
             && declaration.ClassTail.ClassHeritage && !current.Base) return true;
         current = current.Base;
       }
-      return !sealed;
+      // A typed class that is not a value type class - it holds a reference, or its base is not
+      // a typed class - is held by reference and has an identity (CanBeHeldWeakly).
+      return !sealed || !IsValueType(t);
     }
     default:
       return false;
@@ -8819,6 +8821,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // #sec-typed-classes permits only the running declaring constructor to
   // initialize a readonly field. Lexical capture of this grants no permission.
+  /**
+   * #sec-typed-classes: whether a constructor of the class that declares an instance field can
+   * store to it. A field with no initializer whose type has no default is assigned by its
+   * constructor, and it is a type error only where that is certain not to happen: the class has
+   * no constructor, or its constructor never mentions `this` and makes no direct `eval`, so no
+   * store to the field and no function that could make one is reachable from it. Every other
+   * case is the run time's, which throws when the constructor returns without the field.
+   */
+  const constructorMayAssignField = (field: ParseNode): boolean => {
+    let owner: ParseNode | undefined = field.parent;
+    while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression') owner = owner.parent;
+    if (!owner) return true;
+    const constructors = classBodyOf(owner).filter((element) => element.type === 'MethodDefinition'
+      && !(element as { static?: boolean }).static
+      && classElementKey((element as ParseNode.MethodDefinition).ClassElementName) === 'constructor');
+    if (constructors.length === 0) return false;
+    const reaches = (node: unknown, seen: Set<object>): boolean => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return false;
+      seen.add(node);
+      if (Array.isArray(node)) return node.some((item) => reaches(item, seen));
+      const typed = node as { type?: string, name?: string };
+      if (typeof typed.type !== 'string') return false;
+      if (typed.type === 'ThisExpression') return true;
+      if (typed.type === 'IdentifierReference' && typed.name === 'eval') return true;
+      for (const key of Object.keys(node)) {
+        if (key === 'parent' || key === 'location') continue;
+        if (reaches((node as Record<string, unknown>)[key], seen)) return true;
+      }
+      return false;
+    };
+    return constructors.some((constructor) => reaches(constructor, new Set<object>([owner])));
+  };
+
   const constructorMayWrite = (member: ParseNode.MemberExpression): boolean => {
     if (patternExpression(member.MemberExpression)?.type !== 'ThisExpression') return false;
     let parent = member.parent;
@@ -11797,24 +11832,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Node { next: Node | null; }` legal where the same declaration without the
     // modifier has no finite layout - the inline optional of "Optional values"
     // having removed the indirection `T | null` used to supply.
-    if (declaration.TypeParameters?.TypeParameterList.length || declaration.Decorators?.length
+    if (declaration.Decorators?.length
       || declaration.ClassModifiers?.includes('dynamic')
       || declaration.ClassModifiers?.includes('reference')
       || declaration.ClassModifiers?.includes('sealed')
       || declaration.ClassModifiers?.includes('abstract')) return null;
+    // A GENERIC class has fields only as an APPLICATION whose arguments are all closed:
+    // `Box.<uint8>` has `Box`'s fields with `T` bound to `uint8`. The class over its own
+    // parameters, and an application at an open argument, are not known. Every generic class
+    // answered "not known" here, so `Box.<uint8>` was no value type and no plain data to the
+    // checking pass while it was both at run time, and `new Pool.<Box.<uint8>>()` was an
+    // early error against a `value` bound that the same application satisfies.
+    const parameterCount = declaration.TypeParameters?.TypeParameterList.length ?? 0;
+    const applied = (type as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+    const closed = parameterCount > 0 && applied.length === parameterCount
+      && applied.every((argument) => typeof argument === 'number' || !mentionsTypeParameter(argument));
+    if (parameterCount > 0 && !closed) return null;
+    const bound = (written: TypeRecord): TypeRecord => (closed
+      ? CanonicalizeType(SubstituteTypeArguments(written, declaration, applied)) : written);
     const fields: InlineField[] = [];
     if (declaration.ClassTail.ClassHeritage) {
       const base = (type as { Base?: TypeRecord }).Base;
       if (!base) return null;
-      fields.push({ key: '[[Base]]', type: base });
+      const boundBase = bound(base);
+      if (mentionsTypeParameter(boundBase)) return null;
+      fields.push({ key: '[[Base]]', type: boundBase });
     }
-    for (const element of declaration.ClassTail.ClassBody ?? []) {
-      if (element.type !== 'FieldDefinition' || element.static) continue;
-      if (!element.TypeAnnotation || element.Decorators?.length) return null;
-      const fieldType = resolveType(element.TypeAnnotation.Type);
-      if (!fieldType || mentionsTypeParameter(fieldType)) return null;
-      const key = element.ClassElementName;
-      fields.push({ key: key.type === 'PropertyName' ? '[computed]' : (key as { name?: string, value?: string }).name ?? String((key as { value?: unknown }).value), type: fieldType });
+    const scoped = closed ? pushTypeParameterScopeOf(declaration) : false;
+    try {
+      for (const element of declaration.ClassTail.ClassBody ?? []) {
+        if (element.type !== 'FieldDefinition' || element.static) continue;
+        if (!element.TypeAnnotation || element.Decorators?.length) return null;
+        const written = resolveType(element.TypeAnnotation.Type);
+        const fieldType = written ? bound(written) : written;
+        if (!fieldType || mentionsTypeParameter(fieldType)) return null;
+        const key = element.ClassElementName;
+        fields.push({ key: key.type === 'PropertyName' ? '[computed]' : (key as { name?: string, value?: string }).name ?? String((key as { value?: unknown }).value), type: fieldType });
+      }
+    } finally {
+      if (scoped) typeParameterScopes.pop();
     }
     return fields.length > 0 ? fields : null;
   };
@@ -18746,16 +18802,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const copyStoreRoots = new Map<ParseNode, TypeRecord>();
   const nodeField = <T,>(node: ParseNode | undefined, key: string): T | undefined => (node as unknown as Record<string, T | undefined> | undefined)?.[key];
 
-  /** A type whose values are laid out inline: a sized scalar, an enum, or an aggregate of them. */
+  /**
+   * A type whose values are stored in what holds them: a primitive value type, a literal, an
+   * enum, a union of these, or an aggregate of them. A layout is not asked for
+   * (#sec-layout-properties: "an assignment needs value-ness"): a `string`, a `bigint` and a
+   * union of value types have none and are values, so a class holding one is copied where it is
+   * bound, and a store to a copy of it is as lost as a store to a copy of a class of numbers. The
+   * name is from when this asked for a layout, and judged no class with a `string` in it.
+   */
   const laidOutValueType = (type: Known, resolving: Set<ParseNode>): boolean => {
     if (!type) return false;
-    if (type.Kind === 'primitive') {
-      try {
-        return LayoutOf(type as TypeRecord) !== null;
-      } catch {
-        return false;
-      }
-    }
+    if (type.Kind === 'primitive') return !['object', 'function', 'any'].includes((type as { Name?: string }).Name ?? '');
+    if (type.Kind === 'literal') return true;
+    if (type.Kind === 'parameterized') return laidOutValueType((type as { Base?: TypeRecord }).Base ?? null, resolving);
+    if (type.Kind === 'union') return type.Members.length > 0 && type.Members.every((member) => laidOutValueType(member, resolving));
     if (type.Kind === 'nominal' && (type as { EnumMembers?: unknown }).EnumMembers !== undefined) return true;
     return holdsCopyType(type, resolving);
   };
@@ -46327,9 +46387,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const declared = resolveType(n.TypeAnnotation.Type);
             if (n.Initializer) {
               checkInitializerAssignable(n.Initializer, declared, false);
-            } else if (declared && !mentionsTypeParameter(declared) && !n.Decorators?.length) {
-              // #sec-typed-classes: a field without an initializer needs a
-              // default. check-pass.mts resolves this after metadata processing.
+            } else if (declared && !mentionsTypeParameter(declared) && !n.Decorators?.length
+                && (n.static || !constructorMayAssignField(n as ParseNode))) {
+              // #sec-typed-classes: a field without an initializer holds its
+              // type's default, and one whose type has none is assigned by its
+              // constructor. So this is asked only of a field no constructor
+              // can reach, and of a static one, which has no constructor.
+              // check-pass.mts resolves it after metadata processing.
               const written = n.TypeAnnotation.Type;
               refuseClassWithoutDefault(declared as TypeRecord);
               if (!recordRefinementDefault(n, declared as TypeRecord)) {

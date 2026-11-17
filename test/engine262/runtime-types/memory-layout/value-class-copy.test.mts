@@ -65,10 +65,13 @@ test('the copy carries what the instance carries', () => {
 });
 
 test('nothing that is NOT a value type class is copied', () => {
-  // A class with a `string` field is not one - #sec-value-types lists "a value
-  // type, a string, or an enumerator" as three things - so its instances alias,
-  // which is correct for an Object.
-  expect(evaluated('class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x);')).toBe('9');
+  // A class that holds a reference, and a class declared `reference`, are held by reference.
+  expect(evaluated('class Q { s: [].<string> = []; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x);')).toBe('9');
+  expect(evaluated('reference class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x);')).toBe('9');
+  // A class with a `string` field and no reference IS a value type class: a `string` is a value
+  // type (#sec-value-types, "the existing primitive types are value types"), and a layout is not
+  // part of the condition (#sec-typed-classes). It aliased while the engine asked for a layout.
+  expect(evaluated('class Q { s: string = ""; x: uint8 = 0; } const a = new Q(); a.x = 1; const b = a; b.x = 9; String(a.x) + String(b.x);')).toBe('19');
   expect(evaluated('const a = { x: 1 }; const b = a; b.x = 9; String(a.x);')).toBe('9');
   expect(evaluated('const a = [1, 2]; const b = a; b[0] = 9; String(a[0]);')).toBe('9');
   expect(evaluated('const m = new Map(); const n = m; n.set(1, 2); String(m.size);')).toBe('1');

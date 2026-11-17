@@ -64,6 +64,7 @@ import {
   ToObject,
   PrivateMethodOrAccessorAdd,
   PrivateFieldAdd,
+  type UninitializedField,
   IsPropertyKey,
   isNonNegativeInteger,
   isStrictModeCode,
@@ -318,7 +319,7 @@ function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: A
 
 // -decorator (removed in the decorator proposal)
 /** https://tc39.es/ecma262/#sec-definefield */
-export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefinitionRecord): PlainEvaluator {
+export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefinitionRecord, owner?: object): PlainEvaluator {
   // 1. Let fieldName be fieldRecord.[[Name]].
   const fieldName = fieldRecord.Name;
   // proposal-runtime-types (#table-check-sites, row "a value stored to a
@@ -390,6 +391,27 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
       dflt = Q(yield* DefaultValueOf(record));
     }
     if (dflt === undefined) {
+      if (record.Kind !== 'parameter' && owner !== undefined) {
+        // #sec-typed-classes: an INSTANCE field with no initializer whose type has no
+        // default is UNINITIALIZED, and the constructor that declares it assigns it. It is
+        // not defined here: its type is recorded, so the store that defines it is checked,
+        // and it is recorded as uninitialized, so a read before that store throws and its
+        // constructor cannot return without it (RequireFieldsInitialized). This was a
+        // TypeError where the field was defined, so `class Session { conn: Conn;
+        // constructor(c: Conn) { this.conn = c; } }` could not be written for any type that
+        // has no zero - a reference class, an object, a function, an interface.
+        const pending = ((receiver as { UninitializedFields?: Map<unknown, UninitializedField> }).UninitializedFields ??= new Map());
+        if (fieldName instanceof PrivateName) {
+          pending.set(fieldName, { owner, display: `#${String((fieldName as { Description?: { stringValue?(): string } }).Description?.stringValue?.() ?? '')}`.replace(/^##/, '#') });
+          (fieldName as { TypeObject?: object }).TypeObject = fieldTypeObject;
+        } else {
+          const key = fieldName instanceof JSStringValue ? fieldName.stringValue() : fieldName;
+          pending.set(key, { owner, display: fieldName instanceof JSStringValue ? fieldName.stringValue() : 'a symbol-keyed field' });
+          const map = ((receiver as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
+          map.set(key, fieldTypeObject!);
+        }
+        return;
+      }
       if (record.Kind !== 'parameter') {
         // The same rule as a binding's, and reporting it here replaces the
         // "undefined is not assignable" the RequireType below used to raise -
@@ -483,7 +505,7 @@ export function* InitializeInstanceElements(O: ObjectValue, constructor: ECMAScr
     // 4. For each element fieldRecord of fields, do
     for (const fieldRecord of fields) {
       // a. Perform ? DefineField(O, fieldRecord).
-      Q(yield* DefineField(O, fieldRecord));
+      Q(yield* DefineField(O, fieldRecord, constructor));
       // proposal-runtime-types (spec sec-typed-classes): record a `readonly`
       // field with the constructor that declares it, so a later write can be
       // rejected unless that constructor is the one executing. The field has just
@@ -762,6 +784,28 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
 }
 
 /**
+ * #sec-typed-classes: "The constructor that declares the field must initialize it." Asked when
+ * [[Construct]] of the class _F_ would return normally: a field _F_ declares that is still
+ * uninitialized makes that a TypeError. A constructor of a subclass runs after this and is too late,
+ * as it is for a `readonly` field, so every class answers for its own fields.
+ */
+export function RequireFieldsInitialized(F: object, O: ObjectValue) {
+  const pending = (O as { UninitializedFields?: Map<unknown, UninitializedField> }).UninitializedFields;
+  if (pending === undefined) {
+    return undefined;
+  }
+  for (const [, field] of pending) {
+    if (field.owner === F) {
+      return Throw.TypeError('the constructor returned without assigning $1, whose type has no default', Value(field.display));
+    }
+  }
+  if (pending.size === 0) {
+    delete (O as { UninitializedFields?: unknown }).UninitializedFields;
+  }
+  return undefined;
+}
+
+/**
  * proposal-runtime-types (spec sec-typed-classes): seal the fully-constructed
  * instance of a class with a typed field. This runs only at the outermost
  * construct frame (F is newTarget), after every base and derived field has been
@@ -772,6 +816,7 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
  * property may not be added or removed.
  */
 function* maybeSealTypedInstance(F: FunctionObject, newTarget: FunctionObject | UndefinedValue, O: ObjectValue): PlainEvaluator<void> {
+  Q(RequireFieldsInitialized(F, O));
   if (F !== newTarget) {
     return undefined;
   }

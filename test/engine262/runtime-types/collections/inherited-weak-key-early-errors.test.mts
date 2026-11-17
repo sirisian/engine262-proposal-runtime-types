@@ -26,7 +26,11 @@ test('weak argument sites reject inherited typed storage in unused bodies', () =
 
 test('weak classification follows generic and multi-level bases', () => {
   expectStaticTypeError('class Base<T: type> { x: T; } class Middle<T: type> extends Base.<T> {} class Derived extends Middle.<uint8> {} function unused(value: Derived) { new WeakRef(value); }');
-  expectStaticTypeError('class Base { x: uint8; } dynamic class Derived extends Base {} function unused(value: Derived) { new WeakRef(value); }');
+  // A `dynamic` subclass of a value type class is not a value type class (#sec-typed-classes: "a
+  // `dynamic` modifier disqualifies a subclass exactly as it does a base"). It is held by reference,
+  // so it is held weakly, though its instances keep the sealing its base contributed and cannot be
+  // proxied. It was refused while every class that seals its instances was.
+  expect(evaluated("class Base { x: uint8; } dynamic class Derived extends Base {} const value = new Derived(); const same = value; same.x = 5; const ref = new WeakRef(value); let proxied = 'ok'; try { new Proxy(value, {}); } catch (e) { proxied = e.name; } String(value.x) + String(ref.deref() === value) + proxied;")).toBe('5trueTypeError');
 });
 
 test('reference class identity is inherited and remains weakly observable', () => {

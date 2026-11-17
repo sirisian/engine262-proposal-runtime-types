@@ -1,5 +1,8 @@
 import { IsComposite } from '../intrinsics/Composite.mts';
 import { ValueAggregateOf } from '../abstract-ops/testing-comparison.mts';
+import { IsValueTypeClass } from '../type-system/layout.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import {
   type FinalizationRegistryObject, Q, NormalCompletion, ObjectValue, SymbolValue, Assert, HostCallJobCallback, type JobCallbackRecord, UndefinedValue, Value, type ValueEvaluator, KeyForSymbol,
   GetActiveScriptOrModule,
@@ -88,9 +91,19 @@ export function CanBeHeldWeakly(v: Value): v is ObjectValue | SymbolValue {
       // class is held and passed by reference precisely so that it HAS one. Its
       // instances are still sealed, so [[SealInstances]] cannot tell the two
       // apart and [[ReferenceKind]] is what does.
+      //
+      // And so is every other typed class that is NOT a value type class: one with a field of
+      // a reference type, and one whose base is not a typed class. Each is held and passed by
+      // reference and is one object under every name, so it has the identity a weak reference
+      // is about. The refusal was of every class that seals its instances, which refused
+      // `class Failure extends Error { status: uint16; }` in a WeakSet for the reason that it
+      // has no identity. Sealing is what Proxy eligibility reads; it says nothing of identity.
       const builtBy = (v as { ConstructedBy?: readonly { SealInstances?: boolean, ReferenceKind?: boolean }[] }).ConstructedBy;
       if (builtBy && builtBy.some((ctor) => ctor.SealInstances) && !builtBy.some((ctor) => ctor.ReferenceKind)) {
-        return false;
+        const t = RuntimeTypeOf(v);
+        if (t.Kind !== 'nominal' || IsValueTypeClass(t)) {
+          return false;
+        }
       }
       // proposal-runtime-types `sec-composite-canbeheldweakly`: a COMPOSITE is
       // refused in the same positions, "for the MIRROR-IMAGE reason, an identity
@@ -105,6 +118,11 @@ export function CanBeHeldWeakly(v: Value): v is ObjectValue | SymbolValue {
       // #sec-value-types: a fixed-length array of a value type and a tuple of
       // value types are values, and a value has no identity to be held by.
       if (ValueAggregateOf(v) !== undefined) {
+        return false;
+      }
+      // #sec-ranges: "A range is a value type class", compared by its endpoints, so it has no
+      // identity to be held by either.
+      if (isRangeObject(v)) {
         return false;
       }
     }

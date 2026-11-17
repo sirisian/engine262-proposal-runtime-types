@@ -64,9 +64,13 @@ test('a copy that is used is the program\'s own, and is untouched', () => {
 test('a binding that is not a copy is not judged', () => {
   // Built in place: a construction.
   expect(evaluated(`${P}function make(): void { const p = new P(); p.x = 1; } make(); 'ok';`)).toBe('ok');
-  // Reached by reference: a reference class, a class with no layout, a dynamic array.
+  // Reached by reference: a reference class, a class that holds a reference, a dynamic array.
   expect(evaluated('reference class R { x: uint8; } function f(r: R) { r.x = 5; } const r = new R(); f(r); String(r.x);')).toBe('5');
-  expect(evaluated("class N { name: string; } function f(n: N) { n.name = 'b'; } const n = new N(); f(n); String(n.name);")).toBe('b');
+  expect(evaluated("class N { name: string; tags: [].<string> = []; } function f(n: N) { n.name = 'b'; } const n = new N(); f(n); String(n.name);")).toBe('b');
+  // A class with a `string` in it and no reference is a value with no layout, and is judged
+  // (classes/value-class-without-layout.test.mts).
+  expect(observeScript("class N { name: string; } function f(n: N) { n.name = 'b'; } f(new N());"))
+    .toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-store-to-copy' } });
   expect(evaluated('function f(a: [].<uint8>) { a[0] = 9; } const a: [].<uint8> = [1]; f(a); String(a[0]);')).toBe('9');
   // No declared type to judge by.
   expect(evaluated('function f(a) { a[0] = 9; } const a: [2].<uint8> = [1, 2]; f(a); String(a[0]);')).toBe('1');

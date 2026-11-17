@@ -87,6 +87,7 @@ import {
   OrdinaryCreateFromConstructor,
   PrivateMethodOrAccessorAdd,
   InitializeInstanceElements,
+  RequireFieldsInitialized,
   DefineField,
   type ECMAScriptFunctionObject,
   type BuiltinFunctionObject,
@@ -816,6 +817,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         }
       }
       Q(yield* InitializeInstanceElements(result, F));
+      // #sec-typed-classes: a class with no constructor of its own has none that could assign
+      // a field whose type has no default, so such a field is still uninitialized here.
+      Q(RequireFieldsInitialized(F, result));
       // proposal-runtime-types (spec sec-typed-classes): a class with a typed
       // instance field seals its instances. The default (field-only) constructor
       // seals here at its outermost frame - when F is the class being new'd
@@ -1731,11 +1735,26 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         );
       }
       (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = computed;
+      // The fields a value of this class is made of, the base's first, whether or not they
+      // have a layout: what a copy and a comparison walk where the class has none
+      // (ValueFieldsOf). *null* where the list is not whole - an untyped field, or a base that
+      // is not a typed class.
+      const parentFields = (constructorParent as { SealInstances?: boolean, DeclaredValueFields?: readonly { key: string | PrivateName, type: TypeRecord }[] | null } | undefined | null);
+      let inheritedFields: readonly { key: string | PrivateName, type: TypeRecord }[] | null = [];
+      if ((F as { UntypedBase?: boolean }).UntypedBase === true) {
+        inheritedFields = null;
+      } else if (parentFields?.SealInstances === true) {
+        inheritedFields = parentFields.DeclaredValueFields ?? null;
+      }
+      const wholeFields = complete ? inheritedFields : null;
+      (F as { DeclaredValueFields?: unknown }).DeclaredValueFields = wholeFields === null
+        ? null
+        : [...wholeFields, ...laidOut.map(({ key, type }) => ({ key, type }))];
       // The INPUTS as well as the answer, so a generic class can be laid out per
       // application (LayoutOf's nominal arm). The answer computed here has the
       // parameters unbound and is the layout of no instantiation.
       (F as { LayoutInputs?: unknown }).LayoutInputs = {
-        baseLayout, baseUnlaid, fields: laidOutUnbound, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
+        baseLayout, baseUnlaid, baseFields: wholeFields, fields: laidOutUnbound, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
       };
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {

@@ -229,7 +229,12 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
         const applied = Descriptor({ ...Desc, Value: converted });
         Q(CheckArrayDefinition(O, P));
         if (!ScalarRestDefinitionAllowed(O, P, applied)) return Throw.TypeError('a property definition violates an ordered scalar rest guard');
-        return ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current, declared.TypeRecord);
+        const defined = ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current, declared.TypeRecord);
+        // The store that defines an uninitialized field initializes it (OrdinaryGet).
+        if (defined === Value.true) {
+          (O as { UninitializedFields?: Map<unknown, unknown> }).UninitializedFields?.delete(P instanceof JSStringValue ? P.stringValue() : P);
+        }
+        return defined;
       }
     }
   }
@@ -412,6 +417,15 @@ export function* OrdinaryHasProperty(O: ObjectValue, P: PropertyKeyValue): Value
 // 9.1.8.1
 export function* OrdinaryGet(O: ObjectValue, P: PropertyKeyValue, Receiver: Value): ValueEvaluator {
   Assert(IsPropertyKey(P));
+
+  // #sec-typed-classes: a field with no initializer whose type has no default is uninitialized
+  // until its constructor stores to it. It is not yet a property, and a read of it must not
+  // answer *undefined*, which is not of the field's type: it throws, as a `let` binding read
+  // before its declaration does.
+  const pending = (O as { UninitializedFields?: Map<unknown, unknown> }).UninitializedFields;
+  if (pending !== undefined && pending.has(P instanceof JSStringValue ? P.stringValue() : P)) {
+    return Throw.TypeError('$1 is read before its constructor has assigned it, and its type has no default', P);
+  }
 
   const desc = Q(yield* O.GetOwnProperty(P));
   if (desc instanceof UndefinedValue) {

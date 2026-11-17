@@ -274,17 +274,18 @@ test('sec-ranges: a range is an expression and appears wherever one does', () =>
   expect(evaluated('String([0..<3][0].end);')).toBe('3');
 });
 
-test('sec-ranges: DIVERGENCE - a range is a value, but does not compare as one', () => {
-  // "A range is a value, so it allocates nothing and copies."
-  //
-  // DIVERGENCE, recorded and not fixed here: two equal ranges are not
-  // `===`. This is engine-wide rather than range-specific -- two equal vectors
-  // are not `===` either, while typed numbers are -- so object-backed value
-  // types generally lack value equality. Fixing it for ranges alone would make
-  // ranges the odd type out.
-  expect(evaluated('const a = 0..<3, b = 0..<3; String(a === b);')).toBe('false');
-  expect(evaluated('const a = float32x4(1,2,3,4), b = float32x4(1,2,3,4); String(a === b);')).toBe('false');
+test('sec-ranges: a range is a value, and compares as one', () => {
+  // "A range is a value type class over an ordered element type and a bound at each endpoint it
+  // has", so two ranges of one shape with equal endpoints are the same value, as two vectors
+  // with equal lanes are (#sec-value-types). This was recorded as a divergence: a range and a
+  // vector were each compared as an object, where a typed number was compared by its value.
+  expect(evaluated('const a = 0..<3, b = 0..<3; String(a === b) + String(Object.is(a, b));')).toBe('truetrue');
+  expect(evaluated('const a = float32x4(1,2,3,4), b = float32x4(1,2,3,4); String(a === b);')).toBe('true');
   expect(evaluated('const a := uint8 = 5, b := uint8 = 5; String(a === b);')).toBe('true');
+  // Another endpoint, another bound and another shape are other values.
+  expect(evaluated('const u: any = { a: 0..<3, b: 0..<4, c: 0..=3, d: 0.. }; String(u.a === u.b) + String(u.a === u.c) + String(u.a === u.d);')).toBe('falsefalsefalse');
+  // An equal range is one key of a Map and one member of a Set.
+  expect(evaluated("const m = new Map(); m.set(0..<3, 'x'); String(m.get(0..<3)) + String(new Set([1..=2, 1..=2]).size);")).toBe('x1');
 });
 
 // =============================================================================

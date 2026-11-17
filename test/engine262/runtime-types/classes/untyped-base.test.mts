@@ -60,7 +60,8 @@ test('it has no layout and no default, and is no value type', () => {
   expectThrown(`${E}PE.byteLength;`, 'has no layout');
   // No constructor ran, so there is no Error to be the default.
   expectThrown(`${E}let e: PE;`, 'has no default value');
-  expectThrown(`${E}class H { e: PE; } new H();`, 'has no default value');
+  // A field of it with no initializer is its constructor's to assign (classes/constructor-assigned-fields.test.mts).
+  expectThrown(`${E}class H { e: PE; } new H();`, 'the constructor returned without assigning');
   expectStaticTypeError(`${E}class Store<T: type extends value> { xs: [].<T> = []; } new Store.<PE>();`);
   expectThrown(`${E}new SoA.<PE>(2);`, 'cannot be stored as columns');
 });

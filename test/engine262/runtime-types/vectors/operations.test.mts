@@ -74,8 +74,10 @@ test('the comparison rules around equality are unchanged', () => {
     + ' String(m.lane.<0>().all());')).toBe('true');
   // scalar equality is untouched
   expect(evaluated('String(1 == 1) + "," + String(NaN == NaN) + "," + String(NaN != NaN);')).toBe('true,false,true');
-  // and strict equality keeps its own semantics rather than comparing lanes
-  expect(evaluated('String(int32x4(1, 2, 3, 4) === int32x4(1, 2, 3, 4));')).toBe('false');
+  // and strict equality keeps its own semantics rather than yielding a mask: it answers a
+  // Boolean, and a vector being a value with no identity (#sec-value-types), two with the same
+  // lanes are the same value. This pinned *false*, which is what comparing two objects gave.
+  expect(evaluated('String(int32x4(1, 2, 3, 4) === int32x4(1, 2, 3, 4)) + String(int32x4(1, 2, 3, 4) === int32x4(1, 2, 3, 5));')).toBe('truefalse');
 });
 
 // -- Mask consumers --------------------------------------------------------------

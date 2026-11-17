@@ -40,7 +40,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf, InterfaceOfSignature } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, TuplePositionsAre, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
-import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver, IsValueType } from '../type-system/layout.mts';
+import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver, IsValueType, ValueFieldsOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
@@ -970,10 +970,13 @@ export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRe
  * value.
  */
 export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTargetPrototype = false): PlainEvaluator<ObjectValue> {
-  const layout = LayoutOf(t) as { fields?: readonly { key: string | PrivateName, type: TypeRecord }[] } | null;
-  if (layout?.fields === undefined) {
+  // The fields of the value, by its layout where it has one and as declared where it has none:
+  // a class with a `string` field is copied field by field all the same (ValueFieldsOf).
+  const fields = ValueFieldsOf(t);
+  if (fields === null) {
     return value;
   }
+  const layout = { fields };
   // The VALUE's prototype, not the type's constructor's.
   //
   // They differ for a GENERIC class, which is evaluated once per application as
@@ -1204,8 +1207,15 @@ export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObs
           const targetLayout = LayoutOf(t) as { byteLength?: number } | null;
           const sourceWidth = sourceLayout?.byteLength;
           const targetWidth = targetLayout?.byteLength;
-          if (sourceWidth === undefined || targetWidth === undefined
-            || sourceWidth <= targetWidth) {
+          if (sourceWidth === undefined || targetWidth === undefined) {
+            // No layout to measure by. A value type class with a `string` field has none
+            // and is copied field by field all the same, so a subclass that declares a
+            // field of its own would be cut down to the base's: the question is put of
+            // the fields. A target that is not a value type class holds any subclass.
+            if (!SubclassAddsStorageOver(sourceType, t)) {
+              break;
+            }
+          } else if (sourceWidth <= targetWidth) {
             break;
           }
           return Throw.TypeError('$1 is not assignable to $2',

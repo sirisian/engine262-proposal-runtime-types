@@ -319,17 +319,20 @@ export const referenceLayout: Layout = { bitLength: 64, byteLength: 8, alignment
  * - a local, a `return`, a parameter - are checked before that.
  */
 export function DeclaresOwnStorage(t: TypeRecord): boolean {
-  const layout = LayoutOf(t) as ClassLayout | null;
+  // The fields of each, by its layout or, for a class with none, as it declares them
+  // (ValueFieldsOf): a subclass of `class B { x: uint8; s: string; }` that adds a field adds
+  // storage as one of a class of numbers does, and was not seen to.
+  const fields = ValueFieldsOf(t);
   const base = (t as { Base?: TypeRecord }).Base;
-  const baseLayout = base ? LayoutOf(base) as ClassLayout | null : null;
-  // BOTH layouts are needed for the comparison to mean anything. Where only the
+  const baseFields = base ? ValueFieldsOf(base) : null;
+  // BOTH lists are needed for the comparison to mean anything. Where only the
   // subclass has one, its field list already includes the inherited fields and
   // the missing base count reads as zero, so `class Q extends P {}` looked like
   // it had added `P`'s own field. The declaration answers exactly what is being
   // asked - what did THIS class declare - so it is the fallback whenever the
   // pair is incomplete.
-  if (layout?.fields !== undefined && (base === undefined || baseLayout?.fields !== undefined)) {
-    return layout.fields.length > (baseLayout?.fields?.length ?? 0);
+  if (fields !== null && (base === undefined || baseFields !== null)) {
+    return fields.length > (baseFields?.length ?? 0);
   }
   // The resolver is `inlineFieldsOf`, written for CYCLE DETECTION, and it
   // reports the base slice as a synthetic field keyed `[[Base]]` - which is
@@ -380,11 +383,65 @@ export function IsValueTypeClass(t: TypeRecord): boolean {
   // survived here because a reference field's WIDTH gives its holder a layout:
   // `class R { o: object | null; }` has one, is not a value type, and was copied
   // and compared structurally by every one of the sites this gates.
+  //
+  // A layout is not asked for at all (#sec-layout-properties: "an array stride
+  // needs a layout, an assignment needs value-ness, and a byte view needs plain
+  // data"). It was, beside value-ness, and that made a class with a field of no
+  // layout - a `string`, a `bigint`, a literal union, a union of value types -
+  // a class that is assignable to `value` and is shared where it is bound:
+  // `class K { n: uint8; s: string; }` was one object under two names, and two
+  // of them were never `===`, while `[string, uint8]` was copied and compared
+  // by its elements. What a copy and a comparison walk is ValueFieldsOf.
   return t.Kind === 'nominal'
     && t.EnumMembers === undefined
     && !IsReferenceClass(t)
-    && LayoutOf(t) !== null
     && IsValueType(t);
+}
+
+/**
+ * The fields a value of a class is made of, the base's first, each with its type: what a copy, a
+ * comparison and a default walk.
+ *
+ * Where the class has a layout these are the layout's fields. Where it has none - a field's size is
+ * a property of its value, as a `string`'s is - they are the declared fields, which the class's
+ * evaluation recorded with the same keys in the same order. A generic application substitutes its
+ * arguments into the declaration's, as LayoutOf does.
+ *
+ * This answers for a class of any kind. Whether a class is a VALUE type class is IsValueTypeClass's
+ * question, and a caller that copies asks it first.
+ */
+export function ValueFieldsOf(t: TypeRecord): readonly { readonly key: string | PrivateName, readonly type: TypeRecord }[] | null {
+  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined) {
+    return null;
+  }
+  const layout = LayoutOf(t) as ClassLayout | null;
+  if (layout !== null && layout.fields !== undefined) {
+    return layout.fields;
+  }
+  type Evaluated = { DeclaredValueFields?: readonly { key: string | PrivateName, type: TypeRecord }[] | null, LayoutInputs?: LayoutInputs };
+  const constructor = t.Constructor as Evaluated | undefined;
+  if (constructor === undefined || constructor === null || typeof constructor !== 'object') {
+    return null;
+  }
+  const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+  if (args && args.length > 0 && caseSpecializationOf !== null) {
+    const selected = caseSpecializationOf((t as { Declaration?: unknown }).Declaration, args, constructor) as Evaluated | undefined;
+    if (selected) {
+      return selected.DeclaredValueFields ?? null;
+    }
+  }
+  const inputs = constructor.LayoutInputs;
+  if (!args || args.length === 0 || !inputs || substituteForLayout === null) {
+    return constructor.DeclaredValueFields ?? null;
+  }
+  if (inputs.baseFields === undefined || inputs.baseFields === null) {
+    return null;
+  }
+  const declaration = (t as { Declaration?: unknown }).Declaration;
+  return [
+    ...inputs.baseFields,
+    ...inputs.fields.map((f) => ({ key: f.key, type: substituteForLayout!(f.type, declaration, args) })),
+  ];
 }
 
 /**
@@ -485,6 +542,14 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
     return false;
   }
   const body = declaration.ClassTail.ClassBody ?? [];
+  // An APPLICATION of a generic class reads its base and its declared field types with its
+  // arguments bound. Before a class is evaluated both are the declaration's, written in its
+  // parameters, so `class Derived extends Middle.<uint8> {}` over `class Middle<T> extends
+  // Base.<T> {}` over `class Base<T> { x: T; }` reached a field of type `T` and was not known
+  // to be a value type.
+  const applied = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+  const bind = (type: TypeRecord): TypeRecord => (applied && applied.length > 0 && substituteForLayout !== null
+    ? substituteForLayout(type, declaration, applied) : type);
   let typedFields = 0;
   for (const element of body) {
     const el = element as { type?: string, static?: boolean, TypeAnnotation?: unknown };
@@ -509,7 +574,7 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
     // `[Q]` bound as a `[B]` - which is accepted, since `Q` adds no storage -
     // was the same tuple under two names.
     const base = (t as { Base?: TypeRecord }).Base;
-    return base !== undefined && valueTypeWalk(base, depth + 1);
+    return base !== undefined && valueTypeWalk(bind(base), depth + 1);
   }
   // The field TYPES are walked, which an earlier revision declined to do for want
   // of a resolver and called a case "a class is unlikely to reach by accident".
@@ -517,9 +582,11 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
   // so a declaration-shape test alone calls R a value type class, and R then
   // compares structurally when it should keep identity. The resolver that makes
   // plainness answerable statically answers this too.
-  const layout = LayoutOf(t) as ClassLayout | null;
-  if (layout !== null && layout.fields !== undefined) {
-    return layout.fields.every((field) => valueTypeWalk(field.type, depth + 1));
+  // The layout's fields, or for an evaluated class with no layout the fields it
+  // declares and inherits: a class with a `string` field has none of the first.
+  const fields = ValueFieldsOf(t);
+  if (fields !== null) {
+    return fields.every((field) => valueTypeWalk(field.type, depth + 1));
   }
   const declared = staticFieldsOfDeclaration?.(t);
   if (declared === undefined) {
@@ -527,7 +594,7 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
     // could answer before. Weaker, never wrong in the other direction.
     return true;
   }
-  return declared !== null && declared.every((field) => valueTypeWalk(field.type, depth + 1));
+  return declared !== null && declared.every((field) => valueTypeWalk(bind(field.type), depth + 1));
 }
 
 export function IsPlainData(t: TypeRecord): boolean {
@@ -825,12 +892,22 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     }
     const inner = LayoutOf(payload);
     if (inner === null) {
-      // A payload with no inline layout of its own is reached through a
-      // reference whatever its declaration says - a `dynamic` class, or a class
-      // with an untyped or unlaid-out field - so the optional is a reference
-      // too. `IsReferenceClass` does not cover these: it answers a question
-      // about the KIND a class was declared with, and this is a question about
-      // whether there is anything to lay out inline.
+      // #table-layout-by-type: "`T | null` where T is a value type WITH A
+      // LAYOUT" is the inline optional, and "a union of value types" has no
+      // layout. So a nullable `string`, a nullable `bigint` and a nullable value
+      // type class that holds one have none, as their payloads have none. This
+      // answered a reference's width for them, so `class K { s: string | null;
+      // }` reported a `byteLength` of 16 and was laid out where `class K { s:
+      // string; }` was not.
+      if (IsValueType(payload)) {
+        return null;
+      }
+      // A payload that is NOT a value type and has no inline layout of its own
+      // is reached through a reference whatever its declaration says - a
+      // `dynamic` class, or a class with an untyped field - so the optional is
+      // a reference too. `IsReferenceClass` does not cover these: it answers a
+      // question about the KIND a class was declared with, and this is a
+      // question about whether there is anything to lay out inline.
       return referenceLayout;
     }
     // #sec-optional-values: the discriminant is a declared byte EXCEPT where the
@@ -982,6 +1059,12 @@ export interface LayoutInputs {
   readonly baseLayout: ClassLayout | null;
   /** The base is a typed class with no layout, so this class has none whatever it declares. */
   readonly baseUnlaid?: boolean;
+  /**
+   * The fields this class inherits, or *null* where the whole list is not known: an untyped field,
+   * or a base that is not a typed class. What ValueFieldsOf puts before `fields` for an
+   * application of a class with no layout.
+   */
+  readonly baseFields?: readonly { key: string | PrivateName, type: TypeRecord }[] | null;
   readonly fields: readonly { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[];
   readonly controls: ClassControls;
   readonly parent: unknown;

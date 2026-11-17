@@ -8,6 +8,22 @@ import {
 } from './all.mts';
 import { RequireType, Throw, surroundingAgent, type PlainEvaluator } from '#self';
 
+/**
+ * The fields of an instance that no store has initialized yet (#sec-typed-classes).
+ *
+ * A field with no initializer whose type has no default - a reference class, an object or function
+ * type, an interface - has no value to hold when its definition is evaluated. It is recorded here,
+ * with the constructor that declares it, and is not yet a property of the instance: the first store
+ * to it defines it, a read before that throws, and the declaring constructor returning while it is
+ * still here throws. Keyed as [[TypedProperties]] is: a String key by its text, and a Symbol or a
+ * Private Name by itself.
+ */
+export type UninitializedField = { readonly owner: object, readonly display: string };
+
+export function UninitializedFieldsOf(O: object): Map<unknown, UninitializedField> | undefined {
+  return (O as { UninitializedFields?: Map<unknown, UninitializedField> }).UninitializedFields;
+}
+
 /** https://tc39.es/ecma262/#sec-privateelementfind */
 export function PrivateElementFind(P: PrivateName, O: ObjectValue) {
   const entry = O.PrivateElements.find((e) => e.Key === P);
@@ -27,6 +43,11 @@ export function* PrivateGet(O: ObjectValue, P: PrivateName) {
   const entry = X(PrivateElementFind(P, O));
   // 2. If entry is empty, throw a TypeError exception.
   if (entry === undefined) {
+    // #sec-typed-classes: a field with no initializer whose type has no default is
+    // uninitialized until its constructor stores to it, and a read before that throws.
+    if (UninitializedFieldsOf(O)?.has(P)) {
+      return Throw.TypeError('$1 is read before its constructor has assigned it, and its type has no default', P);
+    }
     return Throw.TypeError('$1 does not exist on $2', P, O);
   }
   // 3. If entry.[[Kind]] is field or method, then
@@ -51,6 +72,18 @@ export function* PrivateSet(O: ObjectValue, P: PrivateName, value: Value, choice
   const entry = X(PrivateElementFind(P, O));
   // 2. If entry is empty, throw a TypeError exception.
   if (entry === undefined) {
+    // The first store to an uninitialized field initializes it (#sec-typed-classes), checked
+    // against its declared type as every store to the field is.
+    const pending = UninitializedFieldsOf(O);
+    if (pending?.has(P)) {
+      const declared = (P as { TypeObject?: { TypeRecord: unknown } }).TypeObject;
+      const admitted = declared !== undefined
+        ? Q(yield* RequireType(value, declared.TypeRecord as never, undefined, choices))
+        : value;
+      Q(yield* PrivateFieldAdd(O, P, admitted));
+      pending.delete(P);
+      return undefined;
+    }
     return Throw.TypeError('$1 does not exist on $2', P, O);
   }
   // #sec-readonly-span-type: a private field is a field of the element.

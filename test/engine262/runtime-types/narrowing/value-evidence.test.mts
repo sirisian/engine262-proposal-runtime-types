@@ -604,7 +604,9 @@ test("saved-property-write", () => {
 });
 
 test("saved-property-alias", () => {
-  evaluated("class A{x:uint8|string=\"a\";}function f(a:A,c:A,y:uint8|string){const b:boolean=a.x is uint8;c.x=y;if(b){if(a.x is string){}}}");
+  // Two names for one object, so the class is one that is held by reference: two parameters of
+  // a value type class are two copies, and a store to one of them that nothing reads is lost.
+  evaluated("reference class A{x:uint8|string=\"a\";}function f(a:A,c:A,y:uint8|string){const b:boolean=a.x is uint8;c.x=y;if(b){if(a.x is string){}}}");
 });
 
 test("saved-varying-getter", () => {
