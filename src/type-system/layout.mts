@@ -207,6 +207,79 @@ export function IsReferenceClass(t: TypeRecord): boolean {
   return false;
 }
 
+type ClassShape = {
+  ClassModifiers?: readonly string[] | null,
+  ClassTail?: {
+    ClassHeritage?: { type?: string } | null,
+    ClassBody?: readonly unknown[] | null,
+  } | null,
+};
+
+/** Whether a class declares an instance field with, or without, a type annotation. */
+function declaresInstanceField(declaration: ClassShape, typed: boolean): boolean {
+  for (const element of declaration.ClassTail?.ClassBody ?? []) {
+    const el = element as { type?: string, static?: boolean, TypeAnnotation?: unknown };
+    if (el.type !== 'FieldDefinition' || el.static) {
+      continue;
+    }
+    if ((el.TypeAnnotation !== undefined && el.TypeAnnotation !== null) === typed) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether a class is built on a base that is not a typed class: an untyped class, a `dynamic` one, a
+ * function, or a built-in such as `Error`, `Map` or `HTMLElement`.
+ *
+ * Such a class is typed and sealed, and it is NOT a value type class (#sec-typed-classes: "applying
+ * one to a dynamic or untyped base produces an ordinary reference type" is how the design states it
+ * of a mixin, and "`Error` and its subclasses are reference types" of an error). An instance of it
+ * holds what the base's constructor made - own properties no declaration names, and for a built-in
+ * its internal slots - and a copy runs no constructor (#sec-value-type-copying), so a copy would be
+ * its typed fields and nothing else. `class E extends Error { status: uint16; }` was copied at every
+ * typed position: the copy had no `message` and no `stack` and was no Error, and two of them with
+ * different messages were `===`.
+ *
+ * At run time the evaluated constructor says so. Before a class is evaluated the declarations are
+ * walked: every class between this one and the root inherits the root's fields, so they are typed
+ * exactly when the root declares a typed field. A heritage the checking pass could not resolve is
+ * UNKNOWN and answers *false* here - the run time, which has the constructor, decides it.
+ */
+export function HasUntypedBase(t: TypeRecord): boolean {
+  if (t.Kind !== 'nominal' || t.EnumMembers !== undefined) {
+    return false;
+  }
+  const evaluated = (t as { Constructor?: { UntypedBase?: boolean } }).Constructor;
+  if (evaluated !== undefined && evaluated !== null && typeof evaluated === 'object' && evaluated.UntypedBase === true) {
+    return true;
+  }
+  let current: TypeRecord = t;
+  for (let depth = 0; depth < 1000; depth += 1) {
+    const declaration = (current as { Declaration?: ClassShape }).Declaration;
+    const tail = declaration?.ClassTail;
+    if (current !== t) {
+      if (current.Kind !== 'nominal' || !declaration || !tail || declaration.ClassModifiers?.includes('dynamic')) {
+        return true;
+      }
+      if (declaresInstanceField(declaration, false)) {
+        return true;
+      }
+    }
+    const base = (current as { Base?: TypeRecord }).Base;
+    if (base === undefined) {
+      const heritage = tail?.ClassHeritage;
+      if (heritage !== undefined && heritage !== null && heritage.type !== 'NullLiteral') {
+        return (current as { UnresolvedHeritage?: boolean }).UnresolvedHeritage !== true;
+      }
+      return current !== t && !!declaration && !declaresInstanceField(declaration, true);
+    }
+    current = base;
+  }
+  return true;
+}
+
 /** The layout a reference occupies: this implementation's 64-bit pointer. */
 export const referenceLayout: Layout = { bitLength: 64, byteLength: 8, alignment: 8 };
 
@@ -390,6 +463,11 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
     return true;
   }
   if (IsReferenceClass(t)) {
+    return false;
+  }
+  // A class over an untyped base holds what that base's constructor made, which no
+  // copy can make again.
+  if (HasUntypedBase(t)) {
     return false;
   }
   // Read from the DECLARATION, not from the constructor. This question is asked

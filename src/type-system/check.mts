@@ -87,7 +87,7 @@ import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import { ClassValueOrigins } from './class-value-origins.mts';
 import {
   iterationInterfaceRecord, protocolInterfaceRecord, registerProtocolReceiver, protocolNameOf, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType, GeneratorTypeOfProtocol } from './iteration-types.mts';
-import { IsValueTypeClass } from './layout.mts';
+import { HasUntypedBase, IsValueTypeClass } from './layout.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
   ComputeClassLayout, type ClassLayout, IsValueType,
@@ -15531,6 +15531,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let untypedFields = 0;
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
       const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
+      // A typed class over an untyped base has no default: its instances begin with what that
+      // base's constructor made (HasUntypedBase). The root of the chain is typed only by a field
+      // of its own.
+      if (at !== declaration && !heritage && annotatedFields > 0
+          && !classBodyOf(at).some((element) => element.type === 'FieldDefinition' && !(element as { static?: boolean }).static
+            && (element as { TypeAnnotation?: unknown }).TypeAnnotation)) return 'none';
       for (const element of classBodyOf(at)) {
         if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
         const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
@@ -18692,8 +18698,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     seen.add(declaration);
     const modifiers = (declaration as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
     if (modifiers.some((modifier) => modifier === 'reference' || modifier === 'sealed' || modifier === 'abstract')) return false;
+    // A class over a base that is not a typed class is no value type class (HasUntypedBase), and a
+    // base this pass cannot name is not known to be one: neither is judged to be stored inline.
+    if (HasUntypedBase(type as TypeRecord)) return false;
     let fields = 0;
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
+      const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: ParseNode | null } | null }).ClassTail?.ClassHeritage;
+      if (heritage && heritage.type !== 'NullLiteral' && !heritageClassOf(at)) return false;
+      const ownModifiers = (at as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
+      if (at !== declaration && ownModifiers.includes('dynamic')) return false;
+      let ownTyped = 0;
+      for (const element of classBodyOf(at)) {
+        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+        ownTyped += 1;
+      }
+      // The root of the chain is typed only by a field of its own.
+      if (at !== declaration && !heritage && ownTyped === 0) return false;
       for (const element of classBodyOf(at)) {
         if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
         fields += 1;
@@ -18762,6 +18782,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A where clause or a decorator can run code of the program's at a store, which is then not without effect.
         if ((nodeField<{ WhereClauses?: readonly unknown[] | null }>(at, 'ClassTail')?.WhereClauses ?? []).length > 0
           || (nodeField<readonly unknown[] | null>(at, 'Decorators') ?? []).length > 0) return null;
+        let own = 0;
         for (const element of classBodyOf(at)) {
           if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
           if ((nodeField<readonly unknown[] | null>(element, 'Decorators') ?? []).length > 0) return null;
@@ -18771,9 +18792,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const name = nodeField<{ type?: string, name?: string }>(element, 'ClassElementName');
           // A private or computed field is storage of the instance; it is counted and not addressed by a path.
           fields.set(name?.type === 'IdentifierName' && typeof name.name === 'string' ? name.name : `#${fields.size}`, fieldType as TypeRecord);
+          own += 1;
         }
+        const heritage = nodeField<{ ClassHeritage?: { type?: string } | null } | null>(at, 'ClassTail')?.ClassHeritage;
         const base: ParseNode | undefined = heritageClassOf(at);
-        if (nodeField<{ ClassHeritage?: unknown } | null>(at, 'ClassTail')?.ClassHeritage && !base) return null;
+        if (heritage && heritage.type !== 'NullLiteral' && !base) return null;
+        // The root of a chain is a typed class only by a field of its own, and a class over an
+        // untyped base is held by reference (HasUntypedBase).
+        if (at !== declaration && !base && own === 0) return null;
         at = base;
       }
       return fields.size > 0 ? fields : null;

@@ -1509,6 +1509,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // reference class is typed AND has an identity to observe. The kind is
       // inherited for the reason it is inherited in the type system: a subclass
       // reached through a reference class is one too.
+      // A typed class over a base that is not one - an untyped class, a `dynamic` one, a
+      // function, a built-in such as `Error` - is sealed and is no value type class
+      // (HasUntypedBase): its instances hold what the base's constructor made. The flag is
+      // inherited, as the base's fields are.
+      const hasSuperclass = constructorParent !== surroundingAgent.intrinsic('%Function.prototype%');
+      (F as { UntypedBase?: boolean }).UntypedBase = hasSuperclass
+        && (!baseIsTyped || (constructorParent as { UntypedBase?: boolean }).UntypedBase === true);
       const baseIsReference = (constructorParent as { ReferenceKind?: boolean } | undefined)?.ReferenceKind === true;
       (F as { ReferenceKind?: boolean }).ReferenceKind = baseIsReference
         || modifiers.includes('reference') || modifiers.includes('sealed') || modifiers.includes('abstract');
@@ -1635,8 +1642,11 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // base", so `class S extends B { y: uint8; }` was laid out as `y` alone:
       // `S.byteLength` was 1, and a copy of an `S`, which walks the layout,
       // had `y` and neither of `B`'s fields.
-      const baseUnlaid = baseLayout === null
-        && (constructorParent as { SealInstances?: boolean } | undefined | null)?.SealInstances === true;
+      // So does a base that is no typed class at all: the instance begins with whatever that
+      // base's constructor made, and nothing places a field after it.
+      const baseUnlaid = (baseLayout === null
+        && (constructorParent as { SealInstances?: boolean } | undefined | null)?.SealInstances === true)
+        || (F as { UntypedBase?: boolean }).UntypedBase === true;
       const classDecorators = (ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators;
       const unreadableClass = firstUnreadableControl(classDecorators);
       if (unreadableClass !== null) {

@@ -63,7 +63,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter, SubclassAddsStorageOver } from './layout.mts';
+import { FirstInlineCycle, HasUntypedBase, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter, SubclassAddsStorageOver } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -3929,6 +3929,13 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // lost one too, though every field of it has a default. Excluding the
       // reference class is what the defect actually calls for.
       if (IsReferenceClass(t)) {
+        return undefined;
+      }
+      // Nor has a typed class over an untyped base (HasUntypedBase): its instances begin
+      // with what that base's constructor made, and a default runs no constructor. `let e:
+      // E;` for `class E extends Error { status: uint16; }` answered an object that was no
+      // Error.
+      if (HasUntypedBase(t) && (t.Constructor as { SealInstances?: boolean } | undefined)?.SealInstances === true) {
         return undefined;
       }
       // #sec-defaultvalueof: "If _t_.[[Kind]] is ~nominal~ and _t_ denotes a
