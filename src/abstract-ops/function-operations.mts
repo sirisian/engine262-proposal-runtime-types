@@ -44,6 +44,7 @@ import {
   pushContextualType, popContextualType, contextualTypeFor, SubstituteTypeArguments, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext, TakeBodyContext,
 } from '../type-system/runtime.mts';
 import { resolveOverloadChecked } from '../type-system/overloads.mts';
+import { IsExcludedFromFragment } from '../type-system/fragment-library.mts';
 import { AdoptTypeParameters, AdoptedTypeParametersOf, InferGenericCallBindings, SignaturesOf } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
@@ -91,7 +92,6 @@ import {
   isEvaluator,
   surroundingAgent,
 } from '#self';
-import { IsExcludedFromFragment } from '../type-system/fragment-library.mts';
 
 export interface BaseFunctionObject extends OrdinaryObject {
   readonly Realm: Realm;

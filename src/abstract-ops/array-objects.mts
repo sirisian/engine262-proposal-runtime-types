@@ -1,8 +1,9 @@
-import { AdmitStoreValue } from '#self';
-import { CheckInheritedDefinitions } from '#self';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { ThrowCompletion } from '../completion.mts';
+import { CaptureArrayIteratorValue } from '../type-system/iteration-construction.mts';
+import { AdmitStoreValue } from '#self';
+import { CheckInheritedDefinitions } from '#self';
 import { EnsureCompletion, RetainPropertyResult } from '#self';
 import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
@@ -57,7 +58,6 @@ import {
 } from '#self';
 import {
   ScalarRestOwner, ScalarRestLengthAllowed, ScalarRestGuardsAccept, ScalarRestValues, PrepareScalarRestValues, isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
-import { CaptureArrayIteratorValue } from '../type-system/iteration-construction.mts';
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
@@ -702,8 +702,8 @@ function* OrderedComparison(x: Value, y: Value): PlainEvaluator<number | undefin
   // Both must be typed, and to the SAME type: comparing a `uint8` against a
   // string has no order of its own and belongs on the String path.
   if (isTypedNumber(x) && isTypedNumber(y)) {
-    const a = x.numberValue();
-    const b = y.numberValue();
+    const a = x.numberValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
+    const b = y.numberValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
     // A 64-bit integral type holds values a double cannot distinguish:
     // `9007199254740993` and `...992` are exact in the record and equal as
     // Numbers, so comparing as Numbers left them in their original order. The
@@ -752,8 +752,8 @@ function* OrderedComparison(x: Value, y: Value): PlainEvaluator<number | undefin
     return 0;
   }
   if (x instanceof BigIntValue && y instanceof BigIntValue) {
-    const a = x.bigintValue();
-    const bv = y.bigintValue();
+    const a = x.bigintValue(); // eslint-disable-line @engine262/mathematical-value -- the exact value of an unbounded integer
+    const bv = y.bigintValue(); // eslint-disable-line @engine262/mathematical-value -- the exact value of an unbounded integer
     return a < bv ? -1 : (a > bv ? 1 : 0);
   }
   // sec-ordered-element-types: an enum orders by the rule its underlying type

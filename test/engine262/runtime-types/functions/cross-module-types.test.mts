@@ -24,6 +24,7 @@ import {
 
 /** Run a module graph, returning 'ok' or the message of the error it raises. */
 function graph(sources: Record<string, string>, entry: string): string {
+  // eslint-disable-next-line prefer-const -- the hook below closes over the realm, which is made from the agent the hook belongs to
   let realmRef: ManagedRealm;
   const cache = new Map<string, unknown>();
   const agent = new Agent({

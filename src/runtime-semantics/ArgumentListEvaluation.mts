@@ -17,6 +17,7 @@ import { RuntimeTypeOf, SpecializedFunctionSignatureOf, pushContextualType, popC
 import { EvaluateResultValue, RetainArgumentResult, TransferResultDependency, SpreadConstructionOf, CaptureSpreadDataResult } from '../type-system/result-dependencies.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
 export { ArgumentContexts } from '../type-system/argument-construction.mts';
+import { BeginIteratorConstruction, CompleteIteratorConstruction, EndIteratorConstruction } from '../type-system/iteration-construction.mts';
 import {
   surroundingAgent,
   Assert,
@@ -34,7 +35,6 @@ import {
   F,
   IteratorStepValue,
 } from '#self';
-import { BeginIteratorConstruction, CompleteIteratorConstruction, EndIteratorConstruction } from '../type-system/iteration-construction.mts';
 
 /** https://tc39.es/ecma262/#sec-gettemplateobjec */
 function GetTemplateObject(templateLiteral: ParseNode.TemplateLiteral) {

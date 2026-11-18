@@ -26,8 +26,12 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type {
   IndexSignatureRecord, PropertyTypeRecord, SignatureRecord, TupleElementRecord, TypeRecord,
 } from '../type-system/records.mts';
-import { bootstrapPrototype } from './bootstrap.mts';
+import { builtinTypeRecord, libraryTypeRecord, type TypeParameterRecord } from '../type-system/records.mts';
+import { bindIntrinsicArguments, intrinsicParameters } from '../type-system/intrinsic-generics.mts';
+import { finishFamilyPattern, type FamilyPatternRecord } from '../type-system/family-patterns.mts';
+import { SameValue } from '../abstract-ops/testing-comparison.mts';
 import { familyOfRecord } from './TypePrototype.mts';
+import { bootstrapPrototype } from './bootstrap.mts';
 import {
   Call,
   Construct,
@@ -385,7 +389,6 @@ function isCanonicalMetadata(record: unknown): boolean {
     (v) => v instanceof Value || (v !== null && typeof v === 'object' ? isCanonicalMetadata(v) : true),
   );
 }
-
 
 /**
  * proposal-runtime-types #sec-reflect-maketype: read a reflection-node object as
@@ -1355,7 +1358,6 @@ export function typeObjectRecord(): TypeRecord {
   };
 }
 
-
 /**
  * proposal-runtime-types decorators.md, the CLASS family of decorator contexts.
  *
@@ -2264,9 +2266,3 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
   X(CreateDataProperty(obj, Value('isBitField'), placement.isBitField ? Value.true : Value.false));
   return obj;
 }
-
-import { builtinTypeRecord, libraryTypeRecord, type TypeParameterRecord } from '../type-system/records.mts';
-import { bindIntrinsicArguments, intrinsicParameters } from '../type-system/intrinsic-generics.mts';
-import { finishFamilyPattern, type FamilyPatternRecord } from '../type-system/family-patterns.mts';
-
-import { SameValue } from '../abstract-ops/testing-comparison.mts';

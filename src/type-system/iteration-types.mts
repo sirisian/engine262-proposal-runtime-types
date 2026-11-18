@@ -511,10 +511,14 @@ const LIBRARY_EXTENDS: Record<string, string> = {
   ReferenceError: 'Error', SyntaxError: 'Error', TypeError: 'Error', URIError: 'Error',
 };
 export function libraryExtends(name: string | undefined, target: string | undefined): boolean {
-  if (name === undefined || target === undefined) { return false; }
+  if (name === undefined || target === undefined) {
+    return false;
+  }
   let current: string | undefined = LIBRARY_EXTENDS[name];
   while (current !== undefined) {
-    if (current === target) { return true; }
+    if (current === target) {
+      return true;
+    }
     current = LIBRARY_EXTENDS[current];
   }
   return false;

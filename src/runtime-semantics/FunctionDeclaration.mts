@@ -1,17 +1,17 @@
 import { NormalCompletion } from '../completion.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
-import { FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { OverloadSignature } from '../type-system/overloads.mts';
 import { ApplyDecorators, ApplySubTargetDecorators, HasSubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
+import { InstantiateFunctionObject } from './all.mts';
+import { FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { PutValue } from '#self';
 import { CreateDataProperty, OrdinaryObjectCreate, ResolveBinding, X, surroundingAgent } from '#self';
-import { InstantiateFunctionObject } from './all.mts';
-import type { OverloadSignature } from '../type-system/overloads.mts';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-evaluation */
 // FunctionDeclaration :

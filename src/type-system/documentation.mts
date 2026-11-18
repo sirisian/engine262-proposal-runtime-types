@@ -55,7 +55,7 @@ function commentAbove(source: string, startIndex: number): string | undefined {
     return open < 0 ? undefined : source.slice(open, end);
   }
   // A run of line comments, taken upwards while each line begins one.
-  let lineStart = source.lastIndexOf('\n', end - 1) + 1;
+  const lineStart = source.lastIndexOf('\n', end - 1) + 1;
   if (!source.startsWith('//', skipBlanks(source, lineStart))) {
     return undefined;
   }

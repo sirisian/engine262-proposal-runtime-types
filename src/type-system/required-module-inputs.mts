@@ -40,7 +40,9 @@ export function RequireModuleInputs(): () => void {
   // Runtime-only specialization keeps ordinary exception behaviour.
   if (!active?.length) return () => {};
   active.push({});
-  return () => { active.pop(); };
+  return () => {
+    active.pop();
+  };
 }
 
 /** Inspect before accepting a computed result or publishing a successful memo. */

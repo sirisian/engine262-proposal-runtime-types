@@ -1,7 +1,7 @@
-import { JSStringValue, RequireType, Q, type Value, type PropertyKeyValue, type PlainEvaluator } from '#self';
 import { SameType } from './relations.mts';
 import type { TypeRecord } from './records.mts';
 import type { ConstructionSelections } from './result-dependencies.mts';
+import { JSStringValue, RequireType, Q, type Value, type PropertyKeyValue, type PlainEvaluator } from '#self';
 
 /** Successful evidence belongs to one internal store continuation. It is never
  * attached to a value, descriptor, receiver or ambient execution context. */

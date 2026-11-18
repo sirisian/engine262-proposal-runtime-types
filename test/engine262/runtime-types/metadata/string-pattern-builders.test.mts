@@ -1,5 +1,11 @@
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
 import { kit, evaluateBuilder } from '../corpus/type-challenges/harness.mts';
+
+// Each `run` evaluates the whole standard kit, which takes over ten seconds on a
+// small machine, and a test here makes two of them. That leaves a few seconds
+// under the default limit of thirty, and they timed out on two cores whenever
+// another file ran beside this one.
+vi.setConfig({ testTimeout: 120_000 });
 
 /**
  * The three StringPattern builders of the standard kit, shipped.

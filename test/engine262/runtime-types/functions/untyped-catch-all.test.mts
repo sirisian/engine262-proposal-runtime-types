@@ -1,6 +1,6 @@
 import { test } from 'vitest';
-import { expectStaticTypeError, ok } from '../harness.mts';
 import { expect } from 'vitest';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 /**
  * `#sec-issignaturesubtype`, the catch-all step:

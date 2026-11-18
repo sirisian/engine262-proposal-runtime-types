@@ -1,12 +1,12 @@
 import { NumberValue, TypedNumberValue, Value, BigIntValue, ObjectValue } from '../value.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { CreateDecimalValue, DecimalPartsInRange, isDecimalObject } from '../intrinsics/Decimal.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
-import type { ParseNode } from '../parser/ParseNode.mts';
 import { exactOfLiteralText } from './exact-real.mts';
-import { CreateDecimalValue, DecimalPartsInRange, isDecimalObject } from '../intrinsics/Decimal.mts';
 import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, type ThrowCompletion } from '#self';
 
 /**
@@ -205,7 +205,7 @@ function payload(v: Value): number {
 /** The payload as an exact integer, for the wide path. */
 function payloadExact(v: Value): bigint {
   if (v instanceof TypedNumberValue) {
-    return (v as TypedNumberValue).bigintValue();
+    return (v as TypedNumberValue).bigintValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   }
   return BigInt(Math.trunc(payload(v)));
 }
@@ -521,6 +521,17 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
     // the value fits.
     const literalTarget = literals?.right ? xt : yt;
     const literalValue = payload(literals?.right ? y : x);
+    // A literal does not reach a numeric type that carries metadata
+    // (#sec-literal-propagation): it stays a value of the base, whose metadata
+    // is the default, so against an operand whose metadata differs this is the
+    // mismatch two typed operands have, and is described as one. The fit test
+    // below is of a primitive record and refused every such literal as out of
+    // range - `a + 3` for a `float32.<{ m: 1 }>` was "3 is not in the range of"
+    // its type, which names neither the meta type nor the reason.
+    if (literalTarget.Kind === 'parameterized') {
+      const metadata = MetadataMismatchDescription(xt, yt);
+      if (metadata !== undefined) return Throw.TypeError('$1', metadata);
+    }
     if (!fitsNumericType(literalValue, (literalTarget as TypeRecord & { Kind: 'primitive' }).Name, (literalTarget as TypeRecord & { Kind: 'primitive' }).Arguments)) {
       return Throw.RangeError('$1 is not in the range of $2', Value(literalValue), Value(displayType(literalTarget)));
     }
@@ -548,6 +559,12 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
       return Throw.TypeError('a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them', Value('number'), Value(displayType(target)));
     }
     const literalValue = payload(xt ? y : x);
+    // The same of a literal that arrives with no type at all: it is a value
+    // of the base.
+    if (target.Kind === 'parameterized') {
+      const metadata = xt ? MetadataMismatchDescription(target, target.Base) : MetadataMismatchDescription(target.Base, target);
+      if (metadata !== undefined) return Throw.TypeError('$1', metadata);
+    }
     if (!fitsNumericType(literalValue, (target as TypeRecord & { Kind: 'primitive' }).Name, (target as TypeRecord & { Kind: 'primitive' }).Arguments)) {
       // "A literal that does not fit its type" is an Early Error where the
       // checker sees it; this is the run-time backstop, the same RangeError a

@@ -234,10 +234,10 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     // decide that `a + 1` is not a mixed-type addition.
     const liftLiteral = (other: Value, beside: ComplexObject): ComplexObject | undefined => {
       if (other instanceof NumberValue) {
-        return CreateComplexValue(other.numberValue(), 0, beside.ComplexComponent, surroundingAgent.currentRealmRecord);
+        return CreateComplexValue(other.numberValue(), 0, beside.ComplexComponent, surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
       }
       if (isTypedNumber(other)) {
-        return CreateComplexValue(other.numberValue(), 0, beside.ComplexComponent, surroundingAgent.currentRealmRecord);
+        return CreateComplexValue(other.numberValue(), 0, beside.ComplexComponent, surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
       }
       return undefined;
     };

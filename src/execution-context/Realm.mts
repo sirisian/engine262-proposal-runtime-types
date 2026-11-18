@@ -113,6 +113,7 @@ import { bootstrapWeakSetPrototype } from '../intrinsics/WeakSetPrototype.mts';
 import { bootstrapWrapForValidIteratorPrototype } from '../intrinsics/WrapForValidIteratorPrototype.mts';
 import { bootstrapTemporal } from '../intrinsics/Temporal/Temporal.mts';
 import { RegisterTemporalTypeSources } from '../intrinsics/Temporal/type-sources.mts';
+import { registerIntrinsicNamespace } from '../type-system/intrinsic-generics.mts';
 import { BindTypeName } from './TypeNames.mts';
 import {
   type ObjectValue, type GlobalEnvironmentRecord, type ParseNode, type LoadedModuleRequestRecord, type ManagedRealmHostDefined, type GCMarker,
@@ -708,5 +709,3 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     }
   }
 }
-
-import { registerIntrinsicNamespace } from '../type-system/intrinsic-generics.mts';

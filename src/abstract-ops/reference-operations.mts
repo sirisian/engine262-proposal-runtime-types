@@ -25,6 +25,8 @@ import { __ts_cast__ } from '../utils/language.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { ResolvePrivateIdentifier } from '../execution-context/PrivateEnvironment.mts';
 import { ArrayElementIsLive } from '../type-system/array-borrow.mts';
+import { RunningSourceTextAdmitsTypeNames } from '../execution-context/TypeNames.mts';
+import { intrinsicParameters, missingIntrinsicArgument } from '../type-system/intrinsic-generics.mts';
 import {
   Assert,
   ToObject,
@@ -97,7 +99,7 @@ function* referenceRunElement(run: ReferenceRunValue, key: Value): PlainEvaluato
   if (key instanceof JSStringValue && key.stringValue() === 'length') {
     return 'length';
   }
-  const index = key instanceof JSStringValue ? Number(key.stringValue()) : (key instanceof NumberValue ? key.numberValue() : NaN);
+  const index = key instanceof JSStringValue ? Number(key.stringValue()) : (key instanceof NumberValue ? key.numberValue() : NaN); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   if (Number.isInteger(index) && index >= 0 && index < run.Locations.length) {
     return run.Locations[index]!;
   }
@@ -432,7 +434,6 @@ export function MakePrivateReference(baseValue: Value, privateIdentifier: JSStri
   });
 }
 
-
 /**
  * proposal-runtime-types (references extension): a reference value decays to
  * the current value of the storage location it borrows at any boundary that
@@ -500,6 +501,3 @@ export function* DereferenceReferenceValue(value: Value): ValueEvaluator {
   }
   return value;
 }
-
-import { RunningSourceTextAdmitsTypeNames } from '../execution-context/TypeNames.mts';
-import { intrinsicParameters, missingIntrinsicArgument } from '../type-system/intrinsic-generics.mts';

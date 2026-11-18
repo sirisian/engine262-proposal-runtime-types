@@ -7,15 +7,15 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { IsPlainData, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
+import { canonicalTypeText } from '../type-system/records.mts';
 import { CreateComplexValue } from './Complex.mts';
 import { ReadRationalLiteral, RationalApproximateAt } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue, DecimalPartsInRange } from './Decimal.mts';
 import { Float128FromNumber, Binary128ToFloat128 } from './Float128.mts';
 import { fromDecimal as Float128FromDecimal } from './Float128Arithmetic.mts';
+import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
 import { surroundingAgent } from '#self';
-import { canonicalTypeText } from '../type-system/records.mts';
 
 /**
  * proposal-runtime-types: %Type.prototype%, the prototype of every Type
@@ -45,6 +45,8 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
  * The design's `rational.approximate`, on a rational Type Object: the closest
  * value of THAT type under the bound. A type with no
  * rational values has no approximation to give.
+ *
+ * https://sirisian.github.io/proposal-runtime-types/#sec-rational-types
  */
 function* TypeProto_approximate(args: Arguments, { thisValue }: FunctionCallContext) {
   if (!isTypeObject(thisValue)) {
@@ -657,6 +659,8 @@ function* TypeProto_hasLayoutGetter(_args: Arguments, { thisValue }: FunctionCal
  *
  * Like `hasLayout` this ASKS rather than asserts, so it never throws: a type
  * with no layout is simply not plain data.
+ *
+ * https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties
  */
 function* TypeProto_isPlainDataGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isTypeObject(thisValue)) {

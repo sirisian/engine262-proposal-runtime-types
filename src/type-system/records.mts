@@ -1,5 +1,3 @@
-import { intrinsicParameters } from './intrinsic-generics.mts';
-import type { FamilyPatternRecord } from './family-patterns.mts';
 import { JSStringValue, NumberValue, BigIntValue, TypedNumberValue, Value, type SymbolValue } from '../value.mts';
 // `R` reads a Number's mathematical value, for the one place the substitution
 // below turns a ~literal~ argument into a value-parameter binding. Imported
@@ -8,6 +6,8 @@ import { JSStringValue, NumberValue, BigIntValue, TypedNumberValue, Value, type 
 // the root here would make it wait on everything the root re-exports.
 import { R } from '../abstract-ops/spec-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { FamilyPatternRecord } from './family-patterns.mts';
+import { intrinsicParameters } from './intrinsic-generics.mts';
 import type { CapturedTypeContext } from './runtime.mts';
 import { MetadataEntries, MetadataKey, MetadataKeys, SymbolInternIndex } from './metadata-keys.mts';
 
@@ -1423,7 +1423,9 @@ const metadataFunctionIdentities = new WeakMap<object, number>();
 let nextMetadataFunctionIdentity = 0;
 function metadataFunctionIdentity(value: object): number {
   let identity = metadataFunctionIdentities.get(value);
-  if (identity === undefined) { identity = nextMetadataFunctionIdentity++; metadataFunctionIdentities.set(value, identity); }
+  if (identity === undefined) {
+    identity = nextMetadataFunctionIdentity++; metadataFunctionIdentities.set(value, identity);
+  }
   return identity;
 }
 
@@ -1841,7 +1843,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     // check below rather than by inspection, which is the argument for it.
     case 'pattern': return `/${t.Source}/${t.Flags}`;
     case 'range': {
-      const endpoint = (v: Value | undefined): string => (v === undefined ? '' : String((v as { numberValue?: () => unknown }).numberValue?.() ?? (v as { stringValue?: () => string }).stringValue?.() ?? ''));
+      const endpoint = (v: Value | undefined): string => (v === undefined ? '' : String((v as { numberValue?: () => unknown }).numberValue?.() ?? (v as { stringValue?: () => string }).stringValue?.() ?? '')); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
       // The spelling of #sec-ranges: `..` closed-open, `..=` closed-closed,
       // and a leading `<` where the start is open.
       const open = t.StartBound === 'open' ? '<' : '';

@@ -30,6 +30,7 @@ import { ReferenceValue } from '../value.mts';
 import { assignTypeArguments } from '../type-system/type-argument-order.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
 import { Evaluate } from '../evaluator.mts';
+import { IsFamilyConstraintEvaluationFailure } from '../type-system/runtime.mts';
 import { SignaturesOf, InferGenericCallBindings, functionTypeParameters, functionWhereClauses, classFrameOfObject, CheckedConvertValue } from './runtime-types.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
@@ -832,5 +833,3 @@ export function* SelectExplicitCase(
 }
 
 void builtinTypeRecord;
-
-import { IsFamilyConstraintEvaluationFailure } from '../type-system/runtime.mts';

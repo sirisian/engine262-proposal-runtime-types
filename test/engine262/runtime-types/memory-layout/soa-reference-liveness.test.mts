@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
+import { observeModuleGraph, observeModuleSequence, type ModuleObservation } from '../module-observer.mts';
 import {
   Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, ObjectValue, JSStringValue,
   CopyValueClassInstance, skipDebugger, Throw,
 } from '#self';
-import { observeModuleGraph, observeModuleSequence, type ModuleObservation } from '../module-observer.mts';
 
 // #sec-soa-references, #sec-reference-liveness and #sec-value-type-copying.
 const corpus = JSON.parse(readFileSync(new URL('../conformance/soa-reference-liveness.json', import.meta.url), 'utf8')) as {
@@ -57,7 +57,9 @@ test('the copy operation propagates an abrupt field read without losing earlier 
     source.Get = function* (key, receiver) {
       const name = key instanceof JSStringValue ? key.stringValue() : undefined;
       if (name === 'x') reads.push('x');
-      if (name === 'y') { reads.push('y'); return failure; }
+      if (name === 'y') {
+        reads.push('y'); return failure;
+      }
       return yield* originalGet.call(this, key, receiver);
     };
     const result = EnsureCompletion(skipDebugger(CopyValueClassInstance(source)));

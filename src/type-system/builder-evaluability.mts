@@ -2,10 +2,10 @@ import { SourceTextModuleRecord, type AbstractModuleRecord } from '../modules.mt
 import { isModuleNamespaceObject } from '../abstract-ops/module-namespace-exotic-objects.mts';
 import { JSStringValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { surroundingAgent } from '#self';
 import {
   CompileTimeEvaluabilityChecker, ModuleBindingDeclaration, ResolveBindingDeclaration, type BindingDeclaration, type EvaluabilityContext,
 } from './compile-time-evaluability.mts';
+import { surroundingAgent } from '#self';
 
 function sourceRoot(node: ParseNode): ParseNode {
   while (node.parent) node = node.parent;
@@ -69,7 +69,9 @@ export function TypeExpressionEvaluabilityViolation(
       facts = { declarations: new Set(), eval: false };
       mutations.set(root, facts);
       const target = (value: unknown): void => {
-        if (Array.isArray(value)) { value.forEach(target); return; }
+        if (Array.isArray(value)) {
+          value.forEach(target); return;
+        }
         if (!value || typeof value !== 'object') return;
         const node = value as ParseNode & Record<string, unknown>;
         if (node.type === 'IdentifierReference' || node.type === 'BindingIdentifier') {
@@ -86,7 +88,9 @@ export function TypeExpressionEvaluabilityViolation(
         for (const key of keys[node.type] ?? []) target(node[key]);
       };
       const walk = (value: unknown): void => {
-        if (Array.isArray(value)) { value.forEach(walk); return; }
+        if (Array.isArray(value)) {
+          value.forEach(walk); return;
+        }
         if (!value || typeof value !== 'object') return;
         const node = value as ParseNode & Record<string, unknown>;
         if (typeof node.type !== 'string') return;

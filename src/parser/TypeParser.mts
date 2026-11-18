@@ -1,8 +1,8 @@
+import { Throw } from '../host-defined/error-messages.mts';
 import { ExpressionParser } from './ExpressionParser.mts';
 import type { ParseNode } from './ParseNode.mts';
 import { TokenValues, Token } from './tokens.mts';
 import { surroundingAgent } from '#self';
-import { Throw } from '../host-defined/error-messages.mts';
 
 /**
  * proposal-runtime-types: the type sublanguage.

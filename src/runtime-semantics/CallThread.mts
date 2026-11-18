@@ -1,3 +1,12 @@
+import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
+import { SignaturesOf } from '../abstract-ops/runtime-types.mts';
+import { ThreadCluster } from '../host-defined/thread-cluster.mts';
+import {
+  AbortReasonOf, IsAborted, isAbortSignal, OnAbort, type AbortSignalObject,
+} from '../intrinsics/AbortController.mts';
 import {
   Agent,
   AbruptCompletion,
@@ -28,15 +37,6 @@ import {
   type ValueCompletion,
   type ValueEvaluator,
 } from '#self';
-import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import type { TypeRecord } from '../type-system/records.mts';
-import type { ParseNode } from '../parser/ParseNode.mts';
-import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
-import { SignaturesOf } from '../abstract-ops/runtime-types.mts';
-import { ThreadCluster } from '../host-defined/thread-cluster.mts';
-import {
-  AbortReasonOf, IsAborted, isAbortSignal, OnAbort, type AbortSignalObject,
-} from '../intrinsics/AbortController.mts';
 
 /**
  * proposal-runtime-types #sec-classifythreadarguments: decide whether the first

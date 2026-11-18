@@ -1,10 +1,6 @@
 import { Value, UndefinedValue, type Arguments, type FunctionCallContext } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { captureStack } from '../utils/stack.mts';
-import { setErrorHostInternalSlot } from './Error.mts';
-import { bootstrapConstructor } from './bootstrap.mts';
-import { ErrorHostInternalSlots, type ErrorObject } from './Error.mts';
-import { surroundingAgent } from '#self';
 import {
   CreateNonEnumerableDataPropertyOrThrow,
   InstallErrorCause,
@@ -12,6 +8,10 @@ import {
   ToString,
   type FunctionObject,
 } from '../abstract-ops/all.mts';
+import { setErrorHostInternalSlot } from './Error.mts';
+import { bootstrapConstructor } from './bootstrap.mts';
+import { ErrorHostInternalSlots, type ErrorObject } from './Error.mts';
+import { surroundingAgent } from '#self';
 import type { Realm } from '#self';
 
 /**

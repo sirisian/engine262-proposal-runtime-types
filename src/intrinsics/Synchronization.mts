@@ -2,6 +2,10 @@ import { NoDefaultValueError } from '../type-system/intern.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import type { Realm } from '../execution-context/Realm.mts';
+import { EnsureCompletion, AbruptCompletion } from '../completion.mts';
+import { assignProps, bootstrapConstructor } from './bootstrap.mts';
+import { OnAbort, type AbortSignalObject } from './AbortController.mts';
 import {
   Assert,
   Call,
@@ -23,10 +27,6 @@ import {
   type PromiseCapabilityRecord,
   type ValueEvaluator,
 } from '#self';
-import type { Realm } from '../execution-context/Realm.mts';
-import { assignProps, bootstrapConstructor } from './bootstrap.mts';
-import { EnsureCompletion, AbruptCompletion } from '../completion.mts';
-import { OnAbort, type AbortSignalObject } from './AbortController.mts';
 
 /**
  * proposal-runtime-types #sec-threading-synchronization.

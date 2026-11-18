@@ -11,6 +11,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { ReferenceValue, type Value } from '../value.mts';
 import { GetValue } from '../abstract-ops/reference-operations.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
+import { Q } from '../completion.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
 import { isTemplateArgumentType, templateArgumentTypeOf, templateMembersType } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
 import { anyType, mentionsTypeParameter } from './records.mts';
@@ -19,8 +21,6 @@ import { PlanReferenceArguments } from './reference-rest.mts';
 import { BindNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, type ArgumentItem } from './named-arguments.mts';
 import { ArrayWithMembers, ClassImplements, InterfaceExtends, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits, IsOfType } from './runtime.mts';
-import { Q } from '../completion.mts';
-import type { PlainEvaluator } from '../evaluator.mts';
 
 /**
  * One parameter of a signature, as overload resolution reads it.
@@ -286,9 +286,9 @@ function literalValueFitsNumeric(argType: TypeRecord, paramType: TypeRecord): bo
   const v = (argType as { Value?: unknown }).Value as { numberValue?(): number, bigintValue?(): bigint } | undefined;
   let n: number | bigint | null = null;
   if (v && typeof v.numberValue === 'function') {
-    n = v.numberValue();
+    n = v.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
   } else if (v && typeof v.bigintValue === 'function') {
-    n = v.bigintValue();
+    n = v.bigintValue(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
   }
   if (n === null) {
     return false;

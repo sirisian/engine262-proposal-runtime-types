@@ -85,3 +85,19 @@ test('what is not built', () => {
   // refusal says so, where it said the class had no layout.
   expectThrown(`${G}const b = new ArrayBuffer(8); new(b, 0) G();`, 'specified but not implemented in this engine');
 });
+
+test('an instance reports its class, and a store to a copy of one is seen', () => {
+  const G = 'value class G extends [4].<uint8> { sum() { return this[0] + this[1] + this[2] + this[3]; } } ';
+  // #sec-runtimetypeof: "a class instance reports the ~nominal~ type of its class". The array
+  // answer came first, so the type of a G was the type of its base.
+  expect(evaluated(`${G}String(Reflect.typeOf(new G()) === (type G)) + String(new G() is G);`)).toBe('truetrue');
+  expect(evaluated('class Dyn extends [].<uint8> { } String(Reflect.typeOf(new Dyn()) === (type Dyn));')).toBe('true');
+  expect(evaluated(`${G}const a = new G(); const b = a; b[0] = 9; String(a[0]) + String(b[0]) + String(Reflect.typeOf(b) === (type G));`)).toBe('09true');
+  // #sec-value-type-copying: a parameter of the class is a copy, as one of its base is.
+  expect(observeScript(`${G}function f(g: G) { g[0] = 1; }`)).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-store-to-copy' } });
+  expect(observeScript(`${G}value class H { g: G; } function f(h: H) { h.g[0] = 1; }`)).toMatchObject({ errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-store-to-copy' } });
+  // Read afterwards, passed by reference, or stored through an index operator of the class.
+  expect(observeScript(`${G}function f(g: G) { g[0] = 1; return g.sum(); }`).errorClass).toBeUndefined();
+  expect(evaluated(`${G}function f(ref g: G) { g[0] = 1; } const g = new G(); f(ref g); String(g[0]);`)).toBe('1');
+  expect(observeScript('value class Grid extends [4].<uint8> { get operator[](x: uint32, y: uint32) { return ref this[y * 2 + x]; } } function f(g: Grid) { g[1, 1] = 1; }').errorClass).toBeUndefined();
+});

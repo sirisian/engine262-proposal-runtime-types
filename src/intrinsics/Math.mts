@@ -1,7 +1,3 @@
-import {
-  isComplexObject, complexAbs, complexConjugate, complexArgument,
-  complexSqrt, complexExp, complexLog, complexSin, complexCos, complexTan,
-} from './Complex.mts';
 import { VectorValue,
   Value,
   NumberValue,
@@ -15,7 +11,6 @@ import { VectorValue,
 import { EnsureCompletion, Q, X, isEvaluator, type ValueEvaluator, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
-import { endpointOf, type RangeObject } from './Range.mts';
 import { SameType } from '../type-system/relations.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
 import { vectorShape } from '../type-system/vector-ops.mts';
@@ -24,6 +19,11 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows, type IntegerRow } from '../type-system/numeric-signatures.mts';
 import { Decimal } from '../host-defined/decimal.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
+import { endpointOf, type RangeObject } from './Range.mts';
+import {
+  isComplexObject, complexAbs, complexConjugate, complexArgument,
+  complexSqrt, complexExp, complexLog, complexSin, complexCos, complexTan,
+} from './Complex.mts';
 import { isDecimalObject, CreateDecimalValue, decimalCompare, CreateDecimalSpecial } from './Decimal.mts';
 import { isRationalObject, CreateRationalValue, rationalCompare, rationalWidthOf } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
@@ -1094,7 +1094,7 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
           const error = Throw.TypeError('$1 has no signature taking values of two numeric types', Value('Math.sumPrecise'));
           return Q(yield* IteratorClose(iteratorRecord, error));
         }
-        element = F(element.numberValue());
+        element = F(element.numberValue()); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
       }
       if (!(element instanceof NumberValue)) {
         const error = Throw.TypeError('$1 is not a number', element);
@@ -1484,7 +1484,7 @@ function* evaluateIntegerRow(
     return checkedIntegerResult(count, t);
   }
   if (row === 'root') {
-    const value = isTypedNumber(first) ? first.numberValue() : 0;
+    const value = isTypedNumber(first) ? first.numberValue() : 0; // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
     const result = functionName === 'sqrt' ? integerSqrt(value) : integerCbrt(value);
     return checkedIntegerResult(result, t);
   }

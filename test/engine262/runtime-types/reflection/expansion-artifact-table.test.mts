@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { run } from '../harness.mts';
 import { SerializeTypeTable, DeserializeTypeTable } from '#self';
 
 /**
@@ -18,7 +19,6 @@ import { SerializeTypeTable, DeserializeTypeTable } from '#self';
  * held by a nominal record has a `parent` back-pointer and does not terminate.
  * Both were found by running this, not by reading.
  */
-import { run } from '../harness.mts';
 function rootsOf(program: string, names: string[]) {
   const c = run(`${program} [${names.join(',')}];`) as { Type: string, Value?: unknown };
   if (c.Type !== 'normal') return undefined;
@@ -60,7 +60,9 @@ const KINDS: [string, string, string][] = [
   ['nested', 'type N = { a: { b: [].<uint8> } };', 'N'],
 ];
 for (const [n, pre, expr] of KINDS) {
-  test(n, () => { expect(`${n}:${check(pre, [expr])}`).toBe(`${n}:same`); });
+  test(n, () => {
+    expect(`${n}:${check(pre, [expr])}`).toBe(`${n}:same`);
+  });
 }
 test('canonical order: the table does not depend on how roots were enumerated', () => {
   // Ordered by `orderKey`, the total order interning already sorts by, rather
@@ -89,11 +91,15 @@ test('a nominal is carried by name, and nothing unencodable survives', () => {
   const table = SerializeTypeTable(r.roots as never);
   const unencodable: string[] = [];
   const walk = (v: unknown): void => {
-    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (Array.isArray(v)) {
+      v.forEach(walk); return;
+    }
     if (typeof v !== 'object' || v === null) return;
     if ((v as { $ref?: number }).$ref !== undefined) return;
     const proto = Object.getPrototypeOf(v);
-    if (proto === Object.prototype || proto === null) { Object.values(v).forEach(walk); return; }
+    if (proto === Object.prototype || proto === null) {
+      Object.values(v).forEach(walk); return;
+    }
     unencodable.push(v.constructor?.name ?? '?');
   };
   table.types.forEach((e) => Object.values(e).forEach(walk));

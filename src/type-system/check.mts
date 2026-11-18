@@ -1,5 +1,3 @@
-import { contextualParameters } from './contextual-parameters.mts';
-import { DeclaredMemberImplements } from './implements-member.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
@@ -16,7 +14,6 @@ import { surroundingAgent } from '../execution-context/Agent.mts';
 import { type PrimitiveOperatorEntry, ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
 import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
 import { DecimalPartsInRange, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
-import { exactOfLiteralText } from './exact-real.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { NumericValue } from '../static-semantics/NumericValue.mts';
 import { LexicallyDeclaredNames } from '../static-semantics/LexicallyDeclaredNames.mts';
@@ -27,6 +24,9 @@ import { firstUnreadableControl, readClassControls, readFieldControls, layoutCon
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
+import { exactOfLiteralText } from './exact-real.mts';
+import { DeclaredMemberImplements } from './implements-member.mts';
+import { contextualParameters } from './contextual-parameters.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleStorageTypeAt, TupleLengthRange, TupleIndexType, TuplePrefixElement, TuplePrefixLength, TupleDefaultPlacementError } from './tuple-storage.mts';
 import { MetadataKeys, MetadataEntries, MetadataKey } from './metadata-keys.mts';
 import { RawOperatorResultType } from './operator-result.mts';
@@ -133,10 +133,10 @@ import { intrinsicDeclarationRecord } from './records.mts';
 import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint, rememberDeclaredDefault, rememberGenericTypeCaptures } from './records.mts';
+import { ArgumentContexts, FreshArraySpreadSource } from './argument-construction.mts';
 import {
   R, Throw, wellKnownSymbols, RegisterSymbolKeyDeclaration, RememberCheckedPropertyKey, LexicalClassFamily,
 } from '#self';
-import { ArgumentContexts, FreshArraySpreadSource } from './argument-construction.mts';
 
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
@@ -2674,6 +2674,10 @@ function classHasOwnSealedStorage(t: TypeRecord): boolean {
  * that is not a typed class and declares a constructor, which may give `this` any property
  * before the seal is applied at the end of construction.
  */
+/** The members %Object.prototype% gives every object, which no class declares and every instance has. */
+const OBJECT_PROTOTYPE_MEMBERS: ReadonlySet<string> = new Set(['constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable',
+  'toLocaleString', 'toString', 'valueOf', '__proto__', '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__']);
+
 function sealedWithDeclaredMembers(t: TypeRecord): boolean {
   let sealed = false;
   const seen = new Set<TypeRecord>();
@@ -3513,21 +3517,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const journalSet = <K extends object, V>(map: Map<K, V> | WeakMap<K, V>, key: K, value: V): void => {
     if (trialDepth > 0) {
       const had = map.has(key), old = map.get(key);
-      trialJournal.push(() => { if (had) map.set(key, old!); else map.delete(key); });
+      trialJournal.push(() => {
+        if (had) map.set(key, old!); else map.delete(key);
+      });
     }
     map.set(key, value);
   };
   const journalDelete = <K extends object, V>(map: Map<K, V> | WeakMap<K, V>, key: K): void => {
     if (trialDepth > 0 && map.has(key)) {
       const old = map.get(key)!;
-      trialJournal.push(() => { map.set(key, old); });
+      trialJournal.push(() => {
+        map.set(key, old);
+      });
     }
     map.delete(key);
   };
   const journalMembership = (set: WeakSet<object>, key: object, present: boolean): void => {
     if (trialDepth > 0) {
       const had = set.has(key);
-      trialJournal.push(() => { if (had) set.add(key); else set.delete(key); });
+      trialJournal.push(() => {
+        if (had) set.add(key); else set.delete(key);
+      });
     }
     if (present) set.add(key); else set.delete(key);
   };
@@ -3546,14 +3556,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     override set(key: K, value: V): this {
       if (trialDepth > 0) {
         const had = this.has(key), old = this.get(key);
-        trialJournal.push(() => { if (had) super.set(key, old!); else super.delete(key); });
+        trialJournal.push(() => {
+          if (had) super.set(key, old!); else super.delete(key);
+        });
       }
       return super.set(key, value);
     }
     override delete(key: K): boolean {
       if (trialDepth > 0 && this.has(key)) {
         const old = this.get(key)!;
-        trialJournal.push(() => { super.set(key, old); });
+        trialJournal.push(() => {
+          super.set(key, old);
+        });
       }
       return super.delete(key);
     }
@@ -3728,10 +3742,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found = false;
     const visit = (value: unknown): void => {
       if (found || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
-      if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') { found = true; return; }
+      if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') {
+        found = true; return;
+      }
       for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
     };
     visit(predicate);
@@ -3743,10 +3761,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found = false;
     const visit = (value: unknown): void => {
       if (found || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
-      if (node.type === 'ThisExpression' || node.type === 'SuperProperty' || node.type === 'SuperCall') { found = true; return; }
+      if (node.type === 'ThisExpression' || node.type === 'SuperProperty' || node.type === 'SuperCall') {
+        found = true; return;
+      }
       if (/Function|Arrow|Method|Class/.test(node.type)) return;
       for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
     };
@@ -3759,7 +3781,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found: string | undefined;
     const visit = (value: unknown): void => {
       if (found !== undefined || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
       found = NondeterministicMember(node as never);
@@ -3775,10 +3799,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found = false;
     const visit = (value: unknown): void => {
       if (found || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
-      if (node.type === 'ContractReturn') { found = true; return; }
+      if (node.type === 'ContractReturn') {
+        found = true; return;
+      }
       for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(child);
     };
     visit(predicate);
@@ -3835,7 +3863,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found: string | undefined;
     const visit = (value: unknown): void => {
       if (found !== undefined || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
       if (node.type === 'AssignmentExpression' && rooted((node as { LeftHandSideExpression?: ParseNode }).LeftHandSideExpression)) found = 'a store to the value under test';
@@ -3919,7 +3949,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found: string | undefined;
     const visit = (value: unknown): void => {
       if (found !== undefined || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
       if (node.type === 'MemberExpression') {
@@ -3974,7 +4006,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const realm = surroundingAgent.currentRealmRecord;
     const visit = (value: unknown): void => {
       if (!value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode;
       if (typeof node.type !== 'string') return;
       if (node.type === 'TypeReference') {
@@ -4152,7 +4186,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let found: ParseNode | undefined;
     const visit = (value: unknown): void => {
       if (found !== undefined || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(visit); return; }
+      if (Array.isArray(value)) {
+        value.forEach(visit); return;
+      }
       const node = value as ParseNode & { MethodSignature?: ParseNode | null, PropertyName?: { sourceText?: string } | null };
       if (typeof node.type !== 'string') return;
       if (node.type === 'TypeMember' && node.MethodSignature && node.PropertyName?.sourceText?.trim() === key) {
@@ -4980,7 +5016,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const name of reads) {
         const index = names.indexOf(name);
         const value = decidedArgumentValue(written[index], formals[index] as ParseNode.SingleNameBinding);
-        if (!value) { complete = false; break; }
+        if (!value) {
+          complete = false; break;
+        }
         values.set(name, value);
         // #sec-generic-where: the clause reads the parameter as the call binds
         // it, so a written numeric literal is built at the parameter's type.
@@ -6741,7 +6779,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (parameter.ConstraintNode && !parameter.Constraint) computedConstraintNames.add(parameter.Name);
           if (parameter.Kind === 'value' && !parameter.Variadic && parameter.Constraint) {
             let domains = valueParameterDomains.get(scope);
-            if (!domains) { domains = new Map(); valueParameterDomains.set(scope, domains); }
+            if (!domains) {
+              domains = new Map(); valueParameterDomains.set(scope, domains);
+            }
             domains.set(parameter.Name, parameter.Constraint);
           }
         }
@@ -8207,6 +8247,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const constructors = convertingConstructors(target, source);
     if (constructors.length > 0) {
       const best = mostSpecificConversions(constructors);
+      // Two parameter types neither of which is the other's subtype are not yet
+      // an ambiguity. The conversion is the construction `new T(v)`, "the
+      // conversion resolves by the argument's type" (#sec-user-defined-conversions),
+      // and a construction is decided by ordinary overload resolution: for a
+      // literal by the literal ranking, so `let t: MyType = 1` over `float32`
+      // and `uint32` constructors is the `float32` one, as `new MyType(1)` is
+      // and as the run time selects when the same value arrives untyped. This
+      // reported an ambiguity for a line that runs.
+      if (best.length > 1 && constructors.every((candidate) => candidate.parameter !== null)) {
+        const signatures = constructors.map((candidate) => ({
+          Parameters: [{
+            Name: 'value', Type: candidate.parameter as TypeRecord, Optional: false, Rest: false,
+          }],
+          Function: Value.undefined,
+        }));
+        // A literal is ranked as the value it is when the program runs, as the
+        // argument of a call is (selectCallSignature).
+        const argument = source.Kind === 'literal' ? source.Base as TypeRecord : source;
+        if (resolveOverloadByTypes(signatures as never, [argument]).Kind === 'resolved') return { kind: 'found', form: 'constructor' };
+      }
       return best.length > 1 ? { kind: 'ambiguous', form: 'constructor' } : { kind: 'found', form: 'constructor' };
     }
     if (declaresConversionTo(source, target)) {
@@ -9123,33 +9183,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       reportType('rt-vector-lane-store', expression, '$1 names a lane twice and cannot be assigned to', Value(keys!.map(String).join(' | ')));
       return;
     }
-    const requireDeclaredMember = (receiver: Known, named: string | SymbolValue): void => {
-      if (receiver?.Kind === 'union') {
-        receiver.Members.forEach((arm) => requireDeclaredMember(arm, named));
-        return;
-      }
-      // #sec-typed-storage: the rule is the same for every class whose instances are sealed. It
-      // was asked only of a value class, so the misspelled member of an ordinary typed class - the
-      // class a counter or a model is - was left to the seal, which is silent in sloppy code.
-      if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver) || indexAccess(m, receiver)) return;
-      const sealedStructure = structureOf(receiver);
-      const declaresName = (type: Known, seen = new Set<object>()): boolean => {
-        if (type?.Kind !== 'nominal' || seen.has(type)) return false;
-        seen.add(type);
-        const declaration = type.Declaration as ParseNode.ClassDeclaration | undefined;
-        return (declaration?.ClassTail?.ClassBody ?? []).some((element) => {
-          const key = (element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName;
-          return classElementKey(key) === named;
-        }) || declaresName((type as { Base?: Known }).Base ?? null, seen);
-      };
-      if (sealedStructure?.Kind === 'object'
-          && !sealedStructure.Properties.some((property) => property.key === named)
-          && !declaresName(receiver)
-          && sealedStructure.IndexSignatures.length === 0) {
-        reportType('rt-undeclared-member', expression, '$1 is not a member of $2', typeof named === 'string' ? Value(named) : named, Value(displayType(receiver)));
-      }
-    };
-    if (!m.PrivateIdentifier && keys) keys.forEach((key) => requireDeclaredMember(sealedReceiver, key));
+    // #sec-typed-storage: the rule is the same for every class whose instances are sealed. It
+    // was asked only of a value class, so the misspelled member of an ordinary typed class - the
+    // class a counter or a model is - was left to the seal, which is silent in sloppy code.
+    if (!m.PrivateIdentifier && keys) {
+      keys.forEach((key) => classesNotDeclaring(sealedReceiver, key, m).forEach((receiver) => {
+        reportType('rt-undeclared-member', expression, '$1 is not a member of $2', typeof key === 'string' ? Value(key) : key, Value(displayType(receiver)));
+      }));
+    }
     if (constructorMayWrite(lhs)) return;
     if (lhs.PrivateIdentifier) {
       if (privateMember(lhs)?.readonly) {
@@ -9699,6 +9740,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : isConstructor ? 'a constructor' : null;
       if (what !== null) {
         reportType('rt-partial-class', declaration, 'a partial class adds methods and operators only; $1 declares $2', Value(name ?? 'this partial class'), Value(what));
+      }
+    }
+    // #sec-partial-classes: a part may name a private member of the class it extends where it
+    // is in the source text that declares the class. The parser kept the names the part uses
+    // and does not declare; each is a member of that class or it is nothing. A class declared
+    // in another source text is not visible here, and the application of the part judges it.
+    const privateNames = (declaration as { UnresolvedPrivateNames?: readonly string[] }).UnresolvedPrivateNames ?? [];
+    if (privateNames.length > 0) {
+      const primary = partialPrimaryOf(declaration) as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+      const rootOf = (node: ParseNode): ParseNode => {
+        let at = node;
+        while (at.parent) at = at.parent;
+        return at;
+      };
+      if (primary && (primary.type === 'ClassDeclaration' || primary.type === 'ClassExpression')) {
+        if (rootOf(primary) !== rootOf(declaration)) {
+          reportType('rt-partial-class', declaration, 'a partial class names the private member $1 of $2, which it may do only in the source text that declares the class',
+            Value(privateNames[0]), Value(name ?? 'the class'));
+        } else {
+          const declared = new Set((primary.ClassTail?.ClassBody ?? []).flatMap((element) => {
+            const key = (element as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+            return key?.type === 'PrivateIdentifier' && key.name ? [`#${key.name}`, key.name] : [];
+          }));
+          for (const privateName of privateNames) {
+            if (!declared.has(privateName)) {
+              reportType('rt-partial-class', declaration, '$1 is not a private member of $2', Value(privateName), Value(name ?? 'the class'));
+            }
+          }
+        }
       }
     }
   };
@@ -11795,7 +11865,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Resolving a private static receiver can construct the public class view,
     // whose methods can read these private members. Register their tasks first;
     // the public view installs its receiver before querying those bodies.
-    const context = { get type() { return resolveReceiver(); }, owner: members.owner };
+    const context = { get type() {
+      return resolveReceiver();
+    }, owner: members.owner };
     for (const item of members.inferences) {
       item.receiver = context;
       pendingBySignature.set(item.signature, item);
@@ -14316,7 +14388,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // an unproved name and was refused only at evaluation.
     let tail: ParseNode | null = null;
     for (let child: ParseNode = base, parent = base.parent; parent; child = parent, parent = parent.parent) {
-      if (parent.type === 'ClassTail' && (parent as { ClassHeritage?: ParseNode | null }).ClassHeritage === child) { tail = parent; break; }
+      if (parent.type === 'ClassTail' && (parent as { ClassHeritage?: ParseNode | null }).ClassHeritage === child) {
+        tail = parent; break;
+      }
       if (/Function|Arrow|Method|Class/.test(parent.type)) break;
     }
     const owning = tail?.parent && /^Class(Declaration|Expression)$/.test(tail.parent.type) ? tail.parent : null;
@@ -16242,7 +16316,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A generic callable within the target binds its own parameters. They
         // do not make that entire target depend on a same-spelled outer input.
         for (let owner = declaration?.node; owner; owner = owner.parent) {
-          if (owner === node) { internalBinding = true; break; }
+          if (owner === node) {
+            internalBinding = true; break;
+          }
         }
         if (!internalBinding && (declaration?.kind === 'parameter' || declaration?.kind === 'type-parameter')) open = true;
         // A local alias can hide an enclosing generic input. Follow its own
@@ -18000,8 +18076,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } else if (tp.Kind === 'value') requireAssignable(supplied, bound);
           else if (supplied.Kind === 'nominal' && classTypesInProgress.has(supplied.Declaration)) {
             pendingRecursiveConstraints.push({ supplied, bound });
-          }
-          else if (!IsAssignable(supplied, bound)) report(supplied, bound);
+          } else if (!IsAssignable(supplied, bound)) report(supplied, bound);
         }
         scope.set(tp.Name, supplied);
         if (tp.Kind === 'value' && !tp.Variadic && !constrainedToType && supplied.Kind !== 'literal' && supplied.Kind !== 'parameter') {
@@ -19112,9 +19187,91 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return answer;
   };
 
+  /** #sec-value-classes: the fixed-length array a value class extends, which is the whole of its value. */
+  const valueArrayBaseOf = (type: Known): TypeRecord | undefined => {
+    if (type?.Kind !== 'nominal') return undefined;
+    const declaration = type.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+    if (!declaration || (declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression')) return undefined;
+    if (!(declaration.ClassModifiers ?? []).includes('value')) return undefined;
+    const base = (type as { Base?: TypeRecord }).Base ?? heritageArrayTypeOf(declaration);
+    return base?.Kind === 'array' && typeof base.Extent === 'number' ? base : undefined;
+  };
+
+  /**
+   * #sec-array-and-tuple-types: the array type whose constructor a construction of
+   * _declaration_ runs - the one it extends, where neither it nor a class between
+   * the two declares a constructor. A class that declares one has the parameters
+   * it writes, and what reaches the array type is what its `super` call passes.
+   */
+  const inheritedArrayConstructorOf = (declaration: ParseNode | null | undefined): TypeRecord | undefined => {
+    let at = declaration ?? undefined;
+    for (let depth = 0; at && depth < 32; depth += 1) {
+      if (at.type !== 'ClassDeclaration' && at.type !== 'ClassExpression') return undefined;
+      const declaresConstructor = classBodyOf(at).some((member) => {
+        const method = member as unknown as { type?: string, static?: boolean, ClassElementName?: { name?: string, value?: string } | null };
+        return method.type === 'MethodDefinition' && !method.static && (method.ClassElementName?.name ?? method.ClassElementName?.value) === 'constructor';
+      });
+      if (declaresConstructor) return undefined;
+      const array = heritageArrayTypeOf(at);
+      if (array) return array;
+      at = heritageClassOf(at);
+    }
+    return undefined;
+  };
+
+  /** The constructions already judged: a target-typed one is typed wherever its position is asked about. */
+  const arrayConstructionSites = new WeakSet<ParseNode>();
+  /**
+   * #sec-array-and-tuple-types: the constructor of an array type takes one
+   * argument, the SOURCE of the elements, and the array it makes is the one
+   * `const t: A = [...source]` binds. So what is judged here is what that
+   * declaration is judged for, and no more: a literal as the initializer of a
+   * declaration of the type is, and any other source for being iterable at all.
+   * The elements of a source that is not a literal are stored when it runs, as
+   * the elements of a spread are.
+   *
+   * Every argument was dropped before. `new [4].<uint8>(7)` and `new G(a)` made
+   * an array of zeros, and `new [3].<R>()` for a class `R` that has no default
+   * made one of *undefined* that no binding of its own type would take.
+   */
+  const checkArrayConstruction = (constructed: TypeRecord, args: readonly ParseNode[], site: ParseNode, callee: string): void => {
+    if (constructed.Kind !== 'array' || args.some((argument) => argument.type === 'AssignmentRestElement')) return;
+    if (arrayConstructionSites.has(site)) return;
+    arrayConstructionSites.add(site);
+    if (args.length > 1) {
+      reportType('rt-call-argument', site, '$1 takes at most $2 arguments, and $3 were supplied', Value(callee), Value('1'), Value(String(args.length)));
+    }
+    const source = args[0] ? unparenthesized(args[0]) : undefined;
+    const sourceType = source && source.type !== 'ArrayLiteral' ? staticType(source) : null;
+    if (!source || (sourceType?.Kind === 'primitive' && (sourceType.Name === 'undefined' || sourceType.Name === 'null'))) {
+      // No source, or a nullish one: the construction is the type's default
+      // value, which a type whose element has none does not have
+      // (#sec-defaultvalueof).
+      if (!mentionsTypeParameter(constructed) && staticDefaultOf(constructed) === 'none') {
+        reportType('rt-missing-default', site, '$1 has no default value, so its construction needs the source of its elements', Value(displayType(constructed)));
+      }
+      return;
+    }
+    if (source.type === 'ArrayLiteral') {
+      if (mentionsTypeParameter(constructed)) return;
+      // An extent known only when the program runs is checked then; the
+      // elements are judged here either way.
+      const judged = constructed.Extent === 'dynamic' || typeof constructed.Extent === 'number'
+        ? constructed
+        : CanonicalizeType({ Kind: 'array', Element: constructed.Element, Extent: 'dynamic' } as unknown as TypeRecord);
+      requireAssignable(staticTypeIn(source, judged as Known), judged as Known, source);
+      return;
+    }
+    if (notIterable(sourceType)) {
+      reportType('rt-iterable-required', source, 'the argument to the constructor of $1 is the source of its elements, and a value of $2 is not iterable', Value(callee), Value(displayType(sourceType as TypeRecord)));
+    }
+  };
+
   /** A value type class, a fixed-length array of a value type, or a tuple of value types: what binding copies. */
   const holdsCopyType = (type: Known, resolving: Set<ParseNode> = new Set(), compute = true): boolean => {
     if (!type) return false;
+    const arrayBase = valueArrayBaseOf(type);
+    if (arrayBase) return holdsCopyType(arrayBase, resolving, compute);
     if (type.Kind === 'array') return typeof type.Extent === 'number' && (compute ? laidOutValueType(type.Element, resolving) : scalarOrKnownCopyType(type.Element));
     if (type.Kind === 'tuple') {
       return type.Elements.length > 0 && type.Elements.every((element) => !element.Rest
@@ -19184,8 +19341,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** The type one step along a path, `'length'` for a length, or null where the step is not into known inline storage. */
-  const stepIntoCopy = (type: TypeRecord, member: ParseNode.MemberExpression): TypeRecord | 'length' | null => {
-    if (member.PrivateIdentifier || !holdsCopyType(type, new Set(), false)) return null;
+  const stepIntoCopy = (written: TypeRecord, member: ParseNode.MemberExpression): TypeRecord | 'length' | null => {
+    if (member.PrivateIdentifier || !holdsCopyType(written, new Set(), false)) return null;
+    // #sec-value-classes: a value class over a fixed-length array is its base with a name, so an
+    // element of one is an element of the base. An index operator the class declares is the
+    // program's code, and what a store through it does is not known here.
+    let type = written;
+    if (member.Expression || member.IdentifierName?.name === 'length') {
+      const base = valueArrayBaseOf(written);
+      if (base && !indexAccess(member, written)) type = base;
+    }
     if (type.Kind === 'array' || type.Kind === 'tuple') {
       if (member.IdentifierName) return member.IdentifierName.name === 'length' ? 'length' : null;
       if (!member.Expression) return null;
@@ -20463,7 +20628,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const live = flowLive;
     const exits = flowExits;
     flowExits = [];
-    try { return query(); } finally {
+    try {
+      return query();
+    } finally {
       restoreFlow(entry);
       flowLive = live;
       flowExits = exits;
@@ -20529,7 +20696,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     expressionViewTypes.set(receiver, constructionResult(captured));
     expressionViewTypes.set(key, keyType);
     computedMemberQueries.add(node);
-    try { return constructionResult(inferStaticType(node)); } finally {
+    try {
+      return constructionResult(inferStaticType(node));
+    } finally {
       computedMemberQueries.delete(node);
       if (hadReceiver) expressionViewTypes.set(receiver, savedReceiver!);
       else expressionViewTypes.delete(receiver);
@@ -20923,6 +21092,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       journalSet(targetTypedNewTypes, node as object, contextual);
+      // An array is built as its written construction is, from the one argument
+      // that is the source of its elements.
+      if (contextual.Kind === 'array') checkArrayConstruction(contextual, (node.Arguments ?? []) as readonly ParseNode[], node, displayType(contextual));
       if (isVector) {
         const lanes = vectorConstructorType(contextual, (node.Arguments ?? []) as readonly ParseNode[]);
         if (lanes) checkCallArguments({ CallExpression: node, Arguments: node.Arguments }, lanes, node);
@@ -21541,8 +21713,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const selected = selectObjectLiteralContext(inner as ParseNode.ObjectLiteral, contextual);
         if (selected) {
           unionFreshnessChecks.add(inner);
-          try { return staticTypeIn(inner, selected); }
-          finally { unionFreshnessChecks.delete(inner); }
+          try {
+            return staticTypeIn(inner, selected);
+          } finally {
+            unionFreshnessChecks.delete(inner);
+          }
         }
       }
       if (walkable && walkable.Kind === 'object') {
@@ -22310,6 +22485,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // one index; ordinary contextual typing retains its effects and applies
     // numeric-provenance restrictions to its final value.
     return get || set ? { get, set, arguments: indices } : null;
+  };
+
+  /**
+   * #sec-typed-storage: the classes among the arms of _receiver_ whose instances are sealed with
+   * every member they have declared (`sealedWithDeclaredMembers`), and that do not declare
+   * _named_: not as a field, a method or an accessor of the class or of a base. An index
+   * operator answers for every key, so a class that declares one is not among them.
+   */
+  const classesNotDeclaring = (receiver: Known, named: string | SymbolValue, access: ParseNode.MemberExpression): TypeRecord[] => {
+    if (receiver?.Kind === 'union') return receiver.Members.flatMap((arm) => classesNotDeclaring(arm, named, access));
+    if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver) || indexAccess(access, receiver)) return [];
+    const sealedStructure = structureOf(receiver);
+    const declaresName = (type: Known, seen = new Set<object>()): boolean => {
+      if (type?.Kind !== 'nominal' || seen.has(type)) return false;
+      seen.add(type);
+      const declaration = type.Declaration as ParseNode.ClassDeclaration | undefined;
+      return (declaration?.ClassTail?.ClassBody ?? []).some((element) => {
+        const key = (element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName;
+        return classElementKey(key) === named;
+      }) || declaresName((type as { Base?: Known }).Base ?? null, seen);
+    };
+    return sealedStructure?.Kind === 'object'
+      && !sealedStructure.Properties.some((property) => property.key === named)
+      && !declaresName(receiver)
+      && sealedStructure.IndexSignatures.length === 0 ? [receiver] : [];
+  };
+
+  /**
+   * #sec-typed-storage: a call of a member that the receiver's class does not declare. The read
+   * of such a member is ordinary and yields *undefined*, which a call cannot be made of, so the
+   * call is the misspelled method of a class whose members are all written down. `r.m?.()` is
+   * the read with its test and is not judged, and neither is a member every object inherits.
+   * `new r.m()` and a tagged template are calls of the member in the same sense.
+   */
+  const checkUndeclaredMemberCall = (callee: ParseNode, site: ParseNode, use: 'called' | 'constructed' = 'called'): void => {
+    let target = callee;
+    while (target.type === 'ParenthesizedExpression' || target.type === 'TypeArgumentsExpression') {
+      target = (target as ParseNode.ParenthesizedExpression | ParseNode.TypeArgumentsExpression).Expression as ParseNode;
+    }
+    if (target.type !== 'MemberExpression' || target.PrivateIdentifier) return;
+    const keys = memberKeys(target);
+    if (!keys) return;
+    const receiver = operationalType(staticType(target.MemberExpression));
+    for (const key of keys) {
+      if (typeof key !== 'string' || OBJECT_PROTOTYPE_MEMBERS.has(key)) continue;
+      for (const lacking of classesNotDeclaring(receiver, key, target)) {
+        reportType('rt-undeclared-member', site, use === 'called'
+          ? '$1 is not a member of $2, so it cannot be called; where a subclass may declare it, test the class with `is` or call it with `?.()`'
+          : '$1 is not a member of $2, so it cannot be constructed; where a subclass may declare it, test the class with `is`',
+        Value(key), Value(displayType(lacking)));
+      }
+    }
   };
 
   const pipelineInputType = (expression: ParseNode): Known => {
@@ -26997,7 +27224,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           else if (shapeFits && misfit) refusedResult ??= misfit.key;
           return false;
         });
-      } finally { errors.length = before; }
+      } finally {
+        errors.length = before;
+      }
     }
     // Numeric member adaptation already prefers the narrowest fitting
     // representation. Apply that preference only among complete alternatives,
@@ -27067,7 +27296,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let wanted = contextualObjectTypes.get(node);
     if (wanted?.Kind === 'union') {
       const selected = selectObjectLiteralContext(node as ParseNode.ObjectLiteral, wanted);
-      if (selected) { wanted = selected; contextualObjectTypes.set(node, selected); }
+      if (selected) {
+        wanted = selected; contextualObjectTypes.set(node, selected);
+      }
     }
     /**
      * The arms a UNION offers for a key its arms DISAGREE about.
@@ -28666,16 +28897,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let excluded = false;
     const visit = (node: unknown): void => {
       if (excluded || !node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(visit); return; }
+      if (Array.isArray(node)) {
+        node.forEach(visit); return;
+      }
       const syntax = node as ParseNode & Record<string, unknown>;
       if (typeof syntax.type !== 'string') return;
-      if (syntax.type === 'WithStatement') { excluded = true; return; }
+      if (syntax.type === 'WithStatement') {
+        excluded = true; return;
+      }
       if (syntax.type === 'CallExpression' && unparenthesized((syntax as unknown as ParseNode.CallExpression).CallExpression as ParseNode).type === 'IdentifierReference'
-          && (unparenthesized((syntax as unknown as ParseNode.CallExpression).CallExpression as ParseNode) as ParseNode.IdentifierReference).name === 'eval') { excluded = true; return; }
+          && (unparenthesized((syntax as unknown as ParseNode.CallExpression).CallExpression as ParseNode) as ParseNode.IdentifierReference).name === 'eval') {
+        excluded = true; return;
+      }
       if (syntax.type === 'IdentifierReference' && (syntax as unknown as ParseNode.IdentifierReference).name === name && declares(ResolveBindingDeclaration(syntax, name), syntax)) {
         let use: ParseNode = syntax;
         let parent = (use as { parent?: ParseNode }).parent;
-        while (parent?.type === 'ParenthesizedExpression') { use = parent; parent = (use as { parent?: ParseNode }).parent; }
+        while (parent?.type === 'ParenthesizedExpression') {
+          use = parent; parent = (use as { parent?: ParseNode }).parent;
+        }
         if (parent?.type === 'RelationalExpression' && ['<', '>', '<=', '>='].includes((parent as ParseNode.RelationalExpression).operator as string)) {
           const r = parent as ParseNode.RelationalExpression;
           operands.push((r.RelationalExpression as ParseNode) === use ? r.ShiftExpression as ParseNode : r.RelationalExpression as ParseNode);
@@ -36915,7 +37154,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const depth = inferenceDepth;
             let captured: ReturnType<typeof patternContributions>;
             inferenceDepth = 0;
-            try { captured = withCaptureContracts(() => contributions()); } finally { inferenceDepth = depth; }
+            try {
+              captured = withCaptureContracts(() => contributions());
+            } finally {
+              inferenceDepth = depth;
+            }
             for (const [element, source] of selected) {
               const name = element.BindingIdentifier!.name;
               if (!(kind === 'const' || (lexicalUnassigned(element as ParseNode, name) ?? !assignedNames.has(name)))) continue;
@@ -38830,8 +39073,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const fallback = node.Initializer && staticTypeIn(node.Initializer, annotation);
         source = { type: annotation && node.Optional && !(fallback && AreDisjoint(fallback, undefinedType))
           ? joinTypes(annotation, undefinedType) : annotation, annotated: true };
-      }
-      else if (node.Initializer && source.type && source.type.Kind !== 'any') {
+      } else if (node.Initializer && source.type && source.type.Kind !== 'any') {
         const present = NarrowFrom(source.type, undefinedType);
         if (!AreDisjoint(source.type, undefinedType)) {
           const skipped = present === empty ? undefined : captureFlow();
@@ -42748,6 +42990,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!unreachable) {
             const callee = callableForm(receiver);
             checkCallable(callee, chain);
+            if (chain.OptionalChain && !chain.OptionalChain.Arguments) checkUndeclaredMemberCall(view.expression, chain as unknown as ParseNode);
             checkCallReceiver(view.expression, callee);
             checkInvocation(view.expression, false, node, invocation);
             checkCallArguments(call, callee, node);
@@ -45324,8 +45567,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // its default is the specialization's question.
           // `shared T` is exempt where `T` is: the modifier's default is its
           // target's (#sec-defaultvalueof).
+          // A type that mentions a parameter anywhere is exempt as the bare parameter is: the
+          // default of `[2].<T>` is two of whatever `T` is bound to, which each application
+          // answers. A field of a generic class already waited for it; a binding in a generic
+          // function was refused for having no default, whatever the application.
           const defaulted = declared && declared.Kind === 'shared' ? declared.Target : declared;
-          if (declared && defaulted && defaulted.Kind !== 'parameter' && defaulted.Kind !== 'deferred' && !n.Initializer && !n.TypedInitializer) {
+          if (declared && defaulted && defaulted.Kind !== 'parameter' && defaulted.Kind !== 'deferred' && !mentionsTypeParameter(defaulted)
+              && !n.Initializer && !n.TypedInitializer) {
             checkDefaultInitialization(declared);
             refuseClassWithoutDefault(declared as TypeRecord);
             const written = (n.TypeAnnotation?.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } | undefined);
@@ -45688,6 +45936,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkInvocation(c.CallExpression, false);
         const callee = callableForm(staticType(c.CallExpression));
         checkCallReceiver(c.CallExpression, callee);
+        checkUndeclaredMemberCall(c.CallExpression, n as ParseNode);
         // Type-object calls share lexical resolution with result inference.
         const conversionTarget = callee?.Kind === 'function' ? undefined : typeObjectTarget(c.CallExpression) ?? undefined;
         vectorCallType(n as ParseNode.CallExpression, true);
@@ -45891,6 +46140,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             checkCallArguments({ Arguments: n.Arguments }, contract, n);
           }
         }
+        // A class over an array type passes its `super` arguments to that type's
+        // constructor, directly or through bases that declare none.
+        {
+          const own = self?.Kind === 'nominal' ? self.Declaration as ParseNode | undefined : undefined;
+          const ownClass = own?.type === 'ClassDeclaration' || own?.type === 'ClassExpression' ? own : undefined;
+          const array = ownClass ? heritageArrayTypeOf(ownClass) ?? inheritedArrayConstructorOf(heritageClassOf(ownClass)) : undefined;
+          if (array) checkArrayConstruction(array, n.Arguments ?? [], n, displayType(array));
+        }
         walk(n.Arguments);
         return;
       }
@@ -45906,6 +46163,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const origin = target ? stableClassOrigin(target) : undefined;
         const namedInstance = bareTarget?.type === 'IdentifierReference' ? lexicalClassType(bareTarget) : null;
         if (target && !ne.PlacementArguments) checkInvocation(target, true);
+        if (target) checkUndeclaredMemberCall(target, n as ParseNode, 'constructed');
+        // The argument of an array type's constructor, written on the type or
+        // on a class over one that declares no constructor of its own.
+        if (target && !ne.PlacementArguments) {
+          if (bareTarget?.type === 'ArrayLiteral' && target.type === 'TypeArgumentsExpression') {
+            const constructed = staticType(n);
+            if (constructed?.Kind === 'array') checkArrayConstruction(constructed, ne.Arguments ?? [], n as ParseNode, displayType(constructed));
+          } else {
+            const declaration = origin?.declaration ?? (namedInstance?.Kind === 'nominal' ? namedInstance.Declaration as ParseNode | undefined : undefined);
+            const array = inheritedArrayConstructorOf(declaration);
+            if (array) checkArrayConstruction(array, ne.Arguments ?? [], n as ParseNode, namedInstance ? displayType(namedInstance) : displayType(array));
+          }
+        }
         // An unused bare generic construction still has to bind its parameters.
         if (origin && !origin.arguments && origin.declaration.TypeParameters) staticType(n);
         // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
@@ -46098,6 +46368,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const neverReturns = establishedNeverCall(call);
         for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         checkInvocation(n.MemberExpression, false);
+        checkUndeclaredMemberCall(n.MemberExpression, n as ParseNode);
         const callee = callableForm(staticType(call.CallExpression));
         checkCallable(callee, (node as ParseNode));
         checkCallArguments(call, callee, call);

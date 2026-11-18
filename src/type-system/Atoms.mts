@@ -1,7 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { SourceWhereClauseOf } from './where-predicates.mts';
 import { JSStringValue, NumberValue, type Value } from '../value.mts';
 import { R } from '../abstract-ops/all.mts';
+import { SourceWhereClauseOf } from './where-predicates.mts';
 import type { TypeRecord } from './records.mts';
 import { DenotedUnionOf, DiscriminatingChainOf } from './DiscriminatingChain.mts';
 

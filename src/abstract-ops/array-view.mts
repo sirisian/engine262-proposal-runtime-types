@@ -8,11 +8,11 @@ import {
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsPlainData, IsValueType, IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import type { TypedArrayObject } from '../intrinsics/TypedArray.mts';
 import { ToIndexType } from './runtime-types.mts';
 import { OrdinaryGetPrototypeOf } from './objects.mts';
 import { BufferElementType, PlacedInstance } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
-import type { TypedArrayObject } from '../intrinsics/TypedArray.mts';
 import { MakeTypedArrayWithBufferWitnessRecord, IsTypedArrayOutOfBounds } from './typedarray-objects.mts';
 import type { FunctionObject } from '#self';
 import {

@@ -2,9 +2,9 @@ import {
   Assert, Parser, Throw,
 } from '../index.mts';
 import { isArray, OutOfRange } from '../utils/language.mts';
-import { surroundingAgent } from '#self';
 import type { PendingEarlyError, TokenData } from './Lexer.mts';
 import type { ParseNode } from './ParseNode.mts';
+import { surroundingAgent } from '#self';
 
 export enum Flag {
   return = 1 << 0,
@@ -229,6 +229,26 @@ export class Scope {
 
   private readonly undefinedPrivateAccesses: UndefinedPrivateAccessInfo[] = [];
 
+  /**
+   * proposal-runtime-types #sec-partial-classes: where a `partial class` body is the outermost
+   * class body, the private names it uses and does not declare are collected here instead of
+   * being refused. They are names of the class the part extends, which the part may use where
+   * it is in the source text that declares the class; that is judged where the class is known.
+   */
+  private partialPrivateSink: { readonly from: number, readonly names: string[] } | undefined;
+
+  beginPartialPrivateNames(): void {
+    if (this.privateScope === undefined && this.partialPrivateSink === undefined) {
+      this.partialPrivateSink = { from: this.undefinedPrivateAccesses.length, names: [] };
+    }
+  }
+
+  endPartialPrivateNames(): readonly string[] {
+    const names = this.partialPrivateSink?.names ?? [];
+    this.partialPrivateSink = undefined;
+    return [...new Set(names)];
+  }
+
   private flags: Flag = 0 as Flag;
 
   constructor(parser: Parser) {
@@ -366,15 +386,22 @@ export class Scope {
       this.privateScope = this.privateScope!.outer;
 
       if (this.privateScope === undefined) {
-        this.undefinedPrivateAccesses.forEach(({ node, name, scope }) => {
+        const sink = this.partialPrivateSink;
+        this.undefinedPrivateAccesses.forEach(({ node, name, scope }, index) => {
           while (scope) {
             if (scope.names.has(name)) {
               return;
             }
             scope = scope.outer;
           }
+          if (sink && index >= sink.from) {
+            sink.names.push(name);
+            return;
+          }
           this.parser.addEarlyError(() => Throw.SyntaxError('Private identifier $1 not defined', name), node);
         });
+        // What a part collected is judged with its class and is not reported again here.
+        if (sink) this.undefinedPrivateAccesses.length = sink.from;
       }
     }
 

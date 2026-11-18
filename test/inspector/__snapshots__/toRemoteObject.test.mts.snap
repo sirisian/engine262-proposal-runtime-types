@@ -8089,7 +8089,7 @@ exports[`runtime-types extended numeric values > complex64(complex(0, 4)) 1`] = 
 {
   "className": "Complex",
   "description": "4i (complex64)",
-  "objectId": "default:20",
+  "objectId": "default:21",
   "preview": {
     "description": "4i (complex64)",
     "overflow": false,
@@ -8108,7 +8108,7 @@ exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-in
 
 exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-indexed owned properties 1`] = `[]`;
 
-exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-indexed properties (prototype) 1`] = `"real, imaginary, toString, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-indexed properties (prototype) 1`] = `"real, imaginary, toString, valueOf, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types extended numeric values > complex64(complex(0, 4)) properties 1`] = `
 {
@@ -8141,7 +8141,7 @@ exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) no
 
 exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) non-indexed owned properties 1`] = `[]`;
 
-exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) non-indexed properties (prototype) 1`] = `"real, imaginary, toString, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) non-indexed properties (prototype) 1`] = `"real, imaginary, toString, valueOf, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) properties 1`] = `
 {
@@ -8151,11 +8151,11 @@ exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) pr
 }
 `;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") 1`] = `
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") 1`] = `
 {
   "className": "Decimal",
   "description": "1.5 (decimal128)",
-  "objectId": "default:21",
+  "objectId": "default:22",
   "preview": {
     "description": "1.5 (decimal128)",
     "overflow": false,
@@ -8166,17 +8166,17 @@ exports[`runtime-types extended numeric values > decimal128("1.5") 1`] = `
 }
 `;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") accessor properties (prototype) 1`] = `"__proto__"`;
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") accessor properties (prototype) 1`] = `"__proto__"`;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") accessor properties 1`] = `[]`;
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") accessor properties 1`] = `[]`;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") non-indexed owned properties (private) 1`] = `""`;
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") non-indexed owned properties 1`] = `[]`;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") non-indexed properties (prototype) 1`] = `"toString, valueOf, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") non-indexed properties (prototype) 1`] = `"toString, valueOf, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
-exports[`runtime-types extended numeric values > decimal128("1.5") properties 1`] = `
+exports[`runtime-types extended numeric values > decimal128.parse("1.5") properties 1`] = `
 {
   "internalProperties": [],
   "privateProperties": [],
@@ -8219,7 +8219,7 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 {
   "className": "Type",
   "description": "never",
-  "objectId": "default:46",
+  "objectId": "default:48",
   "preview": {
     "description": "never",
     "overflow": false,
@@ -8242,7 +8242,7 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 }
 `;
 
-exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, __proto__"`;
+exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, __proto__"`;
 
 exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() accessor properties 1`] = `[]`;
 
@@ -8269,7 +8269,7 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
     "value": {
       "className": "Array",
       "description": "Array(0)",
-      "objectId": "default:48",
+      "objectId": "default:50",
       "preview": {
         "description": "Array(0)",
         "overflow": false,
@@ -8285,7 +8285,7 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 ]
 `;
 
-exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, approximate, bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() properties 1`] = `
 {
@@ -8311,7 +8311,7 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
       "value": {
         "className": "Array",
         "description": "Array(0)",
-        "objectId": "default:47",
+        "objectId": "default:49",
         "preview": {
           "description": "Array(0)",
           "overflow": false,
@@ -8331,10 +8331,10 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() 1`] = `
 {
   "className": "Type",
-  "description": "{ next: { next: ... | null } | null }",
-  "objectId": "default:49",
+  "description": "{ next: null | { next: null | ... } }",
+  "objectId": "default:51",
   "preview": {
-    "description": "{ next: { next: ... | null } | null }",
+    "description": "{ next: null | { next: null | ... } }",
     "overflow": false,
     "properties": [
       {
@@ -8354,7 +8354,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
 }
 `;
 
-exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, __proto__"`;
+exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, __proto__"`;
 
 exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() accessor properties 1`] = `[]`;
 
@@ -8381,7 +8381,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
     "value": {
       "className": "Object",
       "description": "Object",
-      "objectId": "default:51",
+      "objectId": "default:53",
       "preview": {
         "description": "Object",
         "overflow": false,
@@ -8389,7 +8389,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
           {
             "name": "next",
             "type": "object",
-            "value": "{ next: ... | null } | null",
+            "value": "null | { next: null | ... }",
           },
         ],
         "type": "object",
@@ -8401,7 +8401,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
 ]
 `;
 
-exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, approximate, bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() properties 1`] = `
 {
@@ -8427,7 +8427,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
       "value": {
         "className": "Object",
         "description": "Object",
-        "objectId": "default:50",
+        "objectId": "default:52",
         "preview": {
           "description": "Object",
           "overflow": false,
@@ -8435,7 +8435,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
             {
               "name": "next",
               "type": "object",
-              "value": "{ next: ... | null } | null",
+              "value": "null | { next: null | ... }",
             },
           ],
           "type": "object",
@@ -8452,7 +8452,7 @@ exports[`runtime-types type objects > type 'a' | 'b' 1`] = `
 {
   "className": "Type",
   "description": "'a' | 'b'",
-  "objectId": "default:34",
+  "objectId": "default:36",
   "preview": {
     "description": "'a' | 'b'",
     "overflow": false,
@@ -8475,7 +8475,7 @@ exports[`runtime-types type objects > type 'a' | 'b' 1`] = `
 }
 `;
 
-exports[`runtime-types type objects > type 'a' | 'b' accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, __proto__"`;
+exports[`runtime-types type objects > type 'a' | 'b' accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, __proto__"`;
 
 exports[`runtime-types type objects > type 'a' | 'b' accessor properties 1`] = `[]`;
 
@@ -8502,7 +8502,7 @@ exports[`runtime-types type objects > type 'a' | 'b' non-indexed owned propertie
     "value": {
       "className": "Array",
       "description": "Array(2)",
-      "objectId": "default:36",
+      "objectId": "default:38",
       "preview": {
         "description": "Array(2)",
         "overflow": false,
@@ -8529,7 +8529,7 @@ exports[`runtime-types type objects > type 'a' | 'b' non-indexed owned propertie
 ]
 `;
 
-exports[`runtime-types type objects > type 'a' | 'b' non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types type objects > type 'a' | 'b' non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, approximate, bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types type objects > type 'a' | 'b' properties 1`] = `
 {
@@ -8555,7 +8555,7 @@ exports[`runtime-types type objects > type 'a' | 'b' properties 1`] = `
       "value": {
         "className": "Array",
         "description": "Array(2)",
-        "objectId": "default:35",
+        "objectId": "default:37",
         "preview": {
           "description": "Array(2)",
           "overflow": false,
@@ -8587,7 +8587,7 @@ exports[`runtime-types type objects > type [].<uint8> 1`] = `
 {
   "className": "Type",
   "description": "[].<uint.<8>>",
-  "objectId": "default:37",
+  "objectId": "default:39",
   "preview": {
     "description": "[].<uint.<8>>",
     "overflow": false,
@@ -8609,7 +8609,7 @@ exports[`runtime-types type objects > type [].<uint8> 1`] = `
 }
 `;
 
-exports[`runtime-types type objects > type [].<uint8> accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, __proto__"`;
+exports[`runtime-types type objects > type [].<uint8> accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, __proto__"`;
 
 exports[`runtime-types type objects > type [].<uint8> accessor properties 1`] = `[]`;
 
@@ -8636,7 +8636,7 @@ exports[`runtime-types type objects > type [].<uint8> non-indexed owned properti
     "value": {
       "className": "Type",
       "description": "uint.<8>",
-      "objectId": "default:38",
+      "objectId": "default:40",
       "preview": {
         "description": "uint.<8>",
         "overflow": false,
@@ -8645,6 +8645,21 @@ exports[`runtime-types type objects > type [].<uint8> non-indexed owned properti
             "name": "kind",
             "type": "string",
             "value": "primitive",
+          },
+          {
+            "name": "bitLength",
+            "type": "number",
+            "value": "8 (uint64)",
+          },
+          {
+            "name": "byteLength",
+            "type": "number",
+            "value": "1 (uint64)",
+          },
+          {
+            "name": "alignment",
+            "type": "number",
+            "value": "1 (uint64)",
           },
         ],
         "type": "object",
@@ -8656,7 +8671,7 @@ exports[`runtime-types type objects > type [].<uint8> non-indexed owned properti
 ]
 `;
 
-exports[`runtime-types type objects > type [].<uint8> non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types type objects > type [].<uint8> non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, approximate, bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types type objects > type [].<uint8> properties 1`] = `
 {
@@ -8682,7 +8697,7 @@ exports[`runtime-types type objects > type [].<uint8> properties 1`] = `
       "value": {
         "className": "Type",
         "description": "uint.<8>",
-        "objectId": "default:38",
+        "objectId": "default:40",
         "preview": {
           "description": "uint.<8>",
           "overflow": false,
@@ -8691,6 +8706,21 @@ exports[`runtime-types type objects > type [].<uint8> properties 1`] = `
               "name": "kind",
               "type": "string",
               "value": "primitive",
+            },
+            {
+              "name": "bitLength",
+              "type": "number",
+              "value": "8 (uint64)",
+            },
+            {
+              "name": "byteLength",
+              "type": "number",
+              "value": "1 (uint64)",
+            },
+            {
+              "name": "alignment",
+              "type": "number",
+              "value": "1 (uint64)",
             },
           ],
           "type": "object",
@@ -8707,7 +8737,7 @@ exports[`runtime-types type objects > type [uint8, string] 1`] = `
 {
   "className": "Type",
   "description": "[uint.<8>, string]",
-  "objectId": "default:39",
+  "objectId": "default:41",
   "preview": {
     "description": "[uint.<8>, string]",
     "overflow": false,
@@ -8730,7 +8760,7 @@ exports[`runtime-types type objects > type [uint8, string] 1`] = `
 }
 `;
 
-exports[`runtime-types type objects > type [uint8, string] accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, __proto__"`;
+exports[`runtime-types type objects > type [uint8, string] accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, __proto__"`;
 
 exports[`runtime-types type objects > type [uint8, string] accessor properties 1`] = `[]`;
 
@@ -8757,7 +8787,7 @@ exports[`runtime-types type objects > type [uint8, string] non-indexed owned pro
     "value": {
       "className": "Array",
       "description": "Array(2)",
-      "objectId": "default:41",
+      "objectId": "default:43",
       "preview": {
         "description": "Array(2)",
         "overflow": false,
@@ -8784,7 +8814,7 @@ exports[`runtime-types type objects > type [uint8, string] non-indexed owned pro
 ]
 `;
 
-exports[`runtime-types type objects > type [uint8, string] non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types type objects > type [uint8, string] non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, approximate, bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types type objects > type [uint8, string] properties 1`] = `
 {
@@ -8810,7 +8840,7 @@ exports[`runtime-types type objects > type [uint8, string] properties 1`] = `
       "value": {
         "className": "Array",
         "description": "Array(2)",
-        "objectId": "default:40",
+        "objectId": "default:42",
         "preview": {
           "description": "Array(2)",
           "overflow": false,
@@ -8864,7 +8894,7 @@ exports[`runtime-types type objects > type { x: int32 } 1`] = `
 }
 `;
 
-exports[`runtime-types type objects > type { x: int32 } accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, __proto__"`;
+exports[`runtime-types type objects > type { x: int32 } accessor properties (prototype) 1`] = `"bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, __proto__"`;
 
 exports[`runtime-types type objects > type { x: int32 } accessor properties 1`] = `[]`;
 
@@ -8891,7 +8921,7 @@ exports[`runtime-types type objects > type { x: int32 } non-indexed owned proper
     "value": {
       "className": "Object",
       "description": "Object",
-      "objectId": "default:16",
+      "objectId": "default:17",
       "preview": {
         "description": "Object",
         "overflow": false,
@@ -8911,7 +8941,7 @@ exports[`runtime-types type objects > type { x: int32 } non-indexed owned proper
 ]
 `;
 
-exports[`runtime-types type objects > type { x: int32 } non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, hasLayout, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+exports[`runtime-types type objects > type { x: int32 } non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, approximate, bitLength, elementByteLength, byteLength, alignment, hasLayout, isPlainData, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
 exports[`runtime-types type objects > type { x: int32 } properties 1`] = `
 {
@@ -8967,7 +8997,7 @@ exports[`runtime-types type objects > type never 1`] = `
       "description": "SyntaxError: Unexpected token
 type never
           ^",
-      "objectId": "default:45",
+      "objectId": "default:47",
       "preview": {
         "description": "SyntaxError: Unexpected token
 type never
@@ -8986,7 +9016,7 @@ type never
       "subtype": "error",
       "type": "object",
     },
-    "exceptionId": 44,
+    "exceptionId": 46,
     "lineNumber": 0,
     "scriptId": "6",
     "stackTrace": {
@@ -9018,7 +9048,7 @@ exports[`runtime-types type objects > type string.<{ brand: 'B' }> 1`] = `
       "description": "SyntaxError: Unexpected token
 type string.<{ brand: 'B' }>
            ^^",
-      "objectId": "default:43",
+      "objectId": "default:45",
       "preview": {
         "description": "SyntaxError: Unexpected token
 type string.<{ brand: 'B' }>
@@ -9037,7 +9067,7 @@ type string.<{ brand: 'B' }>
       "subtype": "error",
       "type": "object",
     },
-    "exceptionId": 42,
+    "exceptionId": 44,
     "lineNumber": 0,
     "scriptId": "5",
     "stackTrace": {

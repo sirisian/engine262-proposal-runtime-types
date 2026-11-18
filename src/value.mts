@@ -1284,7 +1284,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
           const lengthValue = Q(yield* OrdinaryGet(this, Value('length'), this));
           const len = lengthValue instanceof NumberValue
             ? R(lengthValue)
-            : (isTypedNumber(lengthValue) ? Number(lengthValue.numberValue()) : undefined);
+            : (isTypedNumber(lengthValue) ? Number(lengthValue.numberValue()) : undefined); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
           if (typeof len === 'number' && (index < 0 || index >= len)) {
             return Throw.RangeError('$1 is out of range for $2', P, Value('the array'));
           }

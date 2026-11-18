@@ -14,15 +14,16 @@ import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { contextualTypeFor, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord, spreadElementsOf } from '../type-system/runtime.mts';
+import { contextualTypeFor, SetPendingCalleeContext, TypeNodeToTypeRecord, spreadElementsOf } from '../type-system/runtime.mts';
 import { StampTypedCollection, soleSignatureParameterTypes, RequireType } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { bindLibraryTypeArguments, TakeLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { NamedCallItemsOf } from '../abstract-ops/named-call.mts';
+import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
-import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
+import { ConstructArrayOfType } from './RuntimeTypesDeclarations.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
   Assert,
@@ -353,18 +354,16 @@ export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueE
   // non-nominal target as though the contextual type were missing, which sent a
   // reader looking at the annotation rather than at the feature.
   if (t.Kind === 'array') {
-    // An ARRAY is built by filling it with its element's default, which is what
-    // the written form does: `new [4].<uint8>()` and `new [4].<uint8>(1,2,3,4)`
-    // both give `0,0,0,0`, the same value a bare `let a: [4].<uint8>` holds. The
-    // arguments are ignored here because they are ignored there, and the two
-    // spellings of one construction must not differ.
+    // An ARRAY is built as the written form builds it, since the two spellings
+    // of one construction must not differ: `new.()` is `new [4].<uint8>()`, the
+    // value a bare `let a: [4].<uint8>` holds, and `new.(source)` is
+    // `new [4].<uint8>(source)`, the elements of its source
+    // (#sec-array-and-tuple-types). Both dropped every argument before.
     const args = Q(yield* ArgumentListEvaluation(node.Arguments)) as readonly Value[];
-    void args;
-    const filled = Q(yield* DefaultValueOf(t));
-    if (filled === undefined) {
+    if (t.Extent !== 'dynamic' && typeof t.Extent !== 'number') {
       return Throw.TypeError('$1 is not constructible', Value(displayType(t)));
     }
-    return filled;
+    return Q(yield* ConstructArrayOfType(t, args[0] ?? Value.undefined));
   }
   if (t.Kind !== 'nominal') {
     // A VECTOR is built by CALLING its Type Object - `float32x4(1, 2, 3, 4)` -

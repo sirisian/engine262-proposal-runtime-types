@@ -31,7 +31,6 @@ export function isProxyExoticObject(O: Value): O is ProxyObject {
 export interface RevocableProxyRevokeFunctionObject extends BuiltinFunctionObject {
   RevocableProxy: ProxyObject | NullValue;
 }
-/** https://tc39.es/ecma262/#sec-proxy-target-handler */
 /**
  * The type argument a construction supplied, set by the NewExpression intercept.
  *
@@ -45,6 +44,7 @@ export function SetPendingProxyRuntimeType(t: TypeRecord | undefined): void {
   pendingRuntimeType = t;
 }
 
+/** https://tc39.es/ecma262/#sec-proxy-target-handler */
 function ProxyConstructor(this: FunctionObject, [target = Value.undefined, handler = Value.undefined]: Arguments, { NewTarget }: FunctionCallContext) {
   // Read and CLEAR before anything can fail, so a refused construction leaves
   // nothing for the next one to pick up.

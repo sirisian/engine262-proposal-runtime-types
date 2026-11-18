@@ -78,12 +78,16 @@ test('the clause\'s own shape never reaches a record here', async () => {
   const walk = (v: unknown): void => {
     if (!v || typeof v !== 'object' || seen.has(v as object)) return;
     seen.add(v as object);
-    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (Array.isArray(v)) {
+      v.forEach(walk); return;
+    }
     const k = (v as { Kind?: string }).Kind;
     if (typeof k === 'string') kinds.add(k);
     const proto = Object.getPrototypeOf(v);
     if (proto === Object.prototype || proto === null) {
-      Object.entries(v).forEach(([key, x]) => { if (key !== 'Declaration') walk(x); });
+      Object.entries(v).forEach(([key, x]) => {
+        if (key !== 'Declaration') walk(x);
+      });
     }
   };
   walk(generic);

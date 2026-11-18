@@ -32,8 +32,8 @@ import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { InferredLoopBindingType } from '../type-system/check.mts';
-import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
+import { recordDeclaredType } from './LexicalDeclaration.mts';
 import {
   Evaluate_SwitchStatement,
   Evaluate_VariableDeclarationList,

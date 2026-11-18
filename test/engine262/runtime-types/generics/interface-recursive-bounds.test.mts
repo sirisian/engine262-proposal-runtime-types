@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 import { observeModuleGraph, observeModuleSequence, type ModuleObservation } from '../module-observer.mts';
 import { observeScript } from '../harness.mts';
 import { nativeErrorClass } from '../error-observer.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 // #sec-computed-constraints: recursive description does not discharge admission.
 const corpus = JSON.parse(readFileSync(new URL('../conformance/interface-recursive-bounds.json', import.meta.url), 'utf8')) as {

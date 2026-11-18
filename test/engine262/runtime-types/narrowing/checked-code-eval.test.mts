@@ -35,7 +35,9 @@ test.each([
   try {
     const ctor = X(Get(completion.Value as ObjectValue, Value('constructor'))) as ObjectValue;
     expect((X(Get(ctor, Value('name'))) as JSStringValue).stringValue()).toBe('StaticTypeError');
-  } finally { pop?.(); }
+  } finally {
+    pop?.();
+  }
 });
 
 test.each([

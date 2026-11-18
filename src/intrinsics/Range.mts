@@ -11,8 +11,8 @@ import { NumericRangeLength, NumericRangeTakeOrDrop } from '../type-system/range
 import { RangeEndpointCompare, RangeIsEmpty, rangeContainsRange, rangeIntersect } from '../type-system/range-selection.mts';
 import { NumericRangeScale } from '../type-system/range-scaling.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { surroundingAgent, Throw, Q, Get, Call, IsCallable } from '#self';
 import { boundValue, intervalValue } from './RangeEnums.mts';
+import { surroundingAgent, Throw, Q, Get, Call, IsCallable } from '#self';
 import {
 
   OrdinaryObjectCreate,
@@ -151,7 +151,7 @@ export function endpointOf(v: RangeEndpoint | undefined): number | bigint | unde
     return undefined;
   }
   if (isTypedNumber(v)) {
-    return Number(v.numberValue());
+    return Number(v.numberValue()); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   }
   // An endpoint of a user-declared ordered type has no mathematical value: it is
   // compared through `operator<` rather than converted. Every caller here wants

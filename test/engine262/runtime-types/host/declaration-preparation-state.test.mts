@@ -6,7 +6,9 @@ import {
 } from '#self';
 
 let popContext: (() => void) | undefined;
-afterEach(() => { popContext?.(); popContext = undefined; });
+afterEach(() => {
+  popContext?.(); popContext = undefined;
+});
 
 function setup() {
   const agent = new Agent({ features: ['runtime-types'] });
@@ -103,17 +105,23 @@ test('nested groups suspend outer evidence and restore it on all exits', () => {
     try {
       expect(IsPendingTypeDeclarationReference(outerError)).toBe(false);
       expect(IsPendingTypeDeclarationReference(innerError)).toBe(true);
-    } finally { endInner(); }
+    } finally {
+      endInner();
+    }
     expect(IsPendingTypeDeclarationReference(outerError)).toBe(true);
     expect(() => {
       const endEmpty = BeginTypeDeclarationPreparation(inner, []);
       try {
         expect(IsPendingTypeDeclarationReference(outerError)).toBe(false);
         throw new Error('host interruption');
-      } finally { endEmpty(); }
+      } finally {
+        endEmpty();
+      }
     }).toThrow('host interruption');
     expect(IsPendingTypeDeclarationReference(outerError)).toBe(true);
-  } finally { endOuter(); }
+  } finally {
+    endOuter();
+  }
   expect(IsPendingTypeDeclarationReference(outerError)).toBe(false);
   expect(IsPendingTypeDeclarationReference(innerError)).toBe(false);
 });
@@ -129,7 +137,9 @@ test('another agent cannot consult a suspended group', () => {
     expect(IsPendingTypeDeclarationReference(error)).toBe(false);
     setSurroundingAgent(agent);
     expect(IsPendingTypeDeclarationReference(error)).toBe(true);
-  } finally { setSurroundingAgent(agent); end(); }
+  } finally {
+    setSurroundingAgent(agent); end();
+  }
 });
 
 // Exercise the real checking wrapper, including its finally paths.

@@ -2,12 +2,12 @@ import { Q, type ValueEvaluator } from '../completion.mts';
 import {
   Value, type ObjectValue, type Arguments, type FunctionCallContext,
 } from '../value.mts';
+import { RegisterArrayIteratorNext } from '../type-system/iteration-construction.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import {
   GeneratorResume,
 } from '#self';
 import type { Realm } from '#self';
-import { RegisterArrayIteratorNext } from '../type-system/iteration-construction.mts';
 
 /** https://tc39.es/ecma262/#sec-%arrayiteratorprototype%.next */
 function* ArrayIteratorPrototype_next(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {

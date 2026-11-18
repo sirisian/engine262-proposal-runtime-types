@@ -71,16 +71,22 @@ export async function observeModuleSequence(
           try {
             if (++callbacks !== 1) throw new Error('Module completion callback ran more than once');
             const completion = EnsureCompletion(value);
-            if (completion.Type === 'throw') { resolve(outcome('rejected', completion.Value)); return; }
+            if (completion.Type === 'throw') {
+              resolve(outcome('rejected', completion.Value)); return;
+            }
             const promise = completion.Value;
             if (promise.PromiseState === 'pending') throw new Error('Module completion callback received a pending promise');
             if (promise.PromiseState !== 'fulfilled' && promise.PromiseState !== 'rejected') {
               throw new Error('Module completion callback did not receive a promise');
             }
             resolve(outcome(promise.PromiseState, promise.PromiseState === 'rejected' ? promise.PromiseResult : undefined));
-          } catch (error) { reject(error); }
+          } catch (error) {
+            reject(error);
+          }
         });
-      } catch (error) { clearTimeout(timer); reject(error); }
+      } catch (error) {
+        clearTimeout(timer); reject(error);
+      }
     });
     if (callbacks !== 1) throw new Error('Module completion callback ran more than once');
     return result;

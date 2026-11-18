@@ -5,6 +5,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { TypeRecord, Known } from './records.mts';
 import { unifyTypeParameters } from './unify.mts';
 import { BlockCapturesOf } from './specialization-patterns.mts';
+import { mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
 
 /**
  * proposal-runtime-types #sec-generics and #sec-parameterized-types:
@@ -27,8 +28,6 @@ import { BlockCapturesOf } from './specialization-patterns.mts';
  * would close a cycle. Both are pure walks over Type Records and depend on
  * nothing here.
  */
-import { mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
-
 export { mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters };
 
 export const scopeOfNames = (names: Iterable<string>): Map<string, Known | null> => {
@@ -101,7 +100,6 @@ export const mentionsTypeName = (node: ParseNode | null | undefined, name: strin
   }
   return false;
 };
-
 
 
 /**

@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
-import { TypeDiagnosticOf } from '#self';
 import { evaluated, expectThrown, run, ok, expectStaticTypeError } from '../harness.mts';
+import { TypeDiagnosticOf } from '#self';
 
 // -- A deferred application as a binding's type (#sec-deferred-applications) --
 //

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 import { expectStaticTypeError } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 // Spec: #sec-equality-and-comparison (Equality and Comparison).
 //

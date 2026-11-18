@@ -1,12 +1,12 @@
 import { Descriptor, ObjectValue, JSStringValue, SymbolValue, NumberValue, Value, type PropertyKeyValue, type NullValue } from '../value.mts';
+import { StructuralStorageEstablished } from '../abstract-ops/runtime-types.mts';
+import { IsDataDescriptor, IsAccessorDescriptor, SameValue } from '../abstract-ops/all.mts';
+import type { ThrowCompletion } from '../completion.mts';
 import { propertyKeyValue, type TypeRecord } from './records.mts';
 import { OrdinaryDataReadSupported, RuntimeTypeOf, primitiveMembership, MayRequireCallableMaterialization } from './runtime.mts';
-import { StructuralStorageEstablished } from '../abstract-ops/runtime-types.mts';
 import { IsSubtype, SameType } from './relations.mts';
 import { LayoutOf, SubclassAddsStorageOver } from './layout.mts';
-import { IsDataDescriptor, IsAccessorDescriptor, SameValue } from '../abstract-ops/all.mts';
 import { Throw } from '#self';
-import type { ThrowCompletion } from '../completion.mts';
 
 type Key = string | SymbolValue;
 const normalized = (key: PropertyKeyValue): Key => key instanceof JSStringValue ? key.stringValue() : key;
@@ -100,7 +100,9 @@ function plan(mutation: Mutation): Change[] | false {
   for (const guard of dependents.get(mutation.object) ?? []) {
     const owner = guard.owner.deref();
     const key = typeof guard.key === 'string' ? guard.key : guard.key.deref();
-    if (!owner || key === undefined) { detach(guard); continue; }
+    if (!owner || key === undefined) {
+      detach(guard); continue;
+    }
     if (mutation.properties && !mutation.properties.has(key)) continue;
     // The supplier's outgoing prototype is not part of a successful data read.
     if (mutation.prototype !== undefined && guard.path.at(-1)?.deref() === mutation.object) continue;
@@ -121,7 +123,9 @@ export function CommitInheritedStorageChanges(changes: readonly Change[]): void 
   for (const { guard, observation } of changes) {
     const owner = guard.owner.deref();
     const key = typeof guard.key === 'string' ? guard.key : guard.key.deref();
-    if (!owner || key === undefined) { detach(guard); continue; }
+    if (!owner || key === undefined) {
+      detach(guard); continue;
+    }
     const state = acquired.get(owner)?.get(key);
     if (!state) continue;
     if (observation.path.length === 1) {
@@ -190,7 +194,9 @@ export function CheckInheritedArrayAcquisition(object: ObjectValue, element?: Ty
   for (const guard of dependents.get(object) ?? []) {
     const key = typeof guard.key === 'string' ? guard.key : guard.key.deref();
     const owner = guard.owner.deref();
-    if (key === undefined || !owner) { detach(guard); continue; }
+    if (key === undefined || !owner) {
+      detach(guard); continue;
+    }
     if (typeof key !== 'string') continue;
     if (key === 'length' || (key === 'byteLength'
         && element && LayoutOf(element) && lookup(owner, propertyKeyValue(key))?.value === Value.undefined)) {

@@ -35,7 +35,8 @@ import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { IsAssignable, IsSubtype, SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
-import { EnsureCompletion, NormalCompletion, Q, X } from '../completion.mts';
+import { EnsureCompletion, NormalCompletion, Q, X, type PlainCompletion } from '../completion.mts';
+import { PrivateEnvironmentRecord } from '../execution-context/PrivateEnvironment.mts';
 import { RetainTypeResultContext } from '../type-system/type-result-context.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -57,7 +58,6 @@ import { BindTypeParameterTyped, toNumericArgument,
 import { currentTypeParameterFrame, NewTypeParameterEnvironment, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
 import { InferGenericBindings, TypeParameterValue, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
-import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
 import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
@@ -74,11 +74,14 @@ import {
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
+import { intrinsicDeclarationName } from '../type-system/records.mts';
+import { libraryTypeRecord } from '../type-system/records.mts';
 import { ClassDefinitionEvaluation, PartialClassMergeEvaluation, OwnClassMemberContractsOf } from './ClassDefinitionEvaluation.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
+import { classTypeParameterFrame } from './CallExpression.mts';
 import { EnvironmentRecord, RefBindingHolder, Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, CompleteSpecializationResult, ClassMethodThisTypeOf, type CapturedTypeContext } from '#self';
 import { ClaimMetaKey, MetaTypeClaiming, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
@@ -1817,6 +1820,60 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration, claim
  * so member calls retain their this binding.
  */
 /**
+ * #sec-array-and-tuple-types: the array a construction of the array type
+ * _record_ makes, from the one argument its constructor takes. `new A(source)`
+ * and the target-typed `new.(source)` at a position of type `A` are one
+ * construction, and both come here.
+ */
+export function* ConstructArrayOfType(record: TypeRecord & { Kind: 'array' }, source: Value): ValueEvaluator {
+  const element = record.Element;
+  const extent = record.Extent;
+  if (source === Value.undefined || source === Value.null) {
+    // No source, or a nullish one, which the constructors of `Set` and `Map`
+    // read the same way (#sec-collection-construction).
+    //
+    // A construction with no source is the type's default value, so a fixed
+    // extent has that many elements and each is its own default -
+    // `a[0].x = 1` for an element that is a value class does not reach `a[1]` -
+    // and a dynamic one is empty. It is what a declaration with no initializer
+    // holds, and for the same reason an element type with no default leaves
+    // nothing to construct: one value was stored at every index here, and
+    // *undefined* where the type had none, so the array carried an element type
+    // its elements were not values of.
+    const made = Q(yield* DefaultValueOf(record));
+    if (made !== undefined) {
+      return made;
+    }
+    if (typeof extent !== 'number' || !mentionsTypeParameter(element)) {
+      return Throw.TypeError('$1 has no default value, so its construction needs the source of its elements', Value(displayType(record)));
+    }
+    // A type that still mentions a parameter has no application to ask, and
+    // keeps the elements the declaration's own check would give it.
+    const unbound = X(ArrayCreate(extent));
+    for (let i = 0; i < extent; i += 1) {
+      X(CreateDataProperty(unbound, Value(String(i)), Value.undefined));
+    }
+    return unbound;
+  }
+  // The one argument is the SOURCE of the elements. Its items are taken in
+  // iteration order and each is stored as a store to an element is, so the
+  // array is the one that `const t: A = [...source]` binds: a copy, never a
+  // view of its source, and for a fixed extent exactly that many. A number is
+  // therefore not a count and not a value to fill with - those are the extent,
+  // `withCapacity` and `fill` - and it is refused as any other value that is
+  // not iterable is, where every argument was dropped without a word.
+  const method = Q(yield* GetMethod(source, wellKnownSymbols.iterator));
+  if (method === Value.undefined) {
+    return Throw.TypeError('the argument to the constructor of $1 is the source of its elements, and $2 is not iterable', Value(displayType(record)), source);
+  }
+  const items = Q(yield* IteratorToList(Q(yield* GetIterator(source, 'sync'))));
+  if (typeof extent === 'number' && items.length !== extent) {
+    return Throw.TypeError('$1 has $2 elements, and its source supplied $3', Value(displayType(record)), Value(String(extent)), Value(String(items.length)));
+  }
+  return Q(yield* CheckedConvertValue(X(CreateArrayFromList(items)), record));
+}
+
+/**
  * proposal-runtime-types: the constructor of an array type written in
  * expression position, one per interned type so that two mentions of
  * `[4].<uint8>` are one constructor.
@@ -1867,20 +1924,12 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     return cached;
   }
   const realm = surroundingAgent.currentRealmRecord;
-  const ctor = CreateBuiltinFunction(markBuiltinFunctionAsConstructor(function* ArrayTypeConstructor(_args: readonly (Value | undefined)[], context: { NewTarget?: Value }): ValueEvaluator {
+  const ctor = CreateBuiltinFunction(markBuiltinFunctionAsConstructor(function* ArrayTypeConstructor([source = Value.undefined]: readonly (Value | undefined)[], context: { NewTarget?: Value }): ValueEvaluator {
     const { NewTarget } = context;
     if (NewTarget === Value.undefined) {
       return Throw.TypeError('$1 requires new', Value(displayType(record as never)));
     }
-    const length = extent === 'dynamic' ? 0 : extent;
-    const array = X(ArrayCreate(length)) as ObjectValue & { TypedElement?: unknown };
-    // A fixed extent is populated, since its elements exist from the start.
-    if (extent !== 'dynamic') {
-      const dflt = (Q(yield* DefaultValueOf(element as never)) ?? Value.undefined) as Value;
-      for (let i = 0; i < length; i += 1) {
-        X(CreateDataProperty(array, Value(String(i)), dflt));
-      }
-    }
+    const array = Q(yield* ConstructArrayOfType(record as never, source)) as ObjectValue & { TypedElement?: unknown };
     // A subclass constructs through here with itself as NewTarget, so the
     // instance takes the subclass prototype and its methods.
     //
@@ -1937,7 +1986,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
       return Throw.TypeError('$1 is not assignable to $2', wanted0, Value('the index type'));
     }
     const wanted = Q(yield* ToNumber(wanted0));
-    const n = Math.max(0, Math.trunc(Number(wanted.numberValue())));
+    const n = Math.max(0, Math.trunc(Number(wanted.numberValue()))); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
     // #sec-array-type-withcapacity: the same ceiling `reserve` enforces. A
     // `[` `]` `.` `<` T `>` is an Array, so a capacity past (2 ** 32) - 1 is
     // room the array could never use. The clause specified this from the
@@ -2008,7 +2057,35 @@ type PartialClassExtension = {
   node: ParseNode.ClassDeclaration,
   environment: EnvironmentRecord,
   privateEnvironment: typeof surroundingAgent.runningExecutionContext.PrivateEnvironment,
+  /** The Script or Module the part is written in. */
+  sourceText?: unknown,
 };
+
+/**
+ * #sec-partial-classes: the private environment a part's members are created in. A part may
+ * name a private member of the class it extends where it is in the source text that declares
+ * the class: the names it uses and does not declare (which the parser kept with it) are then
+ * the class's own Private Names, so a brand check made in the part is the one the class makes.
+ * A part in another source text has no such names, as no other code has.
+ */
+function PartialPrivateEnvironment(extension: PartialClassExtension, ctor: Value): PlainCompletion<PartialClassExtension['privateEnvironment']> {
+  const named = (extension.node as { UnresolvedPrivateNames?: readonly string[] }).UnresolvedPrivateNames ?? [];
+  if (named.length === 0) return extension.privateEnvironment;
+  const holder = ctor as { ClassPrivateEnvironment?: PrivateEnvironmentRecord, ClassSourceText?: unknown };
+  const className = Value(extension.node.BindingIdentifier?.name ?? 'the class');
+  if (!holder.ClassPrivateEnvironment || holder.ClassSourceText === undefined || holder.ClassSourceText !== extension.sourceText) {
+    return Throw.TypeError('a partial class names the private member $1 of $2, which it may do only in the source text that declares the class', Value(named[0]), className);
+  }
+  const environment = new PrivateEnvironmentRecord(extension.privateEnvironment ?? null);
+  for (const name of named) {
+    const found = holder.ClassPrivateEnvironment.Names.find((n) => n.Description.stringValue() === name);
+    if (!found) {
+      return Throw.TypeError('$1 is not a private member of $2', Value(name), className);
+    }
+    environment.Names.push(found);
+  }
+  return environment;
+}
 const partialClassExtensions = new WeakMap<object, PartialClassExtension[]>();
 const partialTypeContexts = new WeakMap<object, CapturedTypeContext>();
 function currentPartialTypeContext(): CapturedTypeContext {
@@ -2081,8 +2158,9 @@ function* ApplyPartialClass(extension: PartialClassExtension, primary: ParseNode
   const context = surroundingAgent.runningExecutionContext;
   const priorEnvironment = context.LexicalEnvironment;
   const priorPrivate = context.PrivateEnvironment;
+  const partPrivate = Q(PartialPrivateEnvironment(extension, ctor));
   context.LexicalEnvironment = extension.environment;
-  context.PrivateEnvironment = extension.privateEnvironment;
+  context.PrivateEnvironment = partPrivate;
   const frame = new Map<string, TypeRecord>();
   (primary.TypeParameters?.TypeParameterList ?? []).forEach((p, i) => {
     const a = args[i];
@@ -2150,15 +2228,23 @@ function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, nod
 /** #sec-partial-classes: extend existing applications and every later one. */
 export function* RegisterPartialClass(ctor: Value, node: ParseNode.ClassDeclaration): PlainEvaluator<void> {
   const declaration = GenericClassDeclarationOf(ctor);
-  const extension = { node, environment: surroundingAgent.runningExecutionContext.LexicalEnvironment,
-    privateEnvironment: surroundingAgent.runningExecutionContext.PrivateEnvironment };
+  const extension: PartialClassExtension = { node, environment: surroundingAgent.runningExecutionContext.LexicalEnvironment,
+    privateEnvironment: surroundingAgent.runningExecutionContext.PrivateEnvironment,
+    sourceText: surroundingAgent.runningExecutionContext.ScriptOrModule };
   if (!declaration) {
     const type = LookupClassType(ctor as object);
     if (type && isTypeObject(type) && type.TypeRecord.Kind === 'nominal' && type.TypeRecord.Declaration.type === 'ClassDeclaration') {
       Q(yield* ApplyPartialClass(extension, type.TypeRecord.Declaration as ParseNode.ClassDeclaration, ctor, type.TypeRecord.Arguments));
       Q(yield* RegisterPartialClassStructure(type.TypeRecord.Declaration as ParseNode.ClassDeclaration, node));
     } else {
-      Q(yield* PartialClassMergeEvaluation(ctor as never, node.ClassTail));
+      const context = surroundingAgent.runningExecutionContext;
+      const priorPrivate = context.PrivateEnvironment;
+      context.PrivateEnvironment = Q(PartialPrivateEnvironment(extension, ctor));
+      try {
+        Q(yield* PartialClassMergeEvaluation(ctor as never, node.ClassTail));
+      } finally {
+        context.PrivateEnvironment = priorPrivate;
+      }
     }
     return undefined;
   }
@@ -2430,21 +2516,23 @@ function classInterfaceTargetIsOpen(target: ParseNode.Type,
   });
 }
 
+interface DeclaredClassEvidence {
+  Properties: Extract<TypeRecord, { Kind: 'object' }>['Properties'],
+  Fields: readonly (string | SymbolValue)[],
+  Operators: ReadonlyMap<string, TypeRecord>,
+  Call: TypeRecord | 'noncallable' | null,
+}
+
 /** Read declaration evidence in the evaluated class's own captured context. */
 function* declaredClassEvidence(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression, ctor: Value,
-  application?: TypeRecord, seen = new Set<Value>()): PlainEvaluator<{
-    Properties: Extract<TypeRecord, { Kind: 'object' }>['Properties'],
-    Fields: readonly (string | SymbolValue)[],
-    Operators: ReadonlyMap<string, TypeRecord>,
-    Call: TypeRecord | 'noncallable' | null,
-  }> {
+  application?: TypeRecord, seen = new Set<Value>()): PlainEvaluator<DeclaredClassEvidence> {
   const empty = { Properties: [], Fields: [], Operators: new Map(), Call: null };
   if (seen.has(ctor)) return empty;
   seen.add(ctor);
   const declared = DeclaredClassContractOf(node);
   if (!declared) return empty;
   const captured = classTypeContexts.get(ctor);
-  const read = function* () {
+  const read = function* (): PlainEvaluator<DeclaredClassEvidence> {
     const bindings = currentTypeParameterFrame() ?? new Map();
     const instantiate = (type: TypeRecord): TypeRecord => InstantiateCheckedBindings(new Map([
       ['contract', substituteFreeTypeParameters(type, currentTypeParameterFrame() ?? new Map())!],
@@ -3648,5 +3736,3 @@ function isFamilyShorthandTypeObject(name: string, value: Value): boolean {
   return !!record && isTypeObject(value) && GetTypeObject(record as TypeRecord) === value;
 }
 
-import { intrinsicDeclarationName } from '../type-system/records.mts';
-import { libraryTypeRecord } from '../type-system/records.mts';

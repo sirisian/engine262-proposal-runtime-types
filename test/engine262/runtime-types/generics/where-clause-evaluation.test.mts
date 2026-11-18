@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion } from '#self';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion } from '#self';
 
 /**
  * Spec: #sec-generic-where. "A specialization's `where` clauses are evaluated

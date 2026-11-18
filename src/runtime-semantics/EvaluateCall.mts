@@ -1,7 +1,6 @@
 import { CheckWhereCall } from '../type-system/where-predicates.mts';
 import { OriginalFragmentFunction, ReplacedFragmentReach } from '../type-system/fragment-library.mts';
 import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
-import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { SameType } from '../type-system/relations.mts';
 import {
   NumberValue, ObjectValue, ReferenceRecord, ReferenceValue, TypedNumberValue, Value, isTypedNumber,
@@ -16,8 +15,12 @@ import { fitsNumericType } from '../type-system/runtime.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { CallArgumentItems, NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
-import { ArgumentListEvaluation } from './all.mts';
+import { contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
+import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
+import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
 import { signaturesInView, BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
+import { ArgumentListEvaluation } from './all.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -30,9 +33,6 @@ import {
   Throw,
   R,
 } from '#self';
-import { contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
-import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
-import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
 /** The two arguments of an `Object.is` call with a numeric literal adopted into its peer's type, or undefined where neither adopts. */

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 import { observeModuleGraph, type ModuleObservation } from '../module-observer.mts';
 import { nativeErrorClass } from '../error-observer.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 // #sec-generic-constraint-contexts: written arguments retain their source;
 // interface defaults and constraints retain the actual declaration binding.

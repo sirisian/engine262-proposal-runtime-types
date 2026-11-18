@@ -7,6 +7,7 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
+import { PrivateElementRecord } from './MethodDefinitionEvaluation.mts';
 import {
   surroundingAgent,
   CreateBuiltinFunction, DefinePropertyOrThrow, MakeMethod, OrdinaryFunctionCreate, PrivateGet, PrivateSet, SymbolDescriptiveString, Throw,
@@ -21,7 +22,6 @@ import {
   ObjectValue,
   type ECMAScriptFunctionObject, type FunctionCallContext, type FunctionObject, PrivateName, type PropertyKeyValue,
 } from '#self';
-import { PrivateElementRecord } from './MethodDefinitionEvaluation.mts';
 
 /** https://tc39.es/ecma262/#sec-classfielddefinition-record-specification-type */
 export interface ClassFieldDefinitionRecord {

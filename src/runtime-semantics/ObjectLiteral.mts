@@ -7,16 +7,16 @@ import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
+import { IsComposite } from '../intrinsics/Composite.mts';
+import { Evaluate } from '../evaluator.mts';
+import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ObjectMemberDecoratorContext } from './PropertyDefinitionEvaluation.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import {
   PropertyDefinitionEvaluation_PropertyDefinitionList,
 } from './all.mts';
-import { BeginObjectResult, EndObjectResult, CompleteObjectResult, type ObjectValue, surroundingAgent, OrdinaryObjectCreate, GetValue, IsArray, HasProperty, CreateDataProperty } from '#self';
-import { IsComposite } from '../intrinsics/Composite.mts';
-import { Evaluate } from '../evaluator.mts';
 import { FunctionDecoratorContext } from './FunctionDeclaration.mts';
-import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
+import { BeginObjectResult, EndObjectResult, CompleteObjectResult, type ObjectValue, surroundingAgent, OrdinaryObjectCreate, GetValue, IsArray, HasProperty, CreateDataProperty } from '#self';
 
 /**
  * The value an unfolded member default evaluated to, keyed by its property

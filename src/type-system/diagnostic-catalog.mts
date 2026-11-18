@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: 3aa7481bc89b6a68cc47f82cdb1b4aa9c72a99961bda16edd64d390026df4607
+// Catalog SHA-256: ada9679904c42cbfd4c69fe67ea51bfb46321c21d0e1c934ff100279039f57c7
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -289,9 +289,10 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-default-values"
+      "sec-default-values",
+      "sec-array-and-tuple-types"
     ],
-    "explanation": "The declaration needs an initializer because its type has no default.",
+    "explanation": "A declaration needs an initializer, or the construction of an array its source, because the type has no default.",
     "arguments": {
       "type": "array",
       "items": {
@@ -1017,7 +1018,8 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-static-iteration-contribution"
+      "sec-static-iteration-contribution",
+      "sec-array-and-tuple-types"
     ],
     "explanation": "The required iterable operation is impossible for the established source.",
     "arguments": {
@@ -2938,4 +2940,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = '3aa7481bc89b6a68cc47f82cdb1b4aa9c72a99961bda16edd64d390026df4607';
+export const TypeDiagnosticCatalogHash = 'ada9679904c42cbfd4c69fe67ea51bfb46321c21d0e1c934ff100279039f57c7';

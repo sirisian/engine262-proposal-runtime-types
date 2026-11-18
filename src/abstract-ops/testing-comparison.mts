@@ -13,19 +13,19 @@ import {
   Descriptor,
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
-import { OrdinaryObjectCreate, OrdinaryGetPrototypeOf } from './all.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsValueType, IsValueTypeClass, ValueFieldsOf } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
-import { PlacementBackingOf, RequirePlacementLive } from './placement.mts';
 import { isRationalObject, rationalEquals, rationalSameWidth, rationalCompare } from '../intrinsics/Rational.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, float128SameValue, Float128ToBinary128 } from '../intrinsics/Float128.mts';
 import { compare as float128Compare } from '../intrinsics/Float128Arithmetic.mts';
+import { PlacementBackingOf, RequirePlacementLive } from './placement.mts';
+import { OrdinaryObjectCreate, OrdinaryGetPrototypeOf } from './all.mts';
 import { ReadonlyElementTargetOf, StampTypedArray } from './array-view.mts';
 import {
   Assert,
@@ -203,7 +203,7 @@ function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boole
   const xv = (x as TypedNumberValue).value;
   const yv = (y as TypedNumberValue).value;
   if (typeof xv === 'bigint' || typeof yv === 'bigint') {
-    return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue();
+    return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   }
   // proposal-runtime-types: unwrap both to plain Numbers before the payload
   // comparison. A typed number is no longer a NumberValue, so it lacks the
@@ -1112,7 +1112,7 @@ export function exactNumericEquals(a: ExactNumeric, b: ExactNumeric): boolean {
 function mathematicalValueForLooseEquality(v: Value): number | bigint | undefined {
   if (v instanceof TypedNumberValue) {
     if (typeof (v as TypedNumberValue).value === 'bigint') {
-      return (v as TypedNumberValue).bigintValue();
+      return (v as TypedNumberValue).bigintValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
     }
     return (v as TypedNumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   }
@@ -1325,7 +1325,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
     const xv = (x as TypedNumberValue).value;
     const yv = (y as TypedNumberValue).value;
     if (typeof xv === 'bigint' || typeof yv === 'bigint') {
-      return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue();
+      return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
     }
     // proposal-runtime-types: unwrap both to plain Numbers; a typed number
     // lacks the helpers Number::equal relies on.

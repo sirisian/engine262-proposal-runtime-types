@@ -1,6 +1,6 @@
+import { ObjectInspector } from './objects.mts';
 import type { ComplexObject, DecimalObject } from '#self';
 import { complexToString, DecimalToString } from '#self';
-import { ObjectInspector } from './objects.mts';
 
 /**
  * proposal-runtime-types: `complex64` and `decimal128` values.

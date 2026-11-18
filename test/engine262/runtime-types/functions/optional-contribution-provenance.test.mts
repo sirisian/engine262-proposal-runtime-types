@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 import { nativeErrorClass } from '../error-observer.mts';
 import { observeModuleGraph, observeModuleSequence } from '../module-observer.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/optional-contribution-provenance.json', import.meta.url), 'utf8')) as {
   cases: { name: string; modules: Record<string, string>; script: boolean; expected: {
@@ -23,7 +23,9 @@ for (const { name, modules, expected, script } of corpus.cases) {
     setSurroundingAgent(agent);
     const realm = new ManagedRealm();
     let bodies = 0;
-    agent.hostDefinedOptions.onNodeEvaluation = (node) => { if (node.type === 'ScriptBody') bodies += 1; };
+    agent.hostDefinedOptions.onNodeEvaluation = (node) => {
+      if (node.type === 'ScriptBody') bodies += 1;
+    };
     try {
       const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(modules.main));
       const errorClass = completion.Type === 'throw' ? nativeErrorClass(completion.Value, realm) : undefined;

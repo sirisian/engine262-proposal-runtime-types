@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type OrdinaryObject } from '#self';
 import { observeScript } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type OrdinaryObject } from '#self';
 
 let serial = 0;
 const cases = ['field', 'method'].flatMap((member) => ['realm', 'agent'].flatMap((boundary) => (
@@ -15,7 +15,9 @@ test.each(cases)('$member resolution is independent of a previous $warmup across
   let agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);
   let bodyEntered = false;
-  const observeBody = (node: { type: string }) => { if (node.type === 'ScriptBody') bodyEntered = true; };
+  const observeBody = (node: { type: string }) => {
+    if (node.type === 'ScriptBody') bodyEntered = true;
+  };
   agent.hostDefinedOptions.onNodeEvaluation = observeBody;
   const cold = new ManagedRealm();
   const coldResult = EnsureCompletion(cold.evaluateScriptSkipDebugger(source));

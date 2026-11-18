@@ -1,8 +1,8 @@
 import { test, expect } from 'vitest';
+import { evaluated } from '../harness.mts';
 import {
   Agent, ManagedRealm, setSurroundingAgent, InspectPattern, DecidesInclusion,
 } from '#self';
-import { evaluated } from '../harness.mts';
 
 /**
  * The pattern-inclusion decision procedure, from #sec-primitive-metadata: "pattern pairs free of

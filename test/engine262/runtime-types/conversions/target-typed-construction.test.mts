@@ -61,13 +61,15 @@ test('the target may be any CONSTRUCTIBLE type, not only a class', () => {
   // A class target is unchanged.
   expect(evaluated('value class C { x: uint8 = 0; } let c: C = new.(); String(Number(c.x));')).toBe('0');
 
-  // An ARRAY is filled with its element's default, which is what the written
-  // form does: `new [4].<uint8>()` and `new [4].<uint8>(1,2,3,4)` both give
-  // `0,0,0,0`, the same value a bare declaration holds. The two spellings of one
-  // construction must not differ.
+  // An ARRAY is built as the written form builds it, since the two spellings of
+  // one construction must not differ. With no argument both are the value a bare
+  // declaration holds; with one, both take it as the source of the elements
+  // (#sec-array-and-tuple-types, and arrays/construction-source).
   expect(evaluated('let a: [4].<uint8> = new.(); String(a.join(","));')).toBe('0,0,0,0');
   expect(evaluated('const a = new [4].<uint8>(); String(a.join(","));')).toBe('0,0,0,0');
   expect(evaluated('let a: [4].<uint8>; String(a.join(","));')).toBe('0,0,0,0');
+  expect(evaluated('let a: [4].<uint8> = new.([1, 2, 3, 4]); String(a.join(","));')).toBe('1,2,3,4');
+  expect(evaluated('const a = new [4].<uint8>([1, 2, 3, 4]); String(a.join(","));')).toBe('1,2,3,4');
 });
 
 test('a target that is NOT constructible says so', () => {

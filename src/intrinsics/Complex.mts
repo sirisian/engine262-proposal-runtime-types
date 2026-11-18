@@ -422,8 +422,8 @@ function* ComplexConstructor(args: Arguments): ValueEvaluator {
   // an IEEE format has both zeroes, and SameValue reports the difference, so
   // reading through R made `Object.is(complex(0,0), complex(-0,0))` true. The
   // same reading cost float128 its signed zero.
-  const re = (Q(yield* ToNumber(real)) as NumberValue).numberValue();
-  const im = (Q(yield* ToNumber(imaginary)) as NumberValue).numberValue();
+  const re = (Q(yield* ToNumber(real)) as NumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
+  const im = (Q(yield* ToNumber(imaginary)) as NumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   return CreateComplexValue(re, im, undefined, surroundingAgent.currentRealmRecord);
 }
 

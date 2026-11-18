@@ -338,7 +338,9 @@ export function ClassValueOrigins(root: ParseNode,
     };
     const scan = (value: unknown): void => {
       if (unknown || !value || typeof value !== 'object') return;
-      if (Array.isArray(value)) { value.forEach(scan); return; }
+      if (Array.isArray(value)) {
+        value.forEach(scan); return;
+      }
       const node = value as Node;
       if (typeof node.type !== 'string') return;
       if (node !== fn && callable(node)) return;
@@ -351,29 +353,39 @@ export function ClassValueOrigins(root: ParseNode,
           break;
         case 'AssignmentExpression': case 'UpdateExpression': {
           const target = unwrap(node.type === 'AssignmentExpression' ? node.LeftHandSideExpression : node.LeftHandSideExpression ?? node.UnaryExpression);
-          if (target?.type !== 'IdentifierReference') { unknown = true; return; }
+          if (target?.type !== 'IdentifierReference') {
+            unknown = true; return;
+          }
           const binding = bindingAt(target, target.name as string);
           if (!binding || binding.global) writes.add(target.name as string);
           if (node.type === 'AssignmentExpression' && !(node.AssignmentOperator === '=' ? true : literalOnly(node.AssignmentExpression))) numericLocals.delete(target.name as string);
           break;
         }
         case 'CallExpression': {
-          if (directEval(node)) { unknown = true; return; }
+          if (directEval(node)) {
+            unknown = true; return;
+          }
           const found = declarationOf(node.CallExpression, 'function', 'FunctionDeclaration');
           const inner = found && footprintOf(found.node);
-          if (!inner) { unknown = true; return; }
+          if (!inner) {
+            unknown = true; return;
+          }
           inner.forEach((name) => writes.add(name));
           scan(node.Arguments);
           return;
         }
         case 'NewExpression':
-          if (!transparentClass(node.MemberExpression)) { unknown = true; return; }
+          if (!transparentClass(node.MemberExpression)) {
+            unknown = true; return;
+          }
           scan(node.Arguments);
           return;
         case 'AdditiveExpression': case 'MultiplicativeExpression': case 'RelationalExpression': case 'EqualityExpression':
         case 'ShiftExpression': case 'ExponentiationExpression': case 'BitwiseANDExpression': case 'BitwiseORExpression': case 'BitwiseXORExpression': {
           const operands = Object.keys(node).filter((key) => !ignored.has(key) && key !== 'operator' && isNode(node[key])).map((key) => node[key]);
-          if ((node.operator === 'instanceof' || node.operator === 'in') || !operands.every(operand)) { unknown = true; return; }
+          if ((node.operator === 'instanceof' || node.operator === 'in') || !operands.every(operand)) {
+            unknown = true; return;
+          }
           break;
         }
         default:

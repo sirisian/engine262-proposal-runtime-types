@@ -1,3 +1,8 @@
+import type { Realm } from '../execution-context/Realm.mts';
+import {
+  EnsureCompletion, AbruptCompletion, type ThrowCompletion, type ValueCompletion,
+} from '../completion.mts';
+import { assignProps } from './bootstrap.mts';
 import {
   Call,
   OrdinaryObjectCreate,
@@ -7,11 +12,6 @@ import {
   type Arguments,
   type ValueEvaluator,
 } from '#self';
-import type { Realm } from '../execution-context/Realm.mts';
-import { assignProps } from './bootstrap.mts';
-import {
-  EnsureCompletion, AbruptCompletion, type ThrowCompletion, type ValueCompletion,
-} from '../completion.mts';
 
 /**
  * proposal-runtime-types #sec-threading-parallel-iteration.
@@ -65,8 +65,8 @@ function partition(begin: number, end: number): { from: number, to: number }[] {
  * agent whose [[CanBlock]] is false.
  */
 function* Thread_parallelFor(args: Arguments): ValueEvaluator {
-  const begin = Number(Q(yield* ToNumber(args[0] ?? Value.undefined)).numberValue());
-  const end = Number(Q(yield* ToNumber(args[1] ?? Value.undefined)).numberValue());
+  const begin = Number(Q(yield* ToNumber(args[0] ?? Value.undefined)).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
+  const end = Number(Q(yield* ToNumber(args[1] ?? Value.undefined)).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   const body = args[2] ?? Value.undefined;
   const slices = partition(begin, end);
   // #sec-thread-parallel-errors: a failure in slice k cancels the slices above k
@@ -105,8 +105,8 @@ function* Thread_parallelFor(args: Arguments): ValueEvaluator {
  * operation exists for.
  */
 function* Thread_parallelReduce(args: Arguments): ValueEvaluator {
-  const begin = Number(Q(yield* ToNumber(args[0] ?? Value.undefined)).numberValue());
-  const end = Number(Q(yield* ToNumber(args[1] ?? Value.undefined)).numberValue());
+  const begin = Number(Q(yield* ToNumber(args[0] ?? Value.undefined)).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
+  const end = Number(Q(yield* ToNumber(args[1] ?? Value.undefined)).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   const initial = args[2] ?? Value.undefined;
   const perElement = args[3] ?? Value.undefined;
   const combine = args[4] ?? Value.undefined;

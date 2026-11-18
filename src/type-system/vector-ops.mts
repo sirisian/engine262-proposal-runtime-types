@@ -1,5 +1,3 @@
-import { vectorSpecialization, VectorConstantIndexOf, vectorIndexOf } from './vector-specialization.mts';
-import { TypeNodeToTypeRecord, spreadElementsOf } from './runtime.mts';
 import {
   Value, VectorValue, JSStringValue, ObjectValue, type PropertyKeyValue,
 } from '../value.mts';
@@ -7,6 +5,9 @@ import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Throw } from '../host-defined/error-messages.mts';
+import type { ValueEvaluator } from '../evaluator.mts';
+import { vectorSpecialization, VectorConstantIndexOf, vectorIndexOf } from './vector-specialization.mts';
+import { TypeNodeToTypeRecord, spreadElementsOf } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import { displayType } from './records.mts';
 import { SameType } from './relations.mts';
@@ -16,7 +17,6 @@ import {
   OrdinaryObjectCreate, OrdinaryGetOwnProperty, OrdinaryOwnPropertyKeys, Descriptor,
   type Arguments,
 } from '#self';
-import type { ValueEvaluator } from '../evaluator.mts';
 
 
 /**
@@ -236,7 +236,7 @@ function laneKeyName(key: PropertyKeyValue | Value): string | undefined {
   if (key instanceof JSStringValue) {
     return key.stringValue();
   }
-  const asNumber = (key as { numberValue?(): number }).numberValue?.();
+  const asNumber = (key as { numberValue?(): number }).numberValue?.(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
   return typeof asNumber === 'number' && Number.isInteger(asNumber) && asNumber >= 0
     ? String(asNumber)
     : undefined;
@@ -358,9 +358,9 @@ export function isMaskLaneType(laneType: TypeRecord): boolean {
 export function maskLaneIsSet(lane: Value): boolean {
   if (lane.type === 'Vector') {
     const bits = (lane as VectorValue).lanes;
-    return bits.length > 0 && bits.every((b) => (b as { numberValue?(): number }).numberValue?.() === 1);
+    return bits.length > 0 && bits.every((b) => (b as { numberValue?(): number }).numberValue?.() === 1); // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
   }
-  return (lane as { numberValue?(): number }).numberValue?.() === 1;
+  return (lane as { numberValue?(): number }).numberValue?.() === 1; // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
 }
 
 export function isBitLaneType(laneType: TypeRecord): boolean {

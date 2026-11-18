@@ -25,6 +25,7 @@ import { RequireArrayBorrowLive, PutValue } from '../abstract-ops/reference-oper
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { TypeParametersOfEnvironment, TypeParameterArgumentAt, TypeParameterValue } from '../type-system/runtime.mts';
 import { RecordUnavailableModuleInput } from '../type-system/required-module-inputs.mts';
+import { TypeNameEnvironmentFor, RunningSourceTextAdmitsTypeNames } from './TypeNames.mts';
 import {
   Assert,
   DefinePropertyOrThrow,
@@ -42,6 +43,8 @@ import {
   type FunctionObject,
   TransferResultDependency,
 } from '#self';
+import {
+  ScalarRestOwner, surroundingAgent as agentForTypeNames } from '#self';
 
 /** https://tc39.es/ecma262/#sec-environment-records */
 export abstract class EnvironmentRecord {
@@ -1171,10 +1174,6 @@ export class GlobalEnvironmentRecord extends EnvironmentRecord {
 export type EnvironmentRecordWithThisBinding = FunctionEnvironmentRecord | GlobalEnvironmentRecord | ModuleEnvironmentRecord;
 
 /** https://tc39.es/ecma262/#sec-getidentifierreference */
-// eslint-disable-next-line import-x/order
-import { TypeNameEnvironmentFor, RunningSourceTextAdmitsTypeNames } from './TypeNames.mts';
-import {
-  ScalarRestOwner, surroundingAgent as agentForTypeNames } from '#self';
 
 export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSStringValue, strict: BooleanValue, exceptedFromTypeNames?: boolean): PlainEvaluator<ReferenceRecord> {
   // 1. If lex is the value null, then

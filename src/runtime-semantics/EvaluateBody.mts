@@ -11,15 +11,15 @@ import { IsAnonymousFunctionDefinition, type FunctionDeclaration } from '../stat
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Mutable } from '../utils/language.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame, TakeBodyContext } from '../type-system/runtime.mts';
+import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { returnTypeRecordOf, SetGeneratorProtocolType } from '../abstract-ops/runtime-types.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Evaluate_FunctionStatementList,
   FunctionDeclarationInstantiation,
   NamedEvaluation,
 } from './all.mts';
 import { surroundingAgent, ForwardResultDependency, TransferResultDependency } from '#self';
-import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
-import { returnTypeRecordOf, SetGeneratorProtocolType } from '../abstract-ops/runtime-types.mts';
-import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,
   AsyncFunctionStart,

@@ -1,3 +1,5 @@
+import type { Realm } from '../execution-context/Realm.mts';
+import { assignProps, bootstrapConstructor } from './bootstrap.mts';
 import {
   CreateBuiltinFunction,
   Descriptor,
@@ -12,8 +14,6 @@ import {
   type FunctionCallContext,
   type ValueEvaluator,
 } from '#self';
-import type { Realm } from '../execution-context/Realm.mts';
-import { assignProps, bootstrapConstructor } from './bootstrap.mts';
 
 /**
  * proposal-runtime-types #sec-thread-cancellation: "The `signal` option is an

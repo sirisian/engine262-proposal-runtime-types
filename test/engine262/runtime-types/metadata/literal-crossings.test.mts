@@ -1,7 +1,12 @@
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
 import { kit, evaluateBuilder } from '../corpus/type-challenges/harness.mts';
 import { evaluated, expectStaticTypeError, ok } from '../harness.mts';
 import { STD_TYPES_SOURCE } from '../../../../src/type-system/std-types.mts';
+
+// Each `run` evaluates the whole standard kit, which takes over ten seconds on a
+// small machine, and a test here makes up to three of them: at the default limit
+// of thirty seconds one timed out on two cores with nothing else running.
+vi.setConfig({ testTimeout: 120_000 });
 
 /**
  * Spec: #sec-primitive-operator-blocks with #sec-type-errors.

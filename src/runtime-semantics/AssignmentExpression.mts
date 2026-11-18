@@ -1,4 +1,3 @@
-import { copiesOnBinding } from './LexicalDeclaration.mts';
 import { JSStringValue, NumberValue, ObjectValue, ReferenceRecord, TypedNumberValue, Value } from '../value.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
@@ -14,11 +13,18 @@ import {
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { ConstructionSelectionsOf, EvaluateResultValue, GetResultValue } from '../type-system/result-dependencies.mts';
+import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
+import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { isArrayIndex } from '../abstract-ops/all.mts';
+import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
+import { ArraySpanBackingOf } from '../abstract-ops/array-view.mts';
 import {
   NamedEvaluation,
   ApplyStringOrNumericBinaryOperator,
   DestructuringAssignmentEvaluation,
 } from './all.mts';
+import { copiesOnBinding } from './LexicalDeclaration.mts';
 import {
   Call,
   GetValue,
@@ -29,12 +35,6 @@ import {
   ToBoolean,
   surroundingAgent,
 } from '#self';
-import { ConstructionSelectionsOf, EvaluateResultValue, GetResultValue } from '../type-system/result-dependencies.mts';
-import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
-import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
-import { isArrayIndex } from '../abstract-ops/all.mts';
-import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
-import { ArraySpanBackingOf } from '../abstract-ops/array-view.mts';
 
 
 /** https://tc39.es/ecma262/#sec-destructuring-assignment */

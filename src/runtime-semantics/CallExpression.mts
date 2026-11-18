@@ -12,10 +12,8 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf, BindTypeArgumentsInto, BindTypeParameterTyped } from '../type-system/runtime.mts';
-import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression, ResolveImplementedInterfaces, type TypeArgumentsCallTarget } from './RuntimeTypesDeclarations.mts';
 import { CaseGroupMembers, SelectExplicitCase, WithSelectedInvocation } from '../abstract-ops/callable-selection.mts';
 import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
-import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
@@ -36,6 +34,8 @@ import { X } from '../completion.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
+import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
+import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression, ResolveImplementedInterfaces, type TypeArgumentsCallTarget } from './RuntimeTypesDeclarations.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall } from './all.mts';
 import { ArgumentListEvaluationItems, PositionalArgumentListEvaluation } from './ArgumentListEvaluation.mts';
@@ -1196,7 +1196,9 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       const inner = (memberExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression;
       const calleeName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
       const choice = Q(yield* SelectExplicitCase(members, memberExpr.TypeArguments.TypeArgumentList as unknown as ParseNode[], calleeName,
-        function* evaluateArguments() { return yield* ArgumentListEvaluationItems(args); }, classTypeParameterFrame(ref)));
+        function* evaluateArguments() {
+          return yield* ArgumentListEvaluationItems(args);
+        }, classTypeParameterFrame(ref)));
       if (choice.frame) {
         const chosen = choice.fn;
         pushTypeParameterFrame(choice.frame);

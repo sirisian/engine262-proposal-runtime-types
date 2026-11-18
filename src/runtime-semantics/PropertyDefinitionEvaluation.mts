@@ -9,11 +9,9 @@ import {
 } from '../static-semantics/all.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
-import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
 import { AdoptTypeParameters, NumericArmRank } from '../abstract-ops/runtime-types.mts';
 import { SelectedObjectLiteralContext } from '../type-system/check.mts';
-import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { RuntimeTypeOf, SubstituteTypeArguments, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
@@ -25,6 +23,8 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { NamedEvaluation, MethodDefinitionEvaluation, Evaluate_PropertyName } from './all.mts';
 import { ApplyDecorators, ApplySubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';

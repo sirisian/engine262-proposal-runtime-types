@@ -1,4 +1,3 @@
-import { BeginConstructionSelections, EndConstructionSelections, CompleteConstructionSelections, NormalCompletion } from '#self';
 import { ObjectValue, Value } from '../value.mts';
 import {
   Evaluate, type PlainEvaluator,
@@ -11,6 +10,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { TupleStorageShapeOf, TupleStorageTypeAt, TupleConstructionTypeAt } from '../type-system/tuple-storage.mts';
+import { BeginConstructionSelections, EndConstructionSelections, CompleteConstructionSelections, NormalCompletion } from '#self';
 import { EnsureCompletion, EvaluateResultValue, RetainPropertyResult } from '#self';
 import {
   Set,

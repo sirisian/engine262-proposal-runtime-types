@@ -1,7 +1,5 @@
 import { GetTypeObject } from '../type-system/intern.mts';
 import type { StoreAdmission } from '../type-system/store-admission.mts';
-import { AdmitStoreValue, isArrayExoticObject } from '#self';
-import { HasInheritedStorageDependents, PlanInheritedDefinition, PlanInheritedDeletion, PlanInheritedPrototypeChange, CommitInheritedStorageChanges } from '#self';
 import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
 import {
   Descriptor,
@@ -40,6 +38,8 @@ import {
   type FunctionObject,
   type Intrinsics,
 } from './all.mts';
+import { HasInheritedStorageDependents, PlanInheritedDefinition, PlanInheritedDeletion, PlanInheritedPrototypeChange, CommitInheritedStorageChanges } from '#self';
+import { AdmitStoreValue, isArrayExoticObject } from '#self';
 import {
   NormalCompletion, TransferResultDependency, RefreshNominalRestDependencies, PlanNominalPrototypeChange, CommitNominalPrototypeChange, ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
 

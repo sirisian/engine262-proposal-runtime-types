@@ -1,6 +1,4 @@
 import { CreateBuiltinFunction, RecordClassConstructors } from '../abstract-ops/function-operations.mts';
-import { RegisterSourceWherePredicate, BeginWhereDefaultObservation, EndWhereDefaultObservation, IsAdmittedWherePredicate, AdmitWherePredicate } from './where-predicates.mts';
-import { PreferredConstructionAlternative, type ConstructionSelections } from './result-dependencies.mts';
 import type { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import { Assert } from '../abstract-ops/notational-conventions.mts';
 import { GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
@@ -38,21 +36,23 @@ import { CopyValueClassInstance, ValueAggregateOf } from '../abstract-ops/testin
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, functionTypeParameters, AdoptedTypeParametersOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
+import { skipDebugger } from '../evaluator.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import { FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
+import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
+import { isTokenStream } from '../intrinsics/TokenStream.mts';
+import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
+import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
 import { PublishedReturnTypeOf, SelectedObjectLiteralContext } from './check.mts';
 import { EvaluateGenericSource } from './check-pass.mts';
 import type { GenericTypeCapture, TypeParameterRecord } from './records.mts';
-import { skipDebugger } from '../evaluator.mts';
-import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BuilderEvaluabilityViolation } from './builder-evaluability.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
-import { FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
-import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
-import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
-import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
@@ -62,7 +62,6 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
-import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter, SubclassAddsStorageOver } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -73,7 +72,8 @@ import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject, TypeObjectOfDenotation } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
-import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { PreferredConstructionAlternative, type ConstructionSelections } from './result-dependencies.mts';
+import { RegisterSourceWherePredicate, BeginWhereDefaultObservation, EndWhereDefaultObservation, IsAdmittedWherePredicate, AdmitWherePredicate } from './where-predicates.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TupleSuffixLength, TuplePrefixElement, TupleDefaultPlacementError, type TupleStorageShape } from './tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
@@ -94,6 +94,12 @@ import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import { CloseInferredNominal } from './inferred-nominals.mts';
+import { intrinsicDeclarationRecord, intrinsicDeclarationName } from './records.mts';
+import { prepareFamilyPattern, finishFamilyPattern, FamilyWildcardName, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault, deferredOverUnboundParameter } from './family-patterns.mts';
+import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
+import { rememberDeclaredConstraint } from './records.mts';
+import { matchesFamilyPattern } from './family-patterns.mts';
+import { SameTypeStructural } from './relations.mts';
 import {
   LexicalClassFamily, ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, IsDataDescriptor, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean, SymbolKeyDependencyOf,
@@ -170,7 +176,9 @@ function selectedLiteralContext(node: object | undefined, context: TypeRecord | 
   const find = (type: TypeRecord): void => {
     if (seen.has(type)) return;
     seen.add(type);
-    if (type.Kind === 'union') { type.Members.forEach(find); return; }
+    if (type.Kind === 'union') {
+      type.Members.forEach(find); return;
+    }
     // A source interface template has no evaluated declaration identity yet.
     // Match it in the current runtime context, retaining that context's actual
     // identity and captured arguments. Multiple matching instances are not a
@@ -353,7 +361,9 @@ export function* AllDefaultsFrame(declaration: unknown): PlainEvaluator<Map<stri
 }
 
 let pendingCheckerBindings = false;
-export function setPendingCheckerBindings(v: boolean): void { pendingCheckerBindings = v; }
+export function setPendingCheckerBindings(v: boolean): void {
+  pendingCheckerBindings = v;
+}
 export function takePendingCheckerBindings(): boolean {
   const v = pendingCheckerBindings;
   pendingCheckerBindings = false;
@@ -842,7 +852,6 @@ export function isValueParameterBinding(record: TypeRecord): boolean {
   return valueParameterBindings.has(record as unknown as object);
 }
 
-
 /**
  * proposal-runtime-types: the Type Record bound to a type parameter
  * of the given name in the active frames, innermost first, or null if none. A
@@ -869,7 +878,9 @@ export function lookupTypeParameter(name: string, reference?: ParseNode): TypeRe
       let inPartial = false;
       for (let at = (reference as { parent?: ParseNode }).parent; at; at = (at as { parent?: ParseNode }).parent) {
         const t = (at as { type?: string }).type;
-        if ((t === 'ClassDeclaration' || t === 'ClassExpression' || t === 'InterfaceDeclaration') && IsPartialDeclaration(at)) { inPartial = true; break; }
+        if ((t === 'ClassDeclaration' || t === 'ClassExpression' || t === 'InterfaceDeclaration') && IsPartialDeclaration(at)) {
+          inPartial = true; break;
+        }
       }
       if (inPartial) {
         for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
@@ -927,7 +938,7 @@ export function packElementAdmits(record: TypeRecord, elementBound: TypeRecord):
   }
   if (record.Kind === 'literal' && elementBound.Kind === 'primitive') {
     const v = record.Value as { numberValue?(): number, bigintValue?(): bigint };
-    const mv = typeof v.numberValue === 'function' ? v.numberValue() : (typeof v.bigintValue === 'function' ? v.bigintValue() : null);
+    const mv = typeof v.numberValue === 'function' ? v.numberValue() : (typeof v.bigintValue === 'function' ? v.bigintValue() : null); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
     if (mv === null) {
       return false;
     }
@@ -2779,7 +2790,6 @@ function literalTypeOf(value: Value): TypeRecord {
   return { Kind: 'literal', Value: value, Base: RuntimeTypeOf(value) };
 }
 
-
 /**
  * proposal-runtime-types: the run-time type of a value. Until the numeric
  * value types exist as distinct values, a Number's type is `number`.
@@ -3276,6 +3286,17 @@ function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeReco
   // A typed array reports the type it carries; an untyped one reports the
   // element type its contents support, which is the union of their types and is
   // exactly what membership asks of every element.
+  // An instance of a class over an array is an Array too, and its type is its class
+  // (#sec-runtimetypeof: "a class instance reports the ~nominal~ type of its class"). The array
+  // answer came first, so `Reflect.typeOf(new Grid())` was the type of the base and
+  // `Reflect.typeOf(g) === (type Grid)` was *false* for a value that `g is Grid` held of.
+  if (isArrayExoticObject(value)) {
+    const ofClass = classInstanceType(value);
+    const declared = ofClass?.Kind === 'nominal' ? (ofClass.Declaration as { type?: string } | undefined)?.type : undefined;
+    if (ofClass && (declared === 'ClassDeclaration' || declared === 'ClassExpression')) {
+      return ofClass;
+    }
+  }
   const arrayType = runtimeArrayType(value, seen);
   if (arrayType) {
     return arrayType;
@@ -4252,13 +4273,15 @@ export function* SourceWhereType(base: TypeRecord, clauses: readonly ParseNode.W
   const privateEnvironment = context.PrivateEnvironment;
   const frame = new Map(currentTypeParameterFrame());
   let cache = sourceWhereCache.get(identityEnvironment);
-  if (!cache) { cache = new Map(); sourceWhereCache.set(identityEnvironment, cache); }
+  if (!cache) {
+    cache = new Map(); sourceWhereCache.set(identityEnvironment, cache);
+  }
   for (const clause of clauses) {
     const entries = cache.get(clause) ?? [];
     let predicate = entries.find((entry) => entry.frame.size === frame.size
       && [...frame].every(([name, record]) => entry.frame.has(name) && SameType(entry.frame.get(name)!, record)))?.predicate;
     if (!predicate) {
-      predicate = X(CreateBuiltinFunction(function* ([candidate = Value.undefined]) {
+      predicate = X(CreateBuiltinFunction(function* ([candidate = Value.undefined]): ValueEvaluator {
         const running = surroundingAgent.runningExecutionContext;
         const savedEnvironment = running.LexicalEnvironment;
         const savedPrivate = running.PrivateEnvironment;
@@ -6070,7 +6093,6 @@ export function MetadataObjectFromType(t: TypeRecord, base?: TypeRecord): Metada
   return projected.value as MetadataRecord;
 }
 
-
 /**
  * proposal-runtime-types #sec-compile-time-evaluability: "Evaluation is confined
  * to checking and READS DECLARATIONS RATHER THAN RUN-TIME BINDINGS."
@@ -7359,7 +7381,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
           // is written about. The unwrap admits both spellings of one number,
           // as the array membership rule already does for a length.
           const numeric = v instanceof NumberValue ? R(v)
-            : (isTypedNumber(v) ? Number(v.numberValue()) : undefined);
+            : (isTypedNumber(v) ? Number(v.numberValue()) : undefined); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
           if (typeof numeric !== 'number' || !Number.isInteger(numeric) || numeric < 0) {
             return Throw.TypeError('$1 is not a type', v);
           }
@@ -8378,11 +8400,6 @@ function ExtentNamesOpenParameter(expression: unknown): boolean {
   return open;
 }
 
-import { intrinsicDeclarationRecord, intrinsicDeclarationName } from './records.mts';
-import { prepareFamilyPattern, finishFamilyPattern, FamilyWildcardName, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault, deferredOverUnboundParameter } from './family-patterns.mts';
-import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
-import { rememberDeclaredConstraint } from './records.mts';
-
 const pendingClassInterfaceChecks: { candidate: TypeRecord, checks: TypeRecord[] }[] = [];
 
 /** Complete the class's actual interface graph before judging a self bound. */
@@ -8460,14 +8477,10 @@ export function* ConstraintAdmits(candidate: TypeRecord, constraint: TypeRecord 
   return admitted;
 }
 
-import { matchesFamilyPattern } from './family-patterns.mts';
-import { SameTypeStructural } from './relations.mts';
-
 const familyConstraintEvaluationFailures = new WeakSet<object>();
 export function IsFamilyConstraintEvaluationFailure(value: object): boolean {
   return familyConstraintEvaluationFailures.has(value);
 }
-
 
 export function* FillGenericConstraintFrame(params: readonly ParseNode.TypeParameter[], frame: Map<string, TypeRecord>, records?: readonly TypeParameterRecord[]): PlainEvaluator<void> {
   for (const parameter of params) {
@@ -8481,7 +8494,6 @@ export function* FillGenericConstraintFrame(params: readonly ParseNode.TypeParam
     }
   }
 }
-
 
 /** Scope lookup precedes an intrinsic application, including ordinary value bindings. */
 function* UsesIntrinsicDeclaration(node: ParseNode, name: string): PlainEvaluator<boolean> {

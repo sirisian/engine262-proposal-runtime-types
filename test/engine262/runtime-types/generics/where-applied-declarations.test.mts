@@ -10,7 +10,7 @@ import { evaluated, observeScript } from '../harness.mts';
  */
 
 const outcome = (source: string) => {
-  const r: any = observeScript(source);
+  const r = observeScript(source) as { errorClass?: string, diagnostic?: { rule?: string, location?: { nodeType?: string } } };
   return { errorClass: r.errorClass, rule: r.diagnostic?.rule, node: r.diagnostic?.location?.nodeType };
 };
 

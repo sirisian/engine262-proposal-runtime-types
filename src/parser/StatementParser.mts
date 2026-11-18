@@ -1,7 +1,7 @@
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { PrimitiveDeclaresParameters, PrimitiveParameterKinds } from '../type-system/specialization-patterns.mts';
-import { CollectCaptures } from './TypeParser.mts';
 import type { Mutable } from '../utils/language.mts';
+import { CollectCaptures } from './TypeParser.mts';
 import { Token, isAutomaticSemicolon } from './tokens.mts';
 import { TypeParser } from './TypeParser.mts';
 import { FunctionKind } from './FunctionParser.mts';

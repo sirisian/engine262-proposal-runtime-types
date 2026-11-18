@@ -720,8 +720,8 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       const real = Q(yield* RequireType(argumentsList[0] ?? Value.undefined, componentType)) as Value;
       const imaginary = Q(yield* RequireType(argumentsList[1] ?? Value.undefined, componentType)) as Value;
       return CreateComplexValue(
-        Number((real as unknown as { numberValue(): number }).numberValue()),
-        Number((imaginary as unknown as { numberValue(): number }).numberValue()),
+        Number((real as unknown as { numberValue(): number }).numberValue()), // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
+        Number((imaginary as unknown as { numberValue(): number }).numberValue()), // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
         componentType,
         surroundingAgent.currentRealmRecord,
       );
@@ -761,7 +761,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       // them apart. Compare what they hold: both are values of the underlying
       // type, which is the sense in which one IS the other.
       const held = (v: Value) => ((v as unknown as { numberValue?: () => number }).numberValue
-        ? (v as unknown as { numberValue(): number }).numberValue()
+        ? (v as unknown as { numberValue(): number }).numberValue() // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
         : undefined);
       const wanted = held(converted);
       for (const member of record.EnumMembers) {

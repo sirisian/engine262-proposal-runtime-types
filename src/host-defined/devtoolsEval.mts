@@ -1,4 +1,7 @@
 import {
+  CheckScriptInSession, CreateCheckSession, type CheckSession,
+} from '../type-system/check.mts';
+import {
   AsyncBlockStart,
   ContainsArguments,
   DeclarativeEnvironmentRecord,
@@ -11,9 +14,6 @@ import {
   ExecutionContext,
   FunctionEnvironmentRecord, GetThisEnvironment, IsStrict, ManagedRealm, NewPromiseCapability, NormalCompletion, surroundingAgent, Throw, ThrowCompletion, X, Value, setNodeParent, wrappedParse, type PlainCompletion, type ValueCompletion, type ValueEvaluator,
 } from '#self';
-import {
-  CheckScriptInSession, CreateCheckSession, type CheckSession,
-} from '../type-system/check.mts';
 
 const cascadeStack = new WeakMap<EnvironmentRecord, EnvironmentRecord>();
 // This is modified based on PerformEval, used internally for devtools console.

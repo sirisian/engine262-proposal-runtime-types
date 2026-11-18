@@ -121,7 +121,6 @@ test('library ordering is enforced, not decorative', () => {
 });
 
 
-
 // Regressions: the positional paths are untouched.
 test('positional applications keep their exact behaviour and messages', () => {
   expect(evaluated(`${BUFFER} String(new Buffer.<uint8, 2>().size());`)).toBe('2');

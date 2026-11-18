@@ -2,8 +2,6 @@ import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { InferredConstTypeOf } from '../type-system/check.mts';
 import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { TypeNodeToTypeRecord, DefaultValueOf, pushContextualType, popContextualType } from '../type-system/runtime.mts';
-import { surroundingAgent, LookupTypeDefault } from '#self';
-import { recordDeclaredType , copiesOnBinding } from './LexicalDeclaration.mts';
 import {
   NormalCompletion, EnsureCompletion, Q,
 } from '../completion.mts';
@@ -11,7 +9,9 @@ import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { StringValue, IsAnonymousFunctionDefinition, type FunctionDeclaration } from '../static-semantics/all.mts';
 import { Value } from '../value.mts';
+import { recordDeclaredType , copiesOnBinding } from './LexicalDeclaration.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
+import { surroundingAgent, LookupTypeDefault } from '#self';
 import {
   EnforceAnnotation,
   EvaluateResultValue,

@@ -95,7 +95,7 @@ test('runtime-types extended numeric values', async () => {
     'complex64(complex(1.5, 2.5))',
     // `complexToString`'s own rule: "`complex(0, 4)` prints as `4i`".
     'complex64(complex(0, 4))',
-    'decimal128("1.5")',
+    'decimal128.parse("1.5")',
   ]) {
     await snapshotObject(inspector, value);
   }

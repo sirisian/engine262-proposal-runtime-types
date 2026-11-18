@@ -1,5 +1,5 @@
-import type { TypeRecord } from './records.mts';
 import { isRangeObject, type RangeObject, type RangeBound } from '../intrinsics/Range.mts';
+import type { TypeRecord } from './records.mts';
 
 /** Every name #sec-ranges gives a range value, shapes and interface alike. */
 export function isRangeShapeName(name: string): boolean {
@@ -45,7 +45,7 @@ function boundOrdinal(arg: TypeRecord | number): number | null {
   }
   const t = arg as { Kind?: string, Value?: { numberValue?(): number } };
   if (t?.Kind === 'literal' && typeof t.Value?.numberValue === 'function') {
-    return t.Value.numberValue();
+    return t.Value.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
   }
   return null;
 }

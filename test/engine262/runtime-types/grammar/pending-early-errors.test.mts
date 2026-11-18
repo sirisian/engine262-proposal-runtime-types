@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { Agent, EnsureCompletion, ManagedRealm, setSurroundingAgent } from '#self';
 import { expectEarlyError, evaluated } from '../harness.mts';
+import { Agent, EnsureCompletion, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
  * Round 4, Q6: a parser early error is kept as a pending record and its

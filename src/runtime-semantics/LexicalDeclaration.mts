@@ -1,6 +1,5 @@
 import { EnforceAnnotation } from '../abstract-ops/all.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
-import { InitializerTokensOf } from './ClassDefinitionEvaluation.mts';
 import { EnsureCompletion } from '../completion.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
@@ -19,9 +18,12 @@ import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { InferredConstTypeOf, StringConstantEvidenceOf } from '../type-system/check.mts';
 import { PublishStringConstant } from '../type-system/published-constants.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';
+import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import { RequireBorrowableReference, SoAElementLocationFor } from './RefExpression.mts';
+import { InitializerTokensOf } from './ClassDefinitionEvaluation.mts';
 import {
   surroundingAgent,
   GetValue,
@@ -34,8 +36,6 @@ import {
   CreateDataProperty,
   GetResultValue, EvaluateResultValue, RetainBindingResult, RetainSymbolBinding, RetainClassExpressionBinding,
 } from '#self';
-import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
-import type { TypeRecord } from '../type-system/records.mts';
 
 /** https://tc39.es/ecma262/#sec-let-and-const-declarations-runtime-semantics-evaluation */
 //   LexicalBinding :

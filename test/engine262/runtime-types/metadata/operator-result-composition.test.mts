@@ -68,6 +68,10 @@ for (const reverse of [false, true]) {
 test('dimension mismatch diagnostics name the meta type without changing admission', () => {
   expectThrown(`${dimensions} ${definition('{m:1}', true)} a+3;`, 'differing Dim metadata');
   expectThrown(`${dimensions} ${definition('{m:1}', true)} const scalar:float32=3; a+scalar;`, 'Dim');
+  // A literal is a value of the base, so it is the same mismatch on either side, and in code the
+  // checker did not type. It was reported as "3 is not in the range of" the operand's type.
+  expectThrown(`${dimensions} ${definition('{m:1}', true)} 3+a;`, 'differing Dim metadata: float32 and float32.<{ m: 1 }>');
+  expectThrown(`${dimensions} function f(x) { return x * 2; } f(a);`, 'differing Dim metadata');
 });
 
 

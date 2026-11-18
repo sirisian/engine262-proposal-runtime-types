@@ -45,6 +45,7 @@ import { CreateTokenStream } from '../intrinsics/TokenStream.mts';
 import { TokensOf } from '../parser/TokensOf.mts';
 import { PublishedReturnTypeOf, PublishedClassTypeOf } from '../type-system/check.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from '../type-system/member-contracts.mts';
+import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import {
   DefineMethod,
   MethodDefinitionEvaluation,
@@ -57,7 +58,6 @@ import {
 } from './all.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import { HasClassCases, MaterializeSpecialization, GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf, RegisterClassTypeEnvironment } from './RuntimeTypesDeclarations.mts';
-import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import { TakeEvaluatedMethodKey, BeginPartialMemberAddition } from './MethodDefinitionEvaluation.mts';
 import {
@@ -765,6 +765,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   surroundingAgent.runningExecutionContext.LexicalEnvironment = classScope;
   // 13. Set the running execution context's PrivateEnvironment to classPrivateEnvironment.
   surroundingAgent.runningExecutionContext.PrivateEnvironment = classPrivateEnvironment;
+
   let F;
   // 14. If constructor is empty, then
   if (constructor === undefined) {
@@ -1481,6 +1482,11 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     }
     // 28. Set F.[[PrivateMethods]] to instancePrivateMethods.
     F.PrivateMethods = instancePrivateMethods;
+    // #sec-partial-classes: a part in the source text that declares the class may name its
+    // private members, so the class keeps the environment that holds them and where it was
+    // declared.
+    (F as { ClassPrivateEnvironment?: PrivateEnvironmentRecord }).ClassPrivateEnvironment = classPrivateEnvironment;
+    (F as { ClassSourceText?: unknown }).ClassSourceText = surroundingAgent.runningExecutionContext.ScriptOrModule;
     // 29. Set F.[[Fields]] to instanceFields.
     F.Fields = instanceFields;
     // proposal-runtime-types (spec sec-typed-classes): a class in which at least

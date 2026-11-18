@@ -2432,10 +2432,18 @@ export abstract class ExpressionParser extends FunctionParser {
       }
       const savedClassModifiers = this.currentClassModifiers;
       this.currentClassModifiers = ClassModifiers;
+      // #sec-partial-classes: the private names a part uses and does not declare are names of
+      // the class it extends. They are kept with the part, and judged where that class is known.
+      const collectsPrivateNames = isPartial && surroundingAgent.feature('runtime-types');
+      if (collectsPrivateNames) this.scope.beginPartialPrivateNames();
       try {
         node.ClassTail = this.scope.with({ default: false }, () => this.parseClassTail());
       } finally {
         this.currentClassModifiers = savedClassModifiers;
+        if (collectsPrivateNames) {
+          const names = this.scope.endPartialPrivateNames();
+          if (names.length > 0) (node as { UnresolvedPrivateNames?: readonly string[] }).UnresolvedPrivateNames = names;
+        }
       }
     });
     node.Decorators = decorators;

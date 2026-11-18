@@ -56,7 +56,7 @@ export function exactOfLiteralText(node: ParseNode): ExactReal | undefined {
 export function exactOfValue(v: Value): ExactReal | undefined {
   if (v instanceof TypedNumberValue) {
     return typeof (v as TypedNumberValue).value === 'bigint'
-      ? { significand: (v as TypedNumberValue).bigintValue(), exponent: 0 }
+      ? { significand: (v as TypedNumberValue).bigintValue(), exponent: 0 } // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
       : exactOfDouble((v as TypedNumberValue).numberValue()); // eslint-disable-line @engine262/mathematical-value -- a typed number's payload, read exactly
   }
   if (isDecimalObject(v)) {

@@ -1,7 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { NumberValue, isTypedNumber } from '../value.mts';
 import type { TypeRecord } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
-import { NumberValue, isTypedNumber } from '../value.mts';
 
 const constantIndices = new WeakMap<object, number>();
 
@@ -21,7 +21,7 @@ export function vectorIndexOf(type: TypeRecord | null): number | null {
   if (!type || type.Kind === 'any' || type.Kind === 'parameter') return null;
   if (type.Kind !== 'literal') return NaN;
   const value = type.Value;
-  if (value instanceof NumberValue) return value.numberValue();
+  if (value instanceof NumberValue) return value.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   if (isTypedNumber(value)) return Number(value.value);
   return NaN;
 }

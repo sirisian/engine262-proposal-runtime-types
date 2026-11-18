@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- the host hooks this file stands in for are untyped callbacks */
 import { test, expect } from 'vitest';
 import {
   Agent, ManagedRealm, setSurroundingAgent, runSingleJobInQueue, Throw,
@@ -9,9 +10,13 @@ import { Inspector } from '#self/inspector';
 class TestInspector extends Inspector {
   readonly sent: any[] = [];
 
-  protected send(data: object): void { this.sent.push(data); }
+  protected send(data: object): void {
+    this.sent.push(data);
+  }
 
-  request(id: number, method: string, params: unknown): void { this.onMessage(id, method, params); }
+  request(id: number, method: string, params: unknown): void {
+    this.onMessage(id, method, params);
+  }
 }
 
 /**
@@ -28,7 +33,9 @@ function makeConsole() {
   const builtinLoader = createBuiltinModuleLoader({
     loadBuiltinModule: (req: any, _r: any, cb: any) => {
       const src = cache.get(req.Specifier);
-      if (src !== undefined) { cb(src); return; }
+      if (src !== undefined) {
+        cb(src); return;
+      }
       cb(Throw.Error(`No virtual module found for specifier ${req.Specifier}`) as any);
     },
   } as any);
@@ -56,7 +63,11 @@ function makeConsole() {
   inspector.request(0, 'Debugger.enable', {});
   const uniqueContextId = inspector.sent
     .find((m) => m.method === 'Runtime.executionContextCreated')?.params?.context?.uniqueId;
-  const drain = () => { let g = 0; while (agent.jobQueue.length > 0 && g++ < 500) { setSurroundingAgent(agent); runSingleJobInQueue(agent.jobQueue.shift()!, () => {}, () => {}); } };
+  const drain = () => {
+    let g = 0; while (agent.jobQueue.length > 0 && g++ < 500) {
+      setSurroundingAgent(agent); runSingleJobInQueue(agent.jobQueue.shift()!, () => {}, () => {});
+    }
+  };
   return async (expression: string) => {
     inspector.sent.length = 0;
     inspector.request(1, 'Runtime.evaluate', { expression, uniqueContextId, replMode: true });
@@ -64,7 +75,9 @@ function makeConsole() {
       drain();
       const reply = inspector.sent.find((m) => m.id === 1);
       if (reply) return reply.result;
-      await new Promise((r) => { setTimeout(r, 0); });
+      await new Promise((r) => {
+        setTimeout(r, 0);
+      });
     }
     return undefined;
   };

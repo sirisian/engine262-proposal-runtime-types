@@ -1,3 +1,10 @@
+import type { Realm } from '../execution-context/Realm.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { displayType, type TypeRecord } from '../type-system/records.mts';
+import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
+import { assignProps } from './bootstrap.mts';
+import { OnAbort } from './AbortController.mts';
 import {
   Descriptor,
   Assert,
@@ -27,13 +34,6 @@ import {
   type ValueEvaluator,
   type PlainEvaluator,
 } from '#self';
-import type { Realm } from '../execution-context/Realm.mts';
-import { assignProps } from './bootstrap.mts';
-import { RuntimeTypeOf } from '../type-system/runtime.mts';
-import { ConvertValue } from '../abstract-ops/runtime-types.mts';
-import { displayType, type TypeRecord } from '../type-system/records.mts';
-import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
-import { OnAbort } from './AbortController.mts';
 
 /**
  * proposal-runtime-types #sec-threading-atomics.
@@ -239,7 +239,7 @@ function isTypedNumber(value: Value): boolean {
 }
 
 function numberOf(value: Value): number {
-  return Number((value as unknown as { numberValue(): number | bigint }).numberValue());
+  return Number((value as unknown as { numberValue(): number | bigint }).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
 }
 
 export function bootstrapAtomics(realmRec: Realm) {
@@ -390,7 +390,7 @@ function settleWaiter(waiter: Waiter, settle: Value, value: Value): void {
 function* Atomics_notify(args: Arguments): ValueEvaluator {
   const target = Q(yield* ValidateAtomicTarget(args, 'integer-only'));
   const countValue = operandOf(target, args);
-  const count = countValue === Value.undefined ? Infinity : Number(Q(yield* ToNumber(countValue)).numberValue());
+  const count = countValue === Value.undefined ? Infinity : Number(Q(yield* ToNumber(countValue)).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   const list = waiterListFor(target);
   let woken = 0;
   while (list.length > 0 && woken < count) {

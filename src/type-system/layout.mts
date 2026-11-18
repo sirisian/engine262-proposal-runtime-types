@@ -51,10 +51,10 @@ function endpointInteger(endpoint: unknown): bigint | null {
   }
   const holder = endpoint as { numberValue?: () => number, bigintValue?: () => bigint, value?: unknown };
   if (typeof holder?.bigintValue === 'function') {
-    return holder.bigintValue();
+    return holder.bigintValue(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
   }
   if (typeof holder?.numberValue === 'function') {
-    const n = holder.numberValue();
+    const n = holder.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
     return Number.isInteger(n) ? BigInt(n) : null;
   }
   if (typeof holder?.value === 'number') {

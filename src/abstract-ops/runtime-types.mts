@@ -5,7 +5,6 @@ import { WithoutFreshAccessors } from '../type-system/inferred-binding.mts';
 import { FunctionTypeParameterDeclarations, bindTypeParameter, markValueParameterBinding, implicitFalseDefaultMatches } from '../type-system/runtime.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
-import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
 import { TakeParameterConstruction, ConstructionSelectionsOf, PreferredConstructionAlternative, type ConstructionSelections } from '../type-system/result-dependencies.mts';
 import { contextualParameters } from '../type-system/contextual-parameters.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
@@ -19,21 +18,13 @@ import { currentTypeParameterFrame, NewTypeParameterEnvironment, instantiateType
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletion, ReturnCompletion, type ThrowCompletion } from '../completion.mts';
-// Placed with the other `./` imports and NOT after `../intrinsics/`, which
-// `import-x/order` asks for and which `./all.mts` and `./array-view.mts` below
-// already decline: moved there it forms a cycle through `array-view.mts` and
-// `CopyValueClassInstance` is undefined at its use. The ordering rule and the
-// module graph disagree, and the graph wins.
-import { CopyValueClassInstance, DeclaredReadonlyFieldsOf, ValueAggregateOf, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { SoAStorageOf, RequireSoAReferenceLive } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterTypeComputation, ExitTypeComputation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
-import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, RecordClassConstructors, ToLength, SameValue } from './all.mts';
 import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, UndefinedValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { ReferenceValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
-import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray, ReadonlyElementTargetOf } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -50,13 +41,6 @@ import { containsComputedType } from '../type-system/runtime.mts';
 import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
-import {
-  PlanOrdinaryNominalConversion, OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
-  wellKnownSymbols, InstantiateReturnDependency, RetainCheckedResult, InstantiateCheckedBindings, NormalizeInferredClassArguments,
-  SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
-  GetIterator, GetIteratorFromMethod, GetMethod, type IteratorRecord,
-  Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
-  IsComposite, CompositeFromShape, GetThisEnvironment } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, CreateDecimalSpecial, ParseDecimalDigits, DecimalFromRational, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
@@ -68,7 +52,24 @@ import {
   truncate as float128Truncate, toBinaryFloat as float128ToBinaryFloat,
 } from '../intrinsics/Float128Arithmetic.mts';
 import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
+import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
+import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
+import { IsCheckedCode } from '../type-system/checked-code.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, RecordClassConstructors, ToLength, SameValue } from './all.mts';
+import { CopyValueClassInstance, DeclaredReadonlyFieldsOf, ValueAggregateOf, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { IsSelectedInvocation, DispatchCaseGroup } from './callable-selection.mts';
+import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray, ReadonlyElementTargetOf } from './array-view.mts';
+import { MaterializeGenericCallable } from './generic-callable-boundary.mts';
+import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
+import {
+  PlanOrdinaryNominalConversion, OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
+  wellKnownSymbols, InstantiateReturnDependency, RetainCheckedResult, InstantiateCheckedBindings, NormalizeInferredClassArguments,
+  SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
+  GetIterator, GetIteratorFromMethod, GetMethod, type IteratorRecord,
+  Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
+  IsComposite, CompositeFromShape, GetThisEnvironment } from '#self';
+import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
+import { AcquireNominalPrototype, RefreshNominalRestDependencies } from '#self';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -1360,13 +1361,27 @@ export function NumericArmRank(m: TypeRecord): number | null {
     // same width so a non-negative value takes the tighter of the two.
     return bits * 2 + (name === 'int' ? 1 : 0);
   }
-  if (name === 'float16') { return 200; }
-  if (name === 'float32') { return 201; }
-  if (name === 'float64' || name === 'number') { return 202; }
-  if (name === 'float128') { return 203; }
-  if (name === 'decimal32') { return 210; }
-  if (name === 'decimal64') { return 211; }
-  if (name === 'decimal128') { return 212; }
+  if (name === 'float16') {
+    return 200;
+  }
+  if (name === 'float32') {
+    return 201;
+  }
+  if (name === 'float64' || name === 'number') {
+    return 202;
+  }
+  if (name === 'float128') {
+    return 203;
+  }
+  if (name === 'decimal32') {
+    return 210;
+  }
+  if (name === 'decimal64') {
+    return 211;
+  }
+  if (name === 'decimal128') {
+    return 212;
+  }
   return null;
 }
 
@@ -1427,9 +1442,9 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
   }
   const numericRank = NumericArmRank;
   const numericValue: number | bigint | null = value instanceof NumberValue
-    ? value.numberValue()
-    : (isTypedNumber(value) ? (value as TypedNumberValue).numberValue()
-      : (value instanceof BigIntValue ? (value as BigIntValue).bigintValue() : null));
+    ? value.numberValue() // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
+    : (isTypedNumber(value) ? (value as TypedNumberValue).numberValue() // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
+      : (value instanceof BigIntValue ? (value as BigIntValue).bigintValue() : null)); // eslint-disable-line @engine262/mathematical-value -- the exact value of an unbounded integer
   if (numericValue !== null) {
     const exact = members
       .map((m) => ({ m, rank: numericRank(m) }))
@@ -1937,7 +1952,7 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
         // numberValue() rather than R(): R answers the MATHEMATICAL value, in
         // which negative zero does not exist. IEEE 754 distinguishes the two
         // zeroes, so reading through R would lose one of the format's values.
-        return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+        return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
       }
       if (isTypedNumber(value)) {
         return Float128FromTypedNumber(value);
@@ -1993,7 +2008,7 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
         && (value instanceof NumberValue || isTypedNumber(value) || value instanceof BigIntValue)) {
       const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
       const lifted = Q(yield* ConvertValue(value, component));
-      const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
+      const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue)); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
       return CreateComplexValue(liftedPart, 0, component, surroundingAgent.currentRealmRecord);
     }
     // Each part by the EXPLICIT float conversion - "the treatment of a value
@@ -2009,7 +2024,7 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
       // The converted part is a value OF the component type, so a float32
       // component comes back as a typed number rather than a plain one; both
       // read as Numbers here, which is how the pair carries its parts.
-      const partOf = (v: Value) => (isTypedNumber(v) ? v.numberValue() : Number(R(v as NumberValue)));
+      const partOf = (v: Value) => (isTypedNumber(v) ? v.numberValue() : Number(R(v as NumberValue))); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
       return CreateComplexValue(partOf(re), partOf(im), component, surroundingAgent.currentRealmRecord);
     }
     switch (t.Name) {
@@ -2638,7 +2653,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       if (typeof innerCount === 'number' && isBitLaneType(innerLane)) {
         const wide: Value[] = [];
         for (let i = 0; i < fromShape.laneCount; i += 1) {
-          const set = ((value as VectorValue).lanes[i] as { numberValue?(): number }).numberValue?.() === 1;
+          const set = ((value as VectorValue).lanes[i] as { numberValue?(): number }).numberValue?.() === 1; // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
           const bits: Value[] = [];
           for (let b = 0; b < innerCount; b += 1) {
             bits.push(Q(yield* convertChecked(Value(set ? 1 : 0), innerLane)) as Value);
@@ -2659,7 +2674,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
       let bits = 0;
       for (let i = 0; i < shape.laneCount; i += 1) {
         const lane = (value as VectorValue).lanes[i] as { numberValue?(): number };
-        if (lane?.numberValue?.() === 1) {
+        if (lane?.numberValue?.() === 1) { // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
           // eslint-disable-next-line no-bitwise
           bits |= (1 << i);
         }
@@ -2681,7 +2696,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
     // 2 into every lane rather than reading its bits - and 2 is not even a
     // value of `uint.<1>`, so it would then be refused.
     if (typeof laneCount === 'number' && value.type !== 'Vector' && isBitLaneType(laneType)) {
-      const asNumber = (value as { numberValue?(): number }).numberValue?.();
+      const asNumber = (value as { numberValue?(): number }).numberValue?.(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
       if (typeof asNumber === 'number' && Number.isInteger(asNumber) && asNumber >= 0) {
         const lanes: Value[] = [];
         for (let i = 0; i < laneCount; i += 1) {
@@ -2918,7 +2933,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
           // IEEE 754 distinguishes the two zeroes and so does SameValue, so a
           // format that reads its input through R cannot represent one of its
           // own values.
-          return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+          return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
         }
         if (isTypedNumber(value)) {
           return Float128FromTypedNumber(value);
@@ -2967,7 +2982,7 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
         if (isTypedNumber(value)) {
           const record = value.TypeRecord as TypeRecord;
           if (record.Kind === 'primitive' && isIntegerTypeName(record.Name)) {
-            return Value(value.bigintValue());
+            return Value(value.bigintValue()); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
           }
           // A typed FLOAT converts where it holds an integer, as a Number does
           // below and as a float converts into a sized integer: `float32` 5.0
@@ -3775,7 +3790,7 @@ export function* ToIndexType(value: Value): PlainEvaluator<number> {
   if (!isTypedNumber(value) && !(value instanceof NumberValue)) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value('the index type'));
   }
-  const n = Number(Q(yield* ToNumber(value)).numberValue());
+  const n = Number(Q(yield* ToNumber(value)).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
   // A count is a non-negative INTEGER. `ToLength` clamped both of these away -
   // a negative became 0 and a fraction was truncated - so `reserve(-1)` and
   // `reserve(2.5)` were accepted as `reserve(0)` and `reserve(2)`.
@@ -5976,7 +5991,7 @@ function safeDisplay(v: Value): string {
     if (typeof s2 === 'string') {
       return JSON.stringify(s2);
     }
-    const n = (v as { numberValue?: () => number }).numberValue?.();
+    const n = (v as { numberValue?: () => number }).numberValue?.(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
     if (typeof n === 'number') {
       return String(n);
     }
@@ -7126,7 +7141,6 @@ export function MetaTypeForConstraint(constraint: TypeRecord, base?: TypeRecord)
   return undefined;
 }
 
-
 /**
  * The type parameters of the nearest enclosing CLASS, or undefined.
  *
@@ -7252,7 +7266,7 @@ function Float128FromTypedNumber(value: TypedNumberValue): Value {
   if (name === 'int' || name === 'uint') {
     return Binary128ToFloat128(float128Finite(value.bigintValue(), 0), surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the exact integer, which a Number would round past 2**53
   }
-  return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+  return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, and R would normalize a negative zero away
 }
 
 /** A conversion of one element to its element or position type - the implicit or the explicit one. */
@@ -7419,11 +7433,3 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   };
   return out;
 }
-
-import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
-
-import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
-import { IsCheckedCode } from '../type-system/checked-code.mts';
-import { MaterializeGenericCallable } from './generic-callable-boundary.mts';
-import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
-import { AcquireNominalPrototype, RefreshNominalRestDependencies } from '#self';
