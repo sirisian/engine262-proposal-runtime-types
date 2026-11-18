@@ -1468,6 +1468,39 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
   return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
 }
 
+/**
+ * proposal-runtime-types #sec-vector-comparisons: the WIDE MASK from a compact
+ * one. A comparison gives "a vector of the boolean type of the same width as
+ * the compared element" where its expected type is that mask, and this engine
+ * evaluates the comparison to the compact mask and converts it: each lane
+ * becomes a bit vector of the target width, all-set where the bit was 1.
+ * Undefined where _value_ is no compact mask or _t_ no wide mask of its lane
+ * count. Shared by the boundary conversion and the written one, since the
+ * README has an explicit conversion settle the form as an annotation does.
+ */
+function* WidenCompactMask(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+  if (!(value.type === 'Vector' && t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2)) return undefined;
+  const fromShape = vectorShape(value as VectorValue);
+  const toLane = t.Arguments[0] as TypeRecord;
+  const toCount = t.Arguments[1];
+  if (!fromShape || !isBitLaneType(fromShape.laneType) || typeof toCount !== 'number'
+      || toCount !== fromShape.laneCount || isBitLaneType(toLane)
+      || toLane.Kind !== 'primitive' || toLane.Name !== 'vector') return undefined;
+  const innerCount = (toLane as { Arguments: readonly unknown[] }).Arguments[1];
+  const innerLane = (toLane as { Arguments: readonly unknown[] }).Arguments[0] as TypeRecord;
+  if (typeof innerCount !== 'number' || !isBitLaneType(innerLane)) return undefined;
+  const wide: Value[] = [];
+  for (let i = 0; i < fromShape.laneCount; i += 1) {
+    const set = ((value as VectorValue).lanes[i] as { numberValue?(): number }).numberValue?.() === 1; // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
+    const bits: Value[] = [];
+    for (let b = 0; b < innerCount; b += 1) {
+      bits.push(Q(yield* CheckedConvertValue(Value(set ? 1 : 0), innerLane)) as Value);
+    }
+    wide.push(new VectorValue(bits, toLane));
+  }
+  return new VectorValue(wide, t);
+}
+
 export function* ConvertValue(value: Value, t: TypeRecord, observations?: StructuralValueObservations): ValueEvaluator {
   if (value instanceof ObjectValue) observations ??= new Map();
   const result = Q(yield* ConvertValueUnbacked(value, t, observations));
@@ -1523,6 +1556,49 @@ function CarryAggregateType(copy: ObjectValue, t: TypeRecord): void {
       inner(elementAt(index), t.Element);
     }
   }
+}
+
+/**
+ * #sec-vector-lanes: "lane i of a `vector.<uint.<1>, N>` is bit i of an N-bit
+ * integer, counting from the least significant", and the conversion between
+ * such a vector and an integer type "is that correspondence read in each
+ * direction". Both directions are read exactly, in BigInt. A 32-bit shift
+ * counts modulo 32, so a `boolean64` read from an integer repeated the low
+ * word in its high lanes, and read back it set bit i - 32 for lane i.
+ *
+ * The integer a bit vector spells, as a Number where a Number holds it and a
+ * BigInt otherwise; undefined where the value is not a bit vector.
+ */
+function BitVectorInteger(value: Value): Value | undefined {
+  const shape = value.type === 'Vector' ? vectorShape(value as VectorValue) : null;
+  if (!shape || !isBitLaneType(shape.laneType)) return undefined;
+  let bits = 0n;
+  for (let i = 0; i < shape.laneCount; i += 1) {
+    const lane = (value as VectorValue).lanes[i] as { numberValue?(): number };
+    if (lane?.numberValue?.() === 1) { // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
+      // eslint-disable-next-line no-bitwise
+      bits |= 1n << BigInt(i);
+    }
+  }
+  return bits <= BigInt(Number.MAX_SAFE_INTEGER) ? Value(Number(bits)) : Value(bits);
+}
+
+/**
+ * The exact value of an integer the bit-vector conversion reads bits from: a
+ * Number or typed number holding an integer, or a BigInt. Undefined otherwise.
+ */
+function ExactIntegerOf(value: Value): bigint | undefined {
+  if (value instanceof BigIntValue && !(value instanceof TypedBigIntValue)) {
+    return R(value) as bigint;
+  }
+  if (isTypedNumber(value)) {
+    const record = value.TypeRecord as TypeRecord;
+    if (record.Kind === 'primitive' && (record.Name === 'int' || record.Name === 'uint')) {
+      return value.bigintValue(); // eslint-disable-line @engine262/mathematical-value -- the exact value of a wide integer; R is reachable only through ToNumber, which rounds an int64 above 2**53
+    }
+  }
+  const asNumber = (value as { numberValue?(): number }).numberValue?.(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
+  return typeof asNumber === 'number' && Number.isInteger(asNumber) ? BigInt(asNumber) : undefined;
 }
 
 function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: StructuralValueObservations): ValueEvaluator {
@@ -1582,6 +1658,10 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
   // The lane count must match. Changing it is packing or unpacking - a
   // different instruction with a different result shape - and is not this.
   if (value.type === 'Vector' && t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
+    // A compact mask converted to the wide mask is the comparison's other
+    // form, as it is at an annotation, not a conversion of each lane.
+    const widened = Q(yield* WidenCompactMask(value, t));
+    if (widened !== undefined) return widened;
     const fromShape = vectorShape(value as VectorValue);
     const toLane = t.Arguments[0] as TypeRecord;
     const toCount = t.Arguments[1];
@@ -1594,6 +1674,18 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord, observations?: Struc
         converted.push(Q(yield* ConvertValue((value as VectorValue).lanes[i] as Value, toLane)) as Value);
       }
       return new VectorValue(converted, t);
+    }
+  }
+  // #sec-vector-lanes: "a value of the vector type converted to an integer type
+  // gives the integer whose bit i is lane i". The annotation's conversion read
+  // a bit vector so and this one did not, so `m := uint8` and `uint8(m)` were
+  // refused where `const n: uint8 = m` converted. The integer the lanes spell
+  // is converted on explicitly, so a narrower target wraps it as any integer.
+  if (value.type === 'Vector' && t.Kind === 'primitive'
+      && (t.Name === 'int' || t.Name === 'uint' || t.Name === 'bigint')) {
+    const integer = BitVectorInteger(value);
+    if (integer !== undefined) {
+      return Q(yield* ConvertValue(integer, t, observations));
     }
   }
 
@@ -2360,7 +2452,7 @@ function restElementType(collected: TypeRecord): TypeRecord {
 }
 
 /** Both target-side conversion forms belong to the target's specialization. */
-function* ConversionTargetConstructor(t: TypeRecord): PlainEvaluator<Value | undefined> {
+export function* ConversionTargetConstructor(t: TypeRecord): PlainEvaluator<Value | undefined> {
   if (t.Kind !== 'nominal') {
     return undefined;
   }
@@ -2641,45 +2733,18 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // clause's rule - the selection half needs return-type overloading, which
   // this engine does not have - so an annotated binding reaches the wide mask
   // while an unannotated expression still yields the compact one.
-  if (value.type === 'Vector' && t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
-    const fromShape = vectorShape(value as VectorValue);
-    const toLane = t.Arguments[0] as TypeRecord;
-    const toCount = t.Arguments[1];
-    if (fromShape && isBitLaneType(fromShape.laneType) && typeof toCount === 'number'
-        && toCount === fromShape.laneCount && !isBitLaneType(toLane)
-        && toLane.Kind === 'primitive' && toLane.Name === 'vector') {
-      const innerCount = (toLane as { Arguments: readonly unknown[] }).Arguments[1];
-      const innerLane = (toLane as { Arguments: readonly unknown[] }).Arguments[0] as TypeRecord;
-      if (typeof innerCount === 'number' && isBitLaneType(innerLane)) {
-        const wide: Value[] = [];
-        for (let i = 0; i < fromShape.laneCount; i += 1) {
-          const set = ((value as VectorValue).lanes[i] as { numberValue?(): number }).numberValue?.() === 1; // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
-          const bits: Value[] = [];
-          for (let b = 0; b < innerCount; b += 1) {
-            bits.push(Q(yield* convertChecked(Value(set ? 1 : 0), innerLane)) as Value);
-          }
-          wide.push(new VectorValue(bits, toLane));
-        }
-        return new VectorValue(wide, t);
-      }
-    }
+  {
+    const widened = Q(yield* WidenCompactMask(value, t));
+    if (widened !== undefined) return widened;
   }
   // The reverse of the bit-vector conversion: "a value of the vector type
   // converted to an integer type gives the integer whose bit i is lane i"
   // (#sec-vector-lanes). Stated in each direction by the clause and needed in
   // each, since a bit vector is a bitfield a program reads back as a number.
   if (value.type === 'Vector' && t.Kind === 'primitive' && t.Name !== 'vector') {
-    const shape = vectorShape(value as VectorValue);
-    if (shape && isBitLaneType(shape.laneType)) {
-      let bits = 0;
-      for (let i = 0; i < shape.laneCount; i += 1) {
-        const lane = (value as VectorValue).lanes[i] as { numberValue?(): number };
-        if (lane?.numberValue?.() === 1) { // eslint-disable-line @engine262/mathematical-value -- a lane is a TypedNumberValue, which R does not accept
-          // eslint-disable-next-line no-bitwise
-          bits |= (1 << i);
-        }
-      }
-      return Q(yield* convertChecked(Value(bits >>> 0), t));
+    const integer = BitVectorInteger(value);
+    if (integer !== undefined) {
+      return Q(yield* convertChecked(integer, t));
     }
   }
   if (t.Kind === 'primitive' && t.Name === 'vector' && t.Arguments.length === 2) {
@@ -2696,12 +2761,12 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
     // 2 into every lane rather than reading its bits - and 2 is not even a
     // value of `uint.<1>`, so it would then be refused.
     if (typeof laneCount === 'number' && value.type !== 'Vector' && isBitLaneType(laneType)) {
-      const asNumber = (value as { numberValue?(): number }).numberValue?.(); // eslint-disable-line @engine262/mathematical-value -- the value may be a typed number, which R does not accept
-      if (typeof asNumber === 'number' && Number.isInteger(asNumber) && asNumber >= 0) {
+      const exact = ExactIntegerOf(value);
+      if (exact !== undefined && exact >= 0n) {
         const lanes: Value[] = [];
         for (let i = 0; i < laneCount; i += 1) {
           // eslint-disable-next-line no-bitwise
-          lanes.push(Q(yield* convertChecked(Value((asNumber >>> i) & 1), laneType)) as Value);
+          lanes.push(Q(yield* convertChecked(Value(Number((exact >> BigInt(i)) & 1n)), laneType)) as Value);
         }
         return new VectorValue(lanes, t);
       }

@@ -1,5 +1,5 @@
 import type { ConstructionSelections } from '../type-system/result-dependencies.mts';
-import { Q, X } from '../completion.mts';
+import { Q, X, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
   BigIntValue, NumberValue, ObjectValue, TypedNumberValue, Value,
@@ -11,13 +11,15 @@ import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import type { TypedArrayObject } from '../intrinsics/TypedArray.mts';
 import { ToIndexType } from './runtime-types.mts';
 import { OrdinaryGetPrototypeOf } from './objects.mts';
+import { isArrayExoticObject } from './array-objects.mts';
 import { BufferElementType, PlacedInstance } from './placement.mts';
+import { RecordClassConstructors } from './function-operations.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import { MakeTypedArrayWithBufferWitnessRecord, IsTypedArrayOutOfBounds } from './typedarray-objects.mts';
 import type { FunctionObject } from '#self';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, OrdinaryObjectCreate, R, RequireType,
-  ToLength, AllocateArrayBuffer,
+  ToLength, AllocateArrayBuffer, ArrayCreate,
   Throw, ToIndex, surroundingAgent, Get, Set as SetValueOnObject,
 } from '#self';
 
@@ -59,12 +61,197 @@ export interface ArrayViewBacking extends ArrayViewSource {
   readonly Extent: number | 'dynamic';
   /** For a fixed view, the byte extent recorded at construction. */
   readonly ByteExtent: number;
+  /**
+   * For an array placed inside something else on the buffer - a fixed-array
+   * field of a placed instance - the enclosing allocation's own liveness rule,
+   * which it keeps as a nested placed instance does.
+   */
+  readonly CheckLive?: () => ThrowCompletion | undefined;
+  /**
+   * The byte order of a scalar element, where a field's `@endian` fixes it:
+   * *true* for little, *false* for big. Absent, the platform's, as a
+   * `TypedArray`'s.
+   */
+  readonly LittleEndian?: boolean;
 }
 
 const views = new WeakMap<object, ArrayViewBacking>();
 
 export function ArrayViewBackingOf(instance: object): ArrayViewBacking | undefined {
   return views.get(instance);
+}
+
+/** Where a placed array's elements are, and what it is an instance of. */
+export interface PlacedArrayOptions extends ArrayViewSource {
+  /** For a class over an array: its prototype, and the class it was constructed as. */
+  readonly prototype?: ObjectValue;
+  readonly classConstructor?: ObjectValue;
+  readonly checkLive?: () => ThrowCompletion | undefined;
+  readonly littleEndian?: boolean;
+}
+
+/** The bytes _extent_ elements of _elementByteLength_ bytes occupy at _stride_: the last one ends the run. */
+function placedByteExtent(extent: number, stride: number, elementByteLength: number): number {
+  return extent === 0 ? 0 : Math.max(extent * stride, (extent - 1) * stride + elementByteLength);
+}
+
+/**
+ * #sec-array-and-tuple-types, the placement forms: an ARRAY of a fixed extent
+ * whose elements are a buffer's bytes. It is what `new(buffer, byteOffset,
+ * byteElementLength) [N].<T>()` makes, what a fixed-array field of a placed
+ * instance reads as, and what an element of a window over fixed arrays is.
+ *
+ * It is an Array of the array type, as any `[N].<T>` is - `Array.isArray`
+ * holds of it and `Reflect.typeOf` answers the array type, or the class for a
+ * class over an array - whose element reads and writes go through the same
+ * decode and encode a window's do, at its offset plus index times stride. A
+ * placed class instance is the same thing for a class: an instance of its
+ * class whose fields are the bytes.
+ */
+export function PlacedArray(arrayType: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, options: PlacedArrayOptions = {}): ObjectValue | null {
+  const extent = (arrayType as { Extent?: unknown }).Extent;
+  const element = (arrayType as { Element?: TypeRecord }).Element;
+  if (arrayType.Kind !== 'array' || typeof extent !== 'number' || !element) {
+    return null;
+  }
+  const elementLayout = LayoutOf(element);
+  if (!elementLayout) {
+    return null;
+  }
+  const array = X(ArrayCreate(extent)) as ObjectValue;
+  // The class's prototype before the stamp, which swaps only an ordinary one.
+  if (options.prototype !== undefined) {
+    X(array.SetPrototypeOf(options.prototype));
+  }
+  if (options.classConstructor !== undefined) {
+    RecordClassConstructors(array, options.classConstructor);
+  }
+  StampTypedArray(array, element);
+  (array as { TypedExtent?: number }).TypedExtent = extent;
+  views.set(array as unknown as object, {
+    Element: element,
+    Buffer: buffer,
+    ByteOffset: byteOffset,
+    Stride: stride,
+    Extent: extent,
+    ByteExtent: placedByteExtent(extent, stride, elementLayout.byteLength),
+    SourceGeneration: options.SourceGeneration,
+    TakenAtGeneration: options.TakenAtGeneration,
+    CheckLive: options.checkLive,
+    LittleEndian: options.littleEndian,
+  });
+  // As extensible as the array or instance a construction makes: a fixed
+  // array is, and an instance of a class that seals its instances is not.
+  if ((options.classConstructor as { SealInstances?: boolean } | undefined)?.SealInstances) {
+    X(array.PreventExtensions());
+  }
+  return array;
+}
+
+/**
+ * Store each element of _source_ into the placed array _target_, through the
+ * element store's own checks: a whole-array store to a fixed-array field or
+ * element of a buffer, and the elements a placement construction made.
+ */
+export function* CopyIntoPlacedArray(target: ObjectValue, source: Value): PlainEvaluator<boolean> {
+  const backing = views.get(target as unknown as object);
+  if (backing === undefined || !(source instanceof ObjectValue) || typeof backing.Extent !== 'number') {
+    return Throw.TypeError('an element of this type cannot be viewed in a buffer');
+  }
+  for (let index = 0; index < backing.Extent; index += 1) {
+    const element = Q(yield* Get(source, Value(String(index))));
+    Q(yield* WriteArrayViewElement(backing, index, element));
+  }
+  return true;
+}
+
+/** Where a placement `new` of an array type puts its elements, validated before anything is constructed. */
+export interface ArrayPlacement {
+  readonly ArrayType: TypeRecord;
+  readonly Buffer: ArrayBufferObject;
+  readonly ByteOffset: number;
+  readonly Stride: number;
+  /** For a class over an array: the class, whose instance the placed array is. */
+  readonly Class?: ObjectValue;
+}
+
+/**
+ * The placement of `new(buffer, byteOffset, byteElementLength) [N].<T>()`, or
+ * of a value class over a fixed-length array, or undefined where the
+ * constructor is neither. The third argument is the byte length reserved for
+ * each element and defaults to the element type's `byteLength`
+ * (#sec-type-arguments-and-placement-new-in-expression-position).
+ */
+export function* ValidateArrayPlacement(constructor: Value, args: readonly Value[]): PlainEvaluator<ArrayPlacement | undefined> {
+  const own = (constructor as { TypeRecord?: TypeRecord }).TypeRecord;
+  const classBase = (constructor as { ValueArrayBase?: TypeRecord | null }).ValueArrayBase ?? undefined;
+  const arrayType = own?.Kind === 'array' ? own : classBase;
+  if (arrayType === undefined || arrayType.Kind !== 'array') {
+    return undefined;
+  }
+  const buffer = args[0];
+  if (!buffer || typeof buffer !== 'object' || !('ArrayBufferData' in buffer)) {
+    // `new (a)[0].<T>()` was JavaScript's construction of what `a[0]` holds,
+    // specialized; it is the array form now, and an array where the buffer
+    // goes is that reading. Say how to write the construction.
+    if (buffer instanceof ObjectValue && isArrayExoticObject(buffer)) {
+      return Throw.TypeError('the first placement argument must be an ArrayBuffer; `new (a)[i].<T>()` places an array of type `[i].<T>`, and `new (a[i]).<T>()` constructs what `a[i]` holds');
+    }
+    return Throw.TypeError('the first placement argument must be an ArrayBuffer');
+  }
+  const extent = (arrayType as { Extent?: unknown }).Extent;
+  const element = (arrayType as { Element?: TypeRecord }).Element;
+  if (typeof extent !== 'number' || element === undefined) {
+    return Throw.TypeError('a placement allocation of an array needs a fixed extent');
+  }
+  const elementLayout = LayoutOf(element);
+  // The bytes are the elements, so an element holding a reference at any
+  // depth is refused as a window over it is: read back, the bytes would be a
+  // forged reference.
+  if (!elementLayout || !IsPlainData(element)) {
+    return Throw.TypeError('a placement allocation needs a type with a layout');
+  }
+  const byteOffset = args.length > 1 ? Number(Q(yield* ToIndex(args[1]!))) : 0;
+  const stride = args.length > 2 ? Number(Q(yield* ToIndex(args[2]!))) : elementLayout.byteLength;
+  if (stride === 0 && extent > 0) {
+    return Throw.TypeError('a placement element cannot have a zero byte length');
+  }
+  if (IsDetachedBuffer(buffer as ArrayBufferObject)) {
+    return Throw.TypeError('this instance is placed on a detached buffer');
+  }
+  if (byteOffset + placedByteExtent(extent, stride, elementLayout.byteLength) > bufferByteLength(buffer as ArrayBufferObject)) {
+    return Throw.RangeError('the placement extent exceeds the buffer');
+  }
+  return {
+    ArrayType: arrayType,
+    Buffer: buffer as ArrayBufferObject,
+    ByteOffset: byteOffset,
+    Stride: stride,
+    Class: classBase !== undefined && constructor instanceof ObjectValue ? constructor : undefined,
+  };
+}
+
+/**
+ * The array a placement construction made, on its buffer: the elements the
+ * construction gave _constructed_ are stored at their positions, and the
+ * array returned is the one over those bytes. Bytes between elements keep
+ * the buffer's contents.
+ */
+export function* PlaceConstructedArray(placement: ArrayPlacement, constructed: Value): PlainEvaluator<ObjectValue> {
+  let prototype: ObjectValue | undefined;
+  if (placement.Class !== undefined && constructed instanceof ObjectValue) {
+    const own = Q(yield* constructed.GetPrototypeOf());
+    prototype = own instanceof ObjectValue ? own : undefined;
+  }
+  const placed = PlacedArray(placement.ArrayType, placement.Buffer, placement.ByteOffset, placement.Stride, {
+    prototype,
+    classConstructor: placement.Class,
+  });
+  if (placed === null) {
+    return Throw.TypeError('a placement allocation needs a type with a layout');
+  }
+  Q(yield* CopyIntoPlacedArray(placed, constructed));
+  return placed;
 }
 
 function bufferByteLength(buffer: ArrayBufferObject): number {
@@ -98,6 +285,10 @@ export function ArrayViewLength(backing: ArrayViewBacking): number {
 }
 
 export function RequireArrayViewLive(backing: ArrayViewBacking) {
+  const enclosing = backing.CheckLive?.();
+  if (enclosing !== undefined) {
+    return enclosing;
+  }
   if (IsDetachedBuffer(backing.Buffer)) {
     return Throw.TypeError('this view is over a detached buffer');
   }
@@ -178,9 +369,15 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
     if (placed) {
       return placed;
     }
+    // A FIXED-ARRAY ELEMENT is an array over the element's bytes, as a class
+    // element is an instance over them.
+    const inner = PlacedArrayOverElement(backing, index);
+    if (inner) {
+      return inner;
+    }
     return Throw.TypeError('an element of this type cannot be viewed in a buffer');
   }
-  const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, true, 'unordered');
+  const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, true, 'unordered', backing.LittleEndian);
   // A 64-bit element kind reads back as a BigInt (ECMA-262's representation);
   // the element's own type carries a wide value exactly, as a bigint, so it is
   // wrapped as the typed value it was written as, not returned raw.
@@ -188,6 +385,19 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
     return new TypedNumberValue(R(raw) as unknown as number, backing.Element);
   }
   return raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, backing.Element) : raw;
+}
+
+/** The element at _index_ of a window whose element type is a fixed-length array, as a placed array; or null. */
+function PlacedArrayOverElement(backing: ArrayViewBacking, index: number): ObjectValue | null {
+  const inner = (backing.Element as { Element?: TypeRecord }).Element;
+  const innerLayout = inner ? LayoutOf(inner) : null;
+  if (backing.Element.Kind !== 'array' || !innerLayout) return null;
+  // The element keeps the window's liveness: a window over an SoA column that
+  // has since grown, or over a buffer that no longer covers it, refuses its
+  // elements' elements as it refuses its own.
+  return PlacedArray(backing.Element, backing.Buffer, backing.ByteOffset + index * backing.Stride, innerLayout.byteLength, {
+    checkLive: () => RequireArrayViewLive(backing),
+  });
 }
 
 /** An element write: the store check first, then encode at the same position. */
@@ -209,6 +419,10 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
     // than blitting bytes, so a bit-field, an explicit offset and a nested class
     // each go through the rule that placed them.
     const source = Q(yield* RequireType(value, backing.Element));
+    const innerArray = PlacedArrayOverElement(backing, index);
+    if (innerArray) {
+      return Q(yield* CopyIntoPlacedArray(innerArray, source));
+    }
     const placed = Q(yield* PlacedInstance(
       backing.Element,
       backing.Buffer,
@@ -245,7 +459,7 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
   const numeric = raw !== undefined
     ? (wide ? Value(typeof raw === 'bigint' ? raw : BigInt(Math.trunc(raw))) : Value(Number(raw)))
     : converted;
-  Q(yield* SetValueInBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, numeric as NumberValue, true, 'unordered'));
+  Q(yield* SetValueInBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, numeric as NumberValue, true, 'unordered', backing.LittleEndian));
   return true;
 }
 

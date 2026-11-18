@@ -7,7 +7,7 @@ import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
 import { exactOfLiteralText } from './exact-real.mts';
-import { IntegerContextOperandValue } from './numeric-constants.mts';
+import { IntegerContextOperandValue, ProducingOperand } from './numeric-constants.mts';
 import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, type ThrowCompletion } from '#self';
 
 /**
@@ -251,7 +251,7 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * passes which side was written as a numeric literal, and a literal adopts the
  * other's type while any other untyped operand is a mix and throws.
  */
-export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypedNumberValue | ThrowCompletion {
+export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant }): TypedNumberValue | ThrowCompletion {
   // #sec-integer-operations: a shift takes its distance as
   // written - its exact value, read below - so the distance is a count, not a
   // value mixed into the left operand: any integer type may give it, and the
@@ -432,11 +432,16 @@ export function DecayEnumOperands(x: Value, y: Value): { left: Value, right: Val
  * *false* rather than a type error. Returns the operand pair to use, or
  * undefined where neither side needs adopting.
  */
-/** The value a constant operand has beside an integer, under its parentheses and sign and as the last of a comma expression. */
+/**
+ * The value a constant operand has beside an integer, under its parentheses
+ * and sign, as the last of a comma expression, and as the operand a selecting
+ * expression produced: `-(c ? 7 / 2 : 1)` is the negation of the value
+ * recorded for the arm that ran.
+ */
 function integerContextOperand(node: ParseNode): bigint | undefined {
   let n = node;
   let negative = false;
-  for (;;) {
+  for (let depth = 0; depth < 1024; depth += 1) {
     if (n.type === 'ParenthesizedExpression') {
       n = n.Expression;
     } else if (n.type === 'CommaOperator') {
@@ -445,7 +450,9 @@ function integerContextOperand(node: ParseNode): bigint | undefined {
       if (n.operator === '-') negative = !negative;
       n = n.UnaryExpression;
     } else {
-      break;
+      const produced = ProducingOperand(n);
+      if (produced === n) break;
+      n = produced;
     }
   }
   const exact = IntegerContextOperandValue(n);
@@ -581,7 +588,17 @@ function arithmeticUnderlyingOf(t: TypeRecord): TypeRecord {
   return Reflect.ownKeys(metadata).length === 0 ? base : { ...t, Base: base, Metadata: metadata };
 }
 
-export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypeRecord | ThrowCompletion {
+/**
+ * How a literal operand's value was arrived at, where it was computed from
+ * constants rather than written (`IsComputedConstantOperand`): for the
+ * diagnostic only. Where no type is declared in reach of a constant, its
+ * operators are a Number's, and a declared type would have given another
+ * value - `7 / 2` is 3 at an integer and 3.5 here, `~0xFF` is 0xFFFFFF00 at a
+ * `uint32` and -256 here - so the message says which reading it had.
+ */
+export type ComputedConstant = 'arithmetic' | 'bitwise';
+
+export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant }): TypeRecord | ThrowCompletion {
   // proposal-runtime-types #sec-enums: an operand of an enum type is read at its
   // UNDERLYING type here, which is what the clause means by "an enum can be used
   // for arithmetic, indexing, and comparison without a cast" and by `comp / 32`
@@ -653,6 +670,16 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
       // "A literal that does not fit its type" is an Early Error where the
       // checker sees it; this is the run-time backstop, the same RangeError a
       // parameter boundary raises.
+      //
+      // A constant computed where no type is declared - `x * (7 / 2)` in a
+      // function whose `x` has no annotation - is the Number its operators
+      // give, 3.5, where under a declared integer type it is 3. The bare
+      // message names 3.5 and not why, and a reader who has the typed reading
+      // in mind looks for a 3.5 nobody wrote; so the message says it.
+      const computed = xt ? literals?.rightComputed : literals?.leftComputed;
+      if (computed === 'bitwise' || (computed === 'arithmetic' && !(typeof literalValue === 'number' && Number.isInteger(literalValue)))) {
+        return Throw.RangeError('$1 is not in the range of $2; no type is declared where this constant is written, so it was computed as a number', Value(literalValue), Value(displayType(target)));
+      }
       return Throw.RangeError('$1 is not in the range of $2', Value(literalValue), Value(displayType(target)));
     }
   }

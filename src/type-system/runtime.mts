@@ -3028,8 +3028,13 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     if (spanBacking !== undefined) {
       return libraryTypeRecord(spanBacking.ReadOnly ? 'ReadonlySpan' : 'Span', [spanBacking.Element])!;
     }
+    // Only a window is a `Span`. An ARRAY whose elements are a buffer's bytes -
+    // an owned fixed array whose storage was materialized for `.buffer`, or one
+    // placed on a buffer - is still an array of its type, and is answered by the
+    // array arm below. It answered `Span.<uint8>` for a `[4].<uint8>` once
+    // anything had asked for its buffer.
     const viewBacking = ArrayViewBackingOf(value as unknown as object);
-    if (viewBacking !== undefined) {
+    if (viewBacking !== undefined && !isArrayExoticObject(value)) {
       return libraryTypeRecord('Span', [viewBacking.Element])!;
     }
   }
@@ -5641,7 +5646,9 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         if (t.LibraryName === 'Span') {
           const element = (t.Arguments.length > 0 ? t.Arguments[0] : { Kind: 'any' as const }) as TypeRecord;
           const spanBacking = ArraySpanBackingOf(value as unknown as object);
-          const viewBacking = ArrayViewBackingOf(value as unknown as object);
+          // An array whose elements are a buffer's bytes is an array, which
+          // coerces to a window rather than being one.
+          const viewBacking = isArrayExoticObject(value) ? undefined : ArrayViewBackingOf(value as unknown as object);
           const backingElement = spanBacking?.Element ?? viewBacking?.Element;
           // A read-only window is not a `Span`: a `Span` may be written through.
           if (backingElement === undefined || spanBacking?.ReadOnly) {

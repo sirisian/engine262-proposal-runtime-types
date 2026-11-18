@@ -19379,6 +19379,184 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
+   * #sec-object-literal-conversion: whether an object literal fills instances
+   * of the class _declaration_ declares - no class of its chain declares a
+   * field a literal cannot name, and none declares a constructor unless the
+   * class is a value class - answering the names of its fields, why not, or
+   * 'unknown' where a class of the chain is not one this pass reads (a
+   * built-in base, a computed one, a computed field name). The run time
+   * (`FillClassFromObjectLiteral`) decides what this cannot. `constructedBy`
+   * names the class of a value class's chain that declares a constructor,
+   * which the fill does not run.
+   */
+  const literalFillVerdict = (declaration: ParseNode | null | undefined):
+    { fields: Map<string, ParseNode.FieldDefinition>, readonlyWriters: Map<string, string>, constructedBy: string | undefined }
+    | { refused: 'constructor' | 'private' | 'protected' | 'accessor', detail: string } | 'unknown' => {
+    const fields = new Map<string, ParseNode.FieldDefinition>();
+    // A `readonly` field whose declaring class declares a constructor, with
+    // that class: the constructor writes it, and the fill does not run it.
+    const readonlyWriters = new Map<string, string>();
+    // A class over a value class is declared `value` itself, so the class
+    // answers for its chain.
+    const valueClass = !!(declaration as { ClassModifiers?: readonly string[] | null } | null | undefined)?.ClassModifiers?.includes('value');
+    let constructedBy: string | undefined;
+    let at = declaration ?? undefined;
+    for (let depth = 0; at && depth < 64; depth += 1) {
+      if (at.type !== 'ClassDeclaration' && at.type !== 'ClassExpression') return 'unknown';
+      const className = (at as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? 'an anonymous class';
+      const declaresConstructor = classBodyOf(at).some((member) => {
+        const element = member as unknown as { type?: string, static?: boolean, ClassElementName?: { name?: string, value?: unknown } | null };
+        return element.type === 'MethodDefinition' && !element.static
+          && (element.ClassElementName?.name ?? element.ClassElementName?.value) === 'constructor';
+      });
+      if (declaresConstructor) {
+        if (!valueClass) return { refused: 'constructor', detail: className };
+        constructedBy ??= className;
+      }
+      for (const member of classBodyOf(at)) {
+        const element = member as unknown as { type?: string, static?: boolean, ClassElementName?: { type?: string, name?: string, value?: unknown } | null };
+        if (element.type !== 'FieldDefinition' || element.static) continue;
+        const field = member as unknown as ParseNode.FieldDefinition;
+        const key = element.ClassElementName;
+        if (key?.type === 'PrivateIdentifier') return { refused: 'private', detail: `#${key.name}` };
+        const name = key?.type === 'IdentifierName' ? key.name : key?.type === 'StringLiteral' || key?.type === 'NumericLiteral' ? String(key.value) : undefined;
+        if (name === undefined) return 'unknown';
+        if (field.accessor) return { refused: 'accessor', detail: name };
+        if (field.protected) return { refused: 'protected', detail: name };
+        fields.set(name, field);
+        if (field.readonly && declaresConstructor) readonlyWriters.set(name, className);
+      }
+      if (!at.ClassTail?.ClassHeritage) return { fields, readonlyWriters, constructedBy };
+      at = heritageClassOf(at);
+    }
+    return 'unknown';
+  };
+
+  /**
+   * Whether the class _declaration_ declares a conversion that may take an
+   * object: a constructor of one parameter, or an `operator C(value: S)`,
+   * whose parameter is not a primitive. Which conversion runs is then the run
+   * time's to decide (#sec-user-defined-conversions).
+   */
+  const declaresObjectConversion = (declaration: ParseNode): boolean => classBodyOf(declaration).some((member) => {
+    const element = member as unknown as { type?: string, static?: boolean, ClassElementName?: { name?: string, value?: unknown } | null,
+      UniqueFormalParameters?: { FormalParameterList?: readonly unknown[] } | readonly unknown[] | null, FormalParameters?: readonly ParseNode[] | { FormalParameterList?: readonly ParseNode[] } | null, Type?: unknown };
+    const parameters = (list: unknown): readonly ParseNode[] => (Array.isArray(list) ? list : ((list as { FormalParameterList?: readonly ParseNode[] } | null)?.FormalParameterList ?? [])) as readonly ParseNode[];
+    // A parameter of a primitive type takes no object; one with no annotation,
+    // or of any other type, may.
+    const takesObject = (formal: ParseNode): boolean => {
+      const annotation = (formal as unknown as { TypeAnnotation?: { Type?: ParseNode } | null }).TypeAnnotation
+        ?? (formal as unknown as { SingleNameBinding?: { TypeAnnotation?: { Type?: ParseNode } | null } }).SingleNameBinding?.TypeAnnotation;
+      const parameterType = annotation?.Type ? resolveType(annotation.Type as unknown as ParseNode.Type) : null;
+      return !(parameterType?.Kind === 'primitive' || parameterType?.Kind === 'literal');
+    };
+    if (element.type === 'MethodDefinition' && !element.static && (element.ClassElementName?.name ?? element.ClassElementName?.value) === 'constructor') {
+      const formals = parameters(element.UniqueFormalParameters);
+      return formals.length === 1 && takesObject(formals[0]);
+    }
+    if (element.type !== 'OperatorDefinition' || !element.Type) return false;
+    const formals = parameters(element.FormalParameters);
+    return formals.length === 1 && takesObject(formals[0]);
+  });
+
+  /**
+   * #sec-object-literal-conversion, where the checker can see it: an object
+   * literal converted to a class it fills names fields of the class and gives
+   * each a value its type converts, and a class it does not fill is refused
+   * where no conversion the class declares could take the literal.
+   */
+  const checkLiteralFill = (literal: ParseNode.ObjectLiteral, target: TypeRecord, depth = 0): void => {
+    if (target.Kind !== 'nominal' || depth > 16) return;
+    const declaration = (target as { Declaration?: ParseNode }).Declaration;
+    if (!declaration || (declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression')) return;
+    const verdict = literalFillVerdict(declaration);
+    if (verdict === 'unknown' || declaresObjectConversion(declaration)) return;
+    const display = Value(displayType(target));
+    if ('refused' in verdict) {
+      const reason = verdict.refused === 'constructor'
+        ? '$1 has no conversion from an object literal: $2 declares a constructor, so it is constructed with new or by a conversion it declares'
+        : verdict.refused === 'private'
+          ? '$1 has no conversion from an object literal: its field $2 is private, and a literal cannot name it'
+          : verdict.refused === 'protected'
+            ? '$1 has no conversion from an object literal: its field $2 is protected, and a literal cannot name it'
+            : '$1 has no conversion from an object literal: its field $2 is an accessor, whose storage a literal cannot name';
+      reportType('rt-explicit-conversion', literal, reason, display, Value(verdict.detail));
+      return;
+    }
+    if ((declaration as { ClassModifiers?: readonly string[] | null }).ClassModifiers?.includes('abstract')) {
+      reportType('rt-abstract-construction', literal, '$1 is an abstract class and cannot be instantiated', display);
+      return;
+    }
+    const structure = structureOf(target);
+    const memberTypes = structure?.Kind === 'object' ? structure.Properties : [];
+    const named = new Set<string>();
+    for (const property of literal.PropertyDefinitionList) {
+      const definition = property as unknown as { type: string, PropertyName?: { type?: string, name?: string, value?: unknown } | null,
+        AssignmentExpression?: ParseNode, TypeAnnotation?: unknown, name?: string };
+      let form: string | undefined;
+      if (property.type === 'PropertyDefinition') {
+        if (!definition.PropertyName) form = 'a spread';
+        else if (definition.PropertyName.type === 'PropertyName') form = 'a computed name';
+        else if (definition.TypeAnnotation) form = 'a typed own property';
+        else if (String(definition.PropertyName.name ?? definition.PropertyName.value) === '__proto__') form = '__proto__';
+      } else if (property.type === 'CoverInitializedName') {
+        form = 'a default';
+      } else if (property.type !== 'IdentifierReference') {
+        form = 'a method or an accessor';
+      }
+      if (form !== undefined) {
+        reportType('rt-explicit-conversion', property, '$1 is filled from an object literal that names its fields, and this one has $2', display, Value(form));
+        continue;
+      }
+      const key = property.type === 'IdentifierReference' ? (definition.name ?? '') : String(definition.PropertyName!.name ?? definition.PropertyName!.value);
+      named.add(key);
+      if (!verdict.fields.has(key)) {
+        reportType('rt-explicit-conversion', property, '$1 has no field named $2', display, Value(key));
+        continue;
+      }
+      const writer = verdict.readonlyWriters.get(key);
+      if (writer !== undefined) {
+        reportType('rt-explicit-conversion', property,
+          '$1 is filled from an object literal without running the constructor $2 declares, and that constructor is what writes its readonly field $3; construct it with new',
+          display, Value(writer), Value(key));
+        continue;
+      }
+      const valueNode = property.type === 'IdentifierReference' ? property : definition.AssignmentExpression;
+      const fieldType = memberTypes.find((member) => member.key === key)?.type;
+      if (!valueNode || !fieldType) continue;
+      const nested = unparenthesized(valueNode);
+      if (nested.type === 'ObjectLiteral' && fieldType.Kind === 'nominal') {
+        checkLiteralFill(nested as ParseNode.ObjectLiteral, fieldType, depth + 1);
+        continue;
+      }
+      // Each value converts to its field's type as a member of a structural
+      // target converts: a string at a numeric field has no conversion.
+      if (explicitConversionAvailability(staticType(valueNode), fieldType) === 'impossible') {
+        const source = staticType(valueNode)!;
+        const base = source.Kind === 'literal' ? source.Base : source;
+        if (base.Kind === 'primitive' && base.Name === 'string' && fieldType.Kind === 'primitive' && isNumericTargetName(fieldType.Name)) {
+          reportType('rt-explicit-conversion', valueNode, 'a string is not a conversion source for $1; use its parse form', Value(displayType(fieldType)));
+        } else {
+          reportType('rt-explicit-conversion', valueNode, '$1 has no explicit conversion to $2', Value(displayType(source)), Value(displayType(fieldType)));
+        }
+      }
+    }
+    // A value class filled without its constructor initializes each field the
+    // literal does not name as a class with no constructor does, so a field
+    // with no initializer whose type has no default is one only the
+    // constructor assigned, and the literal names it.
+    if (verdict.constructedBy !== undefined) {
+      for (const [name, field] of verdict.fields) {
+        if (named.has(name) || field.Initializer) continue;
+        const fieldType = field.TypeAnnotation ? resolveType(field.TypeAnnotation.Type) : null;
+        if (fieldType && !mentionsTypeParameter(fieldType) && staticDefaultOf(fieldType) === 'none') {
+          reportType('rt-missing-default', literal, '$1 is filled from an object literal that does not name $2, whose type has no default', display, Value(name));
+        }
+      }
+    }
+  };
+
+  /**
    * #sec-typed-classes: a typed class that declares no constructor takes no
    * argument. `new Point(1, 2)` for `value class Point { x: float32 = 0; y:
    * float32 = 0; }` made a point at the origin and dropped both arguments.
@@ -20181,7 +20359,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && ((laneType as { Arguments?: readonly unknown[] }).Arguments ?? [])[0] === 1;
     if (args.length === 1) {
       const only = staticType(args[0]!);
-      if (bitLane || (only?.Kind === 'primitive' && (only as { Name?: string }).Name === 'vector')) return null;
+      // A comparison of vectors is a vector in each of its result forms, though
+      // its static type here is the scalar comparison's (#sec-vector-comparisons),
+      // so it is converted rather than broadcast; the drain judges its form.
+      const comparison = vectorComparisons.has(unparenthesized(args[0]!));
+      if (bitLane || comparison || (only?.Kind === 'primitive' && (only as { Name?: string }).Name === 'vector')) return null;
     }
     // One signature, chosen by the argument count: an overload set is resolved
     // more strictly than a single signature is checked, and would refuse a
@@ -20830,6 +21012,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Whether an operand is, under its parentheses and at the end of a comma, an expression that selects one of its operands. */
   const isSelectingOperand = (node: ParseNode): boolean => ['ConditionalExpression', 'LogicalORExpression', 'LogicalANDExpression', 'CoalesceExpression']
     .includes(contextualResultOperand(node).type);
+  /**
+   * The selecting expression an operand is under one or more signs, with
+   * whether they negate it: `-(c ? 7 / 2 : 1)` is the selection `c ? 7 / 2 : 1`,
+   * negated. Null where the operand is no sign over a selection.
+   */
+  const selectionUnderSign = (node: ParseNode): { selection: ParseNode, negative: boolean } | null => {
+    let core = contextualResultOperand(node);
+    let negative = false;
+    let signed = false;
+    while (core.type === 'UnaryExpression' && ((core as { operator?: string }).operator === '-' || (core as { operator?: string }).operator === '+')) {
+      if ((core as { operator?: string }).operator === '-') negative = !negative;
+      signed = true;
+      core = contextualResultOperand((core as unknown as { UnaryExpression: ParseNode }).UnaryExpression);
+    }
+    return signed && isSelectingOperand(core) ? { selection: core, negative } : null;
+  };
   /** An operand that takes the type of the operand beside it: a literal, a numeric constant, or arithmetic over them, under any sign. */
   const adaptingOperand = (node: ParseNode): ParseNode | null => {
     const core = contextualResultOperand(node);
@@ -20888,6 +21086,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * numeric type. _literals_ receives the literals of the second case.
    */
   const selectingOperandType = (node: ParseNode, peerType: Known, literals: ParseNode[]): 'literal' | 'none' | { type: Known } => {
+    // Under a sign, a selection every operand of which adapts is a literal
+    // operand as the selection is: `z * -(c ? 7 / 2 : 1)`. One that may also
+    // produce a typed value is left as it was.
+    const signed = selectionUnderSign(node);
+    if (signed) {
+      const arms = producedOperands(signed.selection);
+      return arms.length > 0 && arms.every((operand) => adaptingOperand(operand)) ? 'literal' : 'none';
+    }
     if (!isSelectingOperand(node)) return 'none';
     const produced = producedOperands(node);
     if (!produced.some((operand) => adaptingOperand(operand))) return 'none';
@@ -21042,18 +21248,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * type - the text of the value it has. Null where it is not such an operand
    * or its value is not read here.
    */
-  const constantBesideInteger = (operand: ParseNode, peer: TypeRecord): { core: ParseNode, value: bigint } | { refused: string } | null => {
+  const constantBesideInteger = (operand: ParseNode, peer: TypeRecord, outerNegative = false): { core: ParseNode, value: bigint } | { refused: string } | null => {
     const constant = constantOperandCore(operand);
     if (!constant) return null;
+    // _outerNegative_: the operand is an arm of a selection under a sign,
+    // `-(c ? 7 / 2 : 1)`, and the value the type must hold is the negated one.
+    const negative = constant.negative !== outerNegative;
     const prim = peer as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
     const folded = foldConstantAt(constant.core, peer);
     if (folded !== null) {
-      const signed = constant.negative ? -folded : folded;
+      const signed = negative ? -folded : folded;
       return fitsNumericType(signed, prim.Name, prim.Arguments) ? { core: constant.core, value: folded } : { refused: String(signed) };
     }
     const number = numberOfConstant(constant.core);
     if (number === null) return null;
-    const signed = constant.negative ? -number : number;
+    const signed = negative ? -number : number;
     // A value that is an integer of the type is taken as the Number is.
     return Number.isInteger(signed) && fitsNumericType(BigInt(signed), prim.Name, prim.Arguments) ? null : { refused: String(signed) };
   };
@@ -21072,10 +21281,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * (`IntegerContextOperandValue`), which leaves the operand a Number beside
    * anything else.
    */
+  /**
+   * The operands _node_ may produce, as `producedOperands` gives them, and
+   * through a sign over a selecting operand the operands that selection may
+   * produce: `-(c ? 7 / 2 : 1)` negates `7 / 2` or `1`, and each is a constant
+   * beside the integer as it would be written there without the sign. The run
+   * time applies the sign to the value recorded for the arm it selected.
+   */
+  const integerContextArms = (node: ParseNode, out: ParseNode[] = [], depth = 0): ParseNode[] => {
+    for (const produced of producedOperands(node)) {
+      let core: ParseNode = produced;
+      while (core.type === 'UnaryExpression' && ((core as { operator?: string }).operator === '-' || (core as { operator?: string }).operator === '+')) {
+        core = contextualResultOperand((core as unknown as { UnaryExpression: ParseNode }).UnaryExpression);
+      }
+      if (core !== produced && depth < 16 && isSelectingOperand(core)) {
+        integerContextArms(core, out, depth + 1);
+      } else {
+        out.push(produced);
+      }
+    }
+    return out;
+  };
   const recordIntegerContextBeside = (operand: ParseNode, peerType: Known): void => {
     const peer = integerPeerOf(peerType);
     if (!peer) return;
-    for (const produced of producedOperands(operand)) {
+    for (const produced of integerContextArms(operand)) {
       const beside = constantBesideInteger(produced, peer);
       if (beside && 'core' in beside) journalSet(integerContextOperands, beside.core, beside.value);
     }
@@ -22397,7 +22627,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const targetIsClass = contextual.Kind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
         if (targetIsClass) {
-          reportType('rt-assignability', node, '$1 is not assignable to $2', Value('an object literal'), Value(displayType(contextual as TypeRecord)));
+          // A class an object literal fills is made from one by `:=`, which
+          // is the spelling to point to (#sec-object-literal-conversion). The
+          // annotation does not convert: a conversion happens only where it is
+          // written.
+          const declaration = (contextual as { Declaration?: ParseNode }).Declaration!;
+          // A conversion the class DECLARES is different: #sec-user-defined-
+          // conversions applies one at an assignment, an argument and a return,
+          // because the class has opted in. A one-parameter constructor or an
+          // `operator C(value: S)` whose parameter may take an object is such a
+          // conversion, and it applies to a literal as it already did to a
+          // binding holding the same object; which one runs, and whether the
+          // literal is of its parameter's type, is decided where it runs, as
+          // for that binding.
+          if (declaresObjectConversion(declaration)) {
+            return contextual;
+          }
+          const verdict = literalFillVerdict(declaration);
+          const fillable = verdict !== 'unknown' && 'fields' in verdict
+            && !declaresObjectConversion(declaration)
+            && !(declaration as { ClassModifiers?: readonly string[] | null }).ClassModifiers?.includes('abstract');
+          if (fillable) {
+            reportType('rt-assignability', node, '$1 is not assignable to $2; write $3 to construct one from its fields', Value('an object literal'),
+              Value(displayType(contextual as TypeRecord)), Value(`{ ... } := ${displayType(contextual as TypeRecord)}`));
+          } else {
+            reportType('rt-assignability', node, '$1 is not assignable to $2', Value('an object literal'), Value(displayType(contextual as TypeRecord)));
+          }
           return contextual;
         }
         // An INTERSECTION names itself and the member that rejected.
@@ -23095,6 +23350,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const vectorComparisons = new Map<object, { wide: string, compact: string, compared: string }>();
   /** Comparisons that reached `staticTypeIn` with a contextual type. */
   const comparisonContextual = new WeakSet<object>();
+  /**
+   * Comparisons that are the one argument of a call on a type, with the type.
+   * `boolean32x4(a == b)` is the explicit conversion `(a == b) := boolean32x4`
+   * (#sec-explicit-conversion: "The two are the same operation"), so the drain
+   * judges the two alike rather than reading the call's context as an
+   * annotation's.
+   */
+  const comparisonConversionCalls = new WeakMap<object, TypeRecord>();
 
   const operatorResult = (callee: Known, args: readonly ParseNode[], node: ParseNode): Known => {
     operatorFailures.delete(node);
@@ -27108,10 +27371,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the type here, so it is checked here; this was a RangeError at run
         // time, which is the truncation caught late rather than the error
         // caught early.
-        const adopt = (lit: ParseNode, t: TypeRecord): void => {
+        const adopt = (lit: ParseNode, t: TypeRecord, outerNegative = false): void => {
           // Each literal a selecting operand may produce takes the type.
           if (isSelectingOperand(lit)) {
-            for (const produced of producedOperands(lit)) if (adaptingOperand(produced)) adopt(produced, t);
+            for (const produced of producedOperands(lit)) if (adaptingOperand(produced)) adopt(produced, t, outerNegative);
+            return;
+          }
+          // And under a sign, each with the sign it is produced under:
+          // `-(c ? 7 / 2 : 1)` beside an `int8` is `-(c ? 3 : 1)`.
+          const signedSelection = selectionUnderSign(lit);
+          if (signedSelection) {
+            for (const produced of producedOperands(signedSelection.selection)) {
+              if (adaptingOperand(produced)) adopt(produced, t, outerNegative !== signedSelection.negative);
+            }
             return;
           }
           // The LITERAL NODE itself is what takes the type - `staticTypeIn`'s
@@ -27124,7 +27396,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const reported = errors.length;
           staticTypeIn(innermostLiteral(lit), t);
           if (isIntegerValueType(t)) {
-            const exact = signedLiteralValue(lit);
+            const written = signedLiteralValue(lit);
+            const exact = written === null || !outerNegative ? written : -written;
             const fraction = exact === null ? fractionalLiteralValue(lit) : null;
             const prim = t as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
             if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
@@ -27135,7 +27408,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // integer, are literals here too: `z * K` with `const K = 300`
               // and `z * (7.5 / 2)` beside a `uint8` were RangeErrors when
               // the line ran.
-              const beside = constantBesideInteger(lit, t);
+              const beside = constantBesideInteger(lit, t, outerNegative);
               if (beside && 'refused' in beside) {
                 const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(beside.refused), Value(displayType(t))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
@@ -45278,6 +45551,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (operand.type === 'NumericLiteral' || isNumericConstantExpression(operand)) {
           markConversionOperand(operand);
           staticTypeIn(operand, target);
+        } else if (target && target.Kind === 'nominal' && unparenthesized(operand).type === 'ObjectLiteral'
+          && /^Class(Declaration|Expression)$/.test((target as { Declaration?: ParseNode }).Declaration?.type ?? '')) {
+          // #sec-object-literal-conversion: an object literal converted to a
+          // class fills its fields, each value converted to its field's type as
+          // a structural target's member is, so a literal value is read at the
+          // field's type and a constant one wraps.
+          markCreationMembers(operand);
+          typeCreationMembers(operand, target);
+          checkLiteralFill(unparenthesized(operand) as ParseNode.ObjectLiteral, target);
         } else if (target && (target.Kind === 'array' || target.Kind === 'tuple')) {
           // An ARRAY or TUPLE literal operand: each element is the operand of its
           // own element's conversion - `[x] := [].<T>` holds what `[x := T]`
@@ -46061,6 +46343,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // first among its arguments. An element of bare `number` came from
             // untyped endpoints, which adopt the discriminant's type as a literal
             // label does, so it is not a disjointness.
+            // A CONSTANT EXPRESSION is its value here, as a named constant is
+            // (#sec-contextual-types): `case 200 + 100` over a `uint8` holds a
+            // 300, and is the test `case 300` and `case K` with `const K = 300`
+            // are, which can never succeed. It was a silent miss.
+            if (labelType?.Kind !== 'literal'
+                && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration') {
+              const peer = integerPeerOf(subject);
+              const beside = peer ? constantBesideInteger(label, peer) : null;
+              if (beside && 'refused' in beside) {
+                reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(beside.refused));
+                continue;
+              }
+            }
             if (labelType && labelType.Kind === 'nominal'
                 && ['Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds']
                   .includes(String((labelType as { LibraryName?: unknown }).LibraryName))) {
@@ -46907,6 +47202,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (creationShape) {
                 markCreationMembers(argNodes[0]!);
                 typeCreationMembers(argNodes[0]!, creationShape);
+              }
+              const converted = unparenthesized(argNodes[0]! as ParseNode);
+              if (converted.type === 'EqualityExpression' || converted.type === 'RelationalExpression') {
+                comparisonConversionCalls.set(converted, conversionTarget as TypeRecord);
               }
               staticTypeIn(argNodes[0]!, conversionTarget as Known);
             }
@@ -48429,7 +48728,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // is only decidable once every contextual position has been visited - which
   // the comment above says is now true.
   for (const [node, forms] of vectorComparisons) {
-    if (comparisonContextual.has(node)) {
+    // An explicit conversion of the comparison to one of its forms names the
+    // form, as an annotation does: the README's ambiguity "requires explicit
+    // cast". `(a == b) := boolean32x4`, or the call on the type, which is the
+    // same operation, `boolean32x4(a == b)`. A target that is none of the three
+    // names no form, and what it converts would differ by form, so the
+    // comparison stays ambiguous in either spelling. The run time gives the
+    // comparison the conversion's target as its expected type
+    // (Evaluate_TypedConversionExpression, EvaluateCall).
+    let target: TypeRecord | null | undefined = comparisonConversionCalls.get(node);
+    if (target === undefined) {
+      let holder = (node as ParseNode).parent;
+      while (holder?.type === 'ParenthesizedExpression') holder = holder.parent;
+      if (holder?.type === 'TypedConversionExpression' && unparenthesized((holder as ParseNode.TypedConversionExpression).Expression as ParseNode) === node) {
+        target = resolveType((holder as ParseNode.TypedConversionExpression).Type) ?? null;
+      }
+    }
+    if (target !== undefined) {
+      const shown = target ? vectorTypeName(target) : undefined;
+      if (shown !== undefined && (shown === forms.wide || shown === forms.compact || shown === forms.compared)) continue;
+    } else if (comparisonContextual.has(node)) {
       continue;
     }
     reportType('rt-ambiguous-result', root, 'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)', Value(forms.wide), Value(forms.compact), Value(forms.compared));

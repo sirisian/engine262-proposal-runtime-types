@@ -1723,6 +1723,28 @@ export abstract class ExpressionParser extends FunctionParser {
             case Token.NEW:
             case Token.SUPER:
               break;
+            case Token.LBRACK: {
+              // The array form, `new(buffer, byteOffset, byteElementLength)
+              // [10].<Type>()`. A bracket after the parentheses is also how
+              // JavaScript continues them - `new (a)[0]()` constructs `a[0]` -
+              // so it begins the target only where it is an array type: one
+              // expression between the brackets, and `.<` after them, which
+              // is not JavaScript. Any other bracket keeps its meaning.
+              const bracket = this.getLexerCheckpoint();
+              const bracketErrors = new Set(this.earlyErrors);
+              let arrayType = false;
+              try {
+                this.next();
+                this.parseAssignmentExpression();
+                arrayType = this.eat(Token.RBRACK) && this.test(Token.PERIOD_LT);
+              } catch {
+                arrayType = false;
+              }
+              this.restoreLexerCheckpoint(bracket);
+              this.earlyErrors = bracketErrors;
+              if (!arrayType) speculative = null;
+              break;
+            }
             default:
               speculative = null;
               break;

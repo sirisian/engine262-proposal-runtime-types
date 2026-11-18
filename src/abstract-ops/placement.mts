@@ -8,6 +8,7 @@ import { LayoutOf, type ClassLayout, type FieldPlacement } from '../type-system/
 import type { TypedArrayTypes } from '../intrinsics/TypedArray.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import { RecordClassConstructors } from './function-operations.mts';
+import { CopyIntoPlacedArray, PlacedArray } from './array-view.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, Throw, surroundingAgent, ToIndex,
   Get, OrdinaryObjectCreate, Set as SetProperty,
@@ -198,6 +199,30 @@ function placementOf(backing: PlacementBacking, key: string): FieldPlacement | u
   return backing.Layout.fields.find((f) => f.key === key);
 }
 
+/**
+ * A FIXED-ARRAY FIELD of a placed instance, as an array over the field's
+ * bytes: its elements are at the field's offset, each the element type's
+ * `byteLength` after the one before, and it keeps the instance's liveness, as
+ * a nested placed instance does. Null where the field's type is no fixed
+ * array.
+ */
+function placedArrayField(backing: PlacementBacking, placement: FieldPlacement, fieldType: TypeRecord): ObjectValue | null {
+  const element = (fieldType as { Element?: TypeRecord }).Element;
+  if (fieldType.Kind !== 'array' || element === undefined) {
+    return null;
+  }
+  const elementLayout = LayoutOf(element);
+  if (!elementLayout) {
+    return null;
+  }
+  // `@endian` on the field fixes the byte order of each of its elements, as
+  // it fixes a scalar field's.
+  return PlacedArray(fieldType, backing.Buffer, backing.ByteOffset + placement.offset, elementLayout.byteLength, {
+    checkLive: () => RequirePlacementLive(backing),
+    littleEndian: placement.endian === undefined ? undefined : placement.endian !== 'big',
+  });
+}
+
 /** A field read: decode the bytes at the field's laid-out position. */
 export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldType: TypeRecord): ValueEvaluator {
   const live = RequirePlacementLive(backing);
@@ -242,6 +267,11 @@ export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldTy
     if (nested) {
       return nested;
     }
+    // A fixed-array field is an array over its bytes, in the same way.
+    const array = placedArrayField(backing, placement, fieldType);
+    if (array) {
+      return array;
+    }
     return Throw.TypeError('a field of this type cannot be placed in a buffer');
   }
   // `@endian` fixes this field's byte order. Without one the platform's order is
@@ -282,6 +312,12 @@ export function* WritePlacedField(backing: PlacementBacking, key: string, fieldT
   }
   const element = BufferElementType(fieldType);
   if (element === null) {
+    // A WHOLE FIXED-ARRAY FIELD is written element by element, through each
+    // element's store.
+    const array = placedArrayField(backing, placement, fieldType);
+    if (array) {
+      return Q(yield* CopyIntoPlacedArray(array, value));
+    }
     // A WHOLE NESTED FIELD is written field by field through the placed
     // instance, so a bit-field, an explicit offset and a further nesting each go
     // through the rule that placed them rather than being blitted.

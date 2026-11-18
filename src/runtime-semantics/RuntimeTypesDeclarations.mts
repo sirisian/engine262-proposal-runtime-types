@@ -20,6 +20,7 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { RequiredModuleInputFailure } from '../type-system/required-module-inputs.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols, Descriptor } from '../value.mts';
+import { FillClassFromObjectLiteral, objectLiteralOf } from '../abstract-ops/literal-fill.mts';
 import { DefinePropertyOrThrow, GetV } from '../abstract-ops/all.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf } from '../type-system/check.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
@@ -1619,9 +1620,36 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
 }
 
 export function* Evaluate_TypedConversionExpression({ Expression, Type }: ParseNode.TypedConversionExpression): ValueEvaluator {
-  const ref = Q(yield* Evaluate(Expression));
+  // A comparison converted to a vector type is told its result form by the
+  // conversion's target, as at an annotation (#sec-vector-comparisons): the
+  // README's ambiguity "requires explicit cast". The target is evaluated
+  // first for this one operand form only; any other operand is evaluated with
+  // no context, as before, since a context also ranks overloads.
+  let comparisonForm: TypeRecord | undefined;
+  if (surroundingAgent.feature('runtime-types')) {
+    let operand = Expression as ParseNode;
+    while (operand.type === 'ParenthesizedExpression') operand = operand.Expression;
+    if (operand.type === 'EqualityExpression' || operand.type === 'RelationalExpression') {
+      const target = Q(yield* TypeNodeToTypeRecord(Type));
+      if (target.Kind === 'primitive' && (target as { Name?: string }).Name === 'vector') comparisonForm = target;
+    }
+  }
+  if (comparisonForm !== undefined) pushContextualType(comparisonForm, Expression as object);
+  let ref;
+  try {
+    ref = Q(yield* Evaluate(Expression));
+  } finally {
+    if (comparisonForm !== undefined) popContextualType();
+  }
   const value = Q(yield* GetValue(ref));
-  const record = Q(yield* TypeNodeToTypeRecord(Type));
+  const record = comparisonForm ?? Q(yield* TypeNodeToTypeRecord(Type));
+  // #sec-object-literal-conversion: an object literal converted to a class
+  // that declares no constructor fills the class's fields.
+  const literal = surroundingAgent.feature('runtime-types') ? objectLiteralOf(Expression as ParseNode) : undefined;
+  if (literal && value instanceof ObjectValue) {
+    const filled = Q(yield* FillClassFromObjectLiteral(literal, value, record));
+    if (filled !== undefined) return filled;
+  }
   return Q(yield* ConvertValue(value, record));
 }
 

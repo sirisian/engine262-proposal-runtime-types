@@ -49,6 +49,7 @@ import { AdoptTypeParameters, AdoptedTypeParametersOf, InferGenericCallBindings,
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
+import { SuppliedFieldOf, ConvertSuppliedField } from './literal-fill.mts';
 import {
   Assert,
   Call,
@@ -343,7 +344,14 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
   // the returned value is captured there and used for every instance here, in
   // place of running the initializer at all.
   const replaced = (fieldRecord as { ReplacedInitial?: Value }).ReplacedInitial;
-  if (replaced !== undefined) {
+  // #sec-object-literal-conversion: an instance filled from an object literal
+  // takes each field the literal names from it, converted to the field's type,
+  // and the field's initializer does not run; the rest initialize as `new`
+  // initializes them.
+  const supplied = surroundingAgent.feature('runtime-types') ? SuppliedFieldOf(receiver, fieldName) : undefined;
+  if (supplied !== undefined) {
+    initValue = Q(yield* ConvertSuppliedField(supplied, (fieldTypeObject as { TypeRecord?: TypeRecord } | undefined)?.TypeRecord));
+  } else if (replaced !== undefined) {
     // Still checked against the field's declared type: "the return type must be
     // compatible with the original", and a replacement is a store like any
     // other.

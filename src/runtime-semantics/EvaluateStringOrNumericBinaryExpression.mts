@@ -4,7 +4,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { IsConstLiteralUse, IsLetConstantUse } from '../type-system/check.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { AdoptIntegerContextOperand } from '../type-system/arithmetic.mts';
+import { AdoptIntegerContextOperand, type ComputedConstant } from '../type-system/arithmetic.mts';
 import { ApplyStringOrNumericBinaryOperator, type BinaryOperator } from './all.mts';
 import { GetValue, surroundingAgent, DeclarativeEnvironmentRecord, Value } from '#self';
 
@@ -156,6 +156,41 @@ export function ReadLiteralOperand(node: ParseNode): { literal: boolean, node: P
   return { literal: isNumericLiteralOperand(node), node: ProducingOperand(node) };
 }
 
+/**
+ * For a diagnostic: whether a literal operand's value was computed from
+ * constants - a named constant, or arithmetic over constants - rather than
+ * written as a numeric literal, and whether a bitwise operator or a shift
+ * computed it (`ComputedConstant`). _node_ is the operand that produced the
+ * value (`ReadLiteralOperand`).
+ */
+export function IsComputedConstantOperand(node: ParseNode): ComputedConstant | undefined {
+  let n = node;
+  while (n.type === 'ParenthesizedExpression' || (n.type === 'UnaryExpression' && (n.operator === '-' || n.operator === '+'))) {
+    n = n.type === 'ParenthesizedExpression' ? n.Expression : n.UnaryExpression;
+  }
+  if (n.type === 'NumericLiteral') return undefined;
+  const bitwise = (m: ParseNode | undefined, depth: number): boolean => {
+    if (!m || depth > 256) return false;
+    switch (m.type) {
+      case 'ShiftExpression': case 'BitwiseANDExpression': case 'BitwiseXORExpression': case 'BitwiseORExpression':
+        return true;
+      case 'UnaryExpression':
+        return m.operator === '~' || bitwise(m.UnaryExpression, depth + 1);
+      case 'ParenthesizedExpression':
+        return bitwise(m.Expression, depth + 1);
+      case 'AdditiveExpression':
+        return bitwise(m.AdditiveExpression, depth + 1) || bitwise(m.MultiplicativeExpression, depth + 1);
+      case 'MultiplicativeExpression':
+        return bitwise(m.MultiplicativeExpression, depth + 1) || bitwise(m.ExponentiationExpression, depth + 1);
+      case 'ExponentiationExpression':
+        return bitwise(m.UpdateExpression, depth + 1) || bitwise(m.ExponentiationExpression, depth + 1);
+      default:
+        return false;
+    }
+  };
+  return bitwise(n, 0) ? 'bitwise' : 'arithmetic';
+}
+
 /** Whether an operand is, under its parentheses and sign and at the end of a comma, an expression that selects one of its operands. */
 export function isSelectingOperand(node: ParseNode): boolean {
   let n = node;
@@ -200,5 +235,7 @@ export function* EvaluateStringOrNumericBinaryExpression(leftOperand: ParseNode.
     // adopt, deliberately, but it is the one failure with a one-word fix.
     leftLetConst: IsLetConstantUse(leftOperand as object),
     rightLetConst: IsLetConstantUse(rightOperand as object),
+    leftComputed: leftRead.literal ? IsComputedConstantOperand(leftRead.node) : undefined,
+    rightComputed: rightRead.literal ? IsComputedConstantOperand(rightRead.node) : undefined,
   }, contextualTypeFor(leftOperand.parent)));
 }

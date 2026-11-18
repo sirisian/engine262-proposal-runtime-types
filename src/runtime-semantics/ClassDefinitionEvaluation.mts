@@ -9,6 +9,7 @@ import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '..
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
+import { TakePendingLiteralFill } from '../abstract-ops/literal-fill.mts';
 import { ComputeClassLayout, IsValueType, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { Descriptor } from '../value.mts';
@@ -832,6 +833,11 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // fields became properties and its buffer was never written.
         if (surroundingAgent.feature('runtime-types')) {
           TakePendingPlacement(result);
+          // An object literal converted to the class fills it here, between
+          // the instance being created and its fields being initialized
+          // (`FillClassFromObjectLiteral`). Only a class with no constructor in
+          // its chain is filled, so this is the one creation path it takes.
+          TakePendingLiteralFill(result);
         }
       }
       Q(yield* InitializeInstanceElements(result, F));

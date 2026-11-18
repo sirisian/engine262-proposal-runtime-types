@@ -26,7 +26,9 @@ import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import { MatchComponentList } from '../type-system/component-patterns.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { isTypedArithmetic, typedBinary, AdoptLiteralOperand } from '../type-system/arithmetic.mts';
+import {
+  isTypedArithmetic, typedBinary, AdoptLiteralOperand, type ComputedConstant,
+} from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
 } from '../intrinsics/Rational.mts';
@@ -68,7 +70,7 @@ export function metadataAsObjectRecord(metadata: MetadataRecord, domain?: TypeRe
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
-export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }, contextualType?: TypeRecord) {
+export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant }, contextualType?: TypeRecord) {
   if (surroundingAgent.feature('runtime-types') && literals
       && (RuntimeTypeOf(lval).Kind === 'parameterized' || RuntimeTypeOf(rval).Kind === 'parameterized')) {
     const adopted = AdoptLiteralOperand(lval, rval, literals);

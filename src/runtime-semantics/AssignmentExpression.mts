@@ -2,6 +2,7 @@ import { JSStringValue, NumberValue, ObjectValue, ReferenceRecord, TypedNumberVa
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { displayType } from '../type-system/records.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, ObjectEnvironmentRecord } from '../execution-context/Environment.mts';
 import { Q, X, EnsureCompletion, NormalCompletion } from '../completion.mts';
 import {
@@ -25,6 +26,7 @@ import {
   DestructuringAssignmentEvaluation,
 } from './all.mts';
 import { copiesOnBinding } from './LexicalDeclaration.mts';
+import { IsComputedConstantOperand, isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   Call,
   GetValue,
@@ -34,6 +36,7 @@ import {
   LocationOfAssignmentTarget,
   ToBoolean,
   surroundingAgent,
+  Throw,
 } from '#self';
 
 
@@ -486,7 +489,19 @@ export function* Evaluate_AssignmentExpression({
       // CHECKED, so a value the type cannot hold is a RangeError rather than a
       // silent wrap: the plain conversion took `a += 300` at a `uint8` to 44,
       // which is the truncation the design refuses everywhere else.
-      operand = Q(yield* CheckedConvertValue(rval, (lval as { TypeRecord: unknown }).TypeRecord as never));
+      const converted = EnsureCompletion(yield* CheckedConvertValue(rval, (lval as { TypeRecord: unknown }).TypeRecord as never));
+      // A constant computed where no type is declared, as `x += 7 / 2` in
+      // untyped code is, says so, as the binary operator's refusal does
+      // (TypedOperandType): a declared type would have read it differently.
+      if (converted.Type === 'throw' && isNumericLiteralOperand(AssignmentExpression)) {
+        const computed = IsComputedConstantOperand(AssignmentExpression);
+        const held = Number((rval as unknown as { value: number }).value);
+        if (computed === 'bitwise' || (computed === 'arithmetic' && !Number.isInteger(held))) {
+          return Throw.RangeError('$1 is not in the range of $2; no type is declared where this constant is written, so it was computed as a number',
+            rval, Value(displayType((lval as { TypeRecord: TypeRecord }).TypeRecord)));
+        }
+      }
+      operand = Q(converted);
     } else if (lval.type === 'Vector' && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)) {
       // #sec-operator-results, #sec-vector-lanes: beside a vector, the literal
       // the desugaring propagates takes the LANE type, and the lane-typed

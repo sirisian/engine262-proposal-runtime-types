@@ -53,6 +53,30 @@ test('form 3: a one-parameter conversion operator on the target', () => {
   expectThrown('class C { constructor(){} operator C(value: float32) { return new C(); } } let t: C = "s";');
 });
 
+test('form 3 from an object type applies to an object literal as to a binding holding one', () => {
+  // #sec-user-defined-conversions applies a declared conversion at an assignment, an argument and a
+  // return. A binding holding `{ x: 5 }` converted; the literal itself was refused before the
+  // program ran, "an object literal is not assignable to D".
+  const D = 'class D { x: uint8 = 0; operator D(o: { x: uint8 }) { const d = new D(); d.x = o.x + 1; return d; } } ';
+  expect(evaluated(`${D}const d: D = { x: 5 }; String(d.x);`)).toBe('6');
+  expect(evaluated(`${D}let d: D = new D(); d = { x: 5 }; String(d.x);`)).toBe('6');
+  expect(evaluated(`${D}function f(d: D) { return d.x; } String(f({ x: 5 }));`)).toBe('6');
+  expect(evaluated(`${D}function f(): D { return { x: 5 }; } String(f().x);`)).toBe('6');
+  // So does a converting constructor of an object type.
+  expect(evaluated('class E { x: uint8 = 0; constructor(o: { x: uint8 }) { this.x = o.x + 1; } } const e: E = { x: 5 }; String(e.x);')).toBe('6');
+  // A literal its parameter does not admit is refused where it runs, as a binding holding it is.
+  expectThrown(`${D}const d: D = { y: 5 };`, 'is not assignable to "{ x: uint.<8> }"');
+});
+
+test('a conversion\'s parameter is its own', () => {
+  // It was read before the operator's scope was entered, so it was declared in the scope around
+  // the class, and a later `const o` there was "Identifier o already declared".
+  expect(evaluated('class D { x: uint8 = 0; operator D(o: { x: uint8 }) { return new D(); } } const o = 1; String(o);')).toBe('1');
+  expect(evaluated('class D { operator D(value: uint8) { return new D(); } } let value = 2; String(value);')).toBe('2');
+  // Nor is it visible outside the operator.
+  expectThrown('class D { operator D(p: uint8) { return new D(); } } p;', 'not defined');
+});
+
 test('form 3 parses beside the other operator forms', () => {
   expect(evaluated('class A { operator number() { return 1; } } "ok";')).toBe('ok');
   expect(evaluated('class A { static operator number() { return 1; } } "ok";')).toBe('ok');

@@ -1617,6 +1617,7 @@ export abstract class TypeParser extends ExpressionParser {
         const conversionCheckpoint = this.getLexerCheckpoint();
         const conversionEarlyErrors = new Set(this.earlyErrors);
         node.Type = this.parseType();
+        let parameterList = false;
         // The trailing `(` `)` reads as an empty ComputedType inside the Type;
         // reclaim it for the conversion form.
         if (node.Type.type === 'ComputedType' && node.Type.Arguments.length === 0) {
@@ -1635,21 +1636,30 @@ export abstract class TypeParser extends ExpressionParser {
           this.restoreLexerCheckpoint(conversionCheckpoint);
           this.earlyErrors = conversionEarlyErrors;
           node.Type = this.parseTypeReference();
-          node.FormalParameters = this.parseFormalParameters();
+          parameterList = true;
         } else {
           this.expect(Token.LPAREN);
           this.expect(Token.RPAREN);
         }
-        if (this.test(Token.COLON)) {
-          node.TypeAnnotation = this.parseTypeAnnotation(true);
-        }
-        if (this.test('where')) {
-          (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
-        }
+        // The parameter is the conversion's own, bound in its function scope
+        // as an operator's or a method's is. It was read before that scope was
+        // entered, so `operator D(o: S)` declared `o` in the scope around the
+        // class, and a later `const o` there was "Identifier o already declared".
         this.scope.with({
           lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
         }, () => {
+          this.scope.arrowInfoStack.push(null);
+          if (parameterList) {
+            node.FormalParameters = this.parseFormalParameters();
+          }
+          if (this.test(Token.COLON)) {
+            node.TypeAnnotation = this.parseTypeAnnotation(true);
+          }
+          if (this.test('where')) {
+            (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses(true);
+          }
           node.FunctionBody = this.parseFunctionBody(false, false, false) as ParseNode.FunctionBody;
+          this.scope.arrowInfoStack.pop();
         });
         break;
       }

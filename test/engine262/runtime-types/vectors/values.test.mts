@@ -220,6 +220,36 @@ test('a bit vector converts back to an integer', () => {
   expect(evaluated('let a: boolean8 = 0; a[0] = 1; a[7] = 1; let n: uint8 = a; String(n);')).toBe('129');
 });
 
+/**
+ * An EXPLICIT conversion reads the bits as well. The annotation's conversion
+ * had the rule and `:=` did not reach it, so `a := uint8` and `uint8(a)` were
+ * refused where `let n: uint8 = a` converted; an explicit conversion is the
+ * one that discards, so a narrower target wraps the integer the lanes spell.
+ */
+test('an explicit conversion reads a bit vector as its integer', () => {
+  const A = 'let a: boolean8 = 0b10001011; ';
+  expect(evaluated(`${A}String(a := uint8) + "," + String(uint8(a)) + "," + String(a := uint32);`)).toBe('139,139,139');
+  expect(evaluated(`${A}String(a := int8) + "," + String(a := uint.<4>) + "," + String(a := bigint);`)).toBe('-117,11,139');
+  // four lanes spell a four-bit integer, whatever register holds them
+  expect(evaluated('const m: vector.<boolean1, 4> = int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 3); String(m := uint8);')).toBe('11');
+  // and an integer type is what the clause names: a Number is not one
+  expectThrown(`${A}a := number;`);
+});
+
+/**
+ * Both directions are exact at 64 lanes. They were computed with 32-bit
+ * shifts, which count modulo 32: an integer's high word was lost and its low
+ * word repeated in the high lanes, and lane 32 read back as bit 0.
+ */
+test('a 64-lane bit vector converts in both directions without losing its high lanes', () => {
+  const V = 'const v = 0xFFFFFFFF00000000n := uint64; ';
+  expect(evaluated(`${V}const m: boolean64 = v; String(m.lane.<0>()) + String(m.lane.<31>()) + String(m.lane.<32>()) + String(m.lane.<63>());`)).toBe('0011');
+  expect(evaluated(`${V}const m = v := boolean64; String(m := uint64);`)).toBe('18446744069414584320');
+  expect(evaluated('let m: boolean64 = 0; m[32] = 1; String(m := uint64);')).toBe('4294967296');
+  // a BigInt is an integer value too
+  expect(evaluated('const m = 0b101n := boolean8; String(m.lane.<0>()) + String(m.lane.<1>()) + String(m.lane.<2>());')).toBe('101');
+});
+
 test('the bit conversion does not disturb an ordinary broadcast', () => {
   // A vector whose lane type is not `uint.<1>` still broadcasts, which is the
   // assertion that would fail if the bit rule were matched too widely.

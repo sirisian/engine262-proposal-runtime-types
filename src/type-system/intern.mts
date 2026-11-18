@@ -731,6 +731,24 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       const laneCount = record.Arguments[1];
       if (typeof laneCount === 'number') {
         const supplied = argumentsList.length;
+        // #sec-vector-lanes: "A single argument that is itself a vector is an
+        // explicit conversion instead (#sec-explicit-conversion), and a single
+        // argument to a vector of `uint.<1>` lanes is a bitmask." Both are the
+        // conversion `:=` performs, which is the one #sec-explicit-conversion
+        // says a call on the type is. The call broadcast every single argument,
+        // so `float32x4(int32x4(1, 2, 3, 4))` was refused, a lane being no
+        // vector, and `boolean32x4(a == b)` with it. A vector of the lane
+        // type, where the lanes are vectors as a wide mask's are, still
+        // broadcasts.
+        if (supplied === 1) {
+          const bitLane = laneType.Kind === 'primitive' && laneType.Name === 'uint'
+            && laneType.Arguments.length === 1 && laneType.Arguments[0] === 1;
+          const laneValue = arg instanceof VectorValue && laneType.Kind === 'primitive' && laneType.Name === 'vector'
+            && SameTypeStructural(arg.TypeRecord as TypeRecord, laneType);
+          if (bitLane || (arg instanceof VectorValue && !laneValue)) {
+            return Q(yield* ConvertValue(arg, record));
+          }
+        }
         if (supplied !== laneCount && supplied !== 1) {
           return Throw.TypeError(
             '$1 lanes were supplied where $2 are wanted',

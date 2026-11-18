@@ -546,3 +546,55 @@ test('every form the message names is writable and selects that form', () => {
   expect(evaluated('let m: boolean32x4 = float32x4(1,2,3,4) < float32x4(4,3,2,1); String(m is boolean32x4);')).toBe('true');
   expect(evaluated('let m: float32x4 = float32x4(1,2,3,4) < float32x4(4,3,2,1); String(m is float32x4);')).toBe('true');
 });
+
+// ---------------------------------------------------------------------------
+// AN EXPLICIT CONVERSION NAMES THE FORM, IN EITHER SPELLING.
+//
+// The README's ambiguous comparison "requires explicit cast", and
+// #sec-explicit-conversion writes a conversion two ways that "are the same
+// operation": `v := T` and the call on the type, `T(v)`. Neither named the
+// form. `:=` offered its target to a literal operand only, so the comparison
+// was still ambiguous; and the call on a vector type broadcast its one
+// argument, so a vector argument, which #sec-vector-lanes makes "an explicit
+// conversion instead", was refused as no lane value, and one argument to a
+// bit-lane vector was not read as the bitmask the clause says it is.
+// ---------------------------------------------------------------------------
+
+test('a conversion to one of the three forms names it, and to another type names none', () => {
+  // lanes 0, 1 and 3 match
+  const AB = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(1, 2, 0, 4); ';
+  expect(evaluated(`${AB}const m = (a == b) := boolean32x4; String(m is boolean32x4) + String(m.any()) + String(m.all());`)).toBe('truetruefalse');
+  expect(evaluated(`${AB}const m = boolean32x4(a == b); String(m is boolean32x4) + String(m.any()) + String(m.all());`)).toBe('truetruefalse');
+  expect(evaluated(`${AB}const m = (a == b) := vector.<uint.<1>, 4>; String(m.lane.<0>()) + String(m.lane.<2>());`)).toBe('10');
+  expect(evaluated(`${AB}const m = vector.<uint.<1>, 4>(a == b); String(m.lane.<0>()) + String(m.lane.<2>());`)).toBe('10');
+  // the compared type has its matching lanes all-ones, which a float lane reads as a NaN
+  expect(evaluated(`${AB}const m = (a == b) := float32x4; String(m.x !== m.x) + String(m.z);`)).toBe('true0');
+  expect(evaluated(`${AB}const m = float32x4(a == b); String(m.x !== m.x) + String(m.z);`)).toBe('true0');
+  // the reduction operatoroverloading.md writes, with the form written
+  expect(evaluated(`${AB}String(((a == b) := boolean32x4).all()) + String(boolean32x4(a == b).any());`)).toBe('falsetrue');
+  // a type that is none of the three names no form, and what each form would
+  // convert to differs, so the comparison is still ambiguous
+  expectStaticTypeError(`${AB}(a == b) := int32x4;`);
+  expectStaticTypeError(`${AB}int32x4(a == b);`);
+  expectThrown(`${AB}int32x4(a == b);`, 'ambiguous among its result forms');
+  // `:=` binds at the precedence of `<`, so without the parentheses it converts `b` alone
+  expectThrown(`${AB}a == b := boolean32x4;`);
+});
+
+test('a call on a vector type converts a vector argument and reads a bitmask, as `:=` does', () => {
+  expect(evaluated('const f = float32x4(int32x4(1, 2, 3, 4)); String(f.w) + String(f.x is float32);')).toBe('4true');
+  expect(evaluated('const i = int32x4(float32x4(1.7, 2.9, 3, 4)); String(i.x) + String(i.y);')).toBe('12');
+  // a vector already of the type is itself
+  expect(evaluated('const m: boolean32x4 = float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1);'
+    + ' const n = boolean32x4(m); String(n.all()) + String(n.any());')).toBe('falsetrue');
+  // the lane count does not change, as with `:=`
+  expectThrown('int32x4(uint8x16(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16));');
+  // one argument to a bit-lane vector is a bitmask, lane i being bit i
+  expect(evaluated('const m = boolean8(0b1011);'
+    + ' String(m.lane.<0>()) + String(m.lane.<2>()) + String(m.lane.<3>()) + String(m.lane.<4>());')).toBe('1010');
+  expect(evaluated('const m = boolean8(1); const n = 1 := boolean8; String(m.all()) + String(n.all()) + String(m.any());')).toBe('falsefalsetrue');
+  // a scalar still fills every lane, and so does a value of the lane type where the lanes are vectors
+  expect(evaluated('const v = float32x4(7); String(v.w);')).toBe('7');
+  expect(evaluated('const l = boolean8(0b11); const v = boolean8x16(l);'
+    + ' String(v.lane.<15>().lane.<1>()) + String(v.lane.<15>().lane.<2>());')).toBe('10');
+});

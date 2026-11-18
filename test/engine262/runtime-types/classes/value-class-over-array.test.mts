@@ -80,10 +80,12 @@ test('its elements are the whole of its value', () => {
   expect(evaluated('value class G extends [4].<uint8> { constructor(fill: uint8) { super(); for (let i: uint32 = 0; i < 4; i++) this[i] = fill; } } String(new G(7)[3]);')).toBe('7');
 });
 
-test('what is not built', () => {
-  // Its layout is its base's, and placing one on a buffer is specified and not built: the
-  // refusal says so, where it said the class had no layout.
-  expectThrown(`${G}const b = new ArrayBuffer(8); new(b, 0) G();`, 'specified but not implemented in this engine');
+test('it is placed on a buffer as its base is', () => {
+  // Its layout is its base's, and a placement puts its elements on the buffer, as the array form
+  // of placement `new` puts an array's (memory-layout/array-placement). It was refused as
+  // "specified but not implemented in this engine".
+  expect(evaluated(`${G}const b = new ArrayBuffer(8); const g = new(b, 2) G(); g[1] = 7; String(new Uint8Array(b)[3]) + String(g.first()) + String(g instanceof G);`))
+    .toBe('70true');
 });
 
 test('an instance reports its class, and a store to a copy of one is seen', () => {

@@ -15,7 +15,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { AbruptCompletion } from '../completion.mts';
 import { JSStringValue, TypedNumberValue } from '../value.mts';
 import { AdoptLiteralOperand, TypedOperandType } from '../type-system/arithmetic.mts';
-import { ReadLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { ReadLiteralOperand, IsComputedConstantOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLessThan,
@@ -234,7 +234,12 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
     const typedLiteralMeetsNumber = (lval instanceof TypedNumberValue && leftLiteral && !(rval instanceof TypedNumberValue))
       || (rval instanceof TypedNumberValue && rightLiteral && !(lval instanceof TypedNumberValue));
     if (!typedLiteralMeetsNumber) {
-      const decided = TypedOperandType(lval, rval, { left: leftLiteral, right: rightLiteral });
+      const decided = TypedOperandType(lval, rval, {
+        left: leftLiteral,
+        right: rightLiteral,
+        leftComputed: leftLiteral ? IsComputedConstantOperand(leftRead.node) : undefined,
+        rightComputed: rightLiteral ? IsComputedConstantOperand(rightRead.node) : undefined,
+      });
       if (decided instanceof AbruptCompletion) {
         return decided;
       }

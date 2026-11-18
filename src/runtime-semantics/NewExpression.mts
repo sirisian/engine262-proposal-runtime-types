@@ -1,6 +1,7 @@
 import { CheckWhereCall } from '../type-system/where-predicates.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
+import { PlaceConstructedArray, ValidateArrayPlacement, type ArrayPlacement } from '../abstract-ops/array-view.mts';
 import { SetPendingProxyRuntimeType } from '../intrinsics/Proxy.mts';
 import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { SetPendingThreadLocalTypeArguments } from '../intrinsics/Synchronization.mts';
@@ -183,12 +184,20 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // would let a constructor with side effects run for a placement that can
   // never happen.
   let placementBacking;
+  let arrayPlacement: ArrayPlacement | undefined;
   if (surroundingAgent.feature('runtime-types') && placementArgs !== undefined && placementArgs !== null) {
     const placementValues: Value[] = [];
     for (const argNode of placementArgs) {
       placementValues.push(Q(yield* GetValue(Q(yield* Evaluate(argNode)))));
     }
-    placementBacking = Q(yield* ValidatePlacement(constructor as ObjectValue, placementValues));
+    // An ARRAY type, `new(buffer, byteOffset, byteElementLength) [N].<T>()`,
+    // or a value class over one. Its elements are what the construction
+    // makes, stored at their positions once it has made them; a class
+    // instance is bound to the buffer as it is created instead (below).
+    arrayPlacement = Q(yield* ValidateArrayPlacement(constructor, placementValues));
+    if (arrayPlacement === undefined) {
+      placementBacking = Q(yield* ValidatePlacement(constructor as ObjectValue, placementValues));
+    }
     // The instance takes the placement as it is CREATED, before its fields are
     // initialized, so the constructor writes into the buffer rather than into
     // properties that would then have to be moved and could not be deleted.
@@ -226,7 +235,10 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
       SetPendingPromiseTypes(undefined);
     }
   }
-  const constructed = completion.Value;
+  let constructed = completion.Value;
+  if (arrayPlacement !== undefined) {
+    constructed = Q(yield* PlaceConstructedArray(arrayPlacement, constructed));
+  }
   // proposal-runtime-types, the PLACEMENT forms: `new(buffer, byteOffset,
   // byteLength) Type(args)`. The parser has built these arguments since the
   // form was added and NOTHING consumed them, so a placement construction

@@ -41,6 +41,22 @@ test('a comparison reads the constant as arithmetic does', () => {
     .toBe('9true3false');
 });
 
+test('under a sign, each constant a selection may produce is read beside the integer', () => {
+  // `-(c ? 7 / 2 : 1)` negates `7 / 2` or `1`, each the constant it is written there without the
+  // sign. It was the Number -3.5 beside an `int8`, a RangeError when the line ran.
+  const F = 'function f(z: int8, c: boolean) { return ';
+  expect(evaluated(`${F}z * -(c ? 7 / 2 : 1); } String(f(3, true)) + String(f(3, false));`)).toBe('-9-3');
+  expect(evaluated(`${F}z + -(c ? 7 / 2 : 1); } String(f(3, true));`)).toBe('0');
+  expect(evaluated(`${F}String(z === -(c ? 7 / 2 : 1)) + String(z < -(c ? 7 / 2 : 1)); } f(-3, true);`)).toBe('truefalse');
+  // The range is judged on the negated value: -128 is an `int8`, -300 and -2 are no `uint8`.
+  expect(evaluated(`${F}z * -(c ? 128 : 1); } String(f(1, true));`)).toBe('-128');
+  expect(observeScript('function f(z: uint8, c: boolean) { return z * -(c ? 300 : 1); }')).toMatchObject(early);
+  expect(observeScript('function f(z: uint8, c: boolean) { return z + -(c ? 2 : 1); }')).toMatchObject(early);
+  expectThrown('function f(z: uint8, c: boolean) { return z + -(c ? 2 : 1); }', '"-2" is not in the range of "uint.<8>"');
+  // A selection that may also produce a typed value is read as it was.
+  expect(evaluated('function f(z: int8, c: boolean, n: int8) { return z * -(c ? n : 1); } String(f(3, true, 2));')).toBe('-6');
+});
+
 test('beside anything else the constant is the Number it was', () => {
   expect(evaluated('function f(n: number) { return String(n === 7 / 2) + String(n < 7 / 2); } f(3.5) + f(3);')).toBe('truefalsefalsetrue');
   expect(evaluated('function f(r: float32) { return String(r === 7 / 2) + String(r * (7 / 2)); } f(3.5);')).toBe('true12.25');
@@ -53,6 +69,24 @@ test('beside anything else the constant is the Number it was', () => {
   expectThrown('function f(x) { return x * (7 / 2); } f(uint8(3));', '3.5 is not in the range');
   expectThrown('function f(x) { return x < 7 / 2; } f(uint8(3));', '3.5 is not in the range');
   expect(evaluated('function f(x) { return String(x * (7 / 2)) + String(x < 7 / 2); } f(3);')).toBe('10.5true');
+});
+
+test('a constant computed where no type is declared says so when it does not fit', () => {
+  // A declared type would have read `7 / 2` as 3; with none in reach it was computed as a Number,
+  // and the refusal says why 3.5 was asked to be a `uint8`.
+  const why = 'no type is declared where this constant is written, so it was computed as a number';
+  expectThrown('function f(x) { return x * (7 / 2); } f(uint8(3));', `3.5 is not in the range of "uint.<8>"; ${why}`);
+  expectThrown('function f(x) { return x < 7 / 2; } f(uint8(3));', why);
+  expectThrown('function f(x) { return x * (1 << 9); } f(uint8(3));', why);
+  // A compound assignment as its binary operator, for both operators it rewrites.
+  expectThrown('function f(x) { x += 7 / 2; return x; } f(uint8(3));', `3.5 is not in the range of "uint.<8>"; ${why}`);
+  expectThrown('function f(x) { x *= 7 / 2; return x; } f(uint8(3));', why);
+  // Where a declared type would have read it the same, the message is the short one.
+  for (const source of ['function f(x) { return x * 3.5; } f(uint8(3));', 'function f(x) { return x * (200 + 100); } f(uint8(3));',
+    'function f(x) { x += 300; return x; } f(uint8(3));', 'function f(x) { x += 200 + 100; return x; } f(uint8(3));']) {
+    expect(() => expectThrown(source, 'so it was computed as a number'), source).toThrow();
+    expectThrown(source, 'is not in the range of "uint.<8>"');
+  }
 });
 
 test('a constant the type cannot hold is refused where the literal is', () => {
@@ -75,6 +109,18 @@ test('a constant the type cannot hold is refused where the literal is', () => {
   expectThrown(`${U}z * (7.5 / 2); }`, '"3.75" is not in the range of "uint.<8>"');
   // An equality with a value the type cannot hold is false, as `z === 300` is.
   expect(evaluated(`${U}String(z === 200 + 100) + String(z === 7.5 / 2); } f(44);`)).toBe('falsefalse');
+  // A case label is the test that guards its clause, and one the type cannot hold can never
+  // succeed, as `case 300:` and `case K:` with `const K = 300` already were. `case 200 + 100:` was
+  // a silent miss.
+  const impossible = { bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-impossible-test' } };
+  const S = 'function f(z: uint8) { switch (z) { case ';
+  expect(observeScript(`${S}300: return 1; } return 0; }`)).toMatchObject(impossible);
+  expect(observeScript(`${S}200 + 100: return 1; } return 0; }`)).toMatchObject(impossible);
+  expect(observeScript(`${S}-1 + 0: return 1; } return 0; }`)).toMatchObject(impossible);
+  expectThrown(`${S}200 + 100: return 1; } return 0; }`, 'the "300" test can never succeed');
+  // One the type holds is taken, and so is any label over an untyped discriminant.
+  expect(evaluated(`${S}7 / 2: return "hit"; default: return "miss"; } } f(3);`)).toBe('hit');
+  expect(evaluated('function f(z) { switch (z) { case 200 + 100: return "hit"; default: return "miss"; } } f(300);')).toBe('hit');
 });
 
 test('and at a position of the type', () => {
