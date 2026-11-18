@@ -387,10 +387,13 @@ test('a constructor is a construct signature, not a member of the instance', () 
   expect(evaluated('class C { constructor(v: uint8) {} } function nc(c: C) { c.constructor(300); } "ok";')).toBe('ok');
   // `new C()` has the class's instance type, so a field read through it flows.
   expectStatic('value class C { x: uint8 = 1; } function nc() { let y: uint16 = new C().x; }');
-  // An untyped or absent constructor leaves the call unchecked, and the
-  // construction still runs.
+  // An untyped constructor leaves the call unchecked, and the construction
+  // still runs.
   expect(evaluated('class C { constructor(v) {} } function nc() { new C(300); } "ok";')).toBe('ok');
-  expect(evaluated('value class C { x: uint8 = 1; } function nc() { new C(300); } "ok";')).toBe('ok');
+  // A typed class that declares none takes no arguments (#sec-typed-classes):
+  // the argument was dropped, and this line pinned that it ran.
+  expectStatic('value class C { x: uint8 = 1; } function nc() { new C(300); }');
+  expect(evaluated('value class C { x: uint8 = 1; } function nc() { new C(); } "ok";')).toBe('ok');
   expect(evaluated('class C { constructor(v: uint8) { this.v = v; } } String(new C((7 := uint8)).v);')).toBe('7');
 });
 

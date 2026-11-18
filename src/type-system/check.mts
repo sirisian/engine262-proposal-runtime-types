@@ -129,7 +129,7 @@ import {
   libraryConstructParameters, iteratorHelperType,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
-import { intrinsicDeclarationRecord } from './records.mts';
+import { intrinsicDeclarationRecord, ArgumentWeight, GROWING_APPLICATION_LIMIT } from './records.mts';
 import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint, rememberDeclaredDefault, rememberGenericTypeCaptures } from './records.mts';
@@ -2440,6 +2440,9 @@ interface Rat { num: bigint, den: bigint }
 const CONSTANT_EXPRESSION_TYPES = new Set([
   'NumericLiteral', 'ParenthesizedExpression', 'UnaryExpression',
   'AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
+  // A constant of the Math object, `Math.PI`: its operands are not constant
+  // expressions and are shared with the original, which is all a read needs.
+  'MemberExpression',
 ]);
 const CONSTANT_EXPRESSION_CHILDREN = new Set([
   'Expression', 'UnaryExpression', 'AdditiveExpression', 'MultiplicativeExpression',
@@ -15823,6 +15826,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const formationKey = type.Declaration ?? type;
       const active = formingNominals.get(formationKey) ?? [];
       if (active.some((instance) => SameType(instance, type))) return;
+      // A member may apply its own declaration to OTHER arguments, and those
+      // need not come round again: `interface Query<T> { chunk(): Query.<[].<T>> }`
+      // names a new application at every step. A nominal type is its
+      // declaration and its arguments, so it is a type however far that goes,
+      // and only so many growing applications of one declaration are opened
+      // inside one another (GROWING_APPLICATION_LIMIT). Past that, an
+      // application has its arguments checked here and its members where it is
+      // written.
+      //
+      // There was no limit, and each step is a new type, so nothing closed: two
+      // such members never finished, and one with a member that fails for the
+      // deeper argument ran until the host stack gave out.
+      const weight = ArgumentWeight(type.Arguments);
+      const nested = active.filter((instance) => instance.Kind === 'nominal' && ArgumentWeight(instance.Arguments) <= weight).length >= GROWING_APPLICATION_LIMIT;
       active.push(type);
       formingNominals.set(formationKey, active);
       try {
@@ -15836,7 +15853,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ? { Kind: 'literal', Value: Value(type.Arguments[i]), Base: makePrimitive('number') } as TypeRecord
               : type.Arguments[i] as TypeRecord])));
         }
-        checkTypeFormation(structureOf(type));
+        if (!nested) checkTypeFormation(structureOf(type));
       } finally {
         active.pop();
         if (active.length === 0) formingNominals.delete(formationKey);
@@ -19222,6 +19239,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** The constructions already judged: a target-typed one is typed wherever its position is asked about. */
   const arrayConstructionSites = new WeakSet<ParseNode>();
   /**
+   * Whether a construction of _declaration_ runs no constructor that a class
+   * declares: neither it nor any class it extends writes one, and the chain is
+   * of class declarations this pass can read, ending at a class that extends
+   * nothing.
+   */
+  const declaresNoConstructor = (declaration: ParseNode | null | undefined): boolean => {
+    let at = declaration ?? undefined;
+    for (let depth = 0; at && depth < 32; depth += 1) {
+      if (at.type !== 'ClassDeclaration' && at.type !== 'ClassExpression') return false;
+      const written = classBodyOf(at).some((member) => {
+        const method = member as unknown as { type?: string, static?: boolean, ClassElementName?: { name?: string, value?: string } | null };
+        return method.type === 'MethodDefinition' && !method.static && (method.ClassElementName?.name ?? method.ClassElementName?.value) === 'constructor';
+      });
+      if (written) return false;
+      if (!at.ClassTail?.ClassHeritage) return true;
+      at = heritageClassOf(at);
+    }
+    return false;
+  };
+
+  /**
+   * #sec-typed-classes: a typed class that declares no constructor takes no
+   * argument. `new Point(1, 2)` for `value class Point { x: float32 = 0; y:
+   * float32 = 0; }` made a point at the origin and dropped both arguments.
+   */
+  const checkImplicitConstruction = (instance: Known, declaration: ParseNode | null | undefined, args: readonly ParseNode[], site: ParseNode): void => {
+    if (args.length === 0 || args.some((argument) => argument.type === 'AssignmentRestElement')) return;
+    if (instance?.Kind !== 'nominal' || !sealedWithDeclaredMembers(instance) || !declaresNoConstructor(declaration)) return;
+    const name = (instance.Declaration as { BindingIdentifier?: { name?: string } } | undefined)?.BindingIdentifier?.name ?? 'this class';
+    reportType('rt-call-argument', site, '$1 declares no constructor, so it takes no arguments, and $2 were supplied', Value(name), Value(String(args.length)));
+  };
+
+  /**
    * #sec-array-and-tuple-types: the constructor of an array type takes one
    * argument, the SOURCE of the elements, and the array it makes is the one
    * `const t: A = [...source]` binds. So what is judged here is what that
@@ -20531,6 +20581,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return false;
       }
+      // #sec-static-type-of-an-expression: the constants of the Math object
+      // "participate as such a `const` does, since none of them can be written
+      // as a literal that denotes it". One was read as a literal only where it
+      // stood alone beside a typed operand, so `r * Math.PI` took `r`'s type and
+      // `const TAU = 2 * Math.PI; r * TAU` was a Number beside it.
+      case 'MemberExpression':
+        return isWellKnownNumericConstant(e) && !shadowedByProgram('Math');
       case 'ParenthesizedExpression':
         return isNumericConstantExpression(e.Expression);
       case 'UnaryExpression':
@@ -20548,6 +20605,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       default:
         return false;
     }
+  };
+
+  /**
+   * An operand that is ARITHMETIC over numeric constants, under any parentheses
+   * and sign - `4 ** 2`, `(K * 2)`, `-(1 + 2)` - or null. #sec-contextual-types
+   * gives such an expression its position's type "applied to the expression's
+   * mathematical value", and gives an operand of a binary operator the type of
+   * the other operand; and a `const` bound to one "behaves as if inlined". So
+   * beside a typed operand it is read as the named constant is: `z * K` with
+   * `const K = 4 ** 2` took `z`'s type, and `z * 4 ** 2` was a Number there.
+   * A bare literal and a bare name have their own readings and answer null.
+   */
+  const constantExpressionOperand = (node: ParseNode): ParseNode | null => {
+    let inner: ParseNode | undefined = node;
+    for (;;) {
+      if (inner?.type === 'ParenthesizedExpression') {
+        inner = (inner as unknown as { Expression?: ParseNode }).Expression;
+      } else if (inner?.type === 'UnaryExpression' && ['-', '+'].includes((inner as unknown as { operator?: string }).operator ?? '')) {
+        inner = (inner as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
+      } else {
+        break;
+      }
+    }
+    return inner && ['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression'].includes(inner.type)
+      && isNumericConstantExpression(inner) ? node : null;
   };
 
   // A comma expression forwards context only to its result producer. This
@@ -21116,6 +21198,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               Return: contextual,
             })),
           }, node);
+        } else {
+          checkImplicitConstruction(contextual, declared as ParseNode, (node.Arguments ?? []) as readonly ParseNode[], node);
         }
       }
       return contextual;
@@ -21442,6 +21526,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // literal type - built from the binding's Number - that each family escaped
     // only through an exemption and a fold of its own, which integers, `bigint`
     // and decimals had and rationals and binary floats did not.
+    // The same clause: the constants of the Math object "participate as such a
+    // `const` does, since none of them can be written as a literal that denotes
+    // it". At a position that wants a binary float or an integer, one reads as
+    // the literal of its value, so `let k: float32 = Math.PI` holds the
+    // `float32` nearest pi as `const PI = 3.14159...; let k: float32 = PI` does,
+    // and an integer position refuses it as it refuses any fraction. It was a
+    // `number` there, refused at every numeric position but an operand's.
+    // Under a sign as well, as a literal is: `-Math.PI` is the literal `-pi`.
+    if (contextual && (node.type === 'MemberExpression' || node.type === 'UnaryExpression')) {
+      let sign = 1;
+      let core: ParseNode | undefined = node;
+      for (;;) {
+        if (core?.type === 'ParenthesizedExpression') {
+          core = (core as unknown as { Expression?: ParseNode }).Expression;
+        } else if (core?.type === 'UnaryExpression' && ['-', '+'].includes((core as unknown as { operator?: string }).operator ?? '')) {
+          if ((core as unknown as { operator?: string }).operator === '-') sign = -sign;
+          core = (core as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
+        } else {
+          break;
+        }
+      }
+      if (core?.type === 'MemberExpression' && isWellKnownNumericConstant(core) && !shadowedByProgram('Math')) {
+        const wanted = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
+        const constant = (Math as unknown as Record<string, unknown>)[(core as unknown as { IdentifierName: { name: string } }).IdentifierName.name];
+        if (typeof constant === 'number' && wanted.Kind === 'primitive'
+            && (/^float(16|32|64)$/.test(wanted.Name) || isIntegerValueType(wanted))) {
+          return { Kind: 'literal', Value: Value(sign * constant), Base: makePrimitive('number') };
+        }
+      }
+    }
     if (contextual && node.type === 'IdentifierReference') {
       const useName = (node as unknown as { name?: string }).name;
       if (typeof useName === 'string') {
@@ -22493,9 +22607,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * _named_: not as a field, a method or an accessor of the class or of a base. An index
    * operator answers for every key, so a class that declares one is not among them.
    */
-  const classesNotDeclaring = (receiver: Known, named: string | SymbolValue, access: ParseNode.MemberExpression): TypeRecord[] => {
+  const classesNotDeclaring = (receiver: Known, named: string | SymbolValue, access?: ParseNode.MemberExpression): TypeRecord[] => {
     if (receiver?.Kind === 'union') return receiver.Members.flatMap((arm) => classesNotDeclaring(arm, named, access));
-    if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver) || indexAccess(access, receiver)) return [];
+    if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver) || (access && indexAccess(access, receiver))) return [];
     const sealedStructure = structureOf(receiver);
     const declaresName = (type: Known, seen = new Set<object>()): boolean => {
       if (type?.Kind !== 'nominal' || seen.has(type)) return false;
@@ -22513,6 +22627,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
+   * #sec-typed-storage: `super.m(...)` in an instance member of a class, where no class it
+   * extends declares `m`. `super` looks nowhere but up, so there is no subclass that could
+   * supply the member, and the call is the misspelled one that `this.m()` is.
+   *
+   * Judged only where `super` is the class's own: an arrow keeps it, a method of an object
+   * literal written inside a class member has the literal's prototype instead, and a static
+   * member has the base constructor, whose members this rule does not list.
+   */
+  const checkUndeclaredSuperCall = (target: ParseNode.SuperProperty, site: ParseNode): void => {
+    const key = memberKey(target);
+    if (typeof key !== 'string' || OBJECT_PROTOTYPE_MEMBERS.has(key)) return;
+    let home: ParseNode | undefined = target.parent;
+    while (home && (home.type !== 'MethodDefinition' && home.type !== 'FieldDefinition' && home.type !== 'ClassStaticBlock'
+        && home.type !== 'FunctionDeclaration' && home.type !== 'FunctionExpression' && home.type !== 'ObjectLiteral')) home = home.parent;
+    if (!home || (home.type !== 'MethodDefinition' && home.type !== 'FieldDefinition') || (home as { static?: boolean }).static
+        || home.parent?.type !== 'ClassTail') return;
+    const self = thisTypeFrames.at(-1);
+    const base = self?.Kind === 'nominal' ? (self as { Base?: Known }).Base ?? null : null;
+    for (const lacking of classesNotDeclaring(base, key)) {
+      reportType('rt-undeclared-member', site, '$1 is not a member of $2 or of a class it extends, so `super` cannot call it', Value(key), Value(displayType(lacking)));
+    }
+  };
+
+  /**
    * #sec-typed-storage: a call of a member that the receiver's class does not declare. The read
    * of such a member is ordinary and yields *undefined*, which a call cannot be made of, so the
    * call is the misspelled method of a class whose members are all written down. `r.m?.()` is
@@ -22523,6 +22661,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let target = callee;
     while (target.type === 'ParenthesizedExpression' || target.type === 'TypeArgumentsExpression') {
       target = (target as ParseNode.ParenthesizedExpression | ParseNode.TypeArgumentsExpression).Expression as ParseNode;
+    }
+    if (target.type === 'SuperProperty') {
+      checkUndeclaredSuperCall(target, site);
+      return;
     }
     if (target.type !== 'MemberExpression' || target.PrivateIdentifier) return;
     const keys = memberKeys(target);
@@ -26102,14 +26244,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // one is a literal operand here: `a + K` with `const K = 9007199254740993`
         // and `a: uint64` reads K's exact value, not the binding's double.
         const constUse = (n: ParseNode): ParseNode | null => {
-          const inner = innermostLiteral(n);
+          // Through parentheses and a sign, as a literal is read: `r * -Math.PI`
+          // and `r * -K` are the constant under a sign. `innermostLiteral`
+          // answers the whole operand where no literal is inside it, so a
+          // signed constant was no constant here and `r * -Math.PI` was refused
+          // as a `number` beside `r`, where `r * Math.PI` was read.
+          let inner: ParseNode = n;
+          for (;;) {
+            const wrapped = inner as unknown as { Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string };
+            if (inner.type === 'ParenthesizedExpression' && wrapped.Expression) inner = wrapped.Expression;
+            else if (inner.type === 'UnaryExpression' && (wrapped.operator === '-' || wrapped.operator === '+') && wrapped.UnaryExpression) inner = wrapped.UnaryExpression;
+            else break;
+          }
           if (isWellKnownNumericConstant(inner) && !shadowedByProgram('Math')) return n;
           if (inner.type !== 'IdentifierReference') return null;
           const nm = inner.name;
           return constExactValue(nm) !== null || constDecimalValue(nm) !== null ? n : null;
         };
-        const leftLit = literalOperand(leftNode) ?? constUse(leftNode);
-        const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
+        const leftLit = literalOperand(leftNode) ?? constUse(leftNode) ?? constantExpressionOperand(leftNode);
+        const rightLit = literalOperand(rightNode) ?? constUse(rightNode) ?? constantExpressionOperand(rightNode);
         // #sec-enums: "an enum can be used for arithmetic, indexing, and
         // comparison without a cast" - an operand of an enum type is read at its
         // UNDERLYING type, as the run time's TypedOperandType reads it, so a
@@ -43482,12 +43635,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // A named numeric constant too: at this position it produces the value its
       // initializer would produce written here, which typing it here arranges.
       const lit = literalOperand(result)
-        ?? (result.type === 'IdentifierReference' && isNumericConstantExpression(result) ? result : null);
+        ?? (result.type === 'IdentifierReference' && isNumericConstantExpression(result) ? result : null)
+        ?? constantExpressionOperand(result);
       if (!lit || !otherType) continue;
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
       if (name === 'rational' || name === 'complex' || name === 'float128' || (name !== undefined && name.startsWith('decimal'))) {
         staticTypeIn(innermostLiteral(lit), base!);
+      }
+      // An integer type wider than a Number's 53 bits is such a family past
+      // the integers a Number holds: `const K = 9007199254740993; z === K`
+      // for a `uint64` _z_ compared with the double K holds, ...992. A
+      // constant up to that range is exact as a Number and is left to the run
+      // time's reading; one the type cannot hold is equal to nothing of it.
+      if (base && isWideIntegerType(base)) {
+        const exact = foldConstant(lit);
+        const wide = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+        if (exact !== null && (exact > BigInt(Number.MAX_SAFE_INTEGER) || exact < BigInt(Number.MIN_SAFE_INTEGER))
+            && fitsNumericType(exact, wide.Name, wide.Arguments)) {
+          staticTypeIn(innermostLiteral(lit), base);
+        }
       }
     }
   };
@@ -46147,6 +46314,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const ownClass = own?.type === 'ClassDeclaration' || own?.type === 'ClassExpression' ? own : undefined;
           const array = ownClass ? heritageArrayTypeOf(ownClass) ?? inheritedArrayConstructorOf(heritageClassOf(ownClass)) : undefined;
           if (array) checkArrayConstruction(array, n.Arguments ?? [], n, displayType(array));
+          else if (ownClass && base?.Kind === 'nominal') checkImplicitConstruction(base, heritageClassOf(ownClass), n.Arguments ?? [], n);
         }
         walk(n.Arguments);
         return;
@@ -46174,6 +46342,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const declaration = origin?.declaration ?? (namedInstance?.Kind === 'nominal' ? namedInstance.Declaration as ParseNode | undefined : undefined);
             const array = inheritedArrayConstructorOf(declaration);
             if (array) checkArrayConstruction(array, ne.Arguments ?? [], n as ParseNode, namedInstance ? displayType(namedInstance) : displayType(array));
+            else checkImplicitConstruction(namedInstance ?? (origin ? instanceTypeOf(origin.declaration) : null), declaration, ne.Arguments ?? [], n as ParseNode);
           }
         }
         // An unused bare generic construction still has to bind its parameters.

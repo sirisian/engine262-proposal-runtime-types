@@ -76,7 +76,6 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       lval = adopted.left; rval = adopted.right;
     }
   }
-  (globalThis as { __a?: string[] }).__a?.push(`apply ${opText}`);
   // proposal-runtime-types #sec-vector-types: a vector's values are "the
   // sequences of N values of T", so an operator over two vectors of one shape
   // applies LANE-WISE. This is what the rest of the SIMD surface is for - the

@@ -101,14 +101,16 @@ test('the refusal does not over-reach to the neighbouring member forms', () => {
 test('the guarantee: `new C() instanceof C` holds, and so does the private brand', () => {
   // The two invariants this broke, restored by construction rather than by a
   // check at `new`.
+  // A class that declares no constructor takes no arguments (#sec-typed-classes);
+  // a constructor written with no annotation takes any, as an untyped function does.
   const shapes = [
-    'value class C { x: uint8 = 1; }',
-    'value class C { x: uint8 = 1; constructor() {} }',
-    'value class C { x: uint8 = 1; constructor(a) { this.x = a; } }',
-    'value class C { x: uint8 = 1; constructor() { return this; } }',
+    ['value class C { x: uint8 = 1; }', 'new C()'],
+    ['value class C { x: uint8 = 1; constructor() {} }', 'new C(1)'],
+    ['value class C { x: uint8 = 1; constructor(a) { this.x = a; } }', 'new C(1)'],
+    ['value class C { x: uint8 = 1; constructor() { return this; } }', 'new C(1)'],
   ];
-  for (const shape of shapes) {
-    expect(evaluated(`${shape} String(new C(1) instanceof C);`), shape).toBe('true');
+  for (const [shape, construction] of shapes) {
+    expect(evaluated(`${shape} String(${construction} instanceof C);`), shape).toBe('true');
   }
   expect(evaluated('class C { x: uint8 = 1; #p = 1; static has(o) { return #p in o; } }'
     + ' String(C.has(new C()));')).toBe('true');

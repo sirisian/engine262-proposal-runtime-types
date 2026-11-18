@@ -5,7 +5,7 @@ import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import { TupleStorageShapeOf, TupleLengthRange, TupleStorageLengths, TupleStorageTypeAt, TupleStorageRun, TupleFixedPositions } from './tuple-storage.mts';
 import { MetadataKeys } from './metadata-keys.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
-import { IsFamilyRecord } from './records.mts';
+import { IsFamilyRecord, ArgumentWeight, GROWING_APPLICATION_LIMIT } from './records.mts';
 import { IsPlainData, IsValueType, SubclassAddsStorageOver } from './layout.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
@@ -1196,6 +1196,26 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (s.Kind === 'nominal' && t.Kind === 'nominal'
       && libraryExtends(s.LibraryName, t.LibraryName)) {
     return true;
+  }
+  // Two declarations compared inside their own comparison, each time at
+  // arguments no smaller than before, are a proof that does not close: the
+  // members of `A.<[].<T>>` against those of `B.<[].<T>>` ask for
+  // `A.<[].<[].<T>>>` against `B.<[].<[].<T>>>`, and no assumption above ever
+  // names the pair again. Past the limit the relation is not established, and
+  // the answer is the one that claims nothing; an interface that is meant to
+  // be another says so with `extends`, which needs no comparison of members.
+  // It ran until the host stack gave out.
+  if (s.Kind === 'nominal' && t.Kind === 'nominal' && s.LibraryName === undefined && t.LibraryName === undefined
+      && s.Declaration !== undefined && t.Declaration !== undefined
+      && (s.Arguments.length > 0 || t.Arguments.length > 0)) {
+    const weight = ArgumentWeight(s.Arguments) + ArgumentWeight(t.Arguments);
+    let growing = 0;
+    for (const assumption of assumptions) {
+      const { First: first, Second: second } = assumption;
+      if (first.Kind === 'nominal' && second.Kind === 'nominal' && first.Declaration === s.Declaration && second.Declaration === t.Declaration
+          && ArgumentWeight(first.Arguments) + ArgumentWeight(second.Arguments) <= weight) growing += 1;
+    }
+    if (growing >= GROWING_APPLICATION_LIMIT) return false;
   }
   const next = [...assumptions, { First: s, Second: t }];
   // The ASSUMED half. A checked contract's fact is a

@@ -2059,6 +2059,56 @@ export function isHigherKinded(t: TypeRecord | null | undefined): boolean {
 }
 
 /**
+ * How many applications of one generic declaration a walk opens inside one
+ * another where the inner ones are no smaller than the outer.
+ *
+ * `interface Query<T> { chunk(): Query.<[].<T>> }` names a new application at
+ * every step, so a walk that follows a member's type from one application to
+ * the next - forming it, comparing it - does not come back to where it began,
+ * and identity never closes it. Applications that do come back, as
+ * `swap(): Pair.<B, A>` does after two, close well inside this limit, and an
+ * application inside a LARGER one - the fifth `Box` of `Box.<Box.<Box.<Box.<Box.<T>>>>>` -
+ * is an argument being walked rather than a member growing, and is not
+ * counted.
+ */
+export const GROWING_APPLICATION_LIMIT = 4;
+
+/**
+ * The size of an application's arguments: the type records they are made of,
+ * counted through arguments, elements, members and signatures and no further
+ * than _cap_. A number is a value and counts nothing, so two applications
+ * that differ only in a value are the same size.
+ */
+export function ArgumentWeight(args: readonly (TypeRecord | number)[] | undefined, cap = 256): number {
+  let weight = 0;
+  const seen = new Set<object>();
+  const visit = (t: unknown): void => {
+    if (weight >= cap || !t || typeof t !== 'object' || !('Kind' in t) || seen.has(t)) return;
+    seen.add(t);
+    weight += 1;
+    const r = t as {
+      Arguments?: readonly unknown[], Element?: unknown, Extent?: unknown, Members?: readonly unknown[], Target?: unknown, Base?: unknown,
+      Elements?: readonly { Type?: unknown }[], Properties?: readonly { type?: unknown }[],
+      Signatures?: readonly { Parameters?: readonly { Type?: unknown }[], Return?: unknown }[],
+    };
+    r.Arguments?.forEach(visit);
+    visit(r.Element);
+    visit(r.Extent);
+    r.Members?.forEach(visit);
+    visit(r.Target);
+    if ((t as { Kind: string }).Kind === 'parameterized' || (t as { Kind: string }).Kind === 'literal') visit(r.Base);
+    r.Elements?.forEach((element) => visit(element.Type));
+    r.Properties?.forEach((property) => visit(property.type));
+    r.Signatures?.forEach((signature) => {
+      signature.Parameters?.forEach((formal) => visit(formal.Type));
+      visit(signature.Return);
+    });
+  };
+  args?.forEach(visit);
+  return weight;
+}
+
+/**
  * Whether _t_ still mentions a type parameter.
  *
  * A call that supplies no type arguments binds nothing, and this proposal

@@ -467,8 +467,24 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
   if (!(untyped instanceof NumberValue)) {
     return undefined;
   }
-  const literalValue = payload(untyped);
   const prim = target as TypeRecord & { Kind: 'primitive' };
+  // An integer type wider than a Number's 53 bits takes the literal at the
+  // integer its source text denotes (#sec-literalvalueintype, "before any
+  // rounding"), as a decimal peer does above. The literal had already been
+  // rounded to a double, so for a `uint64` _z_ holding 9007199254740993,
+  // `z === 9007199254740993` compared it with ...992 and was *false*, and
+  // `z <= 9007199254740993` was *false* too.
+  if (isWideIntegerType(target)) {
+    const node = literalIsRight ? literals.rightNode : literals.leftNode;
+    const exact = node ? exactOfLiteralText(node) : undefined;
+    if (exact && exact.special === undefined && exact.exponent >= 0 && exact.exponent <= 4096) {
+      const integer = exact.significand * 10n ** BigInt(exact.exponent);
+      if (!fitsNumericType(integer, prim.Name, prim.Arguments)) return undefined;
+      const exactly = new TypedNumberValue(integer, target);
+      return literalIsRight ? { left: x, right: exactly } : { left: exactly, right: y };
+    }
+  }
+  const literalValue = payload(untyped);
   if (!fitsNumericType(literalValue, prim.Name, prim.Arguments)) {
     // A literal the type cannot represent is simply not equal to any value of
     // it, which is the answer a comparison wants. Adoption declines and the

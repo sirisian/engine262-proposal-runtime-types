@@ -349,10 +349,20 @@ test('a value type is REFUSED for a static data property', () => {
   // would refuse every existing `let n: number = Math.PI` - which is why the
   // table holds the type these already answer and not the one that looks more
   // precise.
-  expectStaticTypeError('let n: float64 = Math.PI;');
   expectStaticTypeError('let n: uint64 = Number.MAX_SAFE_INTEGER;');
+  expectStaticTypeError('let n: float64 = Number.EPSILON;');
   // A program that wants one writes the conversion, as the clause says.
   expect(evaluated('const d: float64 = (Math.PI := float64); String(d > 3);')).toBe('true');
+  expect(evaluated('const d: float64 = (Number.EPSILON := float64); String(d > 0);')).toBe('true');
+  // The eight constants of `Math` are the exception the design names: one
+  // "cannot be written as a literal that denotes" it, so where a binary float is
+  // wanted it is read as the literal of its value, as a `const` bound to that
+  // literal is (#sec-static-type-of-an-expression). The property's own type is
+  // still `number`, which is what the bound above protects. This line was
+  // `expectStaticTypeError('let n: float64 = Math.PI;')`.
+  expect(evaluated('let n: float64 = Math.PI; String(Reflect.typeOf(n) === float64) + String(n > 3);')).toBe('truetrue');
+  expectStaticTypeError('let n: uint64 = Math.PI;');
+  expectStaticTypeError('let n: decimal128 = Math.PI;');
 });
 
 test('Family A leaves the arithmetic and the methods alone', () => {

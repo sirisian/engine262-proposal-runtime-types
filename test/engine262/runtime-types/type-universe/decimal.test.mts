@@ -313,16 +313,22 @@ test('the buffer round-trip claim was measuring a DEFAULT', () => {
   // instance holding the field's default. `new C(b, 0)` and `new C()` answer the
   // same, which is what shows the reading was of a default.
   const C = 'value class C { f: float64 = 1; } const b = new ArrayBuffer(64); ';
-  expect(evaluated(`${C}const c1 = new C(b, 0); c1.f = 7.25;`
-    + ' const c2 = new C(b, 0); String(c2.f);')).toBe('1');
+  //
+  // The two arguments are refused now: a typed class that declares no
+  // constructor takes none (#sec-typed-classes). That is the report this test
+  // went without while it read a default and took it for a round trip.
+  expectThrown(`${C}const c1 = new C(b, 0); c1.f = 7.25;`
+    + ' const c2 = new C(b, 0); String(c2.f);', 'declares no constructor, so it takes no arguments');
   expect(evaluated(`${C}String(new C().f);`)).toBe('1');
 
   // The type argument was DISCARDED, including one naming nothing - which is how
   // a form doing no placement could look as though it did. Both are refused now
   // that a class name is its own Type Object and an argument on it resolves like
   // any other.
-  expectThrown(`${C}const c = new C.<placement>(b, 0); String(c.f);`, 'is not defined');
-  expectThrown(`${C}const c = new C.<garbage>(b, 0); String(c.f);`, 'is not defined');
+  // (Written without the two arguments, which are refused first and for
+  // their own reason.)
+  expectThrown(`${C}const c = new C.<placement>(); String(c.f);`, 'is not defined');
+  expectThrown(`${C}const c = new C.<garbage>(); String(c.f);`, 'is not defined');
   expectThrown('type P = placement;', 'is not defined');
 });
 

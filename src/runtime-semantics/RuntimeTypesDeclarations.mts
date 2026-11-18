@@ -48,14 +48,14 @@ import { GetValue } from '../abstract-ops/all.mts';
 import { protocolInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
-import { InjectedClassOf, instantiatePartialClassSelf, mentionsTypeParameter, substituteFreeTypeParameters, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
+import { InjectedClassOf, instantiatePartialClassSelf, mentionsTypeParameter, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias, recordGenericAliasDeclaration } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
   SubstituteTypeArguments, GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, NewTypeParameterEnvironment, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, instantiateTypeInFrame, NewTypeParameterEnvironment, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
 import { InferGenericBindings, TypeParameterValue, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -63,7 +63,7 @@ import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
-import { anyType } from '../type-system/records.mts';
+import { anyType, ArgumentWeight, GROWING_APPLICATION_LIMIT } from '../type-system/records.mts';
 import { ConvertValue, AssociateClassType, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
 import {
@@ -2351,7 +2351,7 @@ export function ClassFamilyOf(ctor: Value): Value {
 // conflating another argument list or another evaluation of the same syntax.
 // ClassDefinitionEvaluation records the fresh constructor before static fields
 // run; neither source text nor the most recently evaluated declaration is a key.
-const specializationsInProgress = new WeakMap<Value, Map<string, { declaration: ParseNode.ClassDeclaration, ctor?: Value }>>();
+const specializationsInProgress = new WeakMap<Value, Map<string, { declaration: ParseNode.ClassDeclaration, ctor?: Value, args?: readonly (TypeRecord | number)[] }>>();
 
 /**
  * Create the specialization for an application, whatever named it.
@@ -2405,6 +2405,23 @@ export function* MaterializeSpecialization(
   const family = ClassFamilyOf(declarationConstructor);
   const captured = classTypeContexts.get(family);
   if (!captured) return undefined as never;
+  // A closed application can grow as well: `class Q<T> { chunk(): Q.<[].<T>> }`
+  // at `uint8` names `Q.<[].<uint8>>` in its body, whose body names
+  // `Q.<[].<[].<uint8>>>`, and each was built to evaluate the one before it,
+  // without end - `new Q.<uint8>()` never returned. A class is its declaration
+  // and its arguments (#sec-recursive-interface-resolution), so past the depth
+  // the checker opens, the application is named and not built here. It is
+  // built where the program constructs it, which begins a count of its own.
+  const underWay = specializationsInProgress.get(family);
+  if (underWay && underWay.size >= GROWING_APPLICATION_LIMIT) {
+    const weight = ArgumentWeight(argRecords);
+    let growing = 0;
+    for (const entry of underWay.values()) {
+      if (ArgumentWeight(entry.args) <= weight) growing += 1;
+    }
+    // One already built is the one it names, whatever is under way.
+    if (growing >= GROWING_APPLICATION_LIMIT) return SpecializedClassConstructor(declaration, argRecords, declarationConstructor) as never;
+  }
   return yield* InCapturedTypeContext(captured, () => MaterializeClassApplication(declaration, argRecords, family));
 }
 
@@ -2533,9 +2550,16 @@ function* declaredClassEvidence(node: ParseNode.ClassDeclaration | ParseNode.Cla
   if (!declared) return empty;
   const captured = classTypeContexts.get(ctor);
   const read = function* (): PlainEvaluator<DeclaredClassEvidence> {
-    const bindings = currentTypeParameterFrame() ?? new Map();
+    const frame = currentTypeParameterFrame();
+    const bindings = frame ?? new Map();
+    // In the frame, with the declarations the frame binds. A parameter of the
+    // class named in the ARGUMENTS of an application - `same(): Seq.<T>` - is
+    // recorded with the declaration it was captured from, and is bound through
+    // that declaration and not by its name alone. Substituted by name only it
+    // stayed `T`, so a generic class did not implement `Seq.<uint8>` with the
+    // very member the interface declares, though `wrap(): [].<T>` passed.
     const instantiate = (type: TypeRecord): TypeRecord => InstantiateCheckedBindings(new Map([
-      ['contract', substituteFreeTypeParameters(type, currentTypeParameterFrame() ?? new Map())!],
+      ['contract', frame ? instantiateTypeInFrame(type, frame) : type],
     ]), surroundingAgent.runningExecutionContext.LexicalEnvironment, application).get('contract')!;
     const shape = instantiate(declared.Structure);
     Assert(shape.Kind === 'object');
@@ -3034,7 +3058,7 @@ function* SpecializeFromFrame(
     progress = new Map();
     specializationsInProgress.set(family, progress);
   }
-  progress.set(cacheKey, { declaration });
+  progress.set(cacheKey, { declaration, args: argRecords });
   // Keep recursive applications attached to this constructor until its
   // implemented-interface graph and layout have both been admitted.
   try {

@@ -4566,23 +4566,58 @@ export type StructuralStorageAdmission = {
   positions: readonly { own: boolean, value: Value }[],
 };
 
+/**
+ * The applications of generic nominals a walk over substituted structures has
+ * entered. Substitution builds a new record for a member's type at every step,
+ * so the identity of a record never closes `interface Rec<T> { next: Rec.<T> |
+ * null }`: the walk has to know the application, its declaration and arguments.
+ */
+type EnteredApplications = Map<unknown, (readonly (TypeRecord | number)[])[]>;
+
+/** How many applications of one declaration such a walk enters before it answers without looking further. */
+const ENTERED_APPLICATION_LIMIT = 8;
+
+/**
+ * ~seen~ for an application already entered, ~deep~ for one past the limit -
+ * a member that applies its declaration to a growing argument,
+ * `deeper: G.<[].<T>> | null`, names a new application at every step - and
+ * ~new~ otherwise, having recorded it.
+ */
+function enterApplication(t: TypeRecord & { Kind: 'nominal' }, entered: EnteredApplications): 'new' | 'seen' | 'deep' {
+  const key = t.Declaration ?? t;
+  const lists = entered.get(key) ?? [];
+  const same = (a: TypeRecord | number, b: TypeRecord | number | undefined) => a === b
+    || (typeof a === 'object' && typeof b === 'object' && SameType(a, b));
+  if (lists.some((args) => args.length === t.Arguments.length && args.every((a, i) => same(a, t.Arguments[i])))) return 'seen';
+  if (lists.length >= ENTERED_APPLICATION_LIMIT) return 'deep';
+  lists.push(t.Arguments);
+  entered.set(key, lists);
+  return 'new';
+}
+
 /** A backing contract can prove membership without proving materialization. */
 export function MayRequireCallableMaterialization(source: TypeRecord, target: TypeRecord): boolean {
-  function contains(t: TypeRecord, generic: boolean, seen = new Set<TypeRecord>()): boolean {
+  function contains(t: TypeRecord, generic: boolean, seen = new Set<TypeRecord>(), entered: EnteredApplications = new Map()): boolean {
     if (seen.has(t)) return false;
     seen.add(t);
     switch (t.Kind) {
       case 'any': case 'parameter': case 'deferred': return generic;
       case 'function': return t.Signatures.some((s) => generic ? Boolean(s.TypeParameters?.length || (s as { Untyped?: boolean }).Untyped) : !s.TypeParameters?.length);
-      case 'union': case 'intersection': return t.Members.some((m) => contains(m, generic, seen));
-      case 'object': return t.Properties.some((p) => contains(p.type, generic, seen))
-        || t.IndexSignatures.some((i) => contains(i.Value, generic, seen));
-      case 'array': return contains(t.Element, generic, seen);
-      case 'tuple': return t.Elements.some((e) => contains(e.Type, generic, seen));
-      case 'nominal': return t.Structure !== undefined
-        && contains(SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments), generic, seen);
-      case 'shared': return contains(t.Target, generic, seen);
-      case 'parameterized': return contains(t.Base, generic, seen);
+      case 'union': case 'intersection': return t.Members.some((m) => contains(m, generic, seen, entered));
+      case 'object': return t.Properties.some((p) => contains(p.type, generic, seen, entered))
+        || t.IndexSignatures.some((i) => contains(i.Value, generic, seen, entered));
+      case 'array': return contains(t.Element, generic, seen, entered);
+      case 'tuple': return t.Elements.some((e) => contains(e.Type, generic, seen, entered));
+      case 'nominal': {
+        if (t.Structure === undefined) return false;
+        // An application met again adds nothing, and one past the limit is
+        // answered as what cannot be ruled out.
+        const state = enterApplication(t, entered);
+        if (state !== 'new') return state === 'deep';
+        return contains(SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments), generic, seen, entered);
+      }
+      case 'shared': return contains(t.Target, generic, seen, entered);
+      case 'parameterized': return contains(t.Base, generic, seen, entered);
       default: return false;
     }
   }
@@ -4591,17 +4626,28 @@ export function MayRequireCallableMaterialization(source: TypeRecord, target: Ty
 
 /** A type-only backing proof cannot establish that an optional tuple tail is
  * currently supplied. Keep these receiving boundaries available at runtime. */
-export function MayRequireTupleDefaults(t: TypeRecord, seen = new Set<TypeRecord>()): boolean {
+export function MayRequireTupleDefaults(t: TypeRecord, seen = new Set<TypeRecord>(), entered: EnteredApplications = new Map()): boolean {
   if (seen.has(t)) return false;
   seen.add(t);
   switch (t.Kind) {
-    case 'tuple': return t.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault || MayRequireTupleDefaults(e.Type, seen));
-    case 'array': return MayRequireTupleDefaults(t.Element, seen);
-    case 'object': return t.Properties.some((p) => MayRequireTupleDefaults(p.type, seen))
-      || t.IndexSignatures.some((p) => MayRequireTupleDefaults(p.Value, seen));
-    case 'union': case 'intersection': return t.Members.some((m) => MayRequireTupleDefaults(m, seen));
-    case 'shared': return MayRequireTupleDefaults(t.Target, seen);
-    case 'nominal': return t.Structure !== undefined && MayRequireTupleDefaults(SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments), seen);
+    case 'tuple': return t.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault || MayRequireTupleDefaults(e.Type, seen, entered));
+    case 'array': return MayRequireTupleDefaults(t.Element, seen, entered);
+    case 'object': return t.Properties.some((p) => MayRequireTupleDefaults(p.type, seen, entered))
+      || t.IndexSignatures.some((p) => MayRequireTupleDefaults(p.Value, seen, entered));
+    case 'union': case 'intersection': return t.Members.some((m) => MayRequireTupleDefaults(m, seen, entered));
+    case 'shared': return MayRequireTupleDefaults(t.Target, seen, entered);
+    case 'nominal': {
+      if (t.Structure === undefined) return false;
+      // `let r: Rec.<uint8> | null = null` for a recursive generic interface
+      // never returned from here: each step substituted a new record for
+      // `next`, which the set of records above had not seen, until the host
+      // stack was exhausted. An application met again adds nothing, and one
+      // past the limit keeps the boundary, which is the answer that assumes
+      // nothing.
+      const state = enterApplication(t, entered);
+      if (state !== 'new') return state === 'deep';
+      return MayRequireTupleDefaults(SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments), seen, entered);
+    }
     default: return false;
   }
 }

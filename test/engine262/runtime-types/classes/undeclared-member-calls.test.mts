@@ -94,3 +94,29 @@ test('not judged where a member may exist that no declaration names', () => {
   // A class over an array has the members of an array, which no declaration lists.
   expect(evaluated('value class G extends [4].<uint8> { } const g = new G(); String(g.join(""));')).toBe('0000');
 });
+
+test('a super call of a member no base declares is the same call', () => {
+  const A = 'class A { n: uint8 = 0; step() { return 1; } } ';
+  expect(observeScript(`${A}class B extends A { f() { return super.go(); } }`)).toMatchObject(refused);
+  expectThrown(`${A}class B extends A { f() { return super.go(); } }`, '"go" is not a member of "A" or of a class it extends, so `super` cannot call it');
+  // An arrow and a field initializer have the class's `super`.
+  expect(observeScript(`${A}class B extends A { f() { return (() => super.go())(); } }`)).toMatchObject(refused);
+  expect(observeScript(`${A}class B extends A { v = super.go(); }`)).toMatchObject(refused);
+  // A member a base declares, however far up, and one every object has.
+  expect(evaluated(`${A}class M extends A { } class B extends M { f() { return super.step(); } } String(new B().f());`)).toBe('1');
+  expect(evaluated(`${A}class B extends A { f() { return super.toString(); } } typeof new B().f();`)).toBe('string');
+  // The optional call is the read with its test.
+  expect(evaluated(`${A}class B extends A { f() { return super.go?.(); } } String(new B().f());`)).toBe('undefined');
+});
+
+test('a super call is not judged where super is not the class\'s base', () => {
+  const A = 'class A { n: uint8 = 0; step() { return 1; } } ';
+  // A method of an object literal has the literal's prototype.
+  expect(evaluated(`${A}class B extends A { f() { const o = { __proto__: { go() { return 7; } }, m() { return super.go(); } }; return o.m(); } } String(new B().f());`)).toBe('7');
+  // A static member has the base constructor, a class with no base has %Object.prototype%,
+  // and a dynamic or built-in base may have members no declaration lists.
+  accepted(`${A}class B extends A { static f() { return super.go(); } }`);
+  accepted('class B { n: uint8 = 0; f() { return super.go(); } }');
+  accepted('dynamic class D { n: uint8 = 0; } class B extends D { f() { return super.go(); } }');
+  accepted('class B extends Error { f() { return super.go(); } }');
+});

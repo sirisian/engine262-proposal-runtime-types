@@ -31,6 +31,46 @@ function isValueGenericReference(name: string): boolean {
   return !!bound && isValueParameterBinding(bound);
 }
 
+/**
+ * Whether _node_ is arithmetic over numeric constants and nothing else: a
+ * numeric literal, a use of a `const` bound to a numeric constant, a constant
+ * of the Math object, a sign or parentheses around one of these, or `+`, `-`,
+ * `*`, `/`, `%` or `**` over two of them. These are the shapes the initializer
+ * of a numeric constant may have (#sec-static-type-of-an-expression), so that
+ * the expression written at a position and a `const` bound to it are one thing.
+ *
+ * The right operand is asked first: arithmetic nests to the left, so an
+ * operand that is not a constant is usually found there at once.
+ */
+function isNumericConstantOperand(node: ParseNode): boolean {
+  let n = node;
+  for (;;) {
+    switch (n.type) {
+      case 'ParenthesizedExpression':
+        n = n.Expression;
+        continue;
+      case 'UnaryExpression':
+        if (n.operator !== '-' && n.operator !== '+') return false;
+        n = n.UnaryExpression;
+        continue;
+      case 'NumericLiteral':
+        return typeof n.value === 'number';
+      case 'IdentifierReference':
+        return IsConstLiteralUse(n);
+      case 'MemberExpression':
+        return isWellKnownNumericConstant(n);
+      case 'AdditiveExpression':
+        return isNumericConstantOperand(n.MultiplicativeExpression) && isNumericConstantOperand(n.AdditiveExpression);
+      case 'MultiplicativeExpression':
+        return isNumericConstantOperand(n.ExponentiationExpression) && isNumericConstantOperand(n.MultiplicativeExpression);
+      case 'ExponentiationExpression':
+        return isNumericConstantOperand(n.ExponentiationExpression) && isNumericConstantOperand(n.UpdateExpression);
+      default:
+        return false;
+    }
+  }
+}
+
 export function isNumericLiteralOperand(node: ParseNode): boolean {
   let n = node;
   for (;;) {
@@ -69,6 +109,16 @@ export function isNumericLiteralOperand(node: ParseNode): boolean {
     // `const K = 3.14; K * r` mean what `3.14 * r` means.
     if (n.type === 'IdentifierReference' && IsConstLiteralUse(n as object)) {
       return true;
+    }
+    // A constant expression over literals is judged as its value
+    // (#sec-contextual-types, "An arithmetic expression every operand of which
+    // is compile-time evaluable"), and a `const` bound to one "behaves as if
+    // inlined" - so the expression written here answers as that `const` does.
+    // `z * K` with `const K = 4 ** 2` took `z`'s type and `z * 4 ** 2` did not:
+    // it was a Number beside a `uint32`, a TypeError where it computed, and a
+    // silent *false* where it compared, `z === 2 + 1` for a `z` that is 3.
+    if (n.type === 'AdditiveExpression' || n.type === 'MultiplicativeExpression' || n.type === 'ExponentiationExpression') {
+      return isNumericConstantOperand(n);
     }
     return n.type === 'NumericLiteral';
   }
