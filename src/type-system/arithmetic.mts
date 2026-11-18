@@ -7,6 +7,7 @@ import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
 import { exactOfLiteralText } from './exact-real.mts';
+import { IntegerContextOperandValue } from './numeric-constants.mts';
 import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, type ThrowCompletion } from '#self';
 
 /**
@@ -431,6 +432,59 @@ export function DecayEnumOperands(x: Value, y: Value): { left: Value, right: Val
  * *false* rather than a type error. Returns the operand pair to use, or
  * undefined where neither side needs adopting.
  */
+/** The value a constant operand has beside an integer, under its parentheses and sign and as the last of a comma expression. */
+function integerContextOperand(node: ParseNode): bigint | undefined {
+  let n = node;
+  let negative = false;
+  for (;;) {
+    if (n.type === 'ParenthesizedExpression') {
+      n = n.Expression;
+    } else if (n.type === 'CommaOperator') {
+      n = n.ExpressionList.at(-1)!;
+    } else if (n.type === 'UnaryExpression' && (n.operator === '-' || n.operator === '+')) {
+      if (n.operator === '-') negative = !negative;
+      n = n.UnaryExpression;
+    } else {
+      break;
+    }
+  }
+  const exact = IntegerContextOperandValue(n);
+  return exact === undefined || !negative ? exact : -exact;
+}
+
+/**
+ * A literal or a constant operand of an arithmetic operator beside an integer
+ * whose type the checker did not know, as the integer it writes
+ * (`IntegerContextOperandValue`, and a literal's own digits): the operand pair
+ * to use, or undefined where neither side is one or the integer is not a value
+ * of the type. Past 2**53 the Number the operand evaluated to is not that
+ * integer, and `x * 9007199254740993` multiplied by ...992. The comparisons
+ * read the same record through `AdoptLiteralOperand`.
+ */
+export function AdoptIntegerContextOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { left: Value, right: Value } | undefined {
+  const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  const yt = y instanceof TypedNumberValue ? ((y as TypedNumberValue).TypeRecord as TypeRecord) : null;
+  if ((xt && yt) || (!xt && !yt)) return undefined;
+  const literalIsRight = !!xt;
+  const node = literalIsRight ? literals.rightNode : literals.leftNode;
+  if (!(literalIsRight ? literals.right : literals.left) || !node || !((literalIsRight ? y : x) instanceof NumberValue)) return undefined;
+  const peer = UnderlyingOf((xt ?? yt)!);
+  const target = peer.Kind === 'parameterized' ? peer.Base : peer;
+  if (target.Kind !== 'primitive' || (target.Name !== 'int' && target.Name !== 'uint')) return undefined;
+  let integer = integerContextOperand(node);
+  if (integer === undefined && isWideIntegerType(target)) {
+    // A literal past 2**53 is the integer its digits write, as it is in a
+    // comparison: `x * 9007199254740993` multiplied by ...992.
+    const exact = exactOfLiteralText(node);
+    if (exact && exact.special === undefined && exact.exponent >= 0 && exact.exponent <= 4096) {
+      integer = exact.significand * 10n ** BigInt(exact.exponent);
+    }
+  }
+  if (integer === undefined || !fitsNumericType(integer, target.Name, target.Arguments)) return undefined;
+  const adopted = new TypedNumberValue(isWideIntegerType(target) ? integer : Number(integer), target);
+  return literalIsRight ? { left: x, right: adopted } : { left: adopted, right: y };
+}
+
 export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { left: Value, right: Value } | undefined {
   // A decimal peer takes the literal at the exact value its source text
   // denotes, its exponent included (#sec-literalvalueintype): `0.2` beside a
@@ -482,6 +536,20 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
       if (!fitsNumericType(integer, prim.Name, prim.Arguments)) return undefined;
       const exactly = new TypedNumberValue(integer, target);
       return literalIsRight ? { left: x, right: exactly } : { left: exactly, right: y };
+    }
+  }
+  // A named constant or a constant expression beside an integer is the integer
+  // the checker recorded for it (`IntegerContextOperandValue`): the value its
+  // context gives it where the checker saw the integer, and the integer it
+  // writes otherwise. The Number it evaluates to is another value past 2**53,
+  // and where its `/` does not divide.
+  if (prim.Name === 'int' || prim.Name === 'uint') {
+    const node = literalIsRight ? literals.rightNode : literals.leftNode;
+    const integer = node ? integerContextOperand(node) : undefined;
+    if (integer !== undefined) {
+      if (!fitsNumericType(integer, prim.Name, prim.Arguments)) return undefined;
+      const adopted = new TypedNumberValue(isWideIntegerType(target) ? integer : Number(integer), target);
+      return literalIsRight ? { left: x, right: adopted } : { left: adopted, right: y };
     }
   }
   const literalValue = payload(untyped);

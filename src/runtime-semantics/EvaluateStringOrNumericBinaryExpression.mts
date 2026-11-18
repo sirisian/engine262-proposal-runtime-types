@@ -1,9 +1,10 @@
-import { isWellKnownNumericConstant } from '../type-system/numeric-constants.mts';
+import { isWellKnownNumericConstant, ProducingOperand } from '../type-system/numeric-constants.mts';
 import { contextualTypeFor, typeParameterBindingScopes, currentTypeParameterFrame, isValueParameterBinding } from '../type-system/runtime.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { IsConstLiteralUse, IsLetConstantUse } from '../type-system/check.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { AdoptIntegerContextOperand } from '../type-system/arithmetic.mts';
 import { ApplyStringOrNumericBinaryOperator, type BinaryOperator } from './all.mts';
 import { GetValue, surroundingAgent, DeclarativeEnvironmentRecord, Value } from '#self';
 
@@ -50,7 +51,7 @@ function isNumericConstantOperand(node: ParseNode): boolean {
         n = n.Expression;
         continue;
       case 'UnaryExpression':
-        if (n.operator !== '-' && n.operator !== '+') return false;
+        if (n.operator !== '-' && n.operator !== '+' && n.operator !== '~') return false;
         n = n.UnaryExpression;
         continue;
       case 'NumericLiteral':
@@ -59,6 +60,12 @@ function isNumericConstantOperand(node: ParseNode): boolean {
         return IsConstLiteralUse(n);
       case 'MemberExpression':
         return isWellKnownNumericConstant(n);
+      case 'ShiftExpression':
+        return isNumericConstantOperand(n.AdditiveExpression) && isNumericConstantOperand(n.ShiftExpression);
+      case 'BitwiseANDExpression':
+      case 'BitwiseXORExpression':
+      case 'BitwiseORExpression':
+        return isNumericConstantOperand(n.B) && isNumericConstantOperand(n.A);
       case 'AdditiveExpression':
         return isNumericConstantOperand(n.MultiplicativeExpression) && isNumericConstantOperand(n.AdditiveExpression);
       case 'MultiplicativeExpression':
@@ -74,6 +81,16 @@ function isNumericConstantOperand(node: ParseNode): boolean {
 export function isNumericLiteralOperand(node: ParseNode): boolean {
   let n = node;
   for (;;) {
+    // A conditional and the short-circuit operators produce one of their
+    // operands, and it is that operand which is or is not a literal. Read
+    // from the evaluation that has just returned (`ProducingOperand`).
+    if (n.type === 'ConditionalExpression' || n.type === 'LogicalORExpression'
+        || n.type === 'LogicalANDExpression' || n.type === 'CoalesceExpression') {
+      const produced = ProducingOperand(n);
+      if (produced === n) return false;
+      n = produced;
+      continue;
+    }
     if (n.type === 'ParenthesizedExpression') {
       n = (n as { Expression: ParseNode }).Expression;
       continue;
@@ -117,11 +134,39 @@ export function isNumericLiteralOperand(node: ParseNode): boolean {
     // `z * K` with `const K = 4 ** 2` took `z`'s type and `z * 4 ** 2` did not:
     // it was a Number beside a `uint32`, a TypeError where it computed, and a
     // silent *false* where it compared, `z === 2 + 1` for a `z` that is 3.
-    if (n.type === 'AdditiveExpression' || n.type === 'MultiplicativeExpression' || n.type === 'ExponentiationExpression') {
+    // The bitwise operators and the shifts over constants as well: `1 << 4`,
+    // `0xF0 | 0x0F`, `~0xFF`.
+    if (n.type === 'AdditiveExpression' || n.type === 'MultiplicativeExpression' || n.type === 'ExponentiationExpression'
+        || n.type === 'ShiftExpression' || n.type === 'BitwiseANDExpression' || n.type === 'BitwiseXORExpression' || n.type === 'BitwiseORExpression'
+        || (n.type === 'UnaryExpression' && n.operator === '~')) {
       return isNumericConstantOperand(n);
     }
     return n.type === 'NumericLiteral';
   }
+}
+
+/**
+ * What an operand was, asked as its evaluation returns: whether the expression
+ * that produced its value is a numeric literal, and that expression, which is
+ * where a literal's exact text is read. Asked of each operand before the next
+ * is evaluated, since evaluating the next may evaluate this one's selecting
+ * expression again.
+ */
+export function ReadLiteralOperand(node: ParseNode): { literal: boolean, node: ParseNode } {
+  return { literal: isNumericLiteralOperand(node), node: ProducingOperand(node) };
+}
+
+/** Whether an operand is, under its parentheses and sign and at the end of a comma, an expression that selects one of its operands. */
+export function isSelectingOperand(node: ParseNode): boolean {
+  let n = node;
+  for (;;) {
+    if (n.type === 'ParenthesizedExpression') n = n.Expression;
+    else if (n.type === 'CommaOperator') n = n.ExpressionList.at(-1)!;
+    else if (n.type === 'UnaryExpression' && (n.operator === '-' || n.operator === '+')) n = n.UnaryExpression;
+    else break;
+  }
+  return n.type === 'ConditionalExpression' || n.type === 'LogicalORExpression'
+    || n.type === 'LogicalANDExpression' || n.type === 'CoalesceExpression';
 }
 
 /** https://tc39.es/ecma262/#sec-evaluatestringornumericbinaryexpression */
@@ -129,15 +174,28 @@ export function* EvaluateStringOrNumericBinaryExpression(leftOperand: ParseNode.
   // 1. Let lref be the result of evaluating leftOperand.
   const lref = Q(yield* Evaluate(leftOperand));
   // 2. Let lval be ? GetValue(lref).
-  const lval = Q(yield* GetValue(lref));
+  let lval = Q(yield* GetValue(lref));
+  const leftRead = ReadLiteralOperand(leftOperand as ParseNode);
   // 3. Let rref be the result of evaluating rightOperand.
   const rref = Q(yield* Evaluate(rightOperand));
   // 4. Let rval be ? GetValue(rref).
-  const rval = Q(yield* GetValue(rref));
+  let rval = Q(yield* GetValue(rref));
+  const rightRead = ReadLiteralOperand(rightOperand as ParseNode);
+  // A literal or a constant operand beside an integer whose type the checker
+  // did not know is the integer it writes, which past 2**53 its Number is not.
+  if (surroundingAgent.feature('runtime-types') && (leftRead.literal || rightRead.literal)) {
+    const adopted = AdoptIntegerContextOperand(lval, rval, {
+      left: leftRead.literal, right: rightRead.literal, leftNode: leftRead.node, rightNode: rightRead.node,
+    });
+    if (adopted) {
+      lval = adopted.left;
+      rval = adopted.right;
+    }
+  }
   // 5. Return ? ApplyStringOrNumericBinaryOperator(lval, opText, rval).
   return Q(yield* ApplyStringOrNumericBinaryOperator(lval, opText, rval, {
-    left: isNumericLiteralOperand(leftOperand as ParseNode),
-    right: isNumericLiteralOperand(rightOperand as ParseNode),
+    left: leftRead.literal,
+    right: rightRead.literal,
     // For the diagnostic only: a `let` bound to a numeric constant does not
     // adopt, deliberately, but it is the one failure with a one-word fix.
     leftLetConst: IsLetConstantUse(leftOperand as object),

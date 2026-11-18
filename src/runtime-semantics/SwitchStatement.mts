@@ -15,7 +15,7 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { IsSealedSwitchClause } from '../type-system/check.mts';
-import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { ReadLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   BlockDeclarationInstantiation,
   Evaluate_StatementList,
@@ -71,10 +71,11 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
       subject = decayed.left;
       selector = decayed.right as typeof clauseSelector;
     }
+    const label = ReadLiteralOperand(constructor.Expression as ParseNode);
     const adopted = AdoptLiteralOperand(subject, selector, {
       left: false,
-      right: isNumericLiteralOperand(constructor.Expression as ParseNode),
-      rightNode: constructor.Expression as ParseNode,
+      right: label.literal,
+      rightNode: label.node,
     });
     if (adopted) {
       return IsStrictlyEqual(adopted.left, adopted.right);

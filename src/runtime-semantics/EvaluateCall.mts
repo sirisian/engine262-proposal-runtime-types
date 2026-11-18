@@ -20,7 +20,7 @@ import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
 import { signaturesInView, BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
 import { ArgumentListEvaluation } from './all.mts';
-import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { isNumericLiteralOperand, isSelectingOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -37,8 +37,12 @@ import {
 /** https://tc39.es/ecma262/#sec-evaluatecall */
 /** The two arguments of an `Object.is` call with a numeric literal adopted into its peer's type, or undefined where neither adopts. */
 function AdoptSameValueLiteral(a: Value, b: Value, nodes: ParseNode.Arguments): Value[] | undefined {
+  // The arguments were evaluated before either is read here, so an argument
+  // that selects one of its operands is not asked which it selected: the
+  // other's evaluation may have evaluated it again.
+  const literal = (node: ParseNode) => !isSelectingOperand(node) && isNumericLiteralOperand(node);
   const adopted = AdoptLiteralOperand(a, b, {
-    left: isNumericLiteralOperand(nodes[0] as ParseNode), right: isNumericLiteralOperand(nodes[1] as ParseNode),
+    left: literal(nodes[0] as ParseNode), right: literal(nodes[1] as ParseNode),
     leftNode: nodes[0] as ParseNode, rightNode: nodes[1] as ParseNode,
   });
   return adopted ? [adopted.left, adopted.right] : undefined;

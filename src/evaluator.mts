@@ -337,16 +337,30 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
     }
     case 'UpdateExpression':
       return yield* Evaluate_UpdateExpression(node);
-    case 'ShiftExpression':
+    case 'ShiftExpression': {
+      // A constant shift the checker computed in its context's type
+      // (`FoldedConstantOf`): `1 << 40` at a `uint64` is 2**40.
+      const foldedShift = FoldedConstantOf(node);
+      if (foldedShift !== undefined) {
+        if (foldedShift.type.Kind === 'primitive' && foldedShift.type.Name === 'bigint') return Value(foldedShift.value);
+        return new TypedNumberValue(foldedShift.value, foldedShift.type as never);
+      }
       return yield* Evaluate_ShiftExpression(node);
+    }
     case 'LogicalORExpression':
       return yield* Evaluate_LogicalORExpression(node);
     case 'LogicalANDExpression':
       return yield* Evaluate_LogicalANDExpression(node);
     case 'BitwiseANDExpression':
     case 'BitwiseXORExpression':
-    case 'BitwiseORExpression':
+    case 'BitwiseORExpression': {
+      const foldedBits = FoldedConstantOf(node);
+      if (foldedBits !== undefined) {
+        if (foldedBits.type.Kind === 'primitive' && foldedBits.type.Name === 'bigint') return Value(foldedBits.value);
+        return new TypedNumberValue(foldedBits.value, foldedBits.type as never);
+      }
       return yield* Evaluate_BinaryBitwiseExpression(node);
+    }
     // proposal-runtime-types
     case 'IsExpression':
       return yield* Evaluate_IsExpression(node);

@@ -53,7 +53,7 @@ import { CompletionPaths, CompletionValues } from './completion-values.mts';
 import { templateArgumentType, isTemplateArgumentType, templateMembersType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
-import { isWellKnownNumericConstant } from './numeric-constants.mts';
+import { isWellKnownNumericConstant, integerContextOperands } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias, resolvedAliasContext, resolvedAliasDeclaration, resolvedNamespaceBinding } from './resolving-aliases.mts';
 import { PublishedClassDenotation } from './class-denotation.mts';
@@ -2323,8 +2323,24 @@ function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
  * divide, a negative shift count). `**` with a negative exponent, and shifts
  * past 4096 bits, are refused as null rather than computed.
  */
-function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => bigint | null): bigint | null {
-  const fold = (n: ParseNode) => foldIntegerConstant(n, resolveConst);
+/**
+ * The representation in which a constant expression's bitwise operators and
+ * shifts compute: an integer type's width and sign, or a BigInt's unbounded
+ * two's complement. A mathematical integer has no bits until it has a type,
+ * so these operators fold only where a context gives one, and then they are
+ * the type's own: `~0` at a `uint8` is 255, `1 << 31` at an `int32` is the
+ * sign bit and at a `uint32` is 2147483648, `1 << 40` at a `uint64` is 2**40.
+ * `refusedDistance` reports a shift distance that shifts every bit out.
+ */
+export type ConstantBits = { readonly width: number, readonly signed: boolean, refusedDistance?: bigint } | 'unbounded';
+
+function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => bigint | null, bits?: ConstantBits): bigint | null {
+  const fold = (n: ParseNode) => foldIntegerConstant(n, resolveConst, bits);
+  const sized = bits !== undefined && bits !== 'unbounded' ? bits : undefined;
+  const width = sized ? BigInt(sized.width) : 0n;
+  /** Whether _v_ is a value of the type the operators compute in. */
+  const held = (v: bigint): boolean => !sized
+    || (sized.signed ? v >= -(2n ** (width - 1n)) && v < 2n ** (width - 1n) : v >= 0n && v < 2n ** width);
   const e = node as ParseNode & {
     Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
     AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
@@ -2354,9 +2370,42 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
         return v;
       }
       if (e.operator === '~') {
-        return ~v;
+        // The complement is the type's: of the width's bits where it is
+        // unsigned, and the two's complement otherwise.
+        if (sized && !held(v)) return null;
+        return sized && !sized.signed ? 2n ** width - 1n - v : ~v;
       }
       return null;
+    }
+    case 'ShiftExpression': {
+      if (bits === undefined) return null;
+      const l = fold(e.ShiftExpression!);
+      const r = l === null ? null : fold(e.AdditiveExpression!);
+      if (l === null || r === null || !held(l)) return null;
+      if (!sized) {
+        if (r < 0n || r > 4096n || e.operator === '>>>') return null;
+        return e.operator === '<<' ? l << r : l >> r;
+      }
+      if (r < 0n || r >= width) {
+        sized.refusedDistance = r;
+        return null;
+      }
+      if (e.operator === '<<') {
+        return sized.signed ? BigInt.asIntN(sized.width, l << r) : BigInt.asUintN(sized.width, l << r);
+      }
+      // `>>` keeps the sign of a signed type; `>>>` shifts its bits as written.
+      if (e.operator === '>>' || !sized.signed) return l >> r;
+      return BigInt.asIntN(sized.width, BigInt.asUintN(sized.width, l) >> r);
+    }
+    case 'BitwiseANDExpression':
+    case 'BitwiseXORExpression':
+    case 'BitwiseORExpression': {
+      if (bits === undefined) return null;
+      const operands = e as unknown as { A?: ParseNode, B?: ParseNode };
+      const l = operands.A ? fold(operands.A) : null;
+      const r = l === null || !operands.B ? null : fold(operands.B);
+      if (l === null || r === null || !held(l) || !held(r)) return null;
+      return e.type === 'BitwiseANDExpression' ? l & r : e.type === 'BitwiseORExpression' ? l | r : l ^ r;
     }
     case 'AdditiveExpression': {
       const l = fold(e.AdditiveExpression!);
@@ -2419,6 +2468,57 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
 }
 
 /**
+ * The integer a constant expression denotes, where it denotes one exactly:
+ * `foldIntegerConstant` with `/` answering only where it divides. That fold's
+ * `/` is the division of an integer context, which truncates; this one is for
+ * a reader that has no context to give, and wants the value or nothing.
+ * _initializerOf_ gives the closed initializer of a named numeric constant.
+ */
+function foldExactInteger(node: ParseNode | null | undefined, initializerOf: (name: string) => ParseNode | null, depth = 0): bigint | null {
+  if (!node || depth > 256) return null;
+  const fold = (n: ParseNode | undefined) => foldExactInteger(n, initializerOf, depth + 1);
+  const e = node as ParseNode & {
+    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode,
+  };
+  switch (e.type) {
+    case 'NumericLiteral':
+      return exactBigIntOf(e as ParseNode.NumericLiteral);
+    case 'IdentifierReference':
+      return typeof e.name === 'string' ? fold(initializerOf(e.name) ?? undefined) : null;
+    case 'ParenthesizedExpression':
+      return fold(e.Expression);
+    case 'UnaryExpression': {
+      const v = e.operator === '-' || e.operator === '+' ? fold(e.UnaryExpression) : null;
+      return v === null ? null : e.operator === '-' ? -v : v;
+    }
+    case 'AdditiveExpression': {
+      const l = fold(e.AdditiveExpression);
+      const r = l === null ? null : fold(e.MultiplicativeExpression);
+      return l === null || r === null ? null : e.operator === '+' ? l + r : l - r;
+    }
+    case 'MultiplicativeExpression': {
+      const l = fold(e.MultiplicativeExpression);
+      const r = l === null ? null : fold(e.ExponentiationExpression);
+      if (l === null || r === null) return null;
+      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
+      if (op === '*') return l * r;
+      if (r === 0n) return null;
+      if (op === '%') return l % r;
+      return op === '/' && l % r === 0n ? l / r : null;
+    }
+    case 'ExponentiationExpression': {
+      const l = fold(e.UpdateExpression);
+      const r = l === null ? null : fold(e.ExponentiationExpression);
+      return l === null || r === null || r < 0n || r > 4096n ? null : l ** r;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
  * The exact decimal value of a constant expression, read from the literals'
  * source digits - decimal.md: "a decimal literal is read from its source digits
  * directly, not routed through a binary float64". `+`, `-` and `*` are exact in
@@ -2440,13 +2540,19 @@ interface Rat { num: bigint, den: bigint }
 const CONSTANT_EXPRESSION_TYPES = new Set([
   'NumericLiteral', 'ParenthesizedExpression', 'UnaryExpression',
   'AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
+  'ShiftExpression', 'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression',
   // A constant of the Math object, `Math.PI`: its operands are not constant
   // expressions and are shared with the original, which is all a read needs.
   'MemberExpression',
 ]);
+/** The operators a numeric constant expression is built with, by the node each makes; `~` makes a UnaryExpression. */
+const CONSTANT_ARITHMETIC_HEADS = new Set([
+  'AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
+  'ShiftExpression', 'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression',
+]);
 const CONSTANT_EXPRESSION_CHILDREN = new Set([
   'Expression', 'UnaryExpression', 'AdditiveExpression', 'MultiplicativeExpression',
-  'ExponentiationExpression', 'UpdateExpression',
+  'ExponentiationExpression', 'UpdateExpression', 'ShiftExpression', 'A', 'B',
 ]);
 function copyConstantExpression(node: ParseNode, resolveName?: (name: string) => ParseNode | null): ParseNode | null {
   const e = node as unknown as Record<string, unknown> & { type: string, name?: string };
@@ -2650,6 +2756,19 @@ function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => D
       }
       const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
       return op === '*' ? { sig: l.sig * r.sig, exp: l.exp + r.exp } : null;
+    }
+    // A power with a whole exponent is repeated multiplication, and exact as
+    // `*` is: `2 ** 3` at a decimal is 8. The run time has no `**` between
+    // decimals, though decimal.md lists one, so beside a decimal operand the
+    // expression had no reading at all.
+    case 'ExponentiationExpression': {
+      const l = fold(e.UpdateExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null || r.sig < 0n || r.exp < 0 || r.exp > 4) {
+        return null;
+      }
+      const n = r.sig * 10n ** BigInt(r.exp);
+      return n > 4096n ? null : { sig: l.sig ** n, exp: l.exp * Number(n) };
     }
     default:
       return null;
@@ -20123,6 +20242,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** `foldIntegerConstant` with this scope's constants resolvable. */
   const foldConstant = (node: ParseNode): bigint | null => foldIntegerConstant(node, constExactValue);
+  /** The representation an integer type gives a constant's bitwise operators and shifts, or undefined. */
+  const constantBitsOf = (type: Known): ConstantBits | undefined => {
+    const base = type?.Kind === 'parameterized' ? type.Base : type;
+    if (base?.Kind !== 'primitive') return undefined;
+    if (base.Name === 'bigint') return 'unbounded';
+    const size = (base.Arguments ?? [])[0];
+    return (base.Name === 'int' || base.Name === 'uint') && typeof size === 'number' && size > 0
+      ? { width: size, signed: base.Name === 'int' } : undefined;
+  };
+  /**
+   * `foldConstant` at a position of the type _type_ (#sec-contextual-types):
+   * the arithmetic is exact as it is anywhere, and the bitwise operators and
+   * shifts are the type's. A named constant is its initializer folded there.
+   * _refusal_ receives a shift distance that shifts every bit out.
+   */
+  const foldConstantAt = (node: ParseNode, type: Known, refusal?: { distance?: bigint }): bigint | null => {
+    const bits = constantBitsOf(type);
+    if (!bits) return foldConstant(node);
+    const named = (name: string): bigint | null => {
+      const initializer = constClosedInitializer(name);
+      return initializer ? foldIntegerConstant(initializer, named, bits) : constExactValue(name);
+    };
+    const folded = foldIntegerConstant(node, named, bits);
+    if (refusal && bits !== 'unbounded' && bits.refusedDistance !== undefined) refusal.distance = bits.refusedDistance;
+    return folded;
+  };
 
   /** The exact value of a `const` of an integer value type, resolved as `constExactValue` resolves a literal one. */
   const constTypedValue = (name: string): bigint | null => {
@@ -20591,7 +20736,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ParenthesizedExpression':
         return isNumericConstantExpression(e.Expression);
       case 'UnaryExpression':
-        return (e.operator === '-' || e.operator === '+') && isNumericConstantExpression(e.UnaryExpression);
+        return (e.operator === '-' || e.operator === '+' || e.operator === '~') && isNumericConstantExpression(e.UnaryExpression);
+      // The bitwise operators and the shifts over constants are constant too:
+      // `1 << 4`, `0xF0 | 0x0F`, `~0xFF` are how a mask and a flag are written.
+      case 'ShiftExpression':
+        return isNumericConstantExpression((e as unknown as { ShiftExpression?: ParseNode }).ShiftExpression)
+          && isNumericConstantExpression(e.AdditiveExpression);
+      case 'BitwiseANDExpression':
+      case 'BitwiseXORExpression':
+      case 'BitwiseORExpression':
+        return isNumericConstantExpression((e as unknown as { A?: ParseNode }).A)
+          && isNumericConstantExpression((e as unknown as { B?: ParseNode }).B);
       // The operands are named after the productions rather than left/right.
       case 'AdditiveExpression':
         return isNumericConstantExpression(e.AdditiveExpression)
@@ -20617,6 +20772,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `const K = 4 ** 2` took `z`'s type, and `z * 4 ** 2` was a Number there.
    * A bare literal and a bare name have their own readings and answer null.
    */
+  const isConstantArithmeticHead = (node: ParseNode): boolean => CONSTANT_ARITHMETIC_HEADS.has(node.type)
+    || (node.type === 'UnaryExpression' && (node as unknown as { operator?: string }).operator === '~');
   const constantExpressionOperand = (node: ParseNode): ParseNode | null => {
     let inner: ParseNode | undefined = node;
     for (;;) {
@@ -20628,8 +20785,347 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
     }
-    return inner && ['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression'].includes(inner.type)
-      && isNumericConstantExpression(inner) ? node : null;
+    return inner && isConstantArithmeticHead(inner) && isNumericConstantExpression(inner) ? node : null;
+  };
+
+  /**
+   * #sec-contextual-types: a position's context is retained "through
+   * value-preserving expression selection ... the selected conditional or
+   * short-circuit operand, the final comma operand". An operand of a binary
+   * operator has the other operand's type as its context, so the literal such
+   * an expression may produce is a literal beside that operand:
+   * `z * (scale ?? 1)` is `z * 1` where `scale` is absent, and
+   * `z * (c ? 16 : 2)` is `z * 16` or `z * 2`. These are the operands a
+   * selecting expression may produce, each under its parentheses and at the
+   * end of a comma.
+   */
+  const producedOperands = (node: ParseNode, out: ParseNode[] = [], depth = 0): ParseNode[] => {
+    const core = contextualResultOperand(node);
+    const produce = (part: ParseNode) => producedOperands(part, out, depth + 1);
+    if (depth < 64) {
+      if (core.type === 'ConditionalExpression') {
+        produce(core.AssignmentExpression_a);
+        produce(core.AssignmentExpression_b);
+        return out;
+      }
+      if (core.type === 'LogicalORExpression') {
+        produce(core.LogicalORExpression);
+        produce(core.LogicalANDExpression);
+        return out;
+      }
+      if (core.type === 'LogicalANDExpression') {
+        produce(core.LogicalANDExpression);
+        produce(core.BitwiseORExpression);
+        return out;
+      }
+      if (core.type === 'CoalesceExpression') {
+        produce(core.CoalesceExpressionHead);
+        produce(core.BitwiseORExpression);
+        return out;
+      }
+    }
+    out.push(core);
+    return out;
+  };
+  /** Whether an operand is, under its parentheses and at the end of a comma, an expression that selects one of its operands. */
+  const isSelectingOperand = (node: ParseNode): boolean => ['ConditionalExpression', 'LogicalORExpression', 'LogicalANDExpression', 'CoalesceExpression']
+    .includes(contextualResultOperand(node).type);
+  /** An operand that takes the type of the operand beside it: a literal, a numeric constant, or arithmetic over them, under any sign. */
+  const adaptingOperand = (node: ParseNode): ParseNode | null => {
+    const core = contextualResultOperand(node);
+    if (literalOperand(core)) return core;
+    let inner: ParseNode | undefined = core;
+    for (;;) {
+      if (inner?.type === 'ParenthesizedExpression') {
+        inner = (inner as unknown as { Expression?: ParseNode }).Expression;
+      } else if (inner?.type === 'UnaryExpression' && ['-', '+'].includes((inner as unknown as { operator?: string }).operator ?? '')) {
+        inner = (inner as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
+      } else {
+        break;
+      }
+    }
+    return inner && inner.type !== 'NumericLiteral' && isNumericConstantExpression(inner) ? core : null;
+  };
+  /** The numeric type an operand beside _type_ adapts to: its base, where it is parameterized. */
+  const numericPeerOf = (type: Known): TypeRecord | null => {
+    const at = erasedKeepingBrand(type);
+    const base = at?.Kind === 'parameterized' ? (at as { Base?: TypeRecord }).Base : at;
+    return base?.Kind === 'primitive' && isNumericOperandName((base as { Name?: string }).Name) ? base as TypeRecord : null;
+  };
+  /**
+   * A view of a selecting operand in which each literal it may produce has the
+   * type _peer_, for the ordinary judgments of the selection to be made over:
+   * the join of `(c ? 16 : y)` beside a `uint32` is then that of a `uint32`
+   * and `y`. The literals viewed are added to _literals_.
+   */
+  const selectionView = (node: ParseNode, peer: TypeRecord, literals: ParseNode[], depth = 0): ParseNode => {
+    if (depth > 64) return node;
+    const view = (part: ParseNode) => selectionView(part, peer, literals, depth + 1);
+    switch (node.type) {
+      case 'ParenthesizedExpression':
+        return { ...node, Expression: view(node.Expression) } as ParseNode;
+      case 'CommaOperator':
+        return { ...node, ExpressionList: [...node.ExpressionList.slice(0, -1), view(node.ExpressionList.at(-1)!)] } as ParseNode;
+      case 'ConditionalExpression':
+        return { ...node, AssignmentExpression_a: view(node.AssignmentExpression_a), AssignmentExpression_b: view(node.AssignmentExpression_b) } as ParseNode;
+      case 'LogicalORExpression':
+        return { ...node, LogicalORExpression: view(node.LogicalORExpression), LogicalANDExpression: view(node.LogicalANDExpression) } as ParseNode;
+      case 'LogicalANDExpression':
+        return { ...node, LogicalANDExpression: view(node.LogicalANDExpression), BitwiseORExpression: view(node.BitwiseORExpression) } as ParseNode;
+      case 'CoalesceExpression':
+        return { ...node, CoalesceExpressionHead: view(node.CoalesceExpressionHead), BitwiseORExpression: view(node.BitwiseORExpression) } as ParseNode;
+      default:
+        if (!adaptingOperand(node)) return node;
+        literals.push(node);
+        return typedExpressionView(node, peer);
+    }
+  };
+  /**
+   * The type of a selecting operand beside an operand of type _peerType_, with
+   * the literals it may produce read at that type: ~literal~ where it can
+   * produce nothing else, the type of the view where it can, and ~none~ where
+   * the operand selects nothing, produces no literal, or stands beside no
+   * numeric type. _literals_ receives the literals of the second case.
+   */
+  const selectingOperandType = (node: ParseNode, peerType: Known, literals: ParseNode[]): 'literal' | 'none' | { type: Known } => {
+    if (!isSelectingOperand(node)) return 'none';
+    const produced = producedOperands(node);
+    if (!produced.some((operand) => adaptingOperand(operand))) return 'none';
+    if (produced.every((operand) => adaptingOperand(operand))) return 'literal';
+    const peer = numericPeerOf(peerType);
+    return peer ? { type: staticType(selectionView(node, peer, literals)) } : 'none';
+  };
+
+  /**
+   * Each typed value a selecting operand may produce is an operand beside
+   * _peerType_, and is judged as one: `z * (c ? 16 : n)` for a `number` _n_
+   * mixes two numeric types on the second arm, as `z * n` does. Reported once.
+   */
+  const reportProducedMismatch = (operand: ParseNode, peerType: Known, site: ParseNode, operator: string, peerIsLeft: boolean): boolean => {
+    const numericOperand = (type: Known): TypeRecord | null => {
+      const at = erasedKeepingBrand(type);
+      const base = at?.Kind === 'parameterized' ? (at as { Base?: TypeRecord }).Base : at;
+      return at && base?.Kind === 'primitive' && isNumericOperandName((base as { Name?: string }).Name) ? at as TypeRecord : null;
+    };
+    const peer = numericOperand(peerType);
+    if (!peer) return false;
+    for (const produced of producedOperands(operand)) {
+      if (adaptingOperand(produced)) continue;
+      const mine = numericOperand(enumUnderlying(operationalType(staticType(produced))));
+      if (!mine || SameType(mine, peer)) continue;
+      const [left, right] = peerIsLeft ? [peer, mine] : [mine, peer];
+      if (ordinaryNumericOrdering(operator, left, right) || bodylessResult(operator, left, right, true, site) !== undefined) continue;
+      reportType('rt-numeric-operator', site, '$1 and $2 are different numeric types and do not mix', Value(displayType(left)), Value(displayType(right)));
+      return true;
+    }
+    return false;
+  };
+
+  /**
+   * Whether a numeric constant expression is one a decimal or a `float128`
+   * computes with its own operators: literals and named constants under `+`,
+   * `-`, `*`, `/` and `%`, and `**` where _power_ (the run time has none
+   * between decimals). A constant of `Math` is a Number and is not one.
+   */
+  const computesInType = (node: ParseNode | null | undefined, power: boolean, depth = 0): boolean => {
+    if (!node || depth > 256) return false;
+    const e = node as unknown as Record<string, ParseNode | undefined> & { type: string, name?: string, operator?: string, Imaginary?: boolean };
+    const of = (n: ParseNode | null | undefined) => computesInType(n, power, depth + 1);
+    switch (e.type) {
+      case 'NumericLiteral': return !e.Imaginary;
+      case 'IdentifierReference': return typeof e.name === 'string' && of(constClosedInitializer(e.name));
+      case 'ParenthesizedExpression': return of(e.Expression);
+      case 'UnaryExpression': return (e.operator === '-' || e.operator === '+') && of(e.UnaryExpression);
+      case 'AdditiveExpression': return of(e.AdditiveExpression) && of(e.MultiplicativeExpression);
+      case 'MultiplicativeExpression': return of(e.MultiplicativeExpression) && of(e.ExponentiationExpression);
+      case 'ExponentiationExpression': return power && of(e.UpdateExpression) && of(e.ExponentiationExpression);
+      default: return false;
+    }
+  };
+  /** Give each literal and each named constant of such an expression the type _type_. */
+  const typeConstantOperands = (node: ParseNode | null | undefined, type: TypeRecord, depth = 0): void => {
+    if (!node || depth > 256) return;
+    const e = node as unknown as Record<string, ParseNode | undefined> & { type: string };
+    const into = (n: ParseNode | null | undefined) => typeConstantOperands(n, type, depth + 1);
+    switch (e.type) {
+      case 'NumericLiteral':
+      case 'IdentifierReference':
+        staticTypeIn(node, type);
+        break;
+      case 'ParenthesizedExpression': into(e.Expression); break;
+      case 'UnaryExpression': into(e.UnaryExpression); break;
+      case 'AdditiveExpression': into(e.AdditiveExpression); into(e.MultiplicativeExpression); break;
+      case 'MultiplicativeExpression': into(e.MultiplicativeExpression); into(e.ExponentiationExpression); break;
+      case 'ExponentiationExpression': into(e.UpdateExpression); into(e.ExponentiationExpression); break;
+      default: break;
+    }
+  };
+  /**
+   * Record the integer a numeric constant operand denotes as it is written
+   * (`IntegerContextOperandValue`): the value it has beside an integer whose
+   * type is seen only when the operand runs. No context reaches it there, so
+   * its `/` is the Number's and it denotes an integer only where that divides.
+   */
+  const recordIntegerContextOperand = (node: ParseNode): void => {
+    const value = foldExactInteger(node, constClosedInitializer);
+    if (value !== null && !integerContextOperands.has(node)) journalSet(integerContextOperands, node, value);
+  };
+  /** A numeric constant operand under its parentheses and sign: a use of a named constant, or arithmetic over constants. */
+  const constantOperandCore = (operand: ParseNode): { core: ParseNode, negative: boolean } | null => {
+    let core: ParseNode = operand;
+    let negative = false;
+    for (let depth = 0; depth < 256; depth += 1) {
+      const wrapped = core as unknown as { Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string };
+      if (core.type === 'ParenthesizedExpression' && wrapped.Expression) core = wrapped.Expression;
+      else if (core.type === 'UnaryExpression' && (wrapped.operator === '-' || wrapped.operator === '+') && wrapped.UnaryExpression) {
+        if (wrapped.operator === '-') negative = !negative;
+        core = wrapped.UnaryExpression;
+      } else break;
+    }
+    const constant = (core.type === 'IdentifierReference' || isConstantArithmeticHead(core)) && isNumericConstantExpression(core);
+    return constant ? { core, negative } : null;
+  };
+  /** The Number a numeric constant expression evaluates to, where this reads every part of it. */
+  const numberOfConstant = (node: ParseNode | null | undefined, depth = 0): number | null => {
+    if (!node || depth > 256) return null;
+    const e = node as unknown as Record<string, ParseNode | undefined> & { type: string, name?: string, operator?: string, value?: unknown, MultiplicativeOperator?: string };
+    const of = (n: ParseNode | null | undefined) => numberOfConstant(n, depth + 1);
+    switch (e.type) {
+      case 'NumericLiteral':
+        return typeof e.value === 'number' || typeof e.value === 'bigint' ? Number(e.value) : null;
+      case 'IdentifierReference':
+        return typeof e.name === 'string' ? of(constClosedInitializer(e.name)) : null;
+      case 'ParenthesizedExpression':
+        return of(e.Expression);
+      case 'UnaryExpression': {
+        const v = e.operator === '-' || e.operator === '+' || e.operator === '~' ? of(e.UnaryExpression) : null;
+        return v === null ? null : e.operator === '-' ? -v : e.operator === '~' ? ~v : v;
+      }
+      case 'AdditiveExpression': {
+        const l = of(e.AdditiveExpression);
+        const r = of(e.MultiplicativeExpression);
+        return l === null || r === null ? null : e.operator === '+' ? l + r : l - r;
+      }
+      case 'MultiplicativeExpression': {
+        const l = of(e.MultiplicativeExpression);
+        const r = of(e.ExponentiationExpression);
+        if (l === null || r === null) return null;
+        return e.MultiplicativeOperator === '*' ? l * r : e.MultiplicativeOperator === '/' ? l / r : e.MultiplicativeOperator === '%' ? l % r : null;
+      }
+      case 'ShiftExpression': {
+        const l = of(e.ShiftExpression);
+        const r = of(e.AdditiveExpression);
+        if (l === null || r === null) return null;
+        return e.operator === '<<' ? l << r : e.operator === '>>' ? l >> r : l >>> r;
+      }
+      case 'BitwiseANDExpression':
+      case 'BitwiseXORExpression':
+      case 'BitwiseORExpression': {
+        const l = of(e.A);
+        const r = of(e.B);
+        if (l === null || r === null) return null;
+        return e.type === 'BitwiseANDExpression' ? l & r : e.type === 'BitwiseORExpression' ? l | r : l ^ r;
+      }
+      case 'ExponentiationExpression': {
+        const l = of(e.UpdateExpression);
+        const r = of(e.ExponentiationExpression);
+        return l === null || r === null ? null : l ** r;
+      }
+      default:
+        return null;
+    }
+  };
+  /**
+   * What a numeric constant operand is beside an integer of type _peer_, which
+   * is its context (#sec-contextual-types): the integer it folds to there,
+   * with `/` the integer's division, or the reason it is not a value of the
+   * type - the text of the value it has. Null where it is not such an operand
+   * or its value is not read here.
+   */
+  const constantBesideInteger = (operand: ParseNode, peer: TypeRecord): { core: ParseNode, value: bigint } | { refused: string } | null => {
+    const constant = constantOperandCore(operand);
+    if (!constant) return null;
+    const prim = peer as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+    const folded = foldConstantAt(constant.core, peer);
+    if (folded !== null) {
+      const signed = constant.negative ? -folded : folded;
+      return fitsNumericType(signed, prim.Name, prim.Arguments) ? { core: constant.core, value: folded } : { refused: String(signed) };
+    }
+    const number = numberOfConstant(constant.core);
+    if (number === null) return null;
+    const signed = constant.negative ? -number : number;
+    // A value that is an integer of the type is taken as the Number is.
+    return Number.isInteger(signed) && fitsNumericType(BigInt(signed), prim.Name, prim.Arguments) ? null : { refused: String(signed) };
+  };
+  /** The integer type _type_ is read at as an operand, an enum at its underlying type; or null. */
+  const integerPeerOf = (type: Known): TypeRecord | null => {
+    const raw = erasedKeepingBrand(type);
+    const under = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
+    const base = under?.Kind === 'parameterized' ? under.Base : under;
+    return isIntegerValueType(base) ? base as TypeRecord : null;
+  };
+  /**
+   * Beside an operand of an integer type, each numeric constant operand
+   * _operand_ may produce has that type as its context, in a comparison as in
+   * arithmetic: `z < 7 / 2` is `z < 3`, as `z * (7 / 2)` is `z * 3`. The
+   * value is recorded for the run time to read where it sees the integer
+   * (`IntegerContextOperandValue`), which leaves the operand a Number beside
+   * anything else.
+   */
+  const recordIntegerContextBeside = (operand: ParseNode, peerType: Known): void => {
+    const peer = integerPeerOf(peerType);
+    if (!peer) return;
+    for (const produced of producedOperands(operand)) {
+      const beside = constantBesideInteger(produced, peer);
+      if (beside && 'core' in beside) journalSet(integerContextOperands, beside.core, beside.value);
+    }
+  };
+
+  /** Whether a constant operand has a constant of the Math object in it, through the constants it names. */
+  const involvesMathConstant = (node: ParseNode | null | undefined, depth = 0): boolean => {
+    if (!node || depth > 64) return false;
+    const e = node as ParseNode & {
+      Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
+      AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+      ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode,
+    };
+    switch (e.type) {
+      case 'MemberExpression':
+        return isWellKnownNumericConstant(e) && !shadowedByProgram('Math');
+      case 'IdentifierReference':
+        return typeof e.name === 'string' && involvesMathConstant(constClosedInitializer(e.name), depth + 1);
+      case 'ParenthesizedExpression':
+        return involvesMathConstant(e.Expression, depth + 1);
+      case 'UnaryExpression':
+        return (e.operator === '-' || e.operator === '+') && involvesMathConstant(e.UnaryExpression, depth + 1);
+      case 'AdditiveExpression':
+        return involvesMathConstant(e.AdditiveExpression, depth + 1) || involvesMathConstant(e.MultiplicativeExpression, depth + 1);
+      case 'MultiplicativeExpression':
+        return involvesMathConstant(e.MultiplicativeExpression, depth + 1) || involvesMathConstant(e.ExponentiationExpression, depth + 1);
+      case 'ExponentiationExpression':
+        return involvesMathConstant(e.UpdateExpression, depth + 1) || involvesMathConstant(e.ExponentiationExpression, depth + 1);
+      default:
+        return false;
+    }
+  };
+
+  /**
+   * #sec-static-type-of-an-expression: a constant of the Math object is the
+   * literal of its value where a binary float is wanted, and a `number` at a
+   * position of an integer, a decimal, a rational or a `float128`, whose
+   * values a Number does not denote. Beside an operand of one of those it is
+   * therefore a `number`, and the two do not mix: `d < Math.PI` for a
+   * `decimal128` is the type error `d < n` is. Reading every constant of Math
+   * as a literal wherever it stood let that line through to the run time,
+   * which cannot give a decimal a Number either.
+   */
+  const mathConstantIsNumberBeside = (operand: ParseNode, peer: Known): boolean => {
+    let base = erasedKeepingBrand(peer);
+    // Through a parameterization and a value narrowed to one literal, to the type the operand is of.
+    for (let depth = 0; depth < 4 && (base?.Kind === 'parameterized' || base?.Kind === 'literal'); depth += 1) base = (base as { Base?: TypeRecord }).Base ?? null;
+    if (base?.Kind !== 'primitive') return false;
+    const exact = isIntegerValueType(base) || base.Name === 'rational' || base.Name === 'float128' || decimalWidthOf(base) !== undefined;
+    return exact && involvesMathConstant(operand);
   };
 
   // A comma expression forwards context only to its result producer. This
@@ -22154,7 +22650,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const foldedBigint = contextual !== null && bigintTarget(contextual);
     if (contextual && (isIntegerValueType(contextual as TypeRecord) || foldedBigint) && isNumericConstantExpression(node)
         && node.type !== 'NumericLiteral') {
-      const foldedRaw = foldConstant(node);
+      const refusal: { distance?: bigint } = {};
+      const foldedRaw = foldConstantAt(node, contextual, refusal);
+      // A constant shift is refused as a shift of a value of the type is.
+      if (foldedRaw === null && refusal.distance !== undefined) {
+        if (refusal.distance < 0n) {
+          reportType('rt-shift-distance', node, 'a shift distance of $1 is negative', Value(String(refusal.distance)));
+        } else {
+          reportType('rt-shift-distance', node, 'a shift distance of $1 shifts every bit out of $2', Value(String(refusal.distance)), Value(displayType(contextual as TypeRecord)));
+        }
+        return contextual;
+      }
       if (foldedRaw !== null) {
         let folded: bigint = foldedRaw;
         const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
@@ -22182,6 +22688,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const type = foldedBigint ? makePrimitive('bigint') : contextual;
         journalSet(foldedConstants, node, { value: folded, type });
         return type;
+      }
+      // An expression that does not fold here - a fraction among its
+      // literals, a division by zero, a negative exponent - has the value its
+      // Number arithmetic gives, and that value takes the type as a literal
+      // does: `7.5 * 2` is 15. One that is no integer of the type is refused
+      // as `3.75` written there is; `let k: uint8 = 7.5 / 2` was a RangeError
+      // when the declaration ran. A conversion's operand converts instead.
+      if (!foldedBigint && !conversionOperands.has(node)) {
+        const number = numberOfConstant(node);
+        const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
+        if (number !== null && !(Number.isInteger(number) && fitsNumericType(BigInt(number), prim.Name, prim.Arguments))) {
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(String(number)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return contextual;
+        }
       }
     }
     // ...and at a DECIMAL contextual type, on the source digits: decimal.md,
@@ -22216,6 +22737,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         journalSet(foldedDecimals, node, { ...dec, width: decimalWidthOf(contextual as TypeRecord)!, type: contextual as TypeRecord });
         return contextual;
       }
+    }
+    // rational.md states the rule for every typed context: the literals of a
+    // constant expression "adopt the type the context asks for", and its
+    // operators are then that type's. The folds above read what they can
+    // compute exactly. An expression they do not read - one that divides, at a
+    // decimal; any, at a `float128` - was left to Number arithmetic and
+    // converted where it landed: `let d: decimal128 = 1 / 3` held the double
+    // nearest a third written out to 34 digits, `let q: float128 = 0.1 + 0.2`
+    // the double sum. Beside an operand nothing converts, so `d * (7 / 2)` was
+    // a TypeError and `d === 7 / 2` *false* for a `d` that is 3.5. Here its
+    // literals take the type, and the type's own operators compute it.
+    if (contextual && contextual.Kind === 'primitive' && node.type !== 'NumericLiteral'
+        && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128')
+        && isNumericConstantExpression(node) && computesInType(node, contextual.Name === 'float128')) {
+      typeConstantOperands(node, contextual);
+      return contextual;
     }
     // The same reading at a WIDE INTEGER position, and for the same reason the
     // decimal case gives: the double cannot represent the answer. `int64` has
@@ -25982,6 +26519,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // it in place the adoption here turns a wrong static type into a wrong
         // run-time answer.
         const operandTypes = operandNodes.map((x) => staticType(x));
+        // An operand that selects one of its operands (#sec-contextual-types,
+        // "the selected conditional or short-circuit operand") is judged as
+        // what it may produce. Where every alternative is a literal it adapts
+        // as a literal does, and is read here at the type beside it; where it
+        // may also produce a typed value, it has that value's type. This is
+        // for the judgments below only: no literal is given a type to hold.
+        const selectedMixes: number[] = [];
+        if (operandNodes.length === 2) {
+          const written = [...operandTypes];
+          for (const index of [0, 1]) {
+            const selects = selectingOperandType(operandNodes[index], written[1 - index], []);
+            if (selects === 'literal') {
+              if (numericPeerOf(written[1 - index])) operandTypes[index] = written[1 - index];
+            } else if (typeof selects === 'object') {
+              operandTypes[index] = selects.type;
+              selectedMixes.push(index);
+            }
+          }
+        }
         // ...EXCEPT where the other operand is a `decimal`, a `rational` or a
         // `complex`. The blocker above is a builtin the checker types as a typed
         // INTEGER that the run time returns as a Number; no builtin is typed as
@@ -26073,6 +26629,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (strictOperator && ['<', '>', '<=', '>='].includes(strictOperator) && operandNodes.length === 2
           && checkBinaryConversion(node, strictOperator, operandNodes[0], operandNodes[1])) return neverType;
         if (strictOperator && ['<', '>', '<=', '>='].includes(strictOperator)
+          && selectedMixes.some((index) => reportProducedMismatch(operandNodes[index], operandTypes[1 - index], node, strictOperator, index === 1))) return neverType;
+        if (strictOperator && ['<', '>', '<=', '>='].includes(strictOperator)
           && reportNumericUnion(strictOperator, operandTypes[0], operandTypes[1])) return neverType;
         if (!operandTypes.some((type) => erasedKeepingBrand(type)?.Kind === 'union')) {
           for (const operand of operandTypes) checkNumericOperation(strictOperator, operand);
@@ -26145,10 +26703,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // source expression and its resolved declaration, not a narrowed
         // literal Type Record (#sec-numeric-value-provenance). In particular,
         // `let x: number = 1` retains Number's domain at `n < x`.
+        // A constant of Math beside an integer, a decimal, a rational or a
+        // `float128` adapts to nothing: it is a `number` there
+        // (`mathConstantIsNumberBeside`), and is judged as one.
+        const mathNumbers = operandNodes.length === 2
+          ? operandNodes.map((operand, index) => !!operandTypes[1 - index]
+            && mathConstantIsNumberBeside(contextualResultOperand(operand), operandTypes[1 - index] as Known))
+          : [];
+        const orderedTypes = operandTypes.map((type, index) => (mathNumbers[index] ? makePrimitive('number') : type));
         if ((strictOperator === '<' || strictOperator === '>'
             || strictOperator === '<=' || strictOperator === '>=')
-            && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
-            && !operandNodes.some(numericResultCanAdapt)) {
+            && orderedTypes.length === 2 && orderedTypes[0] && orderedTypes[1]
+            && !operandNodes.some((operand, index) => numericResultCanAdapt(operand) && !mathNumbers[index])) {
           // Through `shared` and a literal's base, and KEEPING a brand: the
           // comparison below is `SameType`, and a brand is part of the identity
           // it compares, exactly as at an arithmetic operator.
@@ -26162,17 +26728,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && isNumericOperandName((base as { Name?: string }).Name)
               ? at as TypeRecord : null;
           };
-          const lvc = numericForCompare(operandTypes[0] as Known);
-          const rvc = numericForCompare(operandTypes[1] as Known);
+          const lvc = numericForCompare(orderedTypes[0] as Known);
+          const rvc = numericForCompare(orderedTypes[1] as Known);
           // A vector is not a numeric VALUE type either, so it reaches neither
           // `lvc` nor `rvc`; two vectors of different types are the same
           // mistake at a comparison as at an arithmetic operator.
-          const lvv = operandTypes[0]!.Kind === 'primitive'
-            && (operandTypes[0] as { Name?: string }).Name === 'vector'
-            ? operandTypes[0] as TypeRecord : null;
-          const rvv = operandTypes[1]!.Kind === 'primitive'
-            && (operandTypes[1] as { Name?: string }).Name === 'vector'
-            ? operandTypes[1] as TypeRecord : null;
+          const lvv = orderedTypes[0]!.Kind === 'primitive'
+            && (orderedTypes[0] as { Name?: string }).Name === 'vector'
+            ? orderedTypes[0] as TypeRecord : null;
+          const rvv = orderedTypes[1]!.Kind === 'primitive'
+            && (orderedTypes[1] as { Name?: string }).Name === 'vector'
+            ? orderedTypes[1] as TypeRecord : null;
           if (lvv && rvv && !SameType(lvv, rvv)) {
             const completion = CreateTypeDiagnostic('rt-numeric-operator', node, diagnosticPhase, '$1 and $2 are different numeric types and do not mix', Value(displayType(lvv)), Value(displayType(rvv))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
@@ -26261,8 +26827,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const nm = inner.name;
           return constExactValue(nm) !== null || constDecimalValue(nm) !== null ? n : null;
         };
-        const leftLit = literalOperand(leftNode) ?? constUse(leftNode) ?? constantExpressionOperand(leftNode);
-        const rightLit = literalOperand(rightNode) ?? constUse(rightNode) ?? constantExpressionOperand(rightNode);
+        // The last expression of a comma is the operand (#sec-contextual-types,
+        // "a comma expression passes its contextual type to its final operand"),
+        // as the run time reads it: `z * (0, 16)` was refused as a `number`.
+        const literalOf = (n: ParseNode): ParseNode | null => {
+          const core = contextualResultOperand(n);
+          return literalOperand(core) ?? constUse(core) ?? constantExpressionOperand(core);
+        };
+        let leftLit = literalOf(leftNode);
+        let rightLit = literalOf(rightNode);
+        // An operand that selects one of its operands, every one a literal, is
+        // a literal operand: `z * (c ? 16 : 2)`. It was the union of the two,
+        // and refused as numeric alternatives that do not mix.
+        const leftLeafLiterals: ParseNode[] = [];
+        const rightLeafLiterals: ParseNode[] = [];
+        const leftSelects = leftLit ? 'none' : selectingOperandType(leftNode, null, []);
+        const rightSelects = rightLit ? 'none' : selectingOperandType(rightNode, null, []);
+        if (leftSelects === 'literal') leftLit = leftNode;
+        if (rightSelects === 'literal') rightLit = rightNode;
         // #sec-enums: "an enum can be used for arithmetic, indexing, and
         // comparison without a cast" - an operand of an enum type is read at its
         // UNDERLYING type, as the run time's TypedOperandType reads it, so a
@@ -26275,8 +26857,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const constant = stringConstantValue(operand);
           return stringOnly(constant) ? constant : null;
         };
-        const leftT = leftLit ? null : enumUnderlying(operationalType(operandType(leftNode)));
-        const rightT = rightLit ? null : enumUnderlying(operationalType(operandType(rightNode)));
+        let leftT = leftLit ? null : enumUnderlying(operationalType(operandType(leftNode)));
+        let rightT = rightLit ? null : enumUnderlying(operationalType(operandType(rightNode)));
+        // One that may also produce a typed value, `z * (scale ?? 1)`, has the
+        // type of that value, the literal taking the type of the operand beside
+        // it. The checker accepted it and the literal reached the run time a
+        // `number`.
+        if (!rightLit && leftT) {
+          const mixed = selectingOperandType(rightNode, leftT, rightLeafLiterals);
+          if (typeof mixed === 'object') rightT = enumUnderlying(operationalType(mixed.type));
+        }
+        if (!leftLit && rightT) {
+          const mixed = selectingOperandType(leftNode, rightT, leftLeafLiterals);
+          if (typeof mixed === 'object') leftT = enumUnderlying(operationalType(mixed.type));
+        }
+        // A constant of Math beside an integer, a decimal, a rational or a
+        // `float128` is a `number` there and takes no type (see
+        // `mathConstantIsNumberBeside`), so the pair is judged as two types.
+        // A `const` bound to an expression of one has no type of its own and
+        // is read the same way.
+        if ((rightLit || !rightT) && leftT && mathConstantIsNumberBeside(rightNode, leftT)) {
+          rightLit = null;
+          rightT = makePrimitive('number');
+        } else if ((leftLit || !leftT) && rightT && mathConstantIsNumberBeside(leftNode, rightT)) {
+          leftLit = null;
+          leftT = makePrimitive('number');
+        }
         // A DEGENERATE LITERAL OPERAND, refused where the checker can see it.
         // #sec-integer-operations states two such rules, and neither was
         // enforced: "It is a type error if the divisor of `/` or `%` is a
@@ -26503,6 +27109,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // time, which is the truncation caught late rather than the error
         // caught early.
         const adopt = (lit: ParseNode, t: TypeRecord): void => {
+          // Each literal a selecting operand may produce takes the type.
+          if (isSelectingOperand(lit)) {
+            for (const produced of producedOperands(lit)) if (adaptingOperand(produced)) adopt(produced, t);
+            return;
+          }
           // The LITERAL NODE itself is what takes the type - `staticTypeIn`'s
           // wide-literal arm matches a `NumericLiteral` and records the exact
           // value against it - so parentheses and a unary sign are looked
@@ -26510,6 +27121,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `a + (9007199254740993)` read the literal as a double while
           // `a + 9007199254740993` beside it was exact. Parentheses do not
           // change what an expression means.
+          const reported = errors.length;
           staticTypeIn(innermostLiteral(lit), t);
           if (isIntegerValueType(t)) {
             const exact = signedLiteralValue(lit);
@@ -26518,9 +27130,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
               const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(t))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
+            } else if (errors.length === reported && !literalOperand(lit)) {
+              // A named constant, and a constant expression that is no
+              // integer, are literals here too: `z * K` with `const K = 300`
+              // and `z * (7.5 / 2)` beside a `uint8` were RangeErrors when
+              // the line ran.
+              const beside = constantBesideInteger(lit, t);
+              if (beside && 'refused' in beside) {
+                const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(beside.refused), Value(displayType(t))) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              }
             }
           }
         };
+        for (const produced of rightLeafLiterals) if (lv) adopt(produced, lv.Kind === 'parameterized' ? lv.Base : lv);
+        for (const produced of leftLeafLiterals) if (rv) adopt(produced, rv.Kind === 'parameterized' ? rv.Base : rv);
+        // A shift's distance and an exponent keep their own rules.
+        if (token && !['<<', '>>', '>>>', '**'].includes(token)) {
+          if (rightLeafLiterals.length > 0 && reportProducedMismatch(rightNode, leftT, node, token, true)) return neverType;
+          if (leftLeafLiterals.length > 0 && reportProducedMismatch(leftNode, rightT, node, token, false)) return neverType;
+        }
         if (lv && rightLit && lv.Kind === 'parameterized'
             && !(token === '**' && lv.Base.Kind === 'primitive' && lv.Base.Name === 'rational')) {
           adopt(rightLit, lv.Base);
@@ -38891,6 +39520,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // rules. In particular, do not forbid a working uint8 * String coercion.
         const adoptingLiteral = (expression: ParseNode): boolean => {
           if (literalOperand(expression)) return true;
+          // An operand that selects among literals adapts as one does.
+          if (selectingOperandType(expression, null, []) === 'literal') return true;
           const inner = innermostLiteral(expression);
           return inner.type === 'IdentifierReference'
             && (constExactValue(inner.name) !== null || constDecimalValue(inner.name) !== null);
@@ -43634,27 +44265,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       // A named numeric constant too: at this position it produces the value its
       // initializer would produce written here, which typing it here arranges.
-      const lit = literalOperand(result)
-        ?? (result.type === 'IdentifierReference' && isNumericConstantExpression(result) ? result : null)
-        ?? constantExpressionOperand(result);
-      if (!lit || !otherType) continue;
+      // And each literal an operand that selects one of its operands may
+      // produce (`producedOperands`): `d === (c ? 0.1 : 0.2)`.
+      if (!otherType) continue;
+      recordIntegerContextBeside(result, otherType);
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
-      if (name === 'rational' || name === 'complex' || name === 'float128' || (name !== undefined && name.startsWith('decimal'))) {
-        staticTypeIn(innermostLiteral(lit), base!);
-      }
-      // An integer type wider than a Number's 53 bits is such a family past
-      // the integers a Number holds: `const K = 9007199254740993; z === K`
-      // for a `uint64` _z_ compared with the double K holds, ...992. A
-      // constant up to that range is exact as a Number and is left to the run
-      // time's reading; one the type cannot hold is equal to nothing of it.
-      if (base && isWideIntegerType(base)) {
-        const exact = foldConstant(lit);
-        const wide = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-        if (exact !== null && (exact > BigInt(Number.MAX_SAFE_INTEGER) || exact < BigInt(Number.MIN_SAFE_INTEGER))
-            && fitsNumericType(exact, wide.Name, wide.Arguments)) {
-          staticTypeIn(innermostLiteral(lit), base);
-        }
+      if (!(name === 'rational' || name === 'complex' || name === 'float128' || (name !== undefined && name.startsWith('decimal')))) continue;
+      for (const produced of producedOperands(result)) {
+        const lit = literalOperand(produced)
+          ?? (produced.type === 'IdentifierReference' && isNumericConstantExpression(produced) ? produced : null)
+          ?? constantExpressionOperand(produced);
+        if (lit) staticTypeIn(innermostLiteral(lit), base!);
       }
     }
   };
@@ -43787,17 +44409,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!a || !b) return;
     const sides: [ParseNode, ParseNode][] = [[b, a], [a, b]];
     for (const [candidate, other] of sides) {
-      const lit = literalOperand(contextualResultOperand(candidate));
-      if (!lit || literalOperand(contextualResultOperand(other))) continue;
+      // Each literal the operand may produce, where it selects one of its
+      // operands: `z < (c ? 300 : 2)` beside a `uint8` holds a 300.
+      const produced = producedOperands(candidate);
+      const literals = produced.map((operand) => literalOperand(operand)).filter((lit): lit is ParseNode => !!lit);
+      const constants = produced.filter((operand) => !literalOperand(operand) && constantOperandCore(operand));
+      if ((literals.length === 0 && constants.length === 0) || literalOperand(contextualResultOperand(other))) continue;
       const raw = erasedKeepingBrand(staticType(other));
       const t = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
       const base = t?.Kind === 'parameterized' ? t.Base : t;
       if (!isIntegerValueType(base)) continue;
-      const exact = signedLiteralValue(lit);
-      const fraction = exact === null ? fractionalLiteralValue(lit) : null;
-      const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-      if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
-        reportType('rt-numeric-range', a, '$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord)));
+      // A named constant or a constant expression is a literal here
+      // (#sec-contextual-types), so one the type cannot hold is refused as the
+      // literal is: `z < 200 + 100` beside a `uint8`, which was a RangeError
+      // when the comparison ran.
+      const refusal = constants.map((operand) => constantBesideInteger(operand, base as TypeRecord)).find((beside) => beside && 'refused' in beside);
+      if (refusal && 'refused' in refusal) {
+        reportType('rt-numeric-range', a, '$1 is not in the range of $2', Value(refusal.refused), Value(displayType(base as TypeRecord)));
+        continue;
+      }
+      for (const lit of literals) {
+        const exact = signedLiteralValue(lit);
+        const fraction = exact === null ? fractionalLiteralValue(lit) : null;
+        const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+        if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
+          reportType('rt-numeric-range', a, '$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord)));
+          break;
+        }
       }
     }
   };
@@ -44403,6 +45041,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (let i = frames.length - 1; i >= 0; i -= 1) {
           if (frames[i].constLiterals.has(name)) {
             journalMembership(constLiteralUses, node as object, true);
+            recordIntegerContextOperand(node as ParseNode);
             break;
           }
           if (frames[i].letConstants.has(name)) {
@@ -44414,6 +45053,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+    }
+    if (!Array.isArray(node) && ['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression'].includes((node as ParseNode).type)
+        && isNumericConstantExpression(node as ParseNode)) {
+      recordIntegerContextOperand(node as ParseNode);
     }
     // #sec-check-elision: a computed index into a fixed-length `[N].<T>` whose
     // key is a range counter proven below _N_.
@@ -45502,6 +46145,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? literalBase as Known
                 : null;
             }
+            // A label that selects among literals adapts to a numeric
+            // discriminant as a literal label does: `case (c ? 3 : 4):`.
+            if (labelType && label && numericPeerOf(subject as Known) && selectingOperandType(label, null, []) === 'literal') labelType = null;
+            // A label is compared with the discriminant, so it has the
+            // discriminant's type as its context: `case 7 / 2:` over a
+            // `uint8` is `case 3:`.
+            if (label) recordIntegerContextBeside(label, subject as Known);
             if (labelType && labelType.Kind !== 'literal' && labelType.Kind !== 'void'
                 && AreDisjoint(subject as TypeRecord, labelType as TypeRecord)) {
               reportType('rt-disjoint-comparison', clause, '$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(subject as TypeRecord)), Value(displayType(labelType as TypeRecord)), Value('false'));
@@ -46084,6 +46734,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // never asked for (a call statement), so its errors are reported.
         if (IsSelectableCall(n)) staticCaseSelection(n);
         checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
+        // An argument of the original `Object.is` is compared with the other,
+        // so it has the other's type as its context, as an operand of `===`.
+        // The run time reads the record only in the original function's call,
+        // so the call is told by how it is written.
+        if (globalStaticName(n.CallExpression, 'Object') === 'is' && n.Arguments?.length === 2
+            && !n.Arguments.some((argument) => /Spread|Rest|NamedArgument/.test(argument.type))) {
+          const compared = n.Arguments as readonly ParseNode[];
+          recordIntegerContextBeside(compared[1], staticType(compared[0]));
+          recordIntegerContextBeside(compared[0], staticType(compared[1]));
+        }
         // A CALL may reassign a binding captured by callable code. The lexical
         // write inventory distinguishes those writes from this invocation's
         // own stores and unrelated same-spelled bindings. Without this,

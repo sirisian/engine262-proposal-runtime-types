@@ -33,6 +33,18 @@ test('a named constant and a constant expression past the integers a Number hold
   expect(evaluated(`${Z}String(z === 9007199254740992 + 1) + String(z === 2 ** 53 + 1) + String(z <= 2 ** 53 + 1) + String(z === 2 ** 53);`)).toBe('truetruetruefalse');
   expect(evaluated('const K = 9007199254740993; function f(z: uint64) { return z === K; } String(f(9007199254740993)) + String(f(9007199254740992));'))
     .toBe('truefalse');
+  // In a `case` label and `Object.is`, under a sign, and beside an operand typed only when it runs.
+  expect(evaluated(`${Z}const K = 9007199254740993; let r = "miss"; switch (z) { case K: r = "hit"; break; default: } r + String(Object.is(z, K));`)).toBe('hittrue');
+  expect(evaluated(`${Z}let r = "miss"; switch (z) { case 2 ** 53 + 1: r = "hit"; break; default: } r + String(Object.is(z, 2 ** 53 + 1));`)).toBe('hittrue');
+  expect(evaluated('const K = 9007199254740993; const z: int64 = -9007199254740993; String(z === -K) + String(z === -(K)) + String(z < -K);')).toBe('truetruefalse');
+  expect(evaluated('const K = 9007199254740993; function f(z) { return z === K; } String(f(uint64(9007199254740993n))) + String(f(uint64(9007199254740992n)));'))
+    .toBe('truefalse');
+  // Beside the integer, `/` is the integer's division (numerics/constant-beside-an-integer).
+  expect(evaluated(`${Z}const H = (2 ** 54 + 2) / 2; String(z === H) + String(z === 2 ** 54 / 3);`)).toBe('truefalse');
+  expect(evaluated('const z: uint64 = 6004799503160661; String(z === 2 ** 54 / 3);')).toBe('true');
+  // In arithmetic too, the literal as much as the constant.
+  expect(evaluated('function f(x) { return String(x * (2 ** 53 + 1)) + "," + String(x + 9007199254740993); } f(uint64(1));'))
+    .toBe('9007199254740993,9007199254740994');
 });
 
 test('what a comparison answered before, it still answers', () => {

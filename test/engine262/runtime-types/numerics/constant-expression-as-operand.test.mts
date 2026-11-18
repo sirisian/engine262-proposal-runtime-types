@@ -122,9 +122,11 @@ test('what is not a constant expression is still a value of its own type', () =>
   expectThrown('function f(z: uint32) { return z * Math.pow(4, 2); } f(3);', 'different numeric types and do not mix');
   expectThrown('let K = 16; function f(z: uint32) { return z * (K * 1); } f(3);', 'do not mix');
   expect(observeScript('function f(z: uint32, n: number) { return z * (n * 2); }')).toMatchObject(early('rt-numeric-operator'));
-  // The bitwise operators are not among the operators of a constant expression, named or written.
-  expectThrown('function f(z: uint32) { return z & (0xF0 | 0x0F); } f(3);', 'do not mix');
-  expectThrown('const K = 0xF0 | 0x0F; function f(z: uint32) { return z & K; } f(3);', 'do not mix');
+  // The bitwise operators are operators of a constant expression too, named or written
+  // (numerics/bitwise-constant-expressions). These two asserted that they are not, and each was
+  // a TypeError when it ran.
+  expect(evaluated('function f(z: uint32) { return z & (0xF0 | 0x0F); } String(f(3));')).toBe('3');
+  expect(evaluated('const K = 0xF0 | 0x0F; function f(z: uint32) { return z & K; } String(f(3));')).toBe('3');
   // Untyped code computes as it always has.
   expect(evaluated('function f(x) { return x * (4 * 4); } String(f(3)) + typeof f(3);')).toBe('48number');
   expect(evaluated('String("a" + (1 + 2)) + String(7 / 2 + 7 / 2);')).toBe('a37');
@@ -159,4 +161,26 @@ test('the constants of the Math object take part as a const does', () => {
   // With no type wanted it is the Number it always was, and a Math the program declares is not it.
   expect(evaluated('const p = Math.PI; String(Reflect.typeOf(p) === number) + String(p === Math.PI);')).toBe('truetrue');
   expect(observeScript('function f(z: float32) { const Math = { PI: 3 }; return z * (2 * Math.PI); }')).toMatchObject(early('rt-numeric-operator'));
+});
+
+test('beside a type whose values a Number does not denote, a constant of Math is a number', () => {
+  // An integer, a decimal, a rational and a `float128`: the constant is a `number` at a position
+  // of one (#sec-static-type-of-an-expression), so beside an operand of one the two do not mix,
+  // as `d * n` does not. The run time cannot give a decimal a Number either, and these lines were
+  // let through to it.
+  for (const [type, value] of [['decimal128', '1.5'], ['float128', '1.5'], ['rational64', '1 / 2'], ['uint32', '3']]) {
+    for (const use of ['r * Math.PI', 'r < Math.PI', 'r * (2 * Math.PI)', 'r * -Math.PI', 'Math.PI + r']) {
+      expect(observeScript(`const r: ${type} = ${value}; ${use};`), `${type}: ${use}`).toMatchObject(early('rt-numeric-operator'));
+    }
+    expect(observeScript(`const TAU = 2 * Math.PI; const r: ${type} = ${value}; r * TAU;`), type).toMatchObject(early('rt-numeric-operator'));
+    expect(observeScript(`const TAU = 2 * Math.PI; const r: ${type} = ${value}; r < TAU;`), type).toMatchObject(early('rt-numeric-operator'));
+  }
+  // An equality answers, as it does for any two numeric types.
+  expect(evaluated('const d: decimal128 = 1.5; String(d === Math.PI);')).toBe('false');
+  // A binary float and a complex number take it, and a `number` beside it is a `number`.
+  expect(evaluated('const r: float64 = 1.5; String(r < Math.PI) + String(r * Math.PI === 1.5 * Math.PI);')).toBe('truetrue');
+  expect(evaluated('const c: complex64 = 1.5; String(c * Math.PI);')).toBe(`${Math.fround(1.5 * Math.fround(Math.PI))}+0i`);
+  expect(evaluated('const n: number = 2; String(n * Math.PI === 2 * Math.PI) + String(n < Math.PI);')).toBe('truetrue');
+  // A constant that names no constant of Math is read at the decimal as before.
+  expect(evaluated('const d: decimal128 = 1.5; String(d * (0.1 + 0.2)) + String(d < 2.5);')).toBe('0.45true');
 });

@@ -15,7 +15,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { AbruptCompletion } from '../completion.mts';
 import { JSStringValue, TypedNumberValue } from '../value.mts';
 import { AdoptLiteralOperand, TypedOperandType } from '../type-system/arithmetic.mts';
-import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { ReadLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLessThan,
@@ -126,18 +126,20 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   const lref = Q(yield* Evaluate(RelationalExpression!));
   // 2. Let lval be ? GetValue(lref).
   let lval = Q(yield* GetValue(lref));
+  const leftRead = ReadLiteralOperand(RelationalExpression as ParseNode);
   // 3. Let rref be the result of evaluating ShiftExpression.
   const rref = Q(yield* Evaluate(ShiftExpression));
   // 4. Let rval be ? GetValue(rref).
   let rval = Q(yield* GetValue(rref));
+  const rightRead = ReadLiteralOperand(ShiftExpression as ParseNode);
   if (surroundingAgent.feature('runtime-types') && ['<', '>', '<=', '>='].includes(operator)) {
     const adopted = AdoptLiteralOperand(lval, rval, {
-      left: isNumericLiteralOperand(RelationalExpression as ParseNode),
-      right: isNumericLiteralOperand(ShiftExpression as ParseNode),
+      left: leftRead.literal,
+      right: rightRead.literal,
       // A decimal takes a literal at the exact value its source text denotes
       // (#sec-literalvalueintype), as it does in an equality.
-      leftNode: RelationalExpression as ParseNode,
-      rightNode: ShiftExpression as ParseNode,
+      leftNode: leftRead.node,
+      rightNode: rightRead.node,
     });
     if (adopted) {
       lval = adopted.left; rval = adopted.right;
@@ -225,8 +227,8 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
       // of `+` is left alone.
       && !(lval instanceof JSStringValue)
       && !(rval instanceof JSStringValue)) {
-    const leftLiteral = isNumericLiteralOperand(RelationalExpression as ParseNode);
-    const rightLiteral = isNumericLiteralOperand(ShiftExpression as ParseNode);
+    const leftLiteral = leftRead.literal;
+    const rightLiteral = rightRead.literal;
     // A value generic reads as the literal its value is: held as a typed
     // value, against an untyped number it compares as that number does.
     const typedLiteralMeetsNumber = (lval instanceof TypedNumberValue && leftLiteral && !(rval instanceof TypedNumberValue))

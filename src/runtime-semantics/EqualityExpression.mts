@@ -6,7 +6,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { ReadLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLooselyEqual,
@@ -33,16 +33,18 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
   const lref = Q(yield* Evaluate(EqualityExpression));
   // 2. Let lval be ? GetValue(lref).
   let lval = Q(yield* GetValue(lref));
+  const leftRead = ReadLiteralOperand(EqualityExpression as ParseNode);
   // 3. Let rref be the result of evaluating RelationalExpression.
   const rref = Q(yield* Evaluate(RelationalExpression));
   // 4. Let rval be ? GetValue(rref).
   let rval = Q(yield* GetValue(rref));
+  const rightRead = ReadLiteralOperand(RelationalExpression as ParseNode);
   if (surroundingAgent.feature('runtime-types')) {
     const adopted = AdoptLiteralOperand(lval, rval, {
-      left: isNumericLiteralOperand(EqualityExpression as ParseNode),
-      right: isNumericLiteralOperand(RelationalExpression as ParseNode),
-      leftNode: EqualityExpression as ParseNode,
-      rightNode: RelationalExpression as ParseNode,
+      left: leftRead.literal,
+      right: rightRead.literal,
+      leftNode: leftRead.node,
+      rightNode: rightRead.node,
     });
     if (adopted) {
       lval = adopted.left; rval = adopted.right;
@@ -117,10 +119,10 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
       rval = decayed.right;
     }
     const adopted = AdoptLiteralOperand(lval, rval, {
-      left: isNumericLiteralOperand(EqualityExpression as ParseNode),
-      right: isNumericLiteralOperand(RelationalExpression as ParseNode),
-      leftNode: EqualityExpression as ParseNode,
-      rightNode: RelationalExpression as ParseNode,
+      left: leftRead.literal,
+      right: rightRead.literal,
+      leftNode: leftRead.node,
+      rightNode: rightRead.node,
     });
     if (adopted) {
       lval = adopted.left;
