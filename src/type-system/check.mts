@@ -1244,10 +1244,14 @@ export function FloatContextLiteralWidth(node: object): 16 | 32 | 128 | undefine
  * #sec-literalvalueintype takes "the mathematical value denoted by the literal,
  * as defined by the numeric literal grammar, BEFORE ANY ROUNDING", and the
  * source text is where that value still exists.
+ *
+ * A conversion's literal operand is marked here at any integer type where the
+ * type cannot hold it, with the value already wrapped: a Number for a type a
+ * double holds, as `TypedNumberValue` carries one.
  */
-const wideIntegerLiterals = new WeakMap<object, { value: bigint, type: TypeRecord }>();
+const wideIntegerLiterals = new WeakMap<object, { value: bigint | number, type: TypeRecord }>();
 
-export function WideIntegerContextLiteral(node: object): { value: bigint, type: TypeRecord } | undefined {
+export function WideIntegerContextLiteral(node: object): { value: bigint | number, type: TypeRecord } | undefined {
   return wideIntegerLiterals.get(node);
 }
 
@@ -1307,6 +1311,33 @@ export function FoldedRationalOf(node: object): { num: bigint, den: bigint, type
 
 export function FoldedDecimalOf(node: object): { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord } | undefined {
   return foldedDecimals.get(node);
+}
+
+/**
+ * The exact value of a literal operand of an explicit conversion whose target is
+ * a TYPE PARAMETER, read without a type: as an integer where it is one, as a
+ * fraction, as decimal digits, and, for a bare literal, its source text and sign.
+ *
+ * #sec-explicit-conversion: "A literal operand, whether a numeric literal or an
+ * expression built only of literals, is converted from its exact value". The
+ * marks above carry that value where the target is written, and are made for one
+ * type; a type parameter's type is known only when the conversion runs, and may
+ * differ from one run to the next. So `9007199254740993 := T` was the double
+ * ...992 at `T` = `uint64`, `0.1 := T` the double nearest a tenth at `decimal128`
+ * and `rational64`, and `2 ** 64 - 1 := T` zero, where each, written with its
+ * type, was exact. The run time reads this record at the resolved type
+ * (`DeferredLiteralValue`).
+ */
+export type DeferredLiteral = {
+  readonly integer: bigint | null,
+  readonly rational: { readonly num: bigint, readonly den: bigint } | null,
+  readonly decimal: { readonly sig: bigint, readonly exp: number } | null,
+  readonly literal: { readonly text: string, readonly negative: boolean } | null,
+};
+const deferredConversionLiterals = new WeakMap<object, DeferredLiteral>();
+
+export function DeferredConversionLiteral(node: object): DeferredLiteral | undefined {
+  return deferredConversionLiterals.get(node);
 }
 
 /**
@@ -20537,6 +20568,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const foldDecimal = (node: ParseNode): Dec | null => foldDecimalConstant(node, constDecimalValue);
 
+  /**
+   * Records the exact value of a conversion's literal operand where the target
+   * is a type parameter (`DeferredConversionLiteral`). Each reading is the one
+   * the marks make where the target is written: the integer fold, the rational
+   * fold and the decimal fold, and a bare literal's digits for a binary float.
+   * An operand none of them reads keeps its Number, as before.
+   */
+  const recordDeferredLiteral = (operand: ParseNode): void => {
+    let core: ParseNode = operand;
+    let negative = false;
+    for (;;) {
+      if (core.type === 'ParenthesizedExpression') {
+        core = core.Expression;
+      } else if (core.type === 'UnaryExpression' && (core.operator === '-' || core.operator === '+')) {
+        if (core.operator === '-') negative = !negative;
+        core = core.UnaryExpression;
+      } else {
+        break;
+      }
+    }
+    const text = core.type === 'NumericLiteral' && typeof core.value === 'number' ? core.SourceText : undefined;
+    const literal = typeof text === 'string' ? { text: text.replace(/_/g, ''), negative } : null;
+    const integer = foldConstant(operand);
+    const rational = foldRationalConstant(operand);
+    const decimal = foldDecimal(operand);
+    if (integer === null && rational === null && decimal === null && literal === null) return;
+    journalSet(deferredConversionLiterals, operand, { integer, rational, decimal, literal });
+  };
+
   // A named constant's CLOSED initializer, through the same shadowing walk the
   // other lookups use: the first frame that declares the name decides.
   const constClosedInitializer = (name: string): ParseNode | null => {
@@ -23008,6 +23068,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && isNumericConstantExpression(node) && computesInType(node, contextual.Name === 'float128')) {
       typeConstantOperands(node, contextual);
       return contextual;
+    }
+    // A conversion's literal operand that its integer type cannot hold converts
+    // from its exact value too, wrapped as every integer conversion wraps
+    // (#sec-explicit-conversion). The text is read where the double has lost the
+    // value: `9007199254740993 := uint8` is 1 and `18446744073709551617 :=
+    // uint64` is 1, where the double ...992 and 2**64 made both 0. A constant
+    // expression folds and wraps above; a bare literal does not reach that fold.
+    if (node.type === 'NumericLiteral' && contextual && conversionOperands.has(node)
+        && isIntegerValueType(contextual as TypeRecord) && contextual.Kind === 'primitive') {
+      const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
+      const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
+      if (exact !== null && typeof (node as ParseNode.NumericLiteral).value === 'number'
+          && !fitsNumericType(exact, prim.Name, prim.Arguments)) {
+        journalSet(wideIntegerLiterals, node, { value: wrapToType(exact, prim), type: contextual as TypeRecord });
+        return contextual;
+      }
     }
     // The same reading at a WIDE INTEGER position, and for the same reason the
     // decimal case gives: the double cannot represent the answer. `int64` has
@@ -45551,6 +45627,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (operand.type === 'NumericLiteral' || isNumericConstantExpression(operand)) {
           markConversionOperand(operand);
           staticTypeIn(operand, target);
+          if (target && mentionsTypeParameter(target)) recordDeferredLiteral(operand);
         } else if (target && target.Kind === 'nominal' && unparenthesized(operand).type === 'ObjectLiteral'
           && /^Class(Declaration|Expression)$/.test((target as { Declaration?: ParseNode }).Declaration?.type ?? '')) {
           // #sec-object-literal-conversion: an object literal converted to a
@@ -47208,6 +47285,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 comparisonConversionCalls.set(converted, conversionTarget as TypeRecord);
               }
               staticTypeIn(argNodes[0]!, conversionTarget as Known);
+              // `T(9007199254740993)` reads its literal as `9007199254740993 := T` does.
+              if (mentionsTypeParameter(conversionTarget as TypeRecord)
+                && ((argNodes[0] as ParseNode).type === 'NumericLiteral' || isNumericConstantExpression(argNodes[0] as ParseNode))) {
+                recordDeferredLiteral(argNodes[0] as ParseNode);
+              }
             }
           }
         }

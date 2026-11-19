@@ -22,7 +22,8 @@ import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols, Descriptor } from '../value.mts';
 import { FillClassFromObjectLiteral, objectLiteralOf } from '../abstract-ops/literal-fill.mts';
 import { DefinePropertyOrThrow, GetV } from '../abstract-ops/all.mts';
-import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf } from '../type-system/check.mts';
+import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf, DeferredConversionLiteral } from '../type-system/check.mts';
+import { DeferredLiteralValue } from '../static-semantics/NumericValue.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject, classFrameOfMethod } from '../abstract-ops/runtime-types.mts';
@@ -1620,6 +1621,18 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
 }
 
 export function* Evaluate_TypedConversionExpression({ Expression, Type }: ParseNode.TypedConversionExpression): ValueEvaluator {
+  // #sec-explicit-conversion: a literal operand converts from its exact value.
+  // Where the target is a type parameter the checker could not read the literal
+  // at it, and recorded the value without a type; it is read here at the type
+  // the parameter has resolved to, as `NumericValue` reads it at a written one.
+  const deferred = surroundingAgent.feature('runtime-types') ? DeferredConversionLiteral(Expression as object) : undefined;
+  if (deferred !== undefined) {
+    const target = Q(yield* TypeNodeToTypeRecord(Type));
+    const exact = DeferredLiteralValue(deferred, target);
+    if (exact !== undefined) {
+      return Q(yield* ConvertValue(Q(exact), target));
+    }
+  }
   // A comparison converted to a vector type is told its result form by the
   // conversion's target, as at an annotation (#sec-vector-comparisons): the
   // README's ambiguity "requires explicit cast". The target is evaluated

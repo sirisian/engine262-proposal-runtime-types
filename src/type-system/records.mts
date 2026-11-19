@@ -1296,7 +1296,12 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
   // `boolean1`; the `NxM` names are the register-width vectors, and a name exists
   // exactly where the lanes fill a register, so `float32x4` has one and a
   // three-lane float vector does not.
-  const bitVector = /^boolean(8|16|32|64)$/.exec(name);
+  //
+  // `boolean2` and `boolean4` name the compact masks of the two- and four-lane
+  // comparisons, one bit per lane (#sec-vector-comparisons), which
+  // #sec-vector-masks already calls `boolean4`; with `boolean8` and the wider
+  // names they give every shorthand vector's compact mask a name (Question AH).
+  const bitVector = /^boolean(2|4|8|16|32|64)$/.exec(name);
   if (bitVector) {
     return makePrimitive('vector', [makePrimitive('uint', [1]), Number(bitVector[1])]);
   }

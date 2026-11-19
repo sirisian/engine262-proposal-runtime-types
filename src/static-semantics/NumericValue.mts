@@ -1,6 +1,9 @@
 import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextRealLiteralComponent, ComplexContextLiteralComponent } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextRealLiteralComponent, ComplexContextLiteralComponent, type DeferredLiteral } from '../type-system/check.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import { wrapToType } from '../type-system/arithmetic.mts';
+import type { ThrowCompletion } from '../completion.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
@@ -106,6 +109,61 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
     }
   }
   return Value(node.value);
+}
+
+/**
+ * The value a conversion's literal operand has at the type _t_ that its
+ * type-parameter target resolved to (`DeferredConversionLiteral`), read as the
+ * checker's marks and `NumericValue` read it where the type is written: an
+ * integer type takes the exact integer, wrapped, or the integer part of the
+ * exact fraction; `bigint` the exact integer; a rational the fraction; a
+ * decimal the digits; a binary float narrower or wider than a Number the bare
+ * literal's digits, rounded once. Undefined where the type takes the Number the
+ * operand evaluates to; the conversion then converts whichever it has.
+ */
+export function DeferredLiteralValue(deferred: DeferredLiteral, t: TypeRecord): Value | ThrowCompletion | undefined {
+  if (t.Kind !== 'primitive') return undefined;
+  const realm = surroundingAgent.currentRealmRecord;
+  switch (t.Name) {
+    case 'int':
+    case 'uint': {
+      // BigInt division truncates toward zero, as the conversion of a fraction does.
+      const exact = deferred.integer ?? (deferred.rational ? deferred.rational.num / deferred.rational.den : null);
+      return exact === null ? undefined : new TypedNumberValue(wrapToType(exact, t), t);
+    }
+    case 'bigint':
+      return deferred.integer === null ? undefined : Value(deferred.integer);
+    case 'rational':
+      return deferred.rational === null ? undefined
+        : CreateRationalValue(deferred.rational.num, deferred.rational.den, realm, t);
+    case 'decimal32':
+    case 'decimal64':
+    case 'decimal128': {
+      const width = Number(t.Name.slice('decimal'.length)) as 32 | 64 | 128;
+      return deferred.decimal === null ? undefined
+        : CreateDecimalValue(deferred.decimal.sig, deferred.decimal.exp, width, realm, t);
+    }
+    case 'float16':
+    case 'float32':
+    case 'float128': {
+      const literal = deferred.literal;
+      if (literal === null) return undefined;
+      const digits = ParseDecimalDigits(literal.text);
+      if (t.Name === 'float128') {
+        const integerText = /^0[xXoObB][0-9a-fA-F]+$/.test(literal.text) ? BigInt(literal.text) : undefined;
+        const significand = digits !== undefined ? digits.significand : integerText;
+        // A zero keeps the Number path, where the sign of a negative zero survives.
+        if (significand === undefined || significand === 0n) return undefined;
+        const signed = literal.negative ? -significand : significand;
+        return Binary128ToFloat128(Float128FromDecimal(signed, digits !== undefined ? digits.exponent : 0), realm);
+      }
+      if (digits === undefined) return undefined;
+      const rounded = RoundDecimalToBinaryFloat(digits.significand, digits.exponent, t.Name === 'float16' ? 16 : 32);
+      return Value(literal.negative ? -rounded : rounded);
+    }
+    default:
+      return undefined;
+  }
 }
 
 /**

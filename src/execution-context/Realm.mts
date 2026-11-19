@@ -463,7 +463,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       ...['int', 'uint', 'float'].flatMap((base) => [8, 16, 32, 64].flatMap(
         (width) => [2, 4, 8, 16, 32].map((lanes) => `${base}${width}x${lanes}`),
       )),
-      'boolean8', 'boolean16', 'boolean32', 'boolean64',
+      'boolean2', 'boolean4', 'boolean8', 'boolean16', 'boolean32', 'boolean64',
       ...[8, 16, 32, 64].flatMap((width) => [2, 4, 8, 16].map((lanes) => `boolean${width}x${lanes}`)),
     ]) {
       const record = builtinTypeRecord(name);

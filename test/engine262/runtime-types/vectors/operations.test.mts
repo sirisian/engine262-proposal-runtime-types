@@ -130,8 +130,10 @@ test('the compact mask and non-masks are unchanged', () => {
  * vector rather than a mask register and whose use is as the operand of a
  * bitwise AND.
  *
- * There is no `boolean4` shorthand - the `boolean`N names are bit WIDTHS, not
- * lane counts - so a four-lane compact mask is written `vector.<boolean1, 4>`.
+ * A four-lane compact mask is `vector.<boolean1, 4>`, which `boolean4` names:
+ * `boolean2` and `boolean4` join `boolean8` and the wider names so that every
+ * shorthand vector's compact mask has one (Question AH). The README's example
+ * wrote `boolean8` for a four-lane comparison, and eight lanes are not four.
  */
 test('a comparison yields the compared vector type with all-ones lanes', () => {
   const C = 'int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2)';
@@ -163,6 +165,19 @@ test('the compact mask is a bit vector of one bit per lane', () => {
   // and it consumes as a mask
   expect(evaluated(`const m: vector.<boolean1, 4> = ${C};`
     + ' String(m.select(int32x4(9, 9, 9, 9), int32x4(5, 5, 5, 5)).x);')).toBe('9');
+});
+
+test('boolean2 and boolean4 name the compact masks of two- and four-lane comparisons', () => {
+  const C = 'int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2)';
+  expect(evaluated(`const m: boolean4 = ${C}; String(m) + String(m is vector.<boolean1, 4>);`)).toBe('(1, 1, 0, 0)true');
+  expect(evaluated('const m: boolean2 = float64x2(1, 2) < float64x2(2, 1); String(m) + String(m.any());')).toBe('(1, 0)true');
+  // a call reads its one integer argument as a bitmask, as for boolean8
+  expect(evaluated('String(boolean4(0b1011)) + String(boolean2(2));')).toBe('(1, 1, 0, 1)(0, 1)');
+  expect(evaluated(`String((${C}) := boolean4);`)).toBe('(1, 1, 0, 0)');
+  // eight lanes are not four: the README's former spelling stays refused
+  expectThrown(`const m: boolean8 = ${C};`);
+  // a program's own binding of the name is found first
+  expect(evaluated('let boolean4 = 5; String(boolean4 + 1);')).toBe('6');
 });
 
 test('adding the forms did not weaken the selection rules', () => {

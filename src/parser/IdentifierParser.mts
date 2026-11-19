@@ -23,6 +23,8 @@ export function isBuiltinTypeNameString(name: unknown): boolean {
     return true;
   }
   if (/^rational(8|16|32|64|128)$/.test(name)) return true;
+  // The compact masks of the two- and four-lane comparisons (Question AH).
+  if (/^boolean(2|4)$/.test(name)) return true;
   if (/^(u?int|float|boolean)(8|16|32|64)x(2|4|8|16|32)$/.test(name)) {
     return true;
   }

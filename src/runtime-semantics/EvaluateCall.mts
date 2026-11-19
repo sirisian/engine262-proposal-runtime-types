@@ -10,7 +10,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
-import { TakeStaticCallResolution, SearchLiteralTypeOf, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
+import { TakeStaticCallResolution, SearchLiteralTypeOf, CallReceiverTypeOf, SelfThisTypeRecord, DeferredConversionLiteral } from '../type-system/check.mts';
+import { DeferredLiteralValue } from '../static-semantics/NumericValue.mts';
 import { fitsNumericType } from '../type-system/runtime.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { CallArgumentItems, NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
@@ -117,6 +118,13 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // argument list that holds it.
     const only = (args as readonly ParseNode[])[0];
     argList = Q(yield* ArgumentListEvaluation(args as ParseNode.Arguments, new Map([[only, conversionContext]])));
+    // `T(9007199254740993)` for a type parameter `T` converts the literal's
+    // exact value, as `9007199254740993 := T` does (Evaluate_TypedConversionExpression).
+    const deferred = only !== undefined && argList.length === 1 ? DeferredConversionLiteral(only) : undefined;
+    const exact = deferred !== undefined ? DeferredLiteralValue(deferred, conversionContext) : undefined;
+    if (exact !== undefined) {
+      argList = CopyArgumentResults(argList, [Q(exact)]) as typeof argList;
+    }
   } else {
     // Each source expression receives its own statically known parameter
     // destination; no first-parameter context surrounds the entire argument list.
