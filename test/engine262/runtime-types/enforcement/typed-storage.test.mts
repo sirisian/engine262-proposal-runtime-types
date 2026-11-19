@@ -223,8 +223,10 @@ test('a redefinition is checked against the type the position already has', () =
   // A tuple position the rest collects takes the rest's type.
   expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
 
-  // A descriptor that stores nothing has nothing to check.
-  expect(evaluated(`${cls} Object.defineProperty(c, "n", { enumerable: false }); String(c.n);`)).toBe('1');
+  // A descriptor that stores nothing has no type to check, and the seal refuses it: an instance's
+  // fields are non-configurable (Question AL, AL2), so its enumerability cannot change.
+  expectThrown(`${cls} Object.defineProperty(c, "n", { enumerable: false });`, 'Cannot define property');
+  expect(evaluated(`${cls} String(Reflect.defineProperty(c, "n", { enumerable: true })) + String(c.n);`)).toBe('true1');
   // An accessor over a typed property is refused: the declared type is a
   // promise about what a read answers, and a getter can answer anything.
   expectThrown(`${cls} Object.defineProperty(c, "n", { get() { return "no"; } });`);
@@ -265,8 +267,10 @@ test('a redefinition is checked against the type the position already has', () =
   // A tuple position the rest collects takes the rest's type.
   expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
 
-  // A descriptor that stores nothing has nothing to check.
-  expect(evaluated(`${cls} Object.defineProperty(c, "n", { enumerable: false }); String(c.n);`)).toBe('1');
+  // A descriptor that stores nothing has no type to check, and the seal refuses it: an instance's
+  // fields are non-configurable (Question AL, AL2), so its enumerability cannot change.
+  expectThrown(`${cls} Object.defineProperty(c, "n", { enumerable: false });`, 'Cannot define property');
+  expect(evaluated(`${cls} String(Reflect.defineProperty(c, "n", { enumerable: true })) + String(c.n);`)).toBe('true1');
   // An accessor over a typed property is refused: the declared type is a
   // promise about what a read answers, and a getter can answer anything.
   expectThrown(`${cls} Object.defineProperty(c, "n", { get() { return "no"; } });`);

@@ -13,6 +13,7 @@ import {
   fitsNumericType,
 } from '../type-system/runtime.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { FillClassFromParsedObject } from '../abstract-ops/literal-fill.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
@@ -862,14 +863,28 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
         }
         return jsonTypeError(path, t, value);
       }
+      // Question AK, AK2: a class is built from the parsed object by the
+      // literal's rule (`FillClassFromParsedObject`), each member coerced at
+      // its field's type as any member of a parsed object is. Read against
+      // the class's structure, a parse made a plain object the class's
+      // instances are not, and an omitted field with an initializer was a
+      // missing key.
+      const declaration = (t as { Declaration?: { type?: string } }).Declaration;
+      if (declaration?.type === 'ClassDeclaration' || declaration?.type === 'ClassExpression') {
+        if (value instanceof ObjectValue && X(IsArray(value)) !== Value.true) {
+          const built = Q(yield* FillClassFromParsedObject(value, t, path, function* coerceMember(member: Value, fieldType: TypeRecord | undefined, key: string): ValueEvaluator {
+            if (fieldType === undefined) return member;
+            return Q(yield* CoerceJSON(member, fieldType, `${path}.${key}`));
+          }));
+          if (built !== undefined) return built;
+        }
+        return jsonTypeError(path, t, value);
+      }
       if (t.Structure) {
         // A type alias for a structural type (the common `type X = { ... }`
         // form) converts against that structure.
         return Q(yield* CoerceJSON(value, t.Structure, path));
       }
-      // A class target allocates the sealed layout and fills it without running
-      // the constructor; that path ties into the memory-layout work and is not
-      // handled by this core.
       return jsonTypeError(path, t, value);
     }
     default:

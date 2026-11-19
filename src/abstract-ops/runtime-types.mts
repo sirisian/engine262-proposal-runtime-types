@@ -39,7 +39,8 @@ import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, TypeNod
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { containsComputedType } from '../type-system/runtime.mts';
 import { TakeBodyContext } from '../type-system/runtime.mts';
-import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { ClassFamilyOf, GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, CreateDecimalSpecial, ParseDecimalDigits, DecimalFromRational, DecimalFromResult } from '../intrinsics/Decimal.mts';
@@ -55,7 +56,7 @@ import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mt
 import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
 import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
-import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, RecordClassConstructors, ToLength, SameValue } from './all.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, RecordClassConstructors, SealTypedInstance, ToLength, SameValue } from './all.mts';
 import { CopyValueClassInstance, DeclaredReadonlyFieldsOf, ValueAggregateOf, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { IsSelectedInvocation, DispatchCaseGroup } from './callable-selection.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray, ReadonlyElementTargetOf } from './array-view.mts';
@@ -1094,8 +1095,13 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
   // copy that forgot this would be a value of the type that accepts what the
   // type cannot hold. Caught by the zero-filled-defaults test, which asserts
   // `Object.isExtensible(d[0])` is *false* for an element of a `[2].<A>`; the
-  // SoA gather already did the same for the same reason.
-  X(copy.PreventExtensions());
+  // SoA gather already did the same for the same reason. Sealed as
+  // `Object.seal` seals, as a constructed instance is (Question AL, AL2).
+  if ((copy as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy?.some((c) => c.SealInstances)) {
+    Q(yield* SealTypedInstance(copy));
+  } else {
+    X(copy.PreventExtensions());
+  }
   return copy;
 }
 
@@ -2451,12 +2457,30 @@ function restElementType(collected: TypeRecord): TypeRecord {
   return collected;
 }
 
+/**
+ * The constructor a class type's record names: its [[Constructor]], or, for a
+ * record resolved before its class was evaluated, the constructor of the
+ * family its declaration last evaluated to. A type alias of an application,
+ * `type B8 = Box.<uint8>`, is resolved where it is declared, and its record
+ * carried no constructor, so `{ v: 1 } := B8` converted nothing while
+ * `{ v: 1 } := Box.<uint8>` filled a `Box.<uint8>`.
+ */
+export function ClassRecordConstructor(t: TypeRecord): Value | undefined {
+  if (t.Kind !== 'nominal') return undefined;
+  const own = (t as unknown as { Constructor?: Value }).Constructor;
+  if (own) return own;
+  const declaration = (t as unknown as { Declaration?: { type?: string } }).Declaration;
+  if (declaration?.type !== 'ClassDeclaration' && declaration?.type !== 'ClassExpression') return undefined;
+  const evaluated = classConstructorOfNode.get(declaration);
+  return evaluated ? ClassFamilyOf(evaluated) : undefined;
+}
+
 /** Both target-side conversion forms belong to the target's specialization. */
 export function* ConversionTargetConstructor(t: TypeRecord): PlainEvaluator<Value | undefined> {
   if (t.Kind !== 'nominal') {
     return undefined;
   }
-  let ctor = (t as unknown as { Constructor?: Value }).Constructor;
+  let ctor = ClassRecordConstructor(t);
   if (!ctor || !IsConstructor(ctor)) {
     return undefined;
   }

@@ -63,9 +63,10 @@ test('what was read before is read as it was', () => {
   expect(evaluated('const r: rational64 = 1 / 3 + 1 / 6; String(r);')).toBe('1/2');
   expect(evaluated('const f: float32 = 0.1 + 0.2; const g: float32 = 16777216 + 1 + 1; String(f) + "," + String(g);')).toBe('0.30000001192092896,16777218');
   expect(evaluated('const n: number = 1 / 3; const m = 0.1 + 0.2; String(n) + "," + String(m);')).toBe('0.3333333333333333,0.30000000000000004');
-  // A power with no exact reading is the Number's, as it was: the run time has no `**` between
-  // decimals, though decimal.md lists one.
-  expect(evaluated('const d: decimal64 = 2 ** 0.5; String(d);')).toBe('1.414213562373095');
+  // A power with no exact reading is refused at a decimal (Question AO, AO1), and the Number's
+  // value is had by converting it explicitly.
+  expect(() => evaluated('const d: decimal64 = 2 ** 0.5; String(d);')).toThrow();
+  expect(evaluated('const d: decimal64 = (2 ** 0.5) := decimal64; String(d);')).toBe('1.414213562373095');
   // A constant of Math is a Number beside a decimal and is refused there.
   expect(() => evaluated('function f(d: decimal64) { return d * (Math.PI / 2); } f(1);')).toThrow();
 });

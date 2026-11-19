@@ -98,7 +98,9 @@ test("the checker types the vector result exactly", () => {
 
 
 test('a fixed nondefault lane pattern does not match plain vector lanes', () => {
-  expect(evaluated(`${D} primitive vector<float32.<{ m: 1 }>, const N: uint32> {
+  // The built-in operation answers, and a String's Number does not mix with a
+  // `float32` lane, where the block would have answered 'matched'.
+  expectThrown(`${D} primitive vector<float32.<{ m: 1 }>, const N: uint32> {
       operator *(rhs: string): string { return 'matched'; } }
-    String(float32x4(1, 2, 3, 4) * 'x');`)).toBe('(NaN, NaN, NaN, NaN)');
+    String(float32x4(1, 2, 3, 4) * 'x');`, 'are different numeric types and do not mix');
 });

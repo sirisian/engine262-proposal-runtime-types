@@ -53,7 +53,7 @@ import { CompletionPaths, CompletionValues } from './completion-values.mts';
 import { templateArgumentType, isTemplateArgumentType, templateMembersType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
-import { isWellKnownNumericConstant, integerContextOperands } from './numeric-constants.mts';
+import { isWellKnownNumericConstant, integerContextOperands, bigIntComparisonOperands } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias, resolvedAliasContext, resolvedAliasDeclaration, resolvedNamespaceBinding } from './resolving-aliases.mts';
 import { PublishedClassDenotation } from './class-denotation.mts';
@@ -1078,11 +1078,15 @@ export function IsLetConstantUse(node: object): boolean {
   return letConstantUses.has(node);
 }
 
-/** Numeric literals the checker read at `bigint`, consulted by NumericValue. */
-const bigintLiterals = new WeakSet<object>();
+/**
+ * Numeric literals the checker read at `bigint`, with the integer each
+ * denotes, consulted by NumericValue. The integer is read from the source
+ * text (`integerOfLiteral`), so `3.0` there is 3n.
+ */
+const bigintLiterals = new WeakMap<object, bigint>();
 
-export function IsBigIntContextLiteral(node: object): boolean {
-  return bigintLiterals.has(node);
+export function BigIntContextLiteralValue(node: object): bigint | undefined {
+  return bigintLiterals.get(node);
 }
 
 /**
@@ -1932,6 +1936,27 @@ function exactBigIntOf(node: ParseNode.NumericLiteral): bigint | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The integer a Number literal denotes however it is spelled, or *null* where
+ * it denotes none: `3`, `3.0` and `3e0` all denote 3, as `const k: uint32 =
+ * 7.0` holds 7 (#sec-literalvalueintype). A constant expression reads its
+ * literals by `exactBigIntOf` instead, which declines the last two, because a
+ * fraction or an exponent makes a division in it exact (Question AN). A
+ * spelling with a fraction or an exponent is read so only where its Number is
+ * finite: `1e400` stays refused at a `bigint`, as it was.
+ */
+function integerOfLiteral(node: ParseNode.NumericLiteral): bigint | null {
+  if (typeof node.value !== 'number') return null;
+  const integer = exactBigIntOf(node);
+  if (integer !== null) return integer;
+  if (!Number.isFinite(node.value)) return null;
+  const exact = exactOfLiteralText(node);
+  if (!exact || exact.special !== undefined || Math.abs(exact.exponent) > 4096) return null;
+  if (exact.exponent >= 0) return exact.significand * 10n ** BigInt(exact.exponent);
+  const scale = 10n ** BigInt(-exact.exponent);
+  return exact.significand % scale === 0n ? exact.significand / scale : null;
 }
 
 /** The two operands of a binary arithmetic node, in source order. */
@@ -19491,6 +19516,97 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   });
 
   /**
+   * Question AJ, AJ2: the class a literal fills at _target_: the class itself,
+   * or the one class of a union whose other members are `null` and
+   * `undefined`; 'several' for a union of two classes, which names none.
+   */
+  const filledClassOf = (target: TypeRecord): TypeRecord | 'several' | undefined => {
+    if (target.Kind === 'nominal') return target;
+    if (target.Kind !== 'union') return undefined;
+    const others = (target.Members as readonly TypeRecord[]).filter((m) => !(m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')));
+    const classes = others.filter((m) => m.Kind === 'nominal' && /^Class(Declaration|Expression)$/.test((m as { Declaration?: ParseNode }).Declaration?.type ?? ''));
+    if (classes.length > 1) return 'several';
+    return others.length === 1 && classes.length === 1 ? classes[0] : undefined;
+  };
+  /**
+   * Question AJ, AJ2: a literal passes to the target's element. An object
+   * literal fills the class _target_ names (`filledClassOf`), and each element
+   * of an array literal at an array or tuple type passes to its position's
+   * type, so a literal means the same at every depth: a field, an element and
+   * the operand of `:=`. Whether _node_ was such a literal, checked here.
+   */
+  const checkCreationOperand = (node: ParseNode, target: TypeRecord, depth: number): boolean => {
+    if (depth > 16) return false;
+    const literal = unparenthesized(node);
+    if (literal.type === 'ObjectLiteral') {
+      const filled = filledClassOf(target);
+      if (filled === 'several') {
+        reportType('rt-explicit-conversion', literal, 'an object literal fills one class, and $1 names more than one; write the class it fills, as `{ ... } := C`', Value(displayType(target)));
+        return true;
+      }
+      if (!filled) return false;
+      checkLiteralFill(literal as ParseNode.ObjectLiteral, filled, depth);
+      return true;
+    }
+    if (literal.type !== 'ArrayLiteral' || (target.Kind !== 'array' && target.Kind !== 'tuple')) return false;
+    const elements = target.Kind === 'tuple' ? (target as unknown as { Elements: readonly { Type: TypeRecord, Rest?: boolean, Spread?: boolean }[] }).Elements : undefined;
+    if (elements?.some((e) => e.Rest || e.Spread)) return false;
+    let index = 0;
+    let filledAny = false;
+    const others: [ParseNode, TypeRecord][] = [];
+    for (const element of (literal as ParseNode.ArrayLiteral).ElementList) {
+      if (element.type === 'SpreadElement') break;
+      if (element.type !== 'Elision') {
+        const elementType = target.Kind === 'array' ? (target as { Element: TypeRecord }).Element : elements![index]?.Type;
+        if (elementType && checkCreationOperand(element as ParseNode, elementType, depth + 1)) filledAny = true;
+        else if (elementType) others.push([element as ParseNode, elementType]);
+      }
+      index += 1;
+    }
+    // Where the literal fills, any other element converts to its position's
+    // type as the whole operand would have; the caller judges the rest.
+    if (filledAny) {
+      for (const [element, elementType] of others) {
+        const source = staticType(element);
+        if (explicitConversionAvailability(source, elementType) === 'impossible') {
+          reportType('rt-explicit-conversion', element, '$1 has no explicit conversion to $2', Value(displayType(source!)), Value(displayType(elementType)));
+        }
+      }
+    }
+    return filledAny;
+  };
+  /**
+   * Question AK, AK2: `JSON.parse.<C>` builds a class as an object literal
+   * converted to it is built, so where the class is one a literal does not
+   * fill and it declares no conversion that could take an object, the parse
+   * is refused before running, as the literal is. The class is _C_, or the one
+   * class of a union with `null` or `undefined`.
+   */
+  const checkTypedParseTarget = (call: ParseNode.CallExpression): void => {
+    const callee = patternExpression(call.CallExpression);
+    if (callee?.type !== 'TypeArgumentsExpression' || (call.Arguments ?? []).length !== 1) return;
+    const member = patternExpression(callee.Expression);
+    if (member?.type !== 'MemberExpression' || (member as { IdentifierName?: { name?: string } | null }).IdentifierName?.name !== 'parse') return;
+    const base = patternExpression((member as { MemberExpression?: ParseNode }).MemberExpression);
+    if (base?.type !== 'IdentifierReference' || base.name !== 'JSON' || shadowedByProgram('JSON')) return;
+    const list = callee.TypeArguments.TypeArgumentList;
+    const target = list.length === 1 ? resolveType(list[0] as unknown as ParseNode.Type) : null;
+    const filled = target ? filledClassOf(target) : undefined;
+    if (!filled || filled === 'several') return;
+    const declaration = (filled as { Declaration?: ParseNode }).Declaration;
+    if (!declaration || (declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression')) return;
+    const verdict = literalFillVerdict(declaration);
+    if (verdict === 'unknown' || !('refused' in verdict) || declaresObjectConversion(declaration)) return;
+    const reason = verdict.refused === 'constructor'
+      ? '$1 has no conversion from a parsed object: $2 declares a constructor, so JSON.parse builds it only by a conversion it declares'
+      : verdict.refused === 'private'
+        ? '$1 has no conversion from a parsed object: its field $2 is private, and a parsed object cannot name it'
+        : verdict.refused === 'protected'
+          ? '$1 has no conversion from a parsed object: its field $2 is protected, and a parsed object cannot name it'
+          : '$1 has no conversion from a parsed object: its field $2 is an accessor, whose storage a parsed object cannot name';
+    reportType('rt-explicit-conversion', call, reason, Value(displayType(filled)), Value(verdict.detail));
+  };
+  /**
    * #sec-object-literal-conversion, where the checker can see it: an object
    * literal converted to a class it fills names fields of the class and gives
    * each a value its type converts, and a class it does not fill is refused
@@ -19555,11 +19671,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const valueNode = property.type === 'IdentifierReference' ? property : definition.AssignmentExpression;
       const fieldType = memberTypes.find((member) => member.key === key)?.type;
       if (!valueNode || !fieldType) continue;
-      const nested = unparenthesized(valueNode);
-      if (nested.type === 'ObjectLiteral' && fieldType.Kind === 'nominal') {
-        checkLiteralFill(nested as ParseNode.ObjectLiteral, fieldType, depth + 1);
-        continue;
-      }
+      if (checkCreationOperand(valueNode, fieldType, depth + 1)) continue;
       // Each value converts to its field's type as a member of a structural
       // target converts: a string at a numeric field has no conversion.
       if (explicitConversionAvailability(staticType(valueNode), fieldType) === 'impossible') {
@@ -20586,6 +20698,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       markCreationMembers(operand);
       typeCreationMembers(operand, target);
       checkLiteralFill(unparenthesized(operand) as ParseNode.ObjectLiteral, target);
+    } else if (target && target.Kind === 'union' && unparenthesized(operand).type === 'ObjectLiteral' && filledClassOf(target) !== undefined) {
+      // Question AJ, AJ2: the one class of a union with `null` or `undefined`
+      // is filled, and a union of two classes is refused.
+      const filled = filledClassOf(target)!;
+      if (filled === 'several') {
+        checkCreationOperand(operand, target, 0);
+        return;
+      }
+      markCreationMembers(operand);
+      typeCreationMembers(operand, filled);
+      checkLiteralFill(unparenthesized(operand) as ParseNode.ObjectLiteral, filled);
+      return;
     } else if (target && (target.Kind === 'array' || target.Kind === 'tuple')) {
       // An ARRAY or TUPLE literal operand: each element is the operand of its
       // own element's conversion - `[x] := [].<T>` holds what `[x := T]`
@@ -20599,6 +20723,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (inner?.type === 'ArrayLiteral') {
         markCreationMembers(operand);
         typeCreationMembers(operand, target);
+        // Question AJ, AJ2: each element passes to its position's type, so an
+        // object literal element fills its position's class.
+        if (checkCreationOperand(operand, target, 0)) return;
       }
     }
     requireExplicitConversion(staticType(operand), target);
@@ -21286,6 +21413,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const constant = (core.type === 'IdentifierReference' || isConstantArithmeticHead(core)) && isNumericConstantExpression(core);
     return constant ? { core, negative } : null;
   };
+  /** The type JavaScript's bitwise operators and shifts compute in, `int32`, for a constant at a type that has none. */
+  const int32ConstantType: TypeRecord = { Kind: 'primitive', Name: 'int', Arguments: [32] } as unknown as TypeRecord;
+  /**
+   * The parts of a numeric constant expression, through the constants it
+   * names, for a judgment about which operators it uses.
+   */
+  const constantParts = (node: ParseNode | null | undefined, visit: (part: ParseNode) => boolean, depth = 0): boolean => {
+    if (!node || depth > 256) return false;
+    if (visit(node)) return true;
+    const e = node as unknown as Record<string, ParseNode | undefined> & { type: string, name?: string };
+    const of = (n: ParseNode | null | undefined) => constantParts(n, visit, depth + 1);
+    switch (e.type) {
+      case 'IdentifierReference': return typeof e.name === 'string' && of(constClosedInitializer(e.name));
+      case 'ParenthesizedExpression': return of(e.Expression);
+      case 'UnaryExpression': return of(e.UnaryExpression);
+      case 'AdditiveExpression': return of(e.AdditiveExpression) || of(e.MultiplicativeExpression);
+      case 'MultiplicativeExpression': return of(e.MultiplicativeExpression) || of(e.ExponentiationExpression);
+      case 'ExponentiationExpression': return of(e.UpdateExpression) || of(e.ExponentiationExpression);
+      case 'ShiftExpression': return of(e.ShiftExpression) || of(e.AdditiveExpression);
+      case 'BitwiseANDExpression': case 'BitwiseXORExpression': case 'BitwiseORExpression': return of(e.A) || of(e.B);
+      default: return false;
+    }
+  };
+  /** Whether a numeric constant expression uses a bitwise operator or a shift. */
+  const bitwiseConstantIn = (node: ParseNode): boolean => constantParts(node, (part) => part.type === 'ShiftExpression'
+    || part.type === 'BitwiseANDExpression' || part.type === 'BitwiseXORExpression' || part.type === 'BitwiseORExpression'
+    || (part.type === 'UnaryExpression' && (part as { operator?: string }).operator === '~'));
+  /** The power in a numeric constant expression whose exponent is no integer, or null. */
+  const fractionalPowerIn = (node: ParseNode): ParseNode | null => {
+    let found: ParseNode | null = null;
+    constantParts(node, (part) => {
+      if (part.type !== 'ExponentiationExpression') return false;
+      const exponent = numberOfConstant((part as unknown as { ExponentiationExpression?: ParseNode }).ExponentiationExpression);
+      if (exponent === null || !Number.isFinite(exponent) || Number.isInteger(exponent)) return false;
+      found = part;
+      return true;
+    });
+    return found;
+  };
   /** The Number a numeric constant expression evaluates to, where this reads every part of it. */
   const numberOfConstant = (node: ParseNode | null | undefined, depth = 0): number | null => {
     if (!node || depth > 256) return null;
@@ -21404,6 +21570,76 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const beside = constantBesideInteger(produced, peer);
       if (beside && 'core' in beside) journalSet(integerContextOperands, beside.core, beside.value);
     }
+  };
+  /**
+   * Question AN, AN1: beside an operand whose type is the `bigint` type, a
+   * literal or constant operand is the integer it denotes, where it denotes
+   * one, and its `/` is an integer division where each of its literals is
+   * written as an integer: `b === 3` is `b === 3n`, and `b < 7 / 2` is
+   * `b < 3n`, as `b * (7 / 2)` is `b * 3n`. One that denotes no integer,
+   * `b < 3.5` or `b < 7.0 / 2`, keeps JavaScript's comparison of a BigInt with
+   * a Number. The peer _peer_ must carry a typed contract, as it must for the
+   * literal to adopt in arithmetic (`operandParticipates`): a BigInt literal,
+   * `BigInt(3)` and an unannotated `const b = 3n` do not, so `65n === 65` and
+   * `BigInt(3) === 3` keep JavaScript's *false*.
+   */
+  const bigIntPeerType: TypeRecord = { Kind: 'primitive', Name: 'bigint', Arguments: [] } as unknown as TypeRecord;
+  const isBigIntPeer = (peerType: Known, peer?: ParseNode): boolean => {
+    const raw = erasedKeepingBrand(peerType);
+    return raw?.Kind === 'primitive' && raw.Name === 'bigint' && (peer === undefined || operandParticipates(peer));
+  };
+  const bigIntLiteralType = (value: bigint): TypeRecord => ({ Kind: 'literal', Value: Value(value), Base: makePrimitive('bigint') } as TypeRecord);
+  /**
+   * The integer a numeric constant expression denotes at `bigint`, or null:
+   * its integer fold where each literal in it is written as an integer, and
+   * otherwise its exact value where that is an integer, `6.0 / 2` being 3n.
+   */
+  const bigIntConstantValue = (node: ParseNode): bigint | null => {
+    const folded = foldConstantAt(node, bigIntPeerType);
+    if (folded !== null) return folded;
+    const rational = foldRationalConstant(node);
+    if (rational !== null) return rational.den === 1n ? rational.num : null;
+    const number = numberOfConstant(node);
+    return number !== null && Number.isSafeInteger(number) ? BigInt(number) : null;
+  };
+  /**
+   * The integer one operand denotes beside a `bigint`, with the node the run
+   * time reads it from: the operand under its parentheses and signs, whose
+   * own value is recorded, the run time applying the signs
+   * (`integerContextOperand`). Null where it denotes no integer.
+   */
+  const bigIntOperandOf = (produced: ParseNode): { core: ParseNode, own: bigint, value: bigint } | null => {
+    let core: ParseNode = produced;
+    let negative = false;
+    for (let depth = 0; depth < 256; depth += 1) {
+      const wrapped = core as unknown as { Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string };
+      if (core.type === 'ParenthesizedExpression' && wrapped.Expression) core = wrapped.Expression;
+      else if (core.type === 'UnaryExpression' && (wrapped.operator === '-' || wrapped.operator === '+') && wrapped.UnaryExpression) {
+        if (wrapped.operator === '-') negative = !negative;
+        core = wrapped.UnaryExpression;
+      } else break;
+    }
+    const own = core.type === 'NumericLiteral' ? integerOfLiteral(core as ParseNode.NumericLiteral)
+      : constantOperandCore(core) ? bigIntConstantValue(core) : null;
+    return own === null ? null : { core, own, value: negative ? -own : own };
+  };
+  /** Records, for the run time, the integer each operand _operand_ may produce denotes beside a `bigint`; whether any does. */
+  const recordBigIntBeside = (operand: ParseNode, peerType: Known, peer: ParseNode): boolean => {
+    if (!isBigIntPeer(peerType, peer)) return false;
+    let recorded = false;
+    for (const produced of integerContextArms(operand)) {
+      const integer = bigIntOperandOf(produced);
+      if (!integer) continue;
+      journalSet(bigIntComparisonOperands, integer.core, integer.own);
+      recorded = true;
+    }
+    return recorded;
+  };
+  /** The one integer _operand_ denotes beside a `bigint`, or null where it denotes none or may produce several values. */
+  const bigIntOperandValue = (operand: ParseNode, peerType: Known, peer: ParseNode): bigint | null => {
+    if (!isBigIntPeer(peerType, peer)) return null;
+    const arms = integerContextArms(operand);
+    return arms.length === 1 ? bigIntOperandOf(arms[0])?.value ?? null : null;
   };
 
   /** Whether a constant operand has a constant of the Math object in it, through the constants it names. */
@@ -22973,9 +23209,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (node.type === 'NumericLiteral' && contextual && bigintTarget(contextual)) {
-      const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
+      // Question AN: a literal is its value however it is spelled, so `b * 3.0`
+      // is `b * 3n`, as `u * 3.0` beside a `uint32` is `u * 3`.
+      const exact = integerOfLiteral(node as ParseNode.NumericLiteral) ?? exactBigIntOf(node as ParseNode.NumericLiteral);
       if (exact !== null) {
-        journalMembership(bigintLiterals, node, true);
+        journalSet(bigintLiterals, node, exact);
         return { Kind: 'literal', Value: Value(exact), Base: makePrimitive('bigint') };
       }
     }
@@ -23045,12 +23283,62 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // does: `7.5 * 2` is 15. One that is no integer of the type is refused
       // as `3.75` written there is; `let k: uint8 = 7.5 / 2` was a RangeError
       // when the declaration ran. A conversion's operand converts instead.
+      // At `bigint` the value is the expression's exact one (Question AN):
+      // `6.0 / 2` is 3n, as it is 3 at a `uint32`, where it was a TypeError
+      // beside a `bigint` operand.
+      if (foldedBigint && !conversionOperands.has(node)) {
+        const integer = bigIntConstantValue(node);
+        if (integer !== null) {
+          journalSet(foldedConstants, node, { value: integer, type: makePrimitive('bigint') });
+          return makePrimitive('bigint');
+        }
+        // One that is no integer is refused as `3.5` written there is: it was a
+        // RangeError at a declaration and a TypeError beside an operand.
+        const rational = foldRationalConstant(node);
+        const number = numberOfConstant(node);
+        const fraction = rational !== null ? rational.den !== 1n : number !== null && Number.isFinite(number) && !Number.isInteger(number);
+        if (fraction && number !== null) {
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(String(number)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return contextual;
+        }
+      }
       if (!foldedBigint && !conversionOperands.has(node)) {
         const number = numberOfConstant(node);
         const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
         if (number !== null && !(Number.isInteger(number) && fitsNumericType(BigInt(number), prim.Name, prim.Arguments))) {
           const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(String(number)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
+          return contextual;
+        }
+      }
+    }
+    // Question AO, AO1: a decimal has neither bitwise operators nor a power
+    // with a fractional exponent. A constant with a bitwise operator or a
+    // shift, every operand of which is an integer, is the integer JavaScript
+    // computes for it, in the 32-bit two's complement its operators use, and
+    // that integer is taken exactly: `d * (6 | 1)` is `d * 7`, as `const e:
+    // decimal64 = 6 | 1` is 7, where it was a TypeError beside a decimal. A
+    // power with a fractional exponent has no exact value, and the double's
+    // digits would enter the decimal silently, so it is refused in both
+    // positions; the program converts a Number explicitly, `(2 ** 0.5) :=
+    // decimal64`, as C# writes `(decimal)Math.Pow(2, 0.5)`.
+    if (contextual && contextual.Kind === 'primitive' && decimalWidthOf(contextual as TypeRecord) !== undefined
+        && node.type !== 'NumericLiteral' && !conversionOperands.has(node) && isNumericConstantExpression(node)) {
+      const fractional = fractionalPowerIn(node);
+      if (fractional) {
+        reportType('rt-numeric-operator', fractional, '$1 with a fractional exponent is not defined for $2; convert a Number to it explicitly with :=', Value('**'), Value(displayType(contextual as TypeRecord)));
+        return contextual;
+      }
+      if (bitwiseConstantIn(node)) {
+        const integer = foldConstantAt(node, int32ConstantType);
+        if (integer !== null) {
+          const width = decimalWidthOf(contextual as TypeRecord)!;
+          if (!DecimalPartsInRange({ significand: integer, exponent: 0 }, width)) {
+            reportType('rt-numeric-range', node, '$1 is not in the range of $2', Value(String(integer)), Value(displayType(contextual as TypeRecord)));
+            return contextual;
+          }
+          journalSet(foldedDecimals, node, { sig: integer, exp: 0, width, type: contextual as TypeRecord });
           return contextual;
         }
       }
@@ -26559,6 +26847,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (target && target.type === 'IdentifierReference' && !application) {
           const targetName = (target as { name: string }).name;
+          // Question AI, AI1: `new` of a type alias of a class constructs the
+          // class, an application of a generic one included.
+          const aliased = !origin && ResolveBindingDeclaration(target, targetName)?.kind === 'type' ? calleeClassType(target, null) : null;
+          if (aliased) return aliased;
           const declared = origin && !origin.arguments ? instanceTypeOf(origin.declaration) : lexicalClassType(target);
           if (declared) {
             // A GENERIC class constructed bare yields the specialization its
@@ -27136,6 +27428,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || (t.Kind === 'primitive' && (t.Name === 'vector' || t.Name === 'Composite')))) {
           return null;
         }
+        // Question AM, AM2: a comparison that may dispatch to a vector or to a
+        // declared operator has the type of what it dispatches to, which an
+        // `any` operand leaves unknown: `a < b` of two vectors is a mask, and a
+        // class's `operator==` returns what it declares. So such a comparison is
+        // `any`, as an operation on a `dynamic` operand is in C#, and a typed
+        // store of its result checks it. `===`, `!==`, `instanceof` and `in`
+        // cannot be overloaded and stay `boolean`. Typed `boolean`, the
+        // comparison let `const t: boolean = a < b` hold a vector unchecked.
+        if (strictOperator && ['<', '>', '<=', '>=', '==', '!='].includes(strictOperator)
+          && operandTypes.some((t) => t!.Kind === 'any')) {
+          return anyTypeRecord;
+        }
         return makePrimitive('boolean');
       }
       case 'TemplateLiteral': {
@@ -27528,6 +27832,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(beside.refused), Value(displayType(t))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               }
+            }
+          } else if (isBigIntPeer(t) && errors.length === reported
+              && (operandParticipates(leftNode) || operandParticipates(rightNode))) {
+            // Question AN: beside a `bigint`, a literal or named constant that
+            // is no integer is refused as it is beside any integer type.
+            // JavaScript's mix of a BigInt and a Number in arithmetic is a
+            // TypeError every time; code that names no type keeps it.
+            const fraction = fractionalLiteralValue(lit);
+            const constant = fraction === null && !literalOperand(lit) ? constantOperandCore(lit) : null;
+            const number = constant && bigIntConstantValue(constant.core) === null ? numberOfConstant(constant.core) : null;
+            const refused = fraction !== null ? (outerNegative ? -fraction : fraction)
+              : number !== null && Number.isFinite(number) && !Number.isInteger(number) ? (constant!.negative !== outerNegative ? -number : number) : null;
+            if (refused !== null) {
+              const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(String(refused)), Value(displayType(t))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
             }
           }
         };
@@ -30207,6 +30526,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         continue;
       }
+      // Question AN, AN1: beside a `bigint`, a constant that denotes an integer
+      // is that integer, so `Object.is(b, 3)` tests for 3n.
+      const bigIntAdopted = bigIntOperandValue(constant, source, argument);
+      if (bigIntAdopted !== null) {
+        const literal = bigIntLiteralType(bigIntAdopted);
+        return { name, type: literal, subjectType: source, negated, sameValueExclusion: literal, display: 'Object.is' };
+      }
       const written = singleValueOperandType(constant) ?? staticType(constant);
       if (written?.Kind !== 'literal' || !strictDomainMembers(written, '===') || !strictDomainMembers(source, '===')) continue;
       // #sec-arithmetic-never-promotes: the literal rule reaches the original
@@ -31365,6 +31691,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Narrowing must compare that same value.
             lit = { ...lit, Base: numericSource, Value: new TypedNumberValue(R(lit.Value), numericSource as never) };
           }
+          // Question AN, AN1: beside a `bigint`, a literal that denotes an
+          // integer is that integer, so `b === 3` tests for 3n.
+          const bigIntAdopted = lit?.Kind === 'literal' && lit.Value instanceof NumberValue ? bigIntOperandValue(against, staticType(subject), subject) : null;
+          if (bigIntAdopted !== null) lit = bigIntLiteralType(bigIntAdopted);
           if (lit && (!loose || sameEqualityBase(source, lit))) {
             return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: negated !== inverted,
               ...(name !== NON_PATH && dataValuePlace(subject) && !changesPlace(against, name)
@@ -39831,12 +40161,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * invocation is the one it reads as a conversion instead.
    *
    * Typed is #sec-typed-classes': a typed instance field, declared or
-   * inherited, or a value class. A generic class is not converted to by a call:
-   * its constructor is the family's, and a call on an application of it is
-   * refused as before.
+   * inherited, or a value class. A generic class is not converted to by a call
+   * on its own name, whose constructor is the family's; an application of it
+   * names one class, and is (_applied_).
+   *
+   * Question AI, AI1: every spelling of the class converts as its name does: a
+   * value alias, a type alias, an application of a generic class and an alias
+   * of one, and an optional call (`classConversionCall`).
    */
-  const conversionClassVerdict = (declaration: ParseNode): 'typed' | 'untyped' | 'unknown' => {
-    if ((declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length) return 'untyped';
+  const conversionClassVerdict = (declaration: ParseNode, applied = false): 'typed' | 'untyped' | 'unknown' => {
+    if (!applied && (declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length) return 'untyped';
     const seen = new Set<ParseNode>();
     for (let at: ParseNode | undefined = declaration; at && !seen.has(at); at = heritageClassOf(at)) {
       seen.add(at);
@@ -39848,16 +40182,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return 'untyped';
   };
-  const classConversionTarget = (call: ParseNode): TypeRecord | 'deferred' | undefined => {
+  /**
+   * The class type a type expression written as a callee names: `V`, an
+   * application `Box.<uint8>`, or an alias of either, read as an annotation
+   * would read it. Null where it names no class.
+   */
+  const calleeClassType = (name: ParseNode, application: ParseNode.TypeArgumentsExpression | null): TypeRecord | null => {
+    if (name.type !== 'IdentifierReference' || hasDirectEval) return null;
+    const resolved = resolveType({
+      type: 'TypeReference',
+      TypeName: { IdentifierReference: name, MemberNames: [] },
+      TypeArguments: application?.TypeArguments ?? null,
+      parent: application ?? name,
+    } as unknown as ParseNode.Type);
+    return resolved?.Kind === 'nominal' && classDeclarationOf(resolved) !== undefined ? resolved : null;
+  };
+  /** The callee of a call on a typed class with one argument, a call or an optional call, or undefined. */
+  const classConversionCallee = (call: ParseNode): ParseNode | undefined => {
     if (call.type !== 'CallExpression') return undefined;
     const args = (call as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
     if (args.length !== 1 || args[0]!.type === 'AssignmentRestElement' || args[0]!.type === 'NamedArgument') return undefined;
-    const targets = invocationFact((call as unknown as { CallExpression: ParseNode }).CallExpression)?.classTargets;
+    return (call as unknown as { CallExpression: ParseNode }).CallExpression;
+  };
+  const classConversionTarget = (call: ParseNode, fact?: InvocationFact | null): TypeRecord | 'deferred' | undefined => {
+    const callee = classConversionCallee(call);
+    if (!callee) return undefined;
+    // A type alias names its class as an annotation does (Question AI, AI1).
+    // An optional chain's callee is a typed view of the expression it wraps.
+    let node = patternExpression(callee);
+    while (node?.type === 'ParenthesizedExpression') node = patternExpression((node as unknown as { Expression: ParseNode }).Expression);
+    const application = node?.type === 'TypeArgumentsExpression' ? node : null;
+    const nameNode = patternExpression((application ? application.Expression : node) ?? undefined);
+    if (nameNode?.type === 'IdentifierReference' && ResolveBindingDeclaration(nameNode, nameNode.name)?.kind === 'type') {
+      const aliased = calleeClassType(nameNode, application);
+      const declaration = aliased ? classDeclarationOf(aliased) : undefined;
+      if (!aliased || !declaration) return undefined;
+      const verdict = conversionClassVerdict(declaration as ParseNode, ((aliased as { Arguments?: readonly unknown[] }).Arguments ?? []).length > 0);
+      return verdict === 'typed' ? aliased : verdict === 'unknown' ? 'deferred' : undefined;
+    }
+    const targets = (fact === undefined ? invocationFact(callee) : fact)?.classTargets;
     if (!targets?.length) return undefined;
-    const verdicts = targets.map((target) => (target.arguments ? 'untyped' : conversionClassVerdict(target.declaration)));
+    const verdicts = targets.map((target) => conversionClassVerdict(target.declaration, !!target.arguments));
     if (verdicts.every((verdict) => verdict === 'untyped')) return undefined;
     if (targets.length > 1 || verdicts[0] !== 'typed') return 'deferred';
-    const declared = instanceTypeOf(targets[0]!.declaration);
+    const target = targets[0]!;
+    // An application names the class its arguments select, as `:=` reads it.
+    const applied = target.arguments ? (target.arguments as unknown as { parent?: ParseNode }).parent : undefined;
+    const declared = !target.arguments ? instanceTypeOf(target.declaration)
+      : applied?.type === 'TypeArgumentsExpression'
+        ? calleeClassType(patternExpression((applied as ParseNode.TypeArgumentsExpression).Expression) ?? applied, applied as ParseNode.TypeArgumentsExpression)
+        : null;
     return declared?.Kind === 'nominal' ? declared : 'deferred';
   };
   const declaresPrimitiveConversion = (declaration: ParseNode): boolean => {
@@ -44210,7 +44584,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const call = { type: 'CallExpression', CallExpression: view.expression, Arguments: chain.Arguments } as ParseNode.CallExpression;
         const neverReturns = !unreachable && establishedNeverCall(call);
         if (visit) {
-          if (!unreachable) {
+          // Question AI, AI1: an optional call on a typed class with one
+          // argument converts it, as the call does, and as `uint8?.(x)` does.
+          const classConversion = unreachable ? undefined : classConversionTarget(call, invocation);
+          if (classConversion) {
+            if (classConversion !== 'deferred') checkConversionOperand(chain.Arguments[0] as ParseNode, classConversion);
+          } else if (!unreachable) {
             const callee = callableForm(receiver);
             checkCallable(callee, chain);
             if (chain.OptionalChain && !chain.OptionalChain.Arguments) checkUndeclaredMemberCall(view.expression, chain as unknown as ParseNode);
@@ -44687,8 +45066,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       .filter((x): x is ParseNode => !!x && typeof x === 'object' && 'type' in x);
     if (operandNodes.length !== 2) return;
     const operandTypes = operandNodes.map((x) => staticType(x));
-    const pairs: [ParseNode, Known][] = [[operandNodes[1], operandTypes[0]], [operandNodes[0], operandTypes[1]]];
-    for (const [candidate, otherType] of pairs) {
+    const pairs: [ParseNode, Known, ParseNode][] = [[operandNodes[1], operandTypes[0], operandNodes[0]], [operandNodes[0], operandTypes[1], operandNodes[1]]];
+    for (const [candidate, otherType, other] of pairs) {
       // The final producer of a comma expression receives the same operand
       // context as if it appeared here directly. Earlier operands still run
       // normally; this is not a constant-folding or narrowing-path proof.
@@ -44708,6 +45087,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // produce (`producedOperands`): `d === (c ? 0.1 : 0.2)`.
       if (!otherType) continue;
       recordIntegerContextBeside(result, otherType);
+      recordBigIntBeside(result, otherType, other);
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
       if (!(name === 'rational' || name === 'complex' || name === 'float128' || (name !== undefined && name.startsWith('decimal')))) continue;
@@ -46446,7 +46826,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ];
           for (const clause of literalClauses) {
             const label = (clause as { Expression?: ParseNode }).Expression;
-            const labelType = label ? staticType(label) : null;
+            // Question AN, AN1: beside a `bigint`, a label that denotes an
+            // integer is that integer, as in the `v === e` row it is.
+            if (label) recordBigIntBeside(label, subject, expression);
+            const adopted = label ? bigIntOperandValue(label, subject, expression) : null;
+            const labelType = adopted !== null ? bigIntLiteralType(adopted) : label ? staticType(label) : null;
             if (labelType?.Kind === 'literal' && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
               reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord)));
             }
@@ -46465,6 +46849,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               continue;
             }
             let labelType = singleValueOperandType(label) ?? staticType(label);
+            // Question AN, AN1: beside a `bigint`, a label that denotes an
+            // integer is that integer, so `case 3:` is `case 3n:` and is judged
+            // as that label is below.
+            recordBigIntBeside(label, subject as Known, expression);
+            const bigIntAdopted = bigIntOperandValue(label, subject as Known, expression);
+            if (bigIntAdopted !== null) labelType = bigIntLiteralType(bigIntAdopted);
             // A RANGE LABEL MATCHES BY CONTAINMENT. #sec-ranges: "A `case` whose
             // label is a range matches where the range contains the
             // discriminant ... Matching is by containment rather than by `===`".
@@ -47176,6 +47566,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const compared = n.Arguments as readonly ParseNode[];
           recordIntegerContextBeside(compared[1], staticType(compared[0]));
           recordIntegerContextBeside(compared[0], staticType(compared[1]));
+          recordBigIntBeside(compared[1], staticType(compared[0]), compared[0]);
+          recordBigIntBeside(compared[0], staticType(compared[1]), compared[1]);
         }
         // A CALL may reassign a binding captured by callable code. The lexical
         // write inventory distinguishes those writes from this invocation's
@@ -47187,6 +47579,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const name of capturedMutationNames()) {
           invalidateNarrowing(name, true);
         }
+        checkTypedParseTarget(n as ParseNode.CallExpression);
         // Question AE, AE1: a call on a typed class with one argument is the
         // explicit conversion `argument := C` (#sec-explicit-conversion), so its
         // argument is checked as the operand of `:=` is, and the call is not
@@ -47210,7 +47603,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         {
           const fact = invocationFact(c.CallExpression);
           checkInvocation(c.CallExpression, false, c.CallExpression, fact, !!fact?.classTargets?.length
-            && fact.classTargets.every((target) => !target.arguments && conversionClassVerdict(target.declaration) === 'typed'));
+            && fact.classTargets.every((target) => conversionClassVerdict(target.declaration, !!target.arguments) === 'typed'));
         }
         const callee = callableForm(staticType(c.CallExpression));
         checkCallReceiver(c.CallExpression, callee);

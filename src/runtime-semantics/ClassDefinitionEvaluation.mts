@@ -1,6 +1,6 @@
 import { operatorTableKey } from '../type-system/overloads.mts';
 import type { OverloadSignature } from '../type-system/overloads.mts';
-import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
+import { SetIntegrityLevel, TestIntegrityLevel, SealTypedInstance } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame, RetainTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord, IsOfType } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
@@ -850,7 +850,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // (NewTarget) - after base and derived fields are initialized, mirroring the
       // FunctionConstructSlot path for classes with an explicit constructor.
       if (F === NewTarget && (F as { SealInstances?: boolean }).SealInstances) {
-        Q(yield* result.PreventExtensions());
+        Q(yield* SealTypedInstance(result));
       }
       return result;
     };

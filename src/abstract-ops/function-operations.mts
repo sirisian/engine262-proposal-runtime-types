@@ -60,6 +60,7 @@ import {
   IsConstructor,
   IsExtensible,
   MakeBasicObject,
+  SetIntegrityLevel,
   OrdinaryObjectCreate,
   OrdinaryGetPrototypeOf,
   OrdinaryCreateFromConstructor,
@@ -820,8 +821,8 @@ export function RequireFieldsInitialized(F: object, O: ObjectValue) {
  * initialized, so a subclass may still append its own fields during super before
  * the whole instance is sealed once. The decision is the most-derived class's:
  * `newTarget.SealInstances` was set at class definition (typed field, not
- * `dynamic`). PreventExtensions is performed so a field may be written but a
- * property may not be added or removed.
+ * `dynamic`). The instance is sealed (`SealTypedInstance`), so a field may be
+ * written but a property may not be added, removed or redefined.
  */
 function* maybeSealTypedInstance(F: FunctionObject, newTarget: FunctionObject | UndefinedValue, O: ObjectValue): PlainEvaluator<void> {
   Q(RequireFieldsInitialized(F, O));
@@ -829,8 +830,23 @@ function* maybeSealTypedInstance(F: FunctionObject, newTarget: FunctionObject | 
     return undefined;
   }
   if ((newTarget as { SealInstances?: boolean }).SealInstances) {
-    Q(yield* O.PreventExtensions());
+    Q(yield* SealTypedInstance(O));
   }
+  return undefined;
+}
+
+/**
+ * Question AL, AL2 (spec sec-typed-storage): an instance of a class with a
+ * typed field is sealed as `Object.seal` seals it, SetIntegrityLevel(_O_,
+ * ~sealed~): it is made non-extensible and each own property non-configurable.
+ * So `Object.isSealed` answers *true*, as the README's "As if Object.seal was
+ * called on it" says, and no field can be made non-enumerable or redefined,
+ * which would change what `Object.keys` and `JSON.stringify` see of one
+ * instance of a fixed layout. A field stays writable. Every path that makes an
+ * instance seals it here: construction, a literal fill, a default, a copy.
+ */
+export function* SealTypedInstance(O: ObjectValue): PlainEvaluator<void> {
+  Q(yield* SetIntegrityLevel(O, 'sealed'));
   return undefined;
 }
 

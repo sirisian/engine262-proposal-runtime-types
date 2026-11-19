@@ -1,5 +1,5 @@
 import { CheckWhereCall } from '../type-system/where-predicates.mts';
-import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
+import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
 import { PlaceConstructedArray, ValidateArrayPlacement, type ArrayPlacement } from '../abstract-ops/array-view.mts';
 import { SetPendingProxyRuntimeType } from '../intrinsics/Proxy.mts';
@@ -9,14 +9,14 @@ import { SetPendingPromiseTypes } from '../type-system/promise-contracts.mts';
 import { Q, EnsureCompletion, NormalCompletion } from '../completion.mts';
 import { TransferTypeResultContext } from '../type-system/type-result-context.mts';
 import { TargetTypedNewType } from '../type-system/check.mts';
-import { GetTypeObject } from '../type-system/intern.mts';
+import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import { libraryConstructParameters } from '../type-system/std-signatures.mts';
 import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { contextualTypeFor, SetPendingCalleeContext, TypeNodeToTypeRecord, spreadElementsOf } from '../type-system/runtime.mts';
-import { StampTypedCollection, soleSignatureParameterTypes, RequireType } from '../abstract-ops/runtime-types.mts';
+import { StampTypedCollection, soleSignatureParameterTypes, RequireType, ClassRecordConstructor } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { bindLibraryTypeArguments, TakeLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
@@ -24,7 +24,7 @@ import { NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
-import { ConstructArrayOfType } from './RuntimeTypesDeclarations.mts';
+import { ConstructArrayOfType, GenericClassDeclarationOf, MaterializeSpecialization } from './RuntimeTypesDeclarations.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
   Assert,
@@ -37,6 +37,22 @@ import {
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-evaluatenew */
+/**
+ * The class constructor a type denotes, where it denotes a class: the class of
+ * a nominal type, or the specialization an application of a generic class
+ * names. Undefined for any other type.
+ */
+function* ClassConstructorOfType(record: TypeRecord | undefined): PlainEvaluator<ObjectValue | undefined> {
+  const ctor = record ? ClassRecordConstructor(record) : undefined;
+  if (!(ctor instanceof ObjectValue) || (ctor as { IsClassConstructor?: Value }).IsClassConstructor !== Value.true) return undefined;
+  const applied = (record as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+  const declaration = GenericClassDeclarationOf(ctor);
+  if (declaration === undefined) return ctor;
+  if (applied.length === 0) return undefined;
+  const specialized = Q(yield* MaterializeSpecialization(declaration, applied, ctor));
+  return specialized instanceof ObjectValue ? specialized : undefined;
+}
+
 function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: undefined | ParseNode.Arguments, placementArgs?: readonly ParseNode.AssignmentExpressionOrHigher[] | null, newExpression?: ParseNode.NewExpression) {
   // 1. Assert: constructExpr is either a NewExpression or a MemberExpression.
   // 2. Assert: arguments is either empty or an Arguments.
@@ -65,7 +81,14 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   }
   const ref = Q(yield* Evaluate(constructExpr));
   // 4. Let constructor be ? GetValue(ref).
-  const constructor = Q(yield* GetValue(ref as never));
+  let constructor = Q(yield* GetValue(ref as never));
+  // Question AI, AI1: `new` of a type that denotes a class constructs the class,
+  // as `new` of the class's own name does: `type W = V; new W()` is `new V()`,
+  // and `type B8 = Box.<uint8>; new B8()` is `new Box.<uint8>()`.
+  if (surroundingAgent.feature('runtime-types') && constructor instanceof ObjectValue && isTypeObject(constructor)) {
+    const denoted = Q(yield* ClassConstructorOfType((constructor as { TypeRecord?: TypeRecord }).TypeRecord));
+    if (denoted !== undefined) constructor = denoted;
+  }
   let appliedLibraryTypes: readonly TypeRecord[] | undefined;
   let appliedLibraryName: string | undefined;
   if (surroundingAgent.feature('runtime-types') && constructExpr.type === 'TypeArgumentsExpression') {

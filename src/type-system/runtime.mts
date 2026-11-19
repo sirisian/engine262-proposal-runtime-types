@@ -4179,7 +4179,12 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       if (declaredReadonly.size > 0) {
         (instance as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields = declaredReadonly;
       }
-      X(instance.PreventExtensions());
+      // Sealed as a constructed instance is (Question AL, AL2).
+      if ((constructor as { SealInstances?: boolean }).SealInstances) {
+        Q(yield* SetIntegrityLevel(instance, 'sealed'));
+      } else {
+        X(instance.PreventExtensions());
+      }
       return instance;
     }
     default:

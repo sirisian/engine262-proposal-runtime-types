@@ -61,8 +61,11 @@ test('beside anything else the constant is the Number it was', () => {
   expect(evaluated('function f(n: number) { return String(n === 7 / 2) + String(n < 7 / 2); } f(3.5) + f(3);')).toBe('truefalsefalsetrue');
   expect(evaluated('function f(r: float32) { return String(r === 7 / 2) + String(r * (7 / 2)); } f(3.5);')).toBe('true12.25');
   expect(evaluated('function f(r: rational64) { return r === 7 / 2; } const h: rational64 = 7 / 2; String(f(h));')).toBe('true');
-  // A BigInt is compared with a Number as the language always has.
-  expect(evaluated('function f(b: bigint) { return String(b < 7 / 2) + String(b === 6 / 2); } f(3n);')).toBe('truefalse');
+  // Beside a `bigint` the constant is the integer it denotes, as it is beside any integer type
+  // (Question AN, AN1: `bigint-literal-comparison.test.mts`). Beside a BigInt that names no type,
+  // it is compared as the language always has.
+  expect(evaluated('function f(b: bigint) { return String(b < 7 / 2) + String(b === 6 / 2); } f(3n);')).toBe('falsetrue');
+  expect(evaluated('function f(b) { return String(b < 7 / 2) + String(b === 6 / 2); } f(3n);')).toBe('truefalse');
   // With no annotation in sight, the type is seen only when the line runs: there is no context,
   // the constant is the Number, and 3.5 is not an integer.
   expect(evaluated('function f(x) { return String(x === 7 / 2) + String(x * (6 / 2)); } f(uint8(3));')).toBe('false9');

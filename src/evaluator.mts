@@ -345,6 +345,11 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
         if (foldedShift.type.Kind === 'primitive' && foldedShift.type.Name === 'bigint') return Value(foldedShift.value);
         return new TypedNumberValue(foldedShift.value, foldedShift.type as never);
       }
+      // At a decimal, the integer the checker computed (Question AO, AO1).
+      const foldedDecShift = FoldedDecimalOf(node);
+      if (foldedDecShift !== undefined) {
+        return CreateDecimalValue(foldedDecShift.sig, foldedDecShift.exp, foldedDecShift.width, surroundingAgent.currentRealmRecord, foldedDecShift.type);
+      }
       return yield* Evaluate_ShiftExpression(node);
     }
     case 'LogicalORExpression':
@@ -358,6 +363,10 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       if (foldedBits !== undefined) {
         if (foldedBits.type.Kind === 'primitive' && foldedBits.type.Name === 'bigint') return Value(foldedBits.value);
         return new TypedNumberValue(foldedBits.value, foldedBits.type as never);
+      }
+      const foldedDecBits = FoldedDecimalOf(node);
+      if (foldedDecBits !== undefined) {
+        return CreateDecimalValue(foldedDecBits.sig, foldedDecBits.exp, foldedDecBits.width, surroundingAgent.currentRealmRecord, foldedDecBits.type);
       }
       return yield* Evaluate_BinaryBitwiseExpression(node);
     }

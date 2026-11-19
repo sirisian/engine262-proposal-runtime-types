@@ -105,7 +105,13 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         return dispatched;
       }
     }
-    return Q(yield* vectorBinaryOperator(lval, opText, rval, literals));
+    // `+` with a String operand concatenates, before any of this
+    // (#sec-operator-dispatch), and the checker types it `string`. Applied at
+    // each lane it made a vector whose lanes were Strings, `(12, 22, 32, 42)`
+    // for `float32x4(1, 2, 3, 4) + "2"`.
+    if (!(opText === '+' && (lval instanceof JSStringValue || rval instanceof JSStringValue))) {
+      return Q(yield* vectorBinaryOperator(lval, opText, rval, literals));
+    }
   }
   // proposal-runtime-types (ranges.md "Types"): interval arithmetic. The bounds
   // of a computed value are the arithmetic of the bounds it was computed from,
@@ -189,6 +195,29 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     }
     const result = rationalPow(lval, BigInt(exponent), surroundingAgent.currentRealmRecord);
     return 'zero' in result ? Throw.RangeError('a zero rational to a negative power') : result;
+  }
+  // A String beside a typed number reaches the operator as the Number
+  // ToNumeric makes of it (#sec-tonumeric-revised), and every step after is
+  // the Number's: it does not mix with a value of another numeric type, as
+  // `z * n` for a Number `n` does not, and where an exponent or a shift
+  // distance is a count a Number's is, `z << "2"` being `z << 2`. A String is
+  // no numeric literal and adopts nothing. This path computed such an
+  // operation as two Numbers before, so `z * "2"` for a `uint32` `z` was the
+  // Number 6 and a `uint64` operand was rounded to a double. `+` concatenates
+  // instead, before any of this.
+  if (surroundingAgent.feature('runtime-types') && opText !== '+' && isTypedArithmetic(lval, rval)
+      && (lval instanceof JSStringValue || rval instanceof JSStringValue)) {
+    const leftString = lval instanceof JSStringValue;
+    const rightString = rval instanceof JSStringValue;
+    const left = leftString ? Q(yield* ToNumeric(lval)) : lval;
+    const right = rightString ? Q(yield* ToNumeric(rval)) : rval;
+    return typedBinary(opText as never, left, right, {
+      ...literals,
+      left: !leftString && (literals?.left ?? false),
+      right: !rightString && (literals?.right ?? false),
+      leftString,
+      rightString,
+    });
   }
   // proposal-runtime-types #sec-operators: typed-number arithmetic. When either operand is
   // a numeric value type and neither is a string, compute and wrap into the

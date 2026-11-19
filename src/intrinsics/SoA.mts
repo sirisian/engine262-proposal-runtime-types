@@ -8,7 +8,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf, type SoAColumn } from '../type-system/layout.mts';
 import { BufferElementType, SetPlacementBacking, WritePlacedField } from '../abstract-ops/placement.mts';
-import { RecordClassConstructors } from '../abstract-ops/function-operations.mts';
+import { RecordClassConstructors, SealTypedInstance } from '../abstract-ops/function-operations.mts';
 import { SubclassAddsStorageOver } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { displayType } from '../type-system/records.mts';
@@ -446,9 +446,13 @@ export function* SoAGather(storage: SoAStorage, index: number): ValueEvaluator {
   // The gathered value carries its field types, so a store into it is checked
   // exactly as one into a constructed instance is - even though the write is
   // then lost, which is what makes the copy semantics visible rather than
-  // silent.
+  // silent. It is sealed as a copy of the instance is (Question AL, AL2).
   (instance as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
-  X(instance.PreventExtensions());
+  if ((ctor as { SealInstances?: boolean }).SealInstances) {
+    Q(yield* SealTypedInstance(instance));
+  } else {
+    X(instance.PreventExtensions());
+  }
   return instance;
 }
 

@@ -166,7 +166,11 @@ test.each([
   ],
   [
     "control: typed string coercion",
-    "function f(x:uint8,y:string){x*y;}f(uint8(2),\"3\");"
+    "function f(x:uint8,y:string){x*y;}"
+  ],
+  [
+    "control: typed string shift count",
+    "function f(x:uint8,y:string){return x<<y;}f(uint8(2),\"3\");"
   ]
 ])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);

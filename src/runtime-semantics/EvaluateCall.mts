@@ -17,12 +17,12 @@ import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribu
 import { CallArgumentItems, NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
-import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
+import { soleSignatureParameterTypes, LookupClassType, ClassRecordConstructor } from '../abstract-ops/runtime-types.mts';
 import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
 import { ConvertOperandValue } from '../abstract-ops/literal-fill.mts';
 import { Evaluate } from '../evaluator.mts';
 import { signaturesInView, BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
-import { ArgumentListEvaluation } from './all.mts';
+import { ArgumentListEvaluation, GenericClassDeclarationOf } from './all.mts';
 import { isNumericLiteralOperand, isSelectingOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   Assert,
@@ -50,6 +50,28 @@ function AdoptSameValueLiteral(a: Value, b: Value, nodes: ParseNode.Arguments): 
     leftNode: nodes[0] as ParseNode, rightNode: nodes[1] as ParseNode,
   });
   return adopted ? [adopted.left, adopted.right] : undefined;
+}
+
+/**
+ * The class a call converts its one argument to, where _func_ denotes a typed
+ * class (#sec-typed-classes): a typed class constructor, a specialization of a
+ * generic one, or a Type Object whose type is one of those (Question AI, AI1).
+ * A generic class's own constructor is the family's, and denotes no class a
+ * value can be converted to.
+ */
+function TypedClassConversionTarget(func: ObjectValue): TypeRecord | undefined {
+  if ((func as { IsClassConstructor?: Value }).IsClassConstructor === Value.true) {
+    if ((func as { TypedClass?: boolean }).TypedClass !== true || GenericClassDeclarationOf(func) !== undefined) return undefined;
+    const record = (func as { TypeRecord?: TypeRecord }).TypeRecord
+      ?? (LookupClassType(func) as { TypeRecord?: TypeRecord } | undefined)?.TypeRecord;
+    return record?.Kind === 'nominal' ? record : undefined;
+  }
+  if (!isTypeObject(func)) return undefined;
+  const record = (func as { TypeRecord?: TypeRecord }).TypeRecord;
+  const ctor = record ? ClassRecordConstructor(record) : undefined;
+  if (!(ctor instanceof ObjectValue) || (ctor as { TypedClass?: boolean }).TypedClass !== true) return undefined;
+  const applied = ((record as { Arguments?: readonly unknown[] }).Arguments ?? []).length > 0;
+  return applied || GenericClassDeclarationOf(ctor) === undefined ? record : undefined;
 }
 
 export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression, evaluatedArguments?: readonly Value[]) {
@@ -89,16 +111,17 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   }
   // Question AE, AE1: a call on a typed class with one argument is the explicit
   // conversion of the argument to the class, `argument := C`, and is evaluated
-  // as that is (#sec-explicit-conversion). A call with no argument, with
-  // several, with a spread or a named argument, an optional call and a tagged
-  // template keep ECMA-262's TypeError, as a call on any other class does.
-  if (surroundingAgent.feature('runtime-types') && !evaluatedArguments && callExpression?.type === 'CallExpression'
+  // as that is (#sec-explicit-conversion). Question AI, AI1: whatever spells the
+  // class - its name or a value alias of it, a type alias, an application of a
+  // generic class or an alias of one - and in an optional call. A call with no
+  // argument, with several, with a spread or a named argument, and a tagged
+  // template keep the behaviour they had, as a call on any other class does.
+  if (surroundingAgent.feature('runtime-types') && !evaluatedArguments
+      && (callExpression?.type === 'CallExpression' || callExpression?.type === 'OptionalExpression')
       && Array.isArray(args) && args.length === 1 && func instanceof ObjectValue) {
     const operand = args[0] as ParseNode;
-    const record = (func as { TypeRecord?: TypeRecord }).TypeRecord;
-    if (operand.type !== 'AssignmentRestElement' && operand.type !== 'NamedArgument'
-        && (func as { IsClassConstructor?: Value }).IsClassConstructor === Value.true
-        && (func as { TypedClass?: boolean }).TypedClass === true && record?.Kind === 'nominal') {
+    const record = operand.type !== 'AssignmentRestElement' && operand.type !== 'NamedArgument' ? TypedClassConversionTarget(func) : undefined;
+    if (record) {
       const value = Q(yield* GetValue(Q(yield* Evaluate(operand as ParseNode.AssignmentExpressionOrHigher))));
       return Q(yield* ConvertOperandValue(operand, value, record));
     }

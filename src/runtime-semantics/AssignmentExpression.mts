@@ -20,6 +20,7 @@ import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '
 import { isArrayIndex } from '../abstract-ops/all.mts';
 import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
 import { ArraySpanBackingOf } from '../abstract-ops/array-view.mts';
+import { AdoptIntegerContextOperand } from '../type-system/arithmetic.mts';
 import {
   NamedEvaluation,
   ApplyStringOrNumericBinaryOperator,
@@ -485,7 +486,16 @@ export function* Evaluate_AssignmentExpression({
     // `uint8` is still refused, and now for the reason the desugaring gives
     // rather than for the operands failing to mix.
     let operand = rval;
-    if (lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)) {
+    // A constant operand is the integer it writes, as it is beside the integer
+    // in `x + c` (`AdoptIntegerContextOperand`): past 2**53 the Number it
+    // evaluated to is another value, and `x += 2 ** 53 + 1` for a `uint64` held
+    // by an untyped `x` added ...992 where `x + (2 ** 53 + 1)` adds ...993.
+    const exact = lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)
+      && isNumericLiteralOperand(AssignmentExpression)
+      ? AdoptIntegerContextOperand(lval, rval, { left: false, right: true, rightNode: AssignmentExpression }) : undefined;
+    if (exact) {
+      operand = exact.right;
+    } else if (lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)) {
       // CHECKED, so a value the type cannot hold is a RangeError rather than a
       // silent wrap: the plain conversion took `a += 300` at a `uint8` to 44,
       // which is the truncation the design refuses everywhere else.

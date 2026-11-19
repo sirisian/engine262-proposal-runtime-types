@@ -49,6 +49,23 @@ export function IntegerContextOperandValue(node: object): bigint | undefined {
 }
 
 /**
+ * Question AN, AN1: the integer a literal or a constant operand writes, where the
+ * checker saw it compared with an operand it knew to be of the `bigint` type, in
+ * an equality or ordered comparison, a `case` label or the original
+ * `Object.is`. The spec: "`bigint` takes a plain integer literal like any other
+ * numeric type", and in a comparison a literal "still takes the other operand's
+ * type". The run time reads it only beside a BigInt (`AdoptLiteralOperand`), so
+ * code with no `bigint` annotation keeps JavaScript's `3n === 3` being *false*.
+ * A literal that writes no integer has no record and keeps JavaScript's mixed
+ * comparison of a BigInt with a Number.
+ */
+export const bigIntComparisonOperands = new WeakMap<object, bigint>();
+
+export function BigIntComparisonOperandValue(node: object): bigint | undefined {
+  return bigIntComparisonOperands.get(node);
+}
+
+/**
  * The operand a selecting expression produced when it was last evaluated: the
  * arm of a conditional, or the operand of `||`, `&&` or `??` whose value it
  * returned. #sec-contextual-types retains a position's context "through

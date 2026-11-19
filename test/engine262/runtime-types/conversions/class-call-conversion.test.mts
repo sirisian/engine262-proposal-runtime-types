@@ -83,9 +83,8 @@ test('a call with no argument or several is still refused, and says what convert
       message: 'a typed class constructor cannot be invoked without new, except with one argument, which it converts',
     });
   }
-  // An optional call and a tagged template are not the conversion.
-  expect(outcome(`${V} V?.({ x: 1 });`)).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call',
-    message: 'a typed class constructor cannot be invoked without new' });
+  // A tagged template is not the conversion. An optional call is (Question AI, AI1):
+  // `class-call-spellings.test.mts`.
   expect(outcome(`${V} V\`a\`;`)).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
 });
 
@@ -95,9 +94,10 @@ test('a class that is not typed, or is generic, keeps the call refused', () => {
   // A class annotated only on a method or a static field is not typed.
   expect(outcome('class C { m(): uint8 { return 1; } } C(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
   expect(outcome('class S { static n: uint8 = 0; } S(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
-  // A generic class's constructor is the family's.
+  // A generic class's constructor is the family's. An application of it names one class, and a
+  // call on it converts (Question AI, AI1), here through the constructor as `1 := Box.<uint8>` does.
   expect(outcome('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } Box(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
-  expect(outcome('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } Box.<uint8>(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
+  expect(evaluated('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } String(Box.<uint8>(1).v);')).toBe('1');
   expectThrownKind('class Box<T: type> { v: T; } const f: any = Box; f({ v: 1 });', 'TypeError');
 });
 

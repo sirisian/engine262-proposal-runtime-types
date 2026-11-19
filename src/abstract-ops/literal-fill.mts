@@ -3,14 +3,15 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import type { ClassFieldDefinitionRecord } from '../runtime-semantics/ClassFieldDefinitionEvaluation.mts';
-import { TakePendingCalleeContext } from '../type-system/runtime.mts';
+import { DefaultValueOf, TakePendingCalleeContext } from '../type-system/runtime.mts';
+import { LiteralTextValueAt } from '../static-semantics/NumericValue.mts';
 import { PlanOrdinaryNominalConversion } from './scalar-rest-storage.mts';
 import { ConvertValue, ConversionTargetConstructor } from './runtime-types.mts';
-import { isECMAScriptFunctionObject } from './function-operations.mts';
+import { isECMAScriptFunctionObject, SealTypedInstance } from './function-operations.mts';
 import {
-  Construct, Get, Throw, IsCallable, OrdinaryInboundConversions, OrdinaryGetOwnProperty, OrdinaryCreateFromConstructor,
+  Construct, CreateDataPropertyOrThrow, Get, Throw, IsCallable, OrdinaryInboundConversions, OrdinaryGetOwnProperty, OrdinaryCreateFromConstructor,
   InitializeInstanceElements, RequireFieldsInitialized, UninitializedFieldsOf,
-  Descriptor, JSStringValue, ObjectValue, PrivateName, Value, type FunctionObject, type ECMAScriptFunctionObject,
+  Descriptor, JSStringValue, NumberValue, ObjectValue, PrivateName, Value, isTypedNumber, type FunctionObject, type ECMAScriptFunctionObject,
 } from '#self';
 
 /**
@@ -44,10 +45,14 @@ import {
  * read from the object it makes; that object is reachable from nothing else.
  */
 
-/** A field the literal names: the value it gave and the expression that gave it. */
+/**
+ * A field the literal names: the value it gave and the expression that gave
+ * it, or, for a parsed object, how its value converts to the field's type.
+ */
 interface SuppliedField {
   readonly value: Value;
-  readonly node: ParseNode;
+  readonly node?: ParseNode;
+  readonly convert?: (fieldType: TypeRecord | undefined) => ValueEvaluator;
 }
 
 interface LiteralFill {
@@ -78,18 +83,20 @@ export function SuppliedFieldOf(receiver: object, name: unknown): SuppliedField 
 }
 
 /**
- * The supplied value at the field's type. A nested object literal at a field
- * whose type is a class fills that class in turn, as the outer literal fills
- * this one; anything else converts as a member of a structural target does.
+ * The supplied value at the field's type. A nested literal fills at the
+ * field's type as the outer literal fills this one (`ConvertOperandValue`);
+ * anything else converts as a member of a structural target does.
  */
 export function* ConvertSuppliedField(supplied: SuppliedField, fieldType: TypeRecord | undefined): ValueEvaluator {
-  if (fieldType === undefined) return supplied.value;
-  const nested = objectLiteralOf(supplied.node);
-  if (nested && supplied.value instanceof ObjectValue) {
-    const filled = Q(yield* FillClassFromObjectLiteral(nested, supplied.value, fieldType));
-    if (filled !== undefined) return filled;
+  if (supplied.convert) return Q(yield* supplied.convert(fieldType));
+  if (fieldType === undefined || supplied.node === undefined) return supplied.value;
+  // A literal whose field type the checker did not know, as through a type
+  // parameter, is read from its text as where the class is written.
+  if (supplied.value instanceof NumberValue && !isTypedNumber(supplied.value)) {
+    const exact = LiteralTextValueAt(supplied.node, fieldType);
+    if (exact !== undefined) return Q(exact);
   }
-  return Q(yield* ConvertValue(supplied.value, fieldType));
+  return Q(yield* ConvertOperandValue(supplied.node, supplied.value, fieldType));
 }
 
 /**
@@ -99,12 +106,69 @@ export function* ConvertSuppliedField(supplied: SuppliedField, fieldType: TypeRe
  * typed class with one argument is the same operation, and is evaluated by it.
  */
 export function* ConvertOperandValue(operand: ParseNode, value: Value, t: TypeRecord): ValueEvaluator {
-  const literal = objectLiteralOf(operand);
-  if (literal && value instanceof ObjectValue) {
-    const filled = Q(yield* FillClassFromObjectLiteral(literal, value, t));
-    if (filled !== undefined) return filled;
-  }
+  const filled = Q(yield* FillFromLiteral(operand, value, t, 0));
+  if (filled !== undefined) return filled;
   return Q(yield* ConvertValue(value, t));
+}
+
+/**
+ * Question AJ, AJ2: the class a literal converted to _t_ fills. A class fills
+ * itself. Of a union, the one class among members that are otherwise `null`
+ * and `undefined` fills, as Swift promotes a value to an optional: `{ x: 1 } :=
+ * (V | null)` is a `V`. A union of two classes names no one class a literal
+ * fills, and the literal converts as a structural value, which it cannot.
+ */
+function FilledClassOf(t: TypeRecord): TypeRecord | undefined {
+  if (t.Kind === 'nominal') return t;
+  if (t.Kind !== 'union') return undefined;
+  const others = (t.Members as readonly TypeRecord[]).filter((m) => !(m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')));
+  return others.length === 1 && others[0]!.Kind === 'nominal' ? others[0] : undefined;
+}
+
+/** The type of the element at _index_ of an array or tuple type, where one type is that position's. */
+function ElementTypeAt(t: TypeRecord, index: number): TypeRecord | undefined {
+  if (t.Kind === 'array') return t.Element;
+  if (t.Kind !== 'tuple') return undefined;
+  const elements = (t as unknown as { Elements: readonly { Type: TypeRecord, Rest?: boolean, Spread?: boolean }[] }).Elements;
+  if (elements.some((e) => e.Rest || e.Spread)) return undefined;
+  return elements[index]?.Type;
+}
+
+/**
+ * Question AJ, AJ2: what a literal operand fills at _t_, or undefined where it
+ * fills nothing and converts as any value does. An object literal fills the
+ * class _t_ names (`FilledClassOf`). An array literal at an array or a tuple
+ * type passes each of its elements to its position's type, so `[{ x: 1 }] :=
+ * [].<V>` fills a `V` at index 0, as a field of a class type is filled, and
+ * the array then converts with the elements it now holds. A position after a
+ * spread is not known from the literal and is left as it is.
+ */
+function* FillFromLiteral(operand: ParseNode, value: Value, t: TypeRecord, depth: number): PlainEvaluator<Value | undefined> {
+  if (!(value instanceof ObjectValue) || depth > 64) return undefined;
+  const literal = objectLiteralOf(operand);
+  if (literal) {
+    const target = FilledClassOf(t);
+    if (target === undefined) return undefined;
+    return Q(yield* FillClassFromObjectLiteral(literal, value, target));
+  }
+  let array: ParseNode | undefined = operand;
+  while (array?.type === 'ParenthesizedExpression') array = array.Expression;
+  if (array?.type !== 'ArrayLiteral' || (t.Kind !== 'array' && t.Kind !== 'tuple')) return undefined;
+  let index = 0;
+  for (const element of array.ElementList) {
+    if (element.type === 'SpreadElement') break;
+    if (element.type !== 'Elision') {
+      const elementType = ElementTypeAt(t, index);
+      if (elementType !== undefined) {
+        const key = Value(String(index));
+        const current = Q(yield* Get(value, key));
+        const filled = Q(yield* FillFromLiteral(element, current, elementType, depth + 1));
+        if (filled !== undefined) Q(yield* CreateDataPropertyOrThrow(value, key, filled));
+      }
+    }
+    index += 1;
+  }
+  return undefined;
 }
 
 /** The object literal _node_ is, under its parentheses. */
@@ -124,6 +188,8 @@ type ChainVerdict =
     readonly readonlyWriters: ReadonlyMap<string, string>,
     /** The class of the chain that declares a constructor, where the class is a value class that has one. */
     readonly constructedBy: string | undefined,
+    /** Each public field with no initializer, and the type it declares. */
+    readonly uninitialized: ReadonlyMap<string, TypeRecord | undefined>,
   }
   | { readonly refused: string, readonly detail?: string };
 
@@ -136,6 +202,7 @@ type ChainVerdict =
 function* fillableChain(ctor: FunctionObject): PlainEvaluator<ChainVerdict> {
   const fields = new Set<string>();
   const readonlyWriters = new Map<string, string>();
+  const uninitialized = new Map<string, TypeRecord | undefined>();
   // Every class of a value class's chain is one (a class over a value class is
   // declared `value`), so the class itself answers for the chain.
   const valueClass = (ctor as { ValueClass?: boolean }).ValueClass === true;
@@ -169,9 +236,14 @@ function* fillableChain(ctor: FunctionObject): PlainEvaluator<ChainVerdict> {
       if (field.Name instanceof JSStringValue) {
         fields.add(field.Name.stringValue());
         if (field.Readonly && declaresConstructor) readonlyWriters.set(field.Name.stringValue(), displayClass(at));
+        if (field.Initializer === undefined) {
+          uninitialized.set(field.Name.stringValue(), (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject?.TypeRecord);
+        } else {
+          uninitialized.delete(field.Name.stringValue());
+        }
       }
     }
-    if (slots.ConstructorKind === 'base') return { fields, readonlyWriters, constructedBy };
+    if (slots.ConstructorKind === 'base') return { fields, readonlyWriters, constructedBy, uninitialized };
     at = Q(yield* (at as ObjectValue).GetPrototypeOf());
   }
   return { refused: 'base' };
@@ -299,7 +371,7 @@ function* ConstructWithoutConstructors(F: FunctionObject): PlainEvaluator<Object
   }
   Q(RequireFieldsInitialized(F, instance));
   if ((F as { SealInstances?: boolean }).SealInstances) {
-    Q(yield* instance.PreventExtensions());
+    Q(yield* SealTypedInstance(instance));
   }
   return instance;
 }
@@ -315,4 +387,69 @@ function* initializeChain(F: FunctionObject, newTarget: FunctionObject): PlainEv
   }
   Q(yield* InitializeInstanceElements(instance, F as ECMAScriptFunctionObject));
   return instance;
+}
+
+/**
+ * Question AK, AK2: `JSON.parse.<C>` builds a class by the literal's rule
+ * (#sec-object-literal-conversion), the two ways to make an instance from named
+ * fields agreeing. A class with no constructor in its chain, and a value class,
+ * is filled from the parsed object: each key names a field and its value
+ * converts to that field's type as the parse converts any member (_coerce_), a
+ * field the object omits takes its initializer or its type's default, and a
+ * key no field has is refused, as is an omitted field with neither. A class held
+ * by reference that declares a constructor says how it is made, and data from
+ * outside does not go around it: it is built only by a conversion it declares
+ * from the parsed object, as Kotlin's serialization runs a class's `init`
+ * blocks and Rust's serde builds only a type that opts in. Undefined where _t_
+ * names no class.
+ */
+export function* FillClassFromParsedObject(value: ObjectValue, t: TypeRecord, path: string,
+  coerce: (member: Value, fieldType: TypeRecord | undefined, key: string) => ValueEvaluator): PlainEvaluator<Value | undefined> {
+  if (t.Kind !== 'nominal') return undefined;
+  const ctor = Q(yield* ConversionTargetConstructor(t));
+  if (ctor === undefined || !(ctor instanceof ObjectValue) || (ctor as { IsClassConstructor?: Value }).IsClassConstructor !== Value.true) return undefined;
+  const where = path === '' ? '' : `at ${path}: `;
+  const chain = Q(yield* fillableChain(ctor as FunctionObject));
+  if ('refused' in chain || OrdinaryInboundConversions(t).some((entry) => IsCallable(entry.Function))) {
+    const planned = Q(yield* PlanOrdinaryNominalConversion(value, t));
+    if (planned !== undefined) return Q(yield* ConvertValue(value, t));
+    if ('refused' in chain) {
+      const why = chain.refused === 'constructor' ? `${chain.detail ?? 'its class'} declares a constructor`
+        : chain.refused === 'private' ? `its field ${chain.detail ?? ''} is private`
+          : chain.refused === 'protected' ? `its field ${chain.detail ?? ''} is protected`
+            : chain.refused === 'accessor' ? `its field ${chain.detail ?? ''} is an accessor`
+              : `${chain.detail ?? 'a base'} in its chain is not a class definition`;
+      return Throw.TypeError('$1', Value(`${where}a parsed object becomes ${displayType(t)} only by a conversion it declares, since ${why}`));
+    }
+  }
+  if ((ctor as { IsAbstract?: boolean }).IsAbstract) {
+    return Throw.TypeError('$1 is an abstract class and cannot be instantiated', ctor);
+  }
+  const supplied = new Map<string, SuppliedField>();
+  for (const k of Q(yield* value.OwnPropertyKeys())) {
+    if (!(k instanceof JSStringValue)) continue;
+    const key = k.stringValue();
+    if (!chain.fields.has(key)) return Throw.TypeError('$1', Value(`${where}unknown key "${key}"`));
+    const writer = chain.readonlyWriters.get(key);
+    if (writer !== undefined) {
+      return Throw.TypeError('$1', Value(`${where}${displayType(t)} is filled without running the constructor ${writer} declares, and that constructor is what writes its readonly field "${key}"`));
+    }
+    const member = Q(yield* Get(value, k));
+    supplied.set(key, { value: member, convert: (fieldType) => coerce(member, fieldType, key) });
+  }
+  for (const [key, fieldType] of chain.uninitialized) {
+    if (supplied.has(key) || fieldType === undefined) continue;
+    if (Q(yield* DefaultValueOf(fieldType)) === undefined) {
+      return Throw.TypeError('$1', Value(`${where}missing required key "${key}"`));
+    }
+  }
+  pendingFill = { fields: supplied };
+  try {
+    if (chain.constructedBy === undefined) {
+      return Q(yield* Construct(ctor as FunctionObject, [], ctor as FunctionObject));
+    }
+    return Q(yield* ConstructWithoutConstructors(ctor as FunctionObject));
+  } finally {
+    pendingFill = undefined;
+  }
 }

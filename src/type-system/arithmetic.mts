@@ -1,4 +1,4 @@
-import { NumberValue, TypedNumberValue, Value, BigIntValue, ObjectValue } from '../value.mts';
+import { BooleanValue, NumberValue, TypedNumberValue, Value, BigIntValue, ObjectValue, isTypedNumber } from '../value.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateDecimalValue, DecimalPartsInRange, isDecimalObject } from '../intrinsics/Decimal.mts';
@@ -7,8 +7,8 @@ import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
 import { exactOfLiteralText } from './exact-real.mts';
-import { IntegerContextOperandValue, ProducingOperand } from './numeric-constants.mts';
-import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, type ThrowCompletion } from '#self';
+import { BigIntComparisonOperandValue, IntegerContextOperandValue, ProducingOperand } from './numeric-constants.mts';
+import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, Z, type ThrowCompletion } from '#self';
 
 /**
  * proposal-runtime-types #sec-numeric-types-of-this-proposal: arithmetic over numeric value
@@ -251,7 +251,7 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * passes which side was written as a numeric literal, and a literal adopts the
  * other's type while any other untyped operand is a mix and throws.
  */
-export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant }): TypedNumberValue | ThrowCompletion {
+export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant, leftString?: boolean, rightString?: boolean }): TypedNumberValue | ThrowCompletion {
   // #sec-integer-operations: a shift takes its distance as
   // written - its exact value, read below - so the distance is a count, not a
   // value mixed into the left operand: any integer type may give it, and the
@@ -438,7 +438,7 @@ export function DecayEnumOperands(x: Value, y: Value): { left: Value, right: Val
  * expression produced: `-(c ? 7 / 2 : 1)` is the negation of the value
  * recorded for the arm that ran.
  */
-function integerContextOperand(node: ParseNode): bigint | undefined {
+function integerContextOperand(node: ParseNode, read: (node: object) => bigint | undefined = IntegerContextOperandValue): bigint | undefined {
   let n = node;
   let negative = false;
   for (let depth = 0; depth < 1024; depth += 1) {
@@ -455,7 +455,7 @@ function integerContextOperand(node: ParseNode): bigint | undefined {
       n = produced;
     }
   }
-  const exact = IntegerContextOperandValue(n);
+  const exact = read(n);
   return exact === undefined || !negative ? exact : -exact;
 }
 
@@ -493,6 +493,20 @@ export function AdoptIntegerContextOperand(x: Value, y: Value, literals: { left:
 }
 
 export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { left: Value, right: Value } | undefined {
+  // Question AN, AN1: beside a BigInt the checker knew to be of the `bigint`
+  // type, a literal or a constant that writes an integer is that integer, as it
+  // is in arithmetic (`BigIntComparisonOperandValue`). The record exists only
+  // where the type was known, so `3n === 3` in code that names no type keeps
+  // JavaScript's answer.
+  for (const [peer, literalOnRight] of [[x, true], [y, false]] as const) {
+    if (!(peer instanceof BigIntValue)) continue;
+    const node = literalOnRight ? literals.rightNode : literals.leftNode;
+    const other = literalOnRight ? y : x;
+    if (!node || !(other instanceof NumberValue) || isTypedNumber(other)) return undefined;
+    const integer = integerContextOperand(node, BigIntComparisonOperandValue);
+    if (integer === undefined) return undefined;
+    return literalOnRight ? { left: x, right: Z(integer) } : { left: Z(integer), right: y };
+  }
   // A decimal peer takes the literal at the exact value its source text
   // denotes, its exponent included (#sec-literalvalueintype): `0.2` beside a
   // `decimal128` is the decimal 0.2, not the double nearest it. A literal the
@@ -598,7 +612,7 @@ function arithmeticUnderlyingOf(t: TypeRecord): TypeRecord {
  */
 export type ComputedConstant = 'arithmetic' | 'bitwise';
 
-export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant }): TypeRecord | ThrowCompletion {
+export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant, leftString?: boolean, rightString?: boolean }): TypeRecord | ThrowCompletion {
   // proposal-runtime-types #sec-enums: an operand of an enum type is read at its
   // UNDERLYING type here, which is what the clause means by "an enum can be used
   // for arithmetic, indexing, and comparison without a cast" and by `comp / 32`
@@ -657,7 +671,14 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
       if (untypedIsLetConst) {
         return Throw.TypeError('a $1 holds a $2 rather than taking this position\'s $3; declare it $4 if it is never reassigned, or annotate it', Value('let'), Value('number'), Value(displayType(target)), Value('const'));
       }
-      return Throw.TypeError('a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them', Value('number'), Value(displayType(target)));
+      // The value it is: a Boolean, *null*, *undefined* and a String reach
+      // the operator as the Number ToNumeric makes of them, and the message
+      // names what the program wrote, `z * (c && 2)` with `c` *false* being a
+      // Boolean. A String arrives here already converted.
+      const untyped = xt ? y : x;
+      const written = xt ? literals?.rightString : literals?.leftString;
+      const shown = written ? 'string' : untyped instanceof BooleanValue ? 'boolean' : untyped === Value.null ? 'null' : untyped === Value.undefined ? 'undefined' : 'number';
+      return Throw.TypeError('a value of the $1 type and a $2 are different numeric types and do not mix; convert one of them', Value(shown), Value(displayType(target)));
     }
     const literalValue = payload(xt ? y : x);
     // The same of a literal that arrives with no type at all: it is a value

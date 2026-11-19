@@ -1,14 +1,14 @@
 import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextRealLiteralComponent, ComplexContextLiteralComponent, type DeferredLiteral } from '../type-system/check.mts';
+import { BigIntContextLiteralValue, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextRealLiteralComponent, ComplexContextLiteralComponent, type DeferredLiteral } from '../type-system/check.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import type { ThrowCompletion } from '../completion.mts';
-import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { CreateDecimalValue, DecimalPartsInRange, ParseDecimalDigits, decimalDivide } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Binary128ToFloat128 } from '../intrinsics/Float128.mts';
-import { fromDecimal as Float128FromDecimal } from '../intrinsics/Float128Arithmetic.mts';
+import { fromDecimal as Float128FromDecimal, divide as Float128Divide } from '../intrinsics/Float128Arithmetic.mts';
 import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
 import { surroundingAgent } from '#self';
 
@@ -39,8 +39,9 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
   if (realComponent !== undefined && typeof node.value === 'number') {
     return CreateComplexValue(Number(node.value), 0, realComponent, surroundingAgent.currentRealmRecord);
   }
-  if (typeof node.value === 'number' && typeof node.SourceText === 'string' && IsBigIntContextLiteral(node)) {
-    return Value(BigInt(node.SourceText.replace(/_/g, '')));
+  const integer = typeof node.value === 'number' ? BigIntContextLiteralValue(node) : undefined;
+  if (integer !== undefined) {
+    return Value(integer);
   }
   // A literal the checker read at a DECIMAL type evaluates to the decimal its
   // SOURCE TEXT denotes, and the reason is sharper than bigint's: the double is
@@ -140,13 +141,29 @@ export function DeferredLiteralValue(deferred: DeferredLiteral, t: TypeRecord): 
     case 'decimal64':
     case 'decimal128': {
       const width = Number(t.Name.slice('decimal'.length)) as 32 | 64 | 128;
-      return deferred.decimal === null ? undefined
-        : CreateDecimalValue(deferred.decimal.sig, deferred.decimal.exp, width, realm, t);
+      if (deferred.decimal !== null) return CreateDecimalValue(deferred.decimal.sig, deferred.decimal.exp, width, realm, t);
+      // A constant that divides is the decimal quotient of its exact fraction,
+      // rounded once in the type, as `1 / 3 := decimal128` is: through a type
+      // parameter it was the double's third written out to 34 digits.
+      const rational = deferred.rational;
+      if (rational === null || !DecimalPartsInRange({ significand: rational.num, exponent: 0 }, width)
+        || !DecimalPartsInRange({ significand: rational.den, exponent: 0 }, width)) return undefined;
+      const quotient = decimalDivide(CreateDecimalValue(rational.num, 0, width, realm), CreateDecimalValue(rational.den, 0, width, realm));
+      if (typeof quotient !== 'object' || quotient.parts.special !== undefined) return undefined;
+      return CreateDecimalValue(quotient.parts.significand, quotient.parts.exponent, width, realm, t);
     }
     case 'float16':
     case 'float32':
     case 'float128': {
       const literal = deferred.literal;
+      // At `float128`, a constant is its exact fraction rounded once, as `1 / 3
+      // := float128` is; through a type parameter it was the double's third.
+      // Each integer of the fraction is exact in the format up to 2**113.
+      const rational = deferred.rational;
+      if (literal === null && t.Name === 'float128' && rational !== null
+          && (rational.num < 0n ? -rational.num : rational.num) < 2n ** 113n && rational.den < 2n ** 113n) {
+        return Binary128ToFloat128(Float128Divide(Float128FromDecimal(rational.num, 0), Float128FromDecimal(rational.den, 0)), realm);
+      }
       if (literal === null) return undefined;
       const digits = ParseDecimalDigits(literal.text);
       if (t.Name === 'float128') {
@@ -178,4 +195,39 @@ function RoundDecimalToBinaryFloat(significand: bigint, exponent: number, width:
   return exponent >= 0
     ? roundRationalToBinaryFloat(significand * 10n ** BigInt(exponent), 1n, width)
     : roundRationalToBinaryFloat(significand, 10n ** BigInt(-exponent), width);
+}
+
+/**
+ * The value a numeric literal written as a member of an object literal has at
+ * its field's type where the checker did not know that type, as through a
+ * type parameter, `{ n: 9007199254740993 } := T`: read from the literal's
+ * source text, as the checker reads it where the class is written, so a value
+ * past 2**53 is not the double the lexer made of it. Undefined where _node_
+ * is not such a literal or the type reads nothing from its text.
+ */
+export function LiteralTextValueAt(node: ParseNode, t: TypeRecord): Value | ThrowCompletion | undefined {
+  let core: ParseNode = node;
+  let negative = false;
+  for (let depth = 0; depth < 64; depth += 1) {
+    if (core.type === 'ParenthesizedExpression') core = core.Expression;
+    else if (core.type === 'UnaryExpression' && (core.operator === '-' || core.operator === '+')) {
+      if (core.operator === '-') negative = !negative;
+      core = core.UnaryExpression;
+    } else break;
+  }
+  if (core.type !== 'NumericLiteral' || typeof core.value !== 'number' || typeof core.SourceText !== 'string') return undefined;
+  const text = core.SourceText.replace(/_/g, '');
+  const radix = /^0[xXoObB][0-9a-fA-F]+$/.test(text) ? BigInt(text) : undefined;
+  const digits = radix === undefined ? ParseDecimalDigits(text) : { significand: radix, exponent: 0 };
+  if (digits === undefined) return undefined;
+  const sig = negative ? -digits.significand : digits.significand;
+  const scale = digits.exponent >= 0 ? 1n : 10n ** BigInt(-digits.exponent);
+  const whole = digits.exponent >= 0 ? sig * 10n ** BigInt(Math.min(digits.exponent, 4096)) : sig;
+  const integer = digits.exponent >= 0 && digits.exponent <= 4096 ? whole : (sig % scale === 0n ? sig / scale : null);
+  return DeferredLiteralValue({
+    integer,
+    rational: digits.exponent <= 4096 ? { num: whole, den: scale } : null,
+    decimal: { sig, exp: digits.exponent },
+    literal: { text, negative },
+  }, t);
 }
