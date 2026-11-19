@@ -19,6 +19,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-vi
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
   TypedNumberValue, TypedStringValue, TypedBigIntValue, TypedSymbolValue, TypedBooleanValue, ReferenceValue, isTypedNumber, unwrapToNumber,
+  TypedString, TypedBigInt,
   type Descriptor, type PropertyKeyValue, type PrivateName } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
@@ -769,8 +770,10 @@ export function* BindTypeParameterTyped(
   // The declared type is the domain (`S: uint32`) or, as some forms record
   // it, the constraint; a value already of a typed kind is not converted twice.
   const declaredNode = p?.TypeParameterDomain ?? p?.TypeParameterConstraint ?? undefined;
+  // An enumerator is typed, but a value of its enum rather than of the domain,
+  // and is converted as `f(E.A)`'s binding is (ValueAtUnderlyingType).
   if (p?.IsValueParameter && declaredNode && record.Kind === 'literal'
-    && !((record as { Value?: unknown }).Value instanceof TypedNumberValue)) {
+    && (!((record as { Value?: unknown }).Value instanceof TypedNumberValue) || IsEnumeratorValue((record as { Value: Value }).Value))) {
     pushTypeParameterFrame(frame);
     let domain;
     try {
@@ -781,7 +784,8 @@ export function* BindTypeParameterTyped(
     if (domain.Type === 'normal') {
       const converted = EnsureCompletion(yield* CheckedConvertValue((record as { Value: Value }).Value, domain.Value as never));
       if (converted.Type === 'normal') {
-        bound = { ...record, Value: converted.Value as Value, Base: domain.Value as TypeRecord } as TypeRecord;
+        const at = domain.Value as TypeRecord;
+        bound = { ...record, Value: at.Kind === 'primitive' ? ValueAtUnderlyingType(converted.Value as Value, at) : converted.Value as Value, Base: at } as TypeRecord;
       }
     }
   }
@@ -2442,7 +2446,7 @@ export function* InferGenericBindingsFrom(
       if (bound !== null && bound.Kind === 'literal' && constraint !== null && constraint.Kind === 'primitive') {
         const converted = EnsureCompletion(yield* ConvertValue(bound.Value, constraint));
         if (converted.Type === 'normal') {
-          bound = { ...bound, Value: converted.Value as Value, Base: constraint } as never;
+          bound = { ...bound, Value: ValueAtUnderlyingType(converted.Value as Value, constraint), Base: constraint } as never;
         }
       }
       if (bound === null) {
@@ -2783,6 +2787,27 @@ function* arrayElementLiteralTuple(value: Value): PlainEvaluator<TypeRecord | nu
     Kind: 'tuple',
     Elements: elements.map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })),
   } as TypeRecord);
+}
+
+/**
+ * An enumerator read as a value of its enum's underlying type _t_. Converting
+ * an enumerator to that type leaves it the enumerator, the enum being a subtype
+ * (#sec-enums), so a value parameter of the underlying type bound from one held
+ * a value of the enum, and a formal typed by the parameter refused the very
+ * argument that bound it: `f(E.A)` for `f<N: uint8>(n: N)` and `enum E :
+ * uint8`. The binding is a value of the parameter's own type, as `f(3)` binds.
+ */
+function IsEnumeratorValue(value: Value): boolean {
+  const carried = CarriedTypeRecordOf(value);
+  return carried?.Kind === 'nominal' && carried.EnumMembers !== undefined && carried.Underlying !== undefined;
+}
+
+function ValueAtUnderlyingType(value: Value, t: TypeRecord): Value {
+  if (!IsEnumeratorValue(value)) return value;
+  if (value instanceof TypedNumberValue) return new TypedNumberValue(value.value, t);
+  if (value instanceof TypedStringValue) return TypedString(value.stringValue(), t);
+  if (value instanceof TypedBigIntValue) return TypedBigInt(R(value) as bigint, t);
+  return value;
 }
 
 /** The literal type of a value (its value with its widened base), used for literal inference. */

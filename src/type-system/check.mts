@@ -2530,7 +2530,7 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
       //
       // rational.md states the rule and gives this case as its example: "With an
       // `int32` context the same `1 / 3` is integer division and gives `0`; in
-      // an untyped context it is `Number` division and gives `0.333â€¦`. The
+      // an untyped context it is `Number` division and gives `0.333...`. The
       // literal never converts a typed value - it just adopts the type the
       // context asks for."
       //
@@ -23426,12 +23426,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // decimal64`, as C# writes `(decimal)Math.Pow(2, 0.5)`.
     // The same integer is taken exactly at a `float128` and at a rational,
     // each of which holds every `int32`: `q * (6 | 1)` is `q * 7`, as `const q:
-    // float128 = 6 | 1` is 7, where it was a TypeError beside the operand.
+    // float128 = 6 | 1` is 7, where it was a TypeError beside the operand. A
+    // fractional power is refused at a rational as at a decimal.
     if (contextual && contextual.Kind === 'primitive'
         && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128' || contextual.Name === 'rational')
         && node.type !== 'NumericLiteral' && !conversionOperands.has(node) && isNumericConstantExpression(node)) {
       const width = decimalWidthOf(contextual as TypeRecord);
-      const fractional = width !== undefined ? fractionalPowerIn(node) : null;
+      // A rational's power takes an integer exponent too (#table-family-
+      // operations), so the double's digits are refused at a rational as at a
+      // decimal: `const q: rational64 = 2 ** 0.5` was the rational of the
+      // double nearest the root, 6369051672525773/4503599627370496.
+      const fractional = width !== undefined || contextual.Name === 'rational' ? fractionalPowerIn(node) : null;
       if (fractional) {
         reportType('rt-numeric-operator', fractional, '$1 with a fractional exponent is not defined for $2; convert a Number to it explicitly with :=', Value('**'), Value(displayType(contextual as TypeRecord)));
         return contextual;
@@ -35996,7 +36001,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A single literal position is left alone, as the string path above
         // leaves it, and zero is left alone because a bare `0` pattern matches
         // either zero while their literal types are distinct.
-        if (numeric !== null && numeric !== 0 && positionType && !mentionsTypeParameter(positionType)
+        // A clause's position is the subject narrowed by the clause's own
+        // pattern, so `when 1` over a `uint8` sees the literal `1` whose base
+        // is `uint8`, and `when 1 or 2` the union of two such literals. The
+        // literal takes that base, as it takes `uint8` in `k is 1`; reading
+        // the position as literals of `number` refused `when 1 or 2`, and
+        // recording no type left `when 1` a Number when the clause ran, so it
+        // matched no `uint8` 1.
+        const literalArms = positionType?.Kind === 'literal' ? [positionType]
+          : positionType?.Kind === 'union' && positionType.Members.length > 0 && positionType.Members.every((m) => m.Kind === 'literal')
+            ? positionType.Members : [];
+        const armBase = (literalArms[0] as { Base?: TypeRecord } | undefined)?.Base;
+        const narrowedBase = armBase && armBase.Kind === 'primitive' && isNumericValueTypeName(armBase.Name)
+          && !['number', 'bigint'].includes(armBase.Name)
+          && literalArms.every((arm) => !!(arm as { Base?: TypeRecord }).Base && SameType((arm as { Base: TypeRecord }).Base, armBase))
+          ? armBase : undefined;
+        if (numeric !== null && numeric !== 0 && positionType && !mentionsTypeParameter(positionType) && !narrowedBase
             && positionType.Kind === 'union' && positionType.Members.length > 0 && positionType.Members.every((m) => m.Kind === 'literal')) {
           const literalType = staticType(pattern.Literal);
           if (literalType && literalType.Kind === 'literal' && NarrowTo(positionType, literalType) === empty) {
@@ -36010,7 +36030,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return neverType;
         }
         if (numeric !== null && positionType) {
-          const numericTypes = (positionType.Kind === 'union' ? positionType.Members : [positionType])
+          const at = narrowedBase ?? positionType;
+          const numericTypes = (at.Kind === 'union' ? at.Members : [at])
             .filter((type) => type.Kind === 'primitive' && (isNumericValueTypeName(type.Name) || type.Name === 'number' || type.Name === 'bigint'));
           if (numericTypes.length === 1) {
             patternLiteralTypes.set(pattern, numericTypes[0]);

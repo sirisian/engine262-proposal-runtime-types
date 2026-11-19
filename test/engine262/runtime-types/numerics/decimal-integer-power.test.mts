@@ -60,3 +60,16 @@ test('a constant with a negative exponent is computed in the type', () => {
   expectStaticTypeError('const e: decimal64 = 2 ** 0.5;');
   expect(evaluated(`${D64}2; String(d * ((2 ** 0.5) := decimal64));`)).toBe('2.828427124746190');
 });
+
+test('a fractional power in a constant is refused at a rational, as at a decimal', () => {
+  // A rational's power takes an integer exponent (#table-family-operations), so
+  // the double's digits do not enter it unnoticed: `2 ** 0.5` at a `rational64`
+  // was 6369051672525773/4503599627370496.
+  for (const source of ['const q: rational64 = 2 ** 0.5;', 'const q: rational64 = 4 ** 0.5;',
+    'function g(q: rational64) { return q * 2 ** 0.5; }']) {
+    expectStaticTypeError(source);
+  }
+  // Written as a conversion of the Number, it is the program's choice.
+  expect(evaluated('const q = (2 ** 0.5) := rational64; String(q);')).toBe('6369051672525773/4503599627370496');
+  expect(evaluated('const q: rational64 = 2 ** -1; String(q);')).toBe('1/2');
+});
