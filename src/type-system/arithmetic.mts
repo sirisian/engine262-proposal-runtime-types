@@ -270,9 +270,21 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
   let count = y;
   if (countOperator && x instanceof TypedNumberValue
       && (y instanceof BooleanValue || y === Value.null || y === Value.undefined)) {
-    const converted = y === Value.true ? 1 : y === Value.undefined ? NaN : 0;
-    if (Number.isInteger(converted)) {
-      count = Value(converted);
+    count = Value(y === Value.true ? 1 : y === Value.undefined ? NaN : 0);
+  }
+  // A count of an integer type is a value whose Number is an integer, so one
+  // that holds none - 2.5, NaN or an infinity, whether written as a Number or
+  // reached as the Number ToNumeric makes of a String or *undefined* - is a
+  // value of the count's kind outside the operation's domain, and a
+  // *RangeError*, as a negative count is. RequireType states the rule: a
+  // value that survives no conversion is a question of range, one of another
+  // type a question of type (Question AY). It was the TypeError of two types
+  // that do not mix, which a Number holding an integer does as a count.
+  if (countOperator && x instanceof TypedNumberValue && count instanceof NumberValue && !(count instanceof TypedNumberValue)
+      && !Number.isInteger(payload(count))) {
+    const xt = arithmeticUnderlyingOf(x.TypeRecord as TypeRecord);
+    if (xt.Kind === 'primitive' && (xt.Name === 'int' || xt.Name === 'uint')) {
+      return Throw.RangeError(op === '**' ? 'the exponent $1 is not an integer' : 'the shift distance $1 is not an integer', count) as ThrowCompletion;
     }
   }
   const shiftTarget = countOperator && x instanceof TypedNumberValue

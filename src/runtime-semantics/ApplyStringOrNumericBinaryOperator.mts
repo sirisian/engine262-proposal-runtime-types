@@ -190,8 +190,12 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       }
     }
     const exponent = isTypedNumber(rval) ? rval.value : R(rval);
+    // A Number is an exponent where it holds an integer; one that holds none
+    // is a value of the exponent's kind out of the power's domain, a
+    // *RangeError* by RequireType's rule (Question AY), where an exponent of a
+    // type not admitted, above, is a *TypeError*.
     if (typeof exponent === 'number' && !Number.isInteger(exponent)) {
-      return Throw.TypeError('a rational exponent must be an integer');
+      return Throw.RangeError('the exponent $1 is not an integer', rval);
     }
     const result = rationalPow(lval, BigInt(exponent), surroundingAgent.currentRealmRecord);
     return 'zero' in result ? Throw.RangeError('a zero rational to a negative power') : result;
@@ -215,14 +219,16 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     } else if (isDecimalObject(rval)) {
       const significand = rval.DecimalSignificand;
       const scale = rval.DecimalExponent;
+      // A decimal holding no integer is out of the power's domain, a
+      // *RangeError*, as a Number holding none is below (Question AY).
       if (rval.DecimalSpecial !== undefined || (scale < 0 && significand % 10n ** BigInt(-scale) !== 0n)) {
-        return Throw.TypeError('a decimal exponent must be an integer');
+        return Throw.RangeError('the exponent $1 is not an integer', rval);
       }
       exponent = scale < 0 ? significand / 10n ** BigInt(-scale) : significand * 10n ** BigInt(scale);
     } else {
       const number = R(rval as NumberValue);
       if (!Number.isInteger(number)) {
-        return Throw.TypeError('a decimal exponent must be an integer');
+        return Throw.RangeError('the exponent $1 is not an integer', rval);
       }
       exponent = BigInt(number);
     }
@@ -440,8 +446,10 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         return q;
       }
       case '**': {
+        // A rational exponent is admitted where it holds an integer, so one
+        // that holds none is a *RangeError* (Question AY).
         if (rval.RationalDenominator !== 1n) {
-          return Throw.TypeError('a rational exponent must be an integer');
+          return Throw.RangeError('the exponent $1 is not an integer', rval);
         }
         const p = rationalPow(lval, rval.RationalNumerator, realmRec);
         if ('zero' in p) {

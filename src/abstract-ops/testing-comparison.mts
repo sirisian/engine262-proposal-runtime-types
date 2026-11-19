@@ -1198,6 +1198,18 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
     if (xm !== undefined && ym !== undefined) {
       return exactNumericEquals(xm, ym);
     }
+    // An Object beside one is the primitive its ToPrimitive gives, and the
+    // comparison is made again, as beside a Number (steps 10 and 11 below,
+    // which do not see these values): `uint8(3) == { valueOf() { return 3; }
+    // }` and `decimal64(3) == new Number(3)` were *false*, with `valueOf`
+    // never called (Question AX).
+    const ordinaryObject = (v: Value) => v instanceof ObjectValue && !isProposalNumeric(v) && !(v instanceof VectorValue);
+    if (isProposalNumeric(x) && ordinaryObject(yc)) {
+      return X(yield* IsLooselyEqual(x, Q(yield* ToPrimitive(yc))));
+    }
+    if (ordinaryObject(xc) && isProposalNumeric(y)) {
+      return X(yield* IsLooselyEqual(Q(yield* ToPrimitive(xc)), y));
+    }
   }
   // 1. If SameType(x, y) is true, then
   if (SameType(x, y)) {

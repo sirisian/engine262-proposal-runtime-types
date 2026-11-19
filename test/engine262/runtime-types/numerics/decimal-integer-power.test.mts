@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * Question AS, AS1: a decimal power takes an integer exponent and is the exact power rounded once.
@@ -38,9 +38,15 @@ test('the exponent may be of any integer type, a BigInt, or a Number or decimal 
   expect(evaluated('function f(d: decimal64, k: number) { return d ** k; } String(f(2, 3));')).toBe('8');
   expect(evaluated('function f(d: decimal64, k: decimal64) { return d ** k; } String(f(2, 3));')).toBe('8');
   expect(evaluated('let d: decimal64 = 3; d **= 2; String(d);')).toBe('9');
-  // One that is no integer has no exact power to round.
-  expectThrown('function f(d: decimal64, k: number) { return d ** k; } f(2, 0.5);', 'a decimal exponent must be an integer');
-  expectThrown('function f(d: decimal64, k: decimal64) { return d ** k; } f(2, 0.5);', 'a decimal exponent must be an integer');
+  // One that is no integer has no exact power to round: a value of an admitted
+  // kind out of the power's domain, a RangeError (Question AY), where an
+  // exponent of a type not admitted is a type error.
+  for (const call of ['function f(d: decimal64, k: number) { return d ** k; } f(2, 0.5);',
+    'function f(d: decimal64, k: decimal64) { return d ** k; } f(2, 0.5);',
+    'function f(d: decimal64, k: number) { return d ** k; } f(2, NaN);']) {
+    expectThrownKind(call, 'RangeError');
+    expectThrown(call, 'is not an integer');
+  }
   expectStaticTypeError('function f(d: decimal64, k: float32) { return d ** k; }');
 });
 
@@ -72,4 +78,18 @@ test('a fractional power in a constant is refused at a rational, as at a decimal
   // Written as a conversion of the Number, it is the program's choice.
   expect(evaluated('const q = (2 ** 0.5) := rational64; String(q);')).toBe('6369051672525773/4503599627370496');
   expect(evaluated('const q: rational64 = 2 ** -1; String(q);')).toBe('1/2');
+});
+
+test('an exponent known to hold no integer is refused before running', () => {
+  // Question AU: at a decimal or a rational base as at an integer one, a
+  // literal, a constant or a constant expression that is no integer.
+  for (const source of ['function f(d: decimal64) { return d ** 2.5; }', 'function f(d: decimal64) { return d ** (1 / 2); }',
+    'const K = 2.5; function f(d: decimal64) { return d ** K; }', 'function f(d: decimal64) { d **= 2.5; return d; }',
+    'function f(q: rational64) { return q ** 0.5; }', 'function f(n: uint8) { return n ** 0.5; }', 'function f(n: uint8) { return n << 0.5; }']) {
+    expectStaticTypeError(source);
+  }
+  // An integer written with a fraction or an exponent is an integer.
+  expect(evaluated('function f(d: decimal64) { return String(d ** 2.0) + " " + String(d ** 1e1); } f(decimal64(2));')).toBe('4 1024');
+  // A binary float has a real power.
+  expect(evaluated('function f(h: float128) { return String(h ** 0.5); } f(float128(4));')).toBe('2');
 });

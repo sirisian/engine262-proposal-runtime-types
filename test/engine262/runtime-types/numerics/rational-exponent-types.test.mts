@@ -14,8 +14,10 @@ test('a wide exponent keeps its exact parity', () => {
   expect(evaluated('function power(n:uint64){return rational64(-1)**n;}String(power(uint64(9007199254740993)));')).toBe('-1');
 });
 
-test.each(['1.5', 'NaN', 'Infinity'])('a non-integer Number exponent %s keeps its runtime error', (value) => {
-  expectThrownKind(`function power(n:number){return rational64(2,3)**n;}power(${value});`, 'TypeError');
+// Question AY: a Number exponent holding no integer is a value of an admitted
+// kind outside the exponent's domain, so a RangeError, as a negative one is.
+test.each(['1.5', 'NaN', 'Infinity'])('a non-integer Number exponent %s is a RangeError when it runs', (value) => {
+  expectThrownKind(`function power(n:number){return rational64(2,3)**n;}power(${value});`, 'RangeError');
 });
 
 test('zero to a negative integer power keeps its runtime RangeError', () => {

@@ -1473,6 +1473,17 @@ export function PatternLiteralTypeOf(pattern: object): TypeRecord | undefined {
   return patternLiteralTypes.get(pattern);
 }
 
+const typePatternLiterals = new WeakMap<object, TypeRecord>();
+
+/**
+ * #sec-match-patterns: a numeric literal type in a type pattern is the literal
+ * of its position's type, as a literal pattern is, so the checker and the run
+ * time read one record for it.
+ */
+export function TypePatternLiteralOf(node: object): TypeRecord | undefined {
+  return typePatternLiterals.get(node);
+}
+
 export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
   return publishedReturnTypes.get(declaration);
 }
@@ -4143,16 +4154,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * An enum's Type Object called with no argument: the call converts one value
-   * to an enumerator, and with none it failed at run time as "undefined is not
-   * assignable to int.<32>" (round 4, diagnostic identity).
+   * An enum's Type Object called with no argument, or with several: the call
+   * converts one value to an enumerator, and with none it failed at run time
+   * as "undefined is not assignable to int.<32>" (round 4, diagnostic
+   * identity), while `E(1, 2)` dropped the 2 (Question AT). A spread keeps the
+   * run time's count, which ignores the values it does not take.
    */
   const checkEnumConversionCall = (call: ParseNode.CallExpression): void => {
     const callee = call.CallExpression;
-    if (callee.type !== 'IdentifierReference' || call.Arguments.length !== 0 || assignedNames.has(callee.name)) return;
+    const count = call.Arguments.length;
+    if (callee.type !== 'IdentifierReference' || count === 1 || assignedNames.has(callee.name)
+      || call.Arguments.some((argument) => (argument as { type?: string }).type === 'AssignmentRestElement')) return;
     const declaration = enumNodes.get(callee.name);
     if (!declaration || declaration.type !== 'EnumDeclaration' || ResolveBindingDeclaration(callee, callee.name)?.node !== declaration) return;
-    reportType('rt-call-argument', call, '$1 converts one value to an enumerator of $1 and is called with none', Value(callee.name));
+    if (count === 0) {
+      reportType('rt-call-argument', call, '$1 converts one value to an enumerator of $1 and is called with none', Value(callee.name));
+    } else {
+      reportType('rt-call-argument', call, '$1 takes at most $2 arguments, and $3 were supplied', Value(callee.name), Value('1'), Value(String(count)));
+    }
   };
 
   /**
@@ -18104,6 +18123,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.kind === 'imaginary') {
           return null;
         }
+        const positioned = typePatternLiterals.get(node);
+        if (positioned) return positioned;
         const raw = node.negated && typeof node.value === 'number' ? -node.value : node.value;
         const base = node.kind === 'number' ? makePrimitive('number') : node.kind === 'string' ? makePrimitive('string') : node.kind === 'boolean' ? makePrimitive('boolean') : makePrimitive('bigint');
         return { Kind: 'literal', Value: Value(raw as never), Base: base, SourceText: node.SourceText };
@@ -23635,7 +23656,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // integer types"); any other distance keeps the judgment it had.
       && (isIntegerValueType(erasedForJudgment(staticType(a.AssignmentExpression)))
         || (a.AssignmentOperator === '**=' && writtenIntegerLiteral(a.AssignmentExpression)))
-      ? compoundBinaryType(a as unknown as ParseNode.AssignmentExpression) : staticTypeIn(a.AssignmentExpression, target));
+      ? compoundBinaryType(a as unknown as ParseNode.AssignmentExpression) : staticTypeIn(a.AssignmentExpression, target)
+        // Question AV: an operator that stores its right operand as it is
+        // stores an enumerator read too, which no Static Type carries.
+        ?? (['=', '||=', '&&=', '??='].includes(a.AssignmentOperator) ? enumeratorReceivedType(a.AssignmentExpression, target) : null));
 
   const compoundBinaryType = (node: ParseNode.AssignmentExpression): Known => {
     const operator = node.AssignmentOperator.slice(0, -1);
@@ -28036,6 +28060,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (rightLeafLiterals.length > 0 && reportProducedMismatch(rightNode, leftT, node, token, true)) return neverType;
           if (leftLeafLiterals.length > 0 && reportProducedMismatch(leftNode, rightT, node, token, false)) return neverType;
         }
+        // A count or an exponent known before running to hold no integer cannot
+        // be one (Question AU): `d ** 2.5` and `q ** 0.5` at a decimal or a
+        // rational base, `n ** 0.5` and `n << 0.5` at an integer one. The
+        // message names the count, where a range it was never meant to fit was
+        // named before, and the run time refuses the same value with a
+        // *RangeError* (Question AY). Judged before the literal is adopted, so
+        // the left operand's range is not reported as well.
+        if (lv && rightLit && token && ['<<', '>>', '>>>', '**'].includes(token)) {
+          const base = erasedForJudgment(lv);
+          const counted = isIntegerValueType(base) || (token === '**' && base?.Kind === 'primitive'
+            && (decimalWidthOf(base) !== undefined || base.Name === 'rational'));
+          const known = counted ? numberOfConstant(rightLit) : null;
+          if (known !== null && !Number.isInteger(known)) {
+            reportType(token === '**' ? 'rt-numeric-range' : 'rt-shift-distance', node,
+              token === '**' ? 'a literal exponent of $1 is not an integer' : 'a shift distance of $1 is not an integer', Value(String(known)));
+            return lv;
+          }
+        }
         if (lv && rightLit && lv.Kind === 'parameterized'
             && !(token === '**' && lv.Base.Kind === 'primitive' && lv.Base.Name === 'rational')) {
           adopt(rightLit, lv.Base);
@@ -28232,7 +28274,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } else {
           const fixedPosition = target.Elements[minimumPosition];
           const position = uncertain ? wanted : fixedPosition?.Rest ? restElementType(fixedPosition.Type) : fixedPosition?.Type ?? wanted;
-          requireAssignable(element.type === 'Elision' ? undefinedType : staticTypeIn(element, position), position, node as ParseNode);
+          requireAssignable(element.type === 'Elision' ? undefinedType : receivedTypeIn(element, position), position, node as ParseNode);
           minimumPosition += 1;
         }
       }
@@ -28260,7 +28302,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       elements.forEach((element, index) => {
         const position = TupleStorageTypeAt(shape, index, elements.length)!;
-        requireAssignable(element.type === 'Elision' ? undefinedType : staticTypeIn(element, position), position, node);
+        requireAssignable(element.type === 'Elision' ? undefinedType : receivedTypeIn(element, position), position, node);
       });
       for (let i = elements.length; i < TuplePrefixLength(shape); i += 1) {
         const position = TuplePrefixElement(target, i)!;
@@ -28324,7 +28366,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? fixed[i]!.Type as Known
         : (restIndex === -1 ? null : restElementType(target.Elements[restIndex]!.Type) as Known);
       if (position) {
-        requireAssignable(el.type === 'Elision' ? undefinedType : staticTypeIn(el as ParseNode, position), position, node as ParseNode);
+        requireAssignable(el.type === 'Elision' ? undefinedType : receivedTypeIn(el as ParseNode, position), position, node as ParseNode);
       }
     });
     for (const position of fixed.slice(elements.length)) {
@@ -28385,7 +28427,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       count += 1;
-      requireAssignable(staticTypeIn(el as ParseNode, target.Element), target.Element, node as ParseNode);
+      requireAssignable(receivedTypeIn(el as ParseNode, target.Element), target.Element, node as ParseNode);
       walk(el as ParseNode);
     }
     // "A fixed extent `[N].<T>` requires the literal to have length N", which
@@ -28640,7 +28682,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // marker stays the marker for every comparison; only the reading site
         // sees a structure.
         contextualThisOwners.set(def.AssignmentExpression, target as Known);
-        requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type, node as ParseNode);
+        requireAssignable(receivedTypeIn(def.AssignmentExpression, declared.type), declared.type, node as ParseNode);
       }
       // #sec-literal-freshness: "an own property the expected type neither
       // declares nor admits through an index signature is a type error,
@@ -30881,6 +30923,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * Question AV: the type a read of a declared enumerator is judged at where a
+   * declared type receives it: an annotated binding's, a parameter's or a
+   * field's initializer, an argument for a typed parameter, a returned or a
+   * yielded value, a value stored by `=` or a logical assignment, and an
+   * element or a member of a literal one of those receives. The read keeps no
+   * Static Type (round 4, Q7), so none of these judgments saw it, and
+   * `const b: boolean = E.A` was a TypeError only when it ran, where
+   * `const b: boolean = e` for an `e: E` is refused before running. It is the enumerator's literal where that is
+   * known, so a type `E.A` admits `E.A`, and its enum where it is not, as for
+   * an enumerator initialized by a function (#sec-enums). The literal keeps
+   * its enum's domain, as a value of `E` does: `let n: uint16 = E.A` converts
+   * nothing when it runs, so 1 fitting `uint16` admits nothing. A refinement
+   * decides an enumerator by its predicate, as before. The reading is these
+   * judgments' alone: the read's own type, and so tests, `match`, narrowing
+   * and inference, are unchanged.
+   */
+  const enumeratorReceivedType = (node: ParseNode | null | undefined, target: Known): Known => {
+    if (!node || !target || mentionsTypeParameter(target)) return null;
+    const refined = (t: TypeRecord): boolean => refinementBaseOf(t) !== null
+      || ((t.Kind === 'union' || t.Kind === 'intersection') && t.Members.some(refined));
+    if (refined(target)) return null;
+    const core = patternExpression(node);
+    const enumType = core ? enumeratorOperandType(core) : null;
+    if (!enumType) return null;
+    const literal = enumeratorLiteralOf(core!);
+    return literal ? { ...literal, FixedNumericDomain: true } as TypeRecord : enumType;
+  };
+  const receivedTypeIn = (node: ParseNode | null | undefined, target: Known): Known => staticTypeIn(node, target)
+    ?? enumeratorReceivedType(node, target);
+  const receivedArgumentType = (argument: ParseNode, target: Known): Known => argumentStaticType(argument, target)
+    ?? enumeratorReceivedType(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument, target);
+
   const judgeTruthiness = (test: ParseNode): void => {
     const core = stripTest(test);
     {
@@ -31667,7 +31742,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `v is not uint8` leaves `v` everything it was except `uint8` in the
       // true branch, which is what union subtraction can represent.
       if (ie.Type) {
-        const written = resolveType(ie.Type as ParseNode.Type);
+        const written = isOperandType(ie);
         return written ? { name: subject, type: written, patternSubject: ie.Expression, subjectType: staticType(ie.Expression), negated } : undefined;
       }
       if (!ie.Pattern) {
@@ -32709,6 +32784,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const source = path ? read(path) : null;
             if (!path || !source) return undefined;
             if (node.Type) {
+              recordTypePatternLiterals(node.Type, staticType(node.Expression));
               const type = assertedType(node.Type);
               return type ? { name: pathName(path), type, subjectType: source, negated: false } : undefined;
             }
@@ -32776,6 +32852,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (node.type === 'IsExpression' && node.Type) {
             const path = RefinementPath(node.Expression);
+            if (path) recordTypePatternLiterals(node.Type, staticType(node.Expression));
             const type = path ? assertedType(node.Type) : null;
             if (!path || !type) return;
             if (!path.length && type.Kind === 'object') {
@@ -35879,6 +35956,107 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
+  /**
+   * A brace or bracket shape every one of whose elements is a type is read as
+   * the type, "the two readings agreeing there", and a literal pattern and a
+   * literal type "coincide ... the semantics are one" (#sec-match-patterns).
+   * So a numeric literal type in a type pattern takes the numeric type of its
+   * position, as `when 1` and `k is 1` do: `o is { a: 1 }` and `when [1, 2]`
+   * over a `uint8` field or pair match a `uint8` 1, where the literal of
+   * `number` matched nothing and `when { a: 1 }` was refused as unable to
+   * match. Recorded where the position has one numeric domain, as the
+   * literal pattern's singleton reads it, other than `number`, for the
+   * checker's resolution and the run time's (TypePatternLiteralOf).
+   * Elsewhere the literal keeps its reading and is judged as before: a
+   * literal an integer or binary float type cannot hold, a `number`
+   * position, and a rational or complex one, which a literal pattern does not
+   * adopt either.
+   */
+  const recordTypePatternLiterals = (node: ParseNode.Type | null | undefined, position: Known): void => {
+    if (!node || !position || position.Kind === 'any' || mentionsTypeParameter(position)) return;
+    switch (node.type) {
+      case 'ParenthesizedType':
+        recordTypePatternLiterals(node.Type, position);
+        return;
+      case 'UnionType':
+        node.Types.forEach((member) => recordTypePatternLiterals(member, position));
+        return;
+      case 'LiteralType': {
+        if (node.kind !== 'number' || typeof node.value !== 'number' || typePatternLiterals.has(node)) return;
+        const raw = node.negated ? -node.value : node.value;
+        // One numeric domain, as the literal pattern's own singleton reads it
+        // (singleNumericDomain), built as the run time holds its values.
+        const domain = singleNumericDomain(position);
+        const at = domain ? eraseMetadata(domain) : null;
+        if (at?.Kind !== 'primitive') return;
+        if (['uint', 'int', 'float16', 'float32', 'float64'].includes(at.Name)) {
+          if (!fitsNumericType(raw, at.Name, at.Arguments)) return;
+          const held = isWideIntegerType(at) ? wrapToType(BigInt(raw), at) : wrapToType(raw, at);
+          typePatternLiterals.set(node, { Kind: 'literal', Value: new TypedNumberValue(held as never, at as never), Base: at, SourceText: node.SourceText } as TypeRecord);
+          return;
+        }
+        // A decimal and a `float128` hold their values as objects: the
+        // literal's digits are read at the type, as a literal written at a
+        // decimal type is (NumericValue), and not through the double.
+        if ((decimalWidthOf(at) === undefined && at.Name !== 'float128') || !node.SourceText) return;
+        const digits = { type: 'NumericLiteral', SourceText: node.SourceText, value: raw } as unknown as ParseNode.NumericLiteral;
+        const before = errors.length;
+        staticTypeIn(digits, at);
+        const value = EnsureCompletion(NumericValue(digits));
+        errors.length = before;
+        if (value.Type !== 'normal') return;
+        typePatternLiterals.set(node, { Kind: 'literal', Value: value.Value as Value, Base: at, SourceText: node.SourceText } as TypeRecord);
+        return;
+      }
+      case 'ObjectType': {
+        const arms = position.Kind === 'union' ? position.Members : [position];
+        for (const member of node.TypeMemberList) {
+          if (member.type !== 'TypeMember' || !member.TypeAnnotation || !member.PropertyName) continue;
+          const name = member.PropertyName as { name?: string, value?: unknown };
+          const raw = name.name ?? name.value;
+          const key = typeof raw === 'string' ? raw : typeof raw === 'number' || typeof raw === 'bigint' ? String(raw) : undefined;
+          if (key === undefined) continue;
+          const types = arms.map((arm) => {
+            const shape = compositeObjectShape(arm) ?? structureOf(arm);
+            return shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === key)?.type ?? null : null;
+          });
+          if (types.length && types.every((type) => type)) {
+            recordTypePatternLiterals(member.TypeAnnotation.Type, CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] }));
+          }
+        }
+        return;
+      }
+      case 'TupleType': {
+        // A tuple type is tested element by element (IsOfType), so a literal's
+        // position is the element type, not what iteration would produce.
+        const arms = position.Kind === 'union' ? position.Members : [position];
+        node.TupleElementList.forEach((element, index) => {
+          if (element.Rest) return;
+          const types = arms.map((arm) => {
+            const shape = structureOf(arm) ?? arm;
+            if (shape.Kind === 'array') return shape.Element;
+            if (shape.Kind !== 'tuple') return null;
+            const elements = shape.Elements;
+            return index < elements.length && !elements.slice(0, index + 1).some((prior) => prior.Rest) ? elements[index].Type : null;
+          });
+          if (types.length && types.every((type) => type)) {
+            recordTypePatternLiterals(element.Type, CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] }));
+          }
+        });
+        return;
+      }
+      default:
+        break;
+    }
+  };
+
+  /** The type operand of `x is T`, its literal types at their positions. */
+  const isOperandType = (ie: { Expression: ParseNode, Type?: ParseNode | null }): Known => {
+    if (!ie.Type) return null;
+    recordTypePatternLiterals(ie.Type as ParseNode.Type, staticType(ie.Expression));
+    return resolveType(ie.Type as ParseNode.Type);
+  };
+
   const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType: Known = null, subPattern = false): Known => {
     if (!pattern) return positionType;
     if ((pattern.type === 'MatchObjectPattern' || pattern.type === 'MatchArrayPattern') && structurallyUnmatchable(pattern, positionType)) {
@@ -35923,6 +36101,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return type;
       }
       case 'MatchTypePattern':
+        recordTypePatternLiterals(pattern.Type, positionType);
         return narrow(resolveType(pattern.Type), subPattern);
       case 'MatchOrPattern': {
         const bindingsOf = (alternative: ParseNode.MatchPattern) => pushBlock(() => {
@@ -36344,6 +36523,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (subjectName !== null && changesPlace(clause.Pattern, subjectName)) subjectStable = false;
         }
         const clauseEntry = captureFlow();
+        // A type pattern's literal types take their positions' types before
+        // the clause is read (recordTypePatternLiterals).
+        for (let shown = clause.Pattern; shown && remaining;) {
+          if (shown.type === 'MatchTypePattern') recordTypePatternLiterals(shown.Type, remaining);
+          if (shown.type === 'MatchOrPattern' || shown.type === 'MatchAndPattern') {
+            if (shown.Left.type === 'MatchTypePattern') recordTypePatternLiterals(shown.Left.Type, remaining);
+            shown = shown.Right;
+          } else shown = shown.type === 'MatchNotPattern' ? shown.Operand : null;
+        }
         let selected = remaining;
         // What the preceding unguarded clauses left, read before this clause
         // narrows it, which is what the reachability rule below is decided over.
@@ -37724,7 +37912,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     initializerInputs = inputs;
     const mark = errors.length;
     try {
-      const source = staticTypeIn(expression, target);
+      const source = receivedTypeIn(expression, target);
       if (provenance) withProvenance(expression, () => requireAssignable(source, target, expression));
       else requireAssignable(source, target, expression);
     } finally {
@@ -40836,7 +41024,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkStoreResult = (target: ParseNode, value: ParseNode): void => {
     if (checkIndexStore(target, value) || checkVectorSelfStore(target, value)) return;
-    for (const type of locationWriteTypes(target)) requireAssignable(staticTypeIn(value, type), type, target as ParseNode);
+    for (const type of locationWriteTypes(target)) requireAssignable(receivedTypeIn(value, type), type, target as ParseNode);
   };
 
   const builtinUpdateFailures = new WeakSet<ParseNode>();
@@ -41890,7 +42078,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const producesUndefined = conciseVoid
               && (produced as { Name?: string } | null)?.Name === 'undefined';
             if (!producesUndefined) {
-              requireAssignable(produced, conciseReturn);
+              requireAssignable(produced ?? enumeratorReceivedType(expr, conciseReturn), conciseReturn);
             }
           }
         }
@@ -43499,7 +43687,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (spread) {
                 requireAssignable(spreadElementAt(argument.AssignmentExpression, wanted), wanted, n as ParseNode);
               } else {
-                requireAssignable(argumentStaticType(argument, wanted), wanted, n as ParseNode);
+                requireAssignable(receivedArgumentType(argument, wanted), wanted, n as ParseNode);
               }
             }
           }
@@ -44134,7 +44322,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const optionalHere = slot?.Optional === true;
         if (!(optionalHere && argType && (argType as { Name?: string }).Name === 'undefined')) {
-          requireAssignable(argType, checkedParam, n as ParseNode);
+          requireAssignable(argType ?? enumeratorReceivedType(arg.type === 'NamedArgument' ? arg.AssignmentExpression : arg, checkedParam),
+            checkedParam, n as ParseNode);
         }
       });
       if (generic?.length) recordTypeArgumentApplication(n as GenericDefaultCheck['application'], generic, bindings,
@@ -46273,7 +46462,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const annotation = (n as ParseNode.PropertyDefinition & { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
         if (annotation) {
           const declared = resolveType(annotation.Type);
-          withProvenance(n.AssignmentExpression, () => requireAssignable(staticTypeIn(n.AssignmentExpression, declared), declared));
+          withProvenance(n.AssignmentExpression, () => requireAssignable(receivedTypeIn(n.AssignmentExpression, declared), declared));
         }
         // #sec-void-type (round 4, Q5): an object literal's property value
         // stores the value, so it is a position that depends on it; the run
@@ -46376,7 +46565,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(ie.Expression as ParseNode);
         const iePattern = ie.Pattern as { type?: string, Type?: ParseNode } | null | undefined;
         const ieType = ie.Type ?? (iePattern?.type === 'MatchTypePattern' ? iePattern.Type : null);
-        if (ieType) {
+        if (ie.Type) isOperandType(ie);
+        else if (ieType) {
           resolveType(ieType as ParseNode.Type);
         }
         return;
@@ -47991,6 +48181,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && argNodes.length !== laneCount && argNodes.length !== 1) {
             reportType('rt-vector-argument', n as ParseNode, '$1 lanes were supplied where $2 are wanted, or one value to fill every lane', Value(String(argNodes.length)), Value(String(laneCount)));
           }
+          // A conversion takes the values its type's conversion takes
+          // (Question AT): one for a numeric type, and one or two for a
+          // rational, its numerator and denominator, and for a complex, its
+          // real and imaginary parts; a vector's count is judged above. A
+          // call with more dropped the rest in silence, `uint8(a, b)` being
+          // `uint8(a)`, where the call and `:=` are one operation and `:=`
+          // has one operand. A spread keeps the run time's count, and the run
+          // time ignores what a conversion does not take, as `Number(1, 2)`
+          // does, so `values.map(uint8)` still converts each element.
+          const conversionArity = ((): number | undefined => {
+            const at = erasedForJudgment(conversionTarget as Known);
+            if (at?.Kind !== 'primitive' || at.Name === 'vector') return undefined;
+            if (at.Name === 'rational' || at.Name === 'complex') return 2;
+            return isNumericValueTypeName(at.Name) || at.Name === 'number' || at.Name === 'bigint' ? 1 : undefined;
+          })();
+          if (conversionArity !== undefined && argNodes.length === (c.Arguments ?? []).length && argNodes.length > conversionArity) {
+            reportType('rt-call-argument', n as ParseNode, '$1 takes at most $2 arguments, and $3 were supplied',
+              Value(displayType(conversionTarget as TypeRecord)), Value(String(conversionArity)), Value(String(argNodes.length)));
+          }
           const vectorLanes = argNodes.length === (c.Arguments ?? []).length
             ? vectorConstructorType(conversionTarget, argNodes as readonly ParseNode[]) : null;
           if (vectorLanes) {
@@ -48422,7 +48631,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!y.hasStar && y.AssignmentExpression && flowLive && literalObject(y.AssignmentExpression)) recordConstantRefinement(n, yieldedType, staticType(y.AssignmentExpression));
           const yielded = generator?.Kind === 'nominal' && generator.LibraryName === 'AsyncGenerator' ? awaitedType(produced) : produced;
           generatorContributions.at(-1)?.yielded.push(yielded);
-          requireAssignable(yielded, yieldedType);
+          requireAssignable(yielded ?? (y.hasStar ? null : enumeratorReceivedType(y.AssignmentExpression, yieldedType)), yieldedType);
         }
         walk(y.AssignmentExpression);
         invalidateCapturedAliases();
@@ -48852,7 +49061,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const contextualVoid = (context as { Kind?: string } | null)?.Kind === 'void'
             && returnContextIsContextual[returnContextIsContextual.length - 1] === true;
           if (!voidAdmitsUndefined && !contextualVoid) {
-            requireAssignable(returned, context);
+            requireAssignable(returned ?? enumeratorReceivedType(expr, context), context);
           }
           // The elision condition, per return. A `return` with NO expression
           // hands back *undefined*, which is the same unproven case as falling

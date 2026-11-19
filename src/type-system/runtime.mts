@@ -47,7 +47,7 @@ import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluatio
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
-import { PublishedReturnTypeOf, SelectedObjectLiteralContext } from './check.mts';
+import { PublishedReturnTypeOf, SelectedObjectLiteralContext, TypePatternLiteralOf } from './check.mts';
 import { EvaluateGenericSource } from './check-pass.mts';
 import type { GenericTypeCapture, TypeParameterRecord } from './records.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
@@ -7529,6 +7529,10 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       };
     }
     case 'LiteralType': {
+      // #sec-match-patterns: in a type pattern, the literal of its position's
+      // numeric type, as the checker resolved it.
+      const positioned = TypePatternLiteralOf(node);
+      if (positioned) return positioned;
       const raw = node.negated && typeof node.value === 'number' ? -node.value : node.value;
       if (node.kind === 'imaginary') {
         return Throw.TypeError('$1 is not supported yet', Value('an imaginary literal type'));

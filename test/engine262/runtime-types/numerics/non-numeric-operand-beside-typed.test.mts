@@ -30,9 +30,10 @@ test('a String count is a count, as a Number is', () => {
   expect(evaluated(`${C}<< n; } String(f(uint8(255), "2")) + " " + String(f(uint8(255), 2));`)).toBe('252 252');
   expect(evaluated(`${C}<< n; } String(Reflect.typeOf(f(uint8(255), "2")));`)).toBe('uint.<8>');
   expect(evaluated(`${C}** n; } String(f(uint64(9007199254740993n), "1"));`)).toBe('9007199254740993');
-  // A count that is no integer is refused as the Number is, and so is a String on the left.
-  expectThrown(`${C}** n; } f(uint8(3), "0.5");`, 'a value of the "string" type');
-  expectThrown(`${C}** n; } f(uint8(3), 0.5);`, 'a value of the "number" type');
+  // A count that is no integer is a RangeError, as the Number is (Question AY),
+  // and a String on the left is refused.
+  expectThrown(`${C}** n; } f(uint8(3), "0.5");`, 'the exponent 0.5 is not an integer');
+  expectThrown(`${C}** n; } f(uint8(3), 0.5);`, 'the exponent 0.5 is not an integer');
   expectThrown(`${C}<< n; } f("2", uint8(3));`, 'a value of the "string" type');
 });
 

@@ -16,8 +16,9 @@ test('an operator judges an enumerator as a value of its enum', () => {
   expectStaticTypeError(`${E}E.A < 300;`);
   expectStaticTypeError(`${E}function f(n: uint16) { return E.A * n; }`);
   expectStaticTypeError(`${E}function f(s: string) { return E.A * s; }`);
-  // A boundary judges the read when it runs.
-  expectThrown(`${E}const b: boolean = E.A;`, 'is not assignable to');
+  // A declared type judges the read before running too (Question AV;
+  // enumerator-at-declared-type).
+  expectStaticTypeError(`${E}const b: boolean = E.A;`);
 });
 
 test('the read of an enumerator keeps no Static Type of its own', () => {
@@ -44,10 +45,10 @@ test('an enum declared without an underlying type is over int32', () => {
   expect(evaluated(`${P}function f(e: P) { return e + 1; } String(f(P.C));`)).toBe('6');
   expect(evaluated(`${P}const a = [10, 20, 30]; String(a[P.B]) + " " + String(P.C / 2);`)).toBe('20 2');
   // And it is refused where an int32 is.
-  for (const body of ['P.B * Math.PI;', 'P.B * 0.5;', 'function f(e: P, n: number) { return e * n; }', 'function f(e: P) { const n: number = e; }']) {
+  for (const body of ['P.B * Math.PI;', 'P.B * 0.5;', 'function f(e: P, n: number) { return e * n; }', 'function f(e: P) { const n: number = e; }',
+    'const n: number = P.A;']) {
     expectStaticTypeError(`${P}${body}`);
   }
-  expectThrown(`${P}const n: number = P.A;`, 'is not assignable to');
 });
 
 test('an enumerator crossing a boundary unseen is refused where its underlying type is', () => {

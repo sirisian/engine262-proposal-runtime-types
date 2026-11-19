@@ -469,9 +469,11 @@ test('the three consequences of sharing, each refused', () => {
   const S = 'enum A: string { X = "s" } enum B: string { Y = "s" } ';
   // A B-typed parameter took an A value.
   expectThrown(`${S}function f(v: B) { return "took"; } f(A.X);`);
-  // A switch over B selected on one.
-  expect(evaluated(`${S}function f(b: B) { switch (b) { case B.Y: return "y"; } return "none"; } `
-    + 'let r = "no"; try { r = f(A.X); } catch (e) { r = "refused"; } r;')).toBe('refused');
+  // A switch over B selected on one. Passed directly, the enumerator is
+  // refused before running (Question AV), so it reaches `f` untyped here.
+  expectStaticTypeError(`${S}function f(b: B) { return b; } f(A.X);`);
+  expect(evaluated(`${S}function f(b: B) { switch (b) { case B.Y: return "y"; } return "none"; } function g(v) { return f(v); } `
+    + 'let r = "no"; try { r = g(A.X); } catch (e) { r = "refused"; } r;')).toBe('refused');
   // And its runtime type was the underlying one rather than the enum.
   expect(evaluated(`${S}String(Reflect.typeOf(A.X) === A);`)).toBe('true');
 });

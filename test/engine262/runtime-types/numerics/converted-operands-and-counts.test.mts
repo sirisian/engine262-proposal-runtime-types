@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * Question AQ: an operand that ToNumeric converts, and what a count may be.
@@ -105,7 +105,16 @@ test('a count is any value whose Number is an integer when run', () => {
   expect(evaluated(`${F}v << n; } String(f(uint8(3), true)) + " " + String(f(uint8(3), null));`)).toBe('6 3');
   expect(evaluated(`${F}v ** n; } String(f(uint8(3), true)) + " " + String(f(uint8(3), false));`)).toBe('3 1');
   expect(evaluated(`${F}v << n; } String(Reflect.typeOf(f(uint8(3), true)));`)).toBe('uint.<8>');
-  expectThrown(`${F}v << n; } f(uint8(3), undefined);`, 'a value of the "undefined" type');
+  // One whose Number is no integer is a value of a count's kind out of the
+  // operation's domain, a RangeError, as a negative count is (Question AY).
+  for (const count of ['undefined', '2.5', 'NaN', 'Infinity', '"2.5"']) {
+    expectThrownKind(`${F}v << n; } f(uint8(3), ${count});`, 'RangeError');
+    expectThrownKind(`${F}v ** n; } f(uint8(3), ${count});`, 'RangeError');
+  }
+  expectThrown(`${F}v << n; } f(uint8(3), 2.5);`, 'the shift distance 2.5 is not an integer');
+  expectThrown(`${F}v ** n; } f(uint8(3), 2.5);`, 'the exponent 2.5 is not an integer');
+  // A value of a type that is no count is a TypeError.
+  expectThrownKind(`${F}v << n; } f(uint8(3), float32(2));`, 'TypeError');
   // Beside a typed number anywhere else a Boolean is refused, as its Number is.
   expectThrown(`${F}v * n; } f(uint8(3), true);`, 'a value of the "boolean" type');
   expectThrown(`${F}n << v; } f(uint8(3), true);`, 'a value of the "boolean" type');

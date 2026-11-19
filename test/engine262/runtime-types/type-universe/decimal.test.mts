@@ -184,11 +184,12 @@ test('a decimal mixes with no other TYPE, but a literal is not another type', ()
   // makes it determinable and the script never runs.
   expectThrown(`${D('1.0')} * uint8(2); "ok";`, 'do not mix');
   // A power takes an integer exponent (Question AS), which a decimal holding
-  // one gives, and is refused where the exponent is no integer. This one is
-  // the RUN TIME's: both operands are decimals, so nothing about the types is
-  // wrong and there is no determinable error to raise early.
+  // one gives, and is refused where the exponent is no integer, a RangeError,
+  // as for a Number exponent holding none (Question AY). This one is the RUN
+  // TIME's: both operands are decimals, so nothing about the types is wrong
+  // and there is no determinable error to raise early.
   expect(evaluated(`(${D('1.0')} ** ${D('2.0')}).toString();`)).toBe('1.00');
-  expectThrownKind(`${D('1.0')} ** ${D('0.5')};`, 'TypeError');
+  expectThrownKind(`${D('1.0')} ** ${D('0.5')};`, 'RangeError');
 });
 test('a literal at a decimal type is read from its SOURCE TEXT', () => {
   // "In a decimal context the literal `0.1` is the decimal one tenth, where in a
