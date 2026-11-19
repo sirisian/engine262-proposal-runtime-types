@@ -4,10 +4,11 @@ import { Throw } from './host-defined/error-messages.mts';
 import { PatternEnvironmentFor } from './runtime-semantics/PatternEnvironment.mts';
 import { InTypeComputation, CurrentTypeComputationSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
-import { FoldedConstantOf, FoldedDecimalOf, FoldedRationalOf, NamedConstantUseCopy } from './type-system/check.mts';
+import { FoldedConstantOf, FoldedDecimalOf, FoldedRationalOf, FoldedFloat128Of, NamedConstantUseCopy } from './type-system/check.mts';
 import { TypedNumberValue } from './value.mts';
 import { CreateDecimalValue } from './intrinsics/Decimal.mts';
 import { CreateRationalValue } from './intrinsics/Rational.mts';
+import { CreateFloat128Value } from './intrinsics/Float128.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
 } from './completion.mts';
@@ -327,6 +328,10 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       if (foldedDec !== undefined) {
         return CreateDecimalValue(foldedDec.sig, foldedDec.exp, foldedDec.width, surroundingAgent.currentRealmRecord, foldedDec.type);
       }
+      const foldedF128 = FoldedFloat128Of(node);
+      if (foldedF128 !== undefined) {
+        return CreateFloat128Value(foldedF128.value, 0, surroundingAgent.currentRealmRecord);
+      }
       if (node.type === 'AdditiveExpression') {
         return yield* Evaluate_AdditiveExpression(node);
       }
@@ -345,10 +350,19 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
         if (foldedShift.type.Kind === 'primitive' && foldedShift.type.Name === 'bigint') return Value(foldedShift.value);
         return new TypedNumberValue(foldedShift.value, foldedShift.type as never);
       }
-      // At a decimal, the integer the checker computed (Question AO, AO1).
+      // At a decimal, a rational or a `float128`, the integer the checker
+      // computed (Question AO, AO1).
       const foldedDecShift = FoldedDecimalOf(node);
       if (foldedDecShift !== undefined) {
         return CreateDecimalValue(foldedDecShift.sig, foldedDecShift.exp, foldedDecShift.width, surroundingAgent.currentRealmRecord, foldedDecShift.type);
+      }
+      const foldedRatShift = FoldedRationalOf(node);
+      if (foldedRatShift !== undefined) {
+        return CreateRationalValue(foldedRatShift.num, foldedRatShift.den, surroundingAgent.currentRealmRecord, foldedRatShift.type);
+      }
+      const foldedF128Shift = FoldedFloat128Of(node);
+      if (foldedF128Shift !== undefined) {
+        return CreateFloat128Value(foldedF128Shift.value, 0, surroundingAgent.currentRealmRecord);
       }
       return yield* Evaluate_ShiftExpression(node);
     }
@@ -367,6 +381,14 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       const foldedDecBits = FoldedDecimalOf(node);
       if (foldedDecBits !== undefined) {
         return CreateDecimalValue(foldedDecBits.sig, foldedDecBits.exp, foldedDecBits.width, surroundingAgent.currentRealmRecord, foldedDecBits.type);
+      }
+      const foldedRatBits = FoldedRationalOf(node);
+      if (foldedRatBits !== undefined) {
+        return CreateRationalValue(foldedRatBits.num, foldedRatBits.den, surroundingAgent.currentRealmRecord, foldedRatBits.type);
+      }
+      const foldedF128Bits = FoldedFloat128Of(node);
+      if (foldedF128Bits !== undefined) {
+        return CreateFloat128Value(foldedF128Bits.value, 0, surroundingAgent.currentRealmRecord);
       }
       return yield* Evaluate_BinaryBitwiseExpression(node);
     }
@@ -445,6 +467,10 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       const foldedRatUnary = FoldedRationalOf(node);
       if (foldedRatUnary !== undefined) {
         return CreateRationalValue(foldedRatUnary.num, foldedRatUnary.den, surroundingAgent.currentRealmRecord, (foldedRatUnary as { type?: unknown }).type);
+      }
+      const foldedF128Unary = FoldedFloat128Of(node);
+      if (foldedF128Unary !== undefined) {
+        return CreateFloat128Value(foldedF128Unary.value, 0, surroundingAgent.currentRealmRecord);
       }
       return yield* Evaluate_UnaryExpression(node);
     }

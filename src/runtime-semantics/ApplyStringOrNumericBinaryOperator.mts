@@ -9,7 +9,7 @@ import { ObjectValue,
   JSStringValue, TypedString, Value,
   NumberValue,
   BigIntValue,
-  type SymbolValue,
+  SymbolValue,
   SameType,
 } from '../value.mts';
 import { vectorBinaryOperator } from '../type-system/vector-ops.mts';
@@ -33,7 +33,7 @@ import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
 } from '../intrinsics/Rational.mts';
 import { Q, type ThrowCompletion } from '../completion.mts';
-import { isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder, DecimalFromResult } from '../intrinsics/Decimal.mts';
+import { isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder, decimalPow, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import {
   add as float128Add, subtract as float128Subtract, multiply as float128Multiply, divide as float128Divide,
@@ -196,6 +196,42 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     const result = rationalPow(lval, BigInt(exponent), surroundingAgent.currentRealmRecord);
     return 'zero' in result ? Throw.RangeError('a zero rational to a negative power') : result;
   }
+  // A decimal power takes an integer exponent as a rational's does (Question
+  // AS, AS1): one of an integer type, a BigInt, a Number holding an integer, or
+  // a decimal holding one, which is what a literal exponent becomes in a
+  // constant computed at a decimal type. The power is exact and rounded once
+  // (decimalPow). `d ** 2` was a TypeError: the decimal had no `**`.
+  if (surroundingAgent.feature('runtime-types') && opText === '**' && isDecimalObject(lval)
+    && (rval instanceof NumberValue || rval instanceof BigIntValue || isTypedNumber(rval) || isDecimalObject(rval))) {
+    let exponent: bigint;
+    if (isTypedNumber(rval)) {
+      const type = rval.TypeRecord as TypeRecord;
+      if (type.Kind !== 'primitive' || !['int', 'uint'].includes(type.Name)) {
+        return Throw.TypeError('a decimal exponent must be an integer');
+      }
+      exponent = BigInt(rval.value);
+    } else if (rval instanceof BigIntValue) {
+      exponent = R(rval);
+    } else if (isDecimalObject(rval)) {
+      const significand = rval.DecimalSignificand;
+      const scale = rval.DecimalExponent;
+      if (rval.DecimalSpecial !== undefined || (scale < 0 && significand % 10n ** BigInt(-scale) !== 0n)) {
+        return Throw.TypeError('a decimal exponent must be an integer');
+      }
+      exponent = scale < 0 ? significand / 10n ** BigInt(-scale) : significand * 10n ** BigInt(scale);
+    } else {
+      const number = R(rval as NumberValue);
+      if (!Number.isInteger(number)) {
+        return Throw.TypeError('a decimal exponent must be an integer');
+      }
+      exponent = BigInt(number);
+    }
+    const power = decimalPow(lval, exponent);
+    if (power === 'divide-by-zero') {
+      return Throw.RangeError('division of a decimal by zero');
+    }
+    return DecimalFromResult(power, surroundingAgent.currentRealmRecord);
+  }
   // A String beside a typed number reaches the operator as the Number
   // ToNumeric makes of it (#sec-tonumeric-revised), and every step after is
   // the Number's: it does not mix with a value of another numeric type, as
@@ -204,13 +240,16 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // no numeric literal and adopts nothing. This path computed such an
   // operation as two Numbers before, so `z * "2"` for a `uint32` `z` was the
   // Number 6 and a `uint64` operand was rounded to a double. `+` concatenates
-  // instead, before any of this.
-  if (surroundingAgent.feature('runtime-types') && opText !== '+' && isTypedArithmetic(lval, rval)
-      && (lval instanceof JSStringValue || rval instanceof JSStringValue)) {
+  // instead, before any of this. A Symbol converts by the same step, which
+  // throws for it, so `uint8(1) * Symbol()` is the TypeError `1 * Symbol()` is
+  // rather than one that names a Number nobody wrote.
+  if (surroundingAgent.feature('runtime-types') && isTypedArithmetic(lval, rval)
+      && ((opText !== '+' && (lval instanceof JSStringValue || rval instanceof JSStringValue))
+        || lval instanceof SymbolValue || rval instanceof SymbolValue)) {
     const leftString = lval instanceof JSStringValue;
     const rightString = rval instanceof JSStringValue;
-    const left = leftString ? Q(yield* ToNumeric(lval)) : lval;
-    const right = rightString ? Q(yield* ToNumeric(rval)) : rval;
+    const left = leftString || lval instanceof SymbolValue ? Q(yield* ToNumeric(lval)) : lval;
+    const right = rightString || rval instanceof SymbolValue ? Q(yield* ToNumeric(rval)) : rval;
     return typedBinary(opText as never, left, right, {
       ...literals,
       left: !leftString && (literals?.left ?? false),
@@ -414,6 +453,18 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         return Throw.TypeError('this operator is not defined for a rational');
     }
   }
+  // An Object beside a typed number reaches the operator as the value its
+  // ToPrimitive gives, and the dispatch above applies to that value as it
+  // would have to the value written (#sec-tonumeric-revised): a Number does
+  // not mix with a value of another numeric type, and is a count where a
+  // Number may be one. The steps below computed the pair as two Numbers
+  // instead, since ToNumber unwraps a typed number, so
+  // `uint8(3) * { valueOf() { return 3; } }` was the Number 9 where
+  // `uint8(3) * 3` with a Number value is a TypeError. An Object is no literal
+  // and adopts nothing.
+  const objectBesideTyped = surroundingAgent.feature('runtime-types')
+    && (lval instanceof TypedNumberValue || rval instanceof TypedNumberValue)
+    && (lval instanceof ObjectValue || rval instanceof ObjectValue);
   // 1. If opText is +, then
   if (opText === '+') {
     // a. Let lprim be ? ToPrimitive(lval).
@@ -432,6 +483,19 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     // d. Set lval to lprim.
     lval = lprim;
     // e. Set rval to rprim.
+    rval = rprim;
+  }
+  if (objectBesideTyped) {
+    const lprim = Q(yield* ToPrimitive(lval, 'number'));
+    const rprim = Q(yield* ToPrimitive(rval, 'number'));
+    if (isTypedArithmetic(lprim, rprim)) {
+      const leftString = lprim instanceof JSStringValue;
+      const rightString = rprim instanceof JSStringValue;
+      const left = leftString || lprim instanceof SymbolValue ? Q(yield* ToNumeric(lprim)) : lprim;
+      const right = rightString || rprim instanceof SymbolValue ? Q(yield* ToNumeric(rprim)) : rprim;
+      return typedBinary(opText as never, left, right, { left: false, right: false, leftString, rightString });
+    }
+    lval = lprim;
     rval = rprim;
   }
   // 2. NOTE: At this point, it must be a numeric operation.

@@ -39,7 +39,9 @@ test('a bare underlying value is not of the enum type; the enum call is the way 
   // already of type E that conversion would have nothing to validate, and the
   // one-way rule would not be one-way. This is the rule of C#, Rust, and Swift,
   // which the clause names.
-  expect(evaluated('enum E { A, B = 10 } !(0 is E) && !(10 is E) && !(3 is E) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A, B = 10 } const is = (v) => v is E; !is(0) && !is(10) && !is(3) ? "ok" : "no";')).toBe('ok');
+  // Where the operand is known to be a Number, the test cannot succeed, and is refused as one.
+  expectStaticTypeError('enum E { A, B = 10 } !(0 is E) ? "ok" : "no";');
   // What IS of the type: the enumerators, and what the enum call returns.
   expect(evaluated('enum E { A, B = 10 } (E.A is E) && (E.B is E) ? "ok" : "no";')).toBe('ok');
   expect(evaluated('enum E { A, B = 10 } E(10) === E.B ? "ok" : "no";')).toBe('ok');
@@ -313,7 +315,10 @@ test('the result of enum arithmetic is of the UNDERLYING type, not the enum', ()
 test('the enum rule does not weaken the operand rule or the enum\'s own identity', () => {
   // #sec-arithmetic-never-promotes still holds of the underlying types: two
   // different widths do not mix just because one of them came from an enum.
-  expectThrownKind('enum C: uint8 { Zero, One } C.One + (1 := uint16);', 'TypeError');
+  // Before running, where the enumerator's type is known (it has its enum's),
+  // and when run, where it is not.
+  expectStaticTypeError('enum C: uint8 { Zero, One } C.One + (1 := uint16);');
+  expectThrownKind('enum C: uint8 { Zero, One } function add(a, b) { return a + b; } add(C.One, 1 := uint16);', 'TypeError');
   // And an enumerator is still a value of its enum: the decay is a reading at a
   // value boundary, not a change to what the value IS.
   const C = 'enum C { Zero, One } ';

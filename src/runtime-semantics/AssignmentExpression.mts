@@ -2,7 +2,7 @@ import { JSStringValue, NumberValue, ObjectValue, ReferenceRecord, TypedNumberVa
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { displayType } from '../type-system/records.mts';
+import { displayType, UnderlyingOf } from '../type-system/records.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, ObjectEnvironmentRecord } from '../execution-context/Environment.mts';
 import { Q, X, EnsureCompletion, NormalCompletion } from '../completion.mts';
 import {
@@ -486,14 +486,24 @@ export function* Evaluate_AssignmentExpression({
     // `uint8` is still refused, and now for the reason the desugaring gives
     // rather than for the operands failing to mix.
     let operand = rval;
+    // An exponent and a shift distance beside an integer target are counts,
+    // which a Number holding an integer gives as written (Question AQ), so
+    // `a **= 300` at a `uint8` is `a = a ** 300` and `a <<= 9` is `a << 9`.
+    // Converting the count into the target's type refused the first and
+    // could change the second.
+    const countBesideInteger = lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)
+      && (opText === '**' || opText === '<<' || opText === '>>' || opText === '>>>')
+      && ((record: TypeRecord) => record.Kind === 'primitive' && (record.Name === 'int' || record.Name === 'uint'))(UnderlyingOf(lval.TypeRecord as TypeRecord));
     // A constant operand is the integer it writes, as it is beside the integer
     // in `x + c` (`AdoptIntegerContextOperand`): past 2**53 the Number it
     // evaluated to is another value, and `x += 2 ** 53 + 1` for a `uint64` held
     // by an untyped `x` added ...992 where `x + (2 ** 53 + 1)` adds ...993.
-    const exact = lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)
+    const exact = !countBesideInteger && lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)
       && isNumericLiteralOperand(AssignmentExpression)
       ? AdoptIntegerContextOperand(lval, rval, { left: false, right: true, rightNode: AssignmentExpression }) : undefined;
-    if (exact) {
+    if (countBesideInteger) {
+      operand = rval;
+    } else if (exact) {
       operand = exact.right;
     } else if (lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)) {
       // CHECKED, so a value the type cannot hold is a RangeError rather than a

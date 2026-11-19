@@ -24,7 +24,7 @@ import { NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
-import { ConstructArrayOfType, GenericClassDeclarationOf, MaterializeSpecialization } from './RuntimeTypesDeclarations.mts';
+import { ArrayTypeConstructorOf, ConstructArrayOfType, GenericClassDeclarationOf, MaterializeSpecialization } from './RuntimeTypesDeclarations.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
   Assert,
@@ -86,8 +86,17 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // as `new` of the class's own name does: `type W = V; new W()` is `new V()`,
   // and `type B8 = Box.<uint8>; new B8()` is `new Box.<uint8>()`.
   if (surroundingAgent.feature('runtime-types') && constructor instanceof ObjectValue && isTypeObject(constructor)) {
-    const denoted = Q(yield* ClassConstructorOfType((constructor as { TypeRecord?: TypeRecord }).TypeRecord));
-    if (denoted !== undefined) constructor = denoted;
+    const record = (constructor as { TypeRecord?: TypeRecord }).TypeRecord;
+    const denoted = Q(yield* ClassConstructorOfType(record));
+    if (denoted !== undefined) {
+      constructor = denoted;
+    } else if (record?.Kind === 'array') {
+      // And an alias of an array type constructs the array, as the type
+      // written out does: `type A4 = [4].<uint8>; new A4()` is
+      // `new ([4].<uint8>)()`. The alias's type object has no [[Construct]] of
+      // its own, so it was "not a constructor".
+      constructor = ArrayTypeConstructorOf(record as TypeRecord & { Kind: 'array' });
+    }
   }
   let appliedLibraryTypes: readonly TypeRecord[] | undefined;
   let appliedLibraryName: string | undefined;

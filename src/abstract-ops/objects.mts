@@ -499,9 +499,23 @@ export function* OrdinarySetWithOwnDescriptor(O: ObjectValue, P: PropertyKeyValu
     }
     // This is the ordinary CreateDataProperty descriptor, with the source
     // occurrence carried only through this internal definition.
-    return yield* Receiver.DefineOwnProperty(P, Descriptor({
+    const created = Q(yield* Receiver.DefineOwnProperty(P, Descriptor({
       Value: V, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
-    }), choices, admission);
+    }), choices, admission));
+    // proposal-runtime-types #sec-typed-classes (Question AP, AP4): an instance
+    // of a typed class is sealed when it is constructed, and a store the seal
+    // refuses - one that would add a property the class does not declare - is
+    // a TypeError in every mode, as a store to a frozen typed instance is,
+    // rather than the silent failure a non-extensible object gives outside
+    // strict mode. `function g(o) { o.extra = 1; } g(new V())` in sloppy code
+    // stored nothing and said nothing, so a misspelt member was lost. A
+    // program that names no type constructs no typed instance and keeps
+    // JavaScript's answer.
+    if (created === Value.false && surroundingAgent.feature('runtime-types')
+        && (Receiver as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy?.some((ctor) => ctor.SealInstances)) {
+      return Throw.TypeError('Cannot set property $1 on $2', P, Receiver);
+    }
+    return created;
   }
 
   Assert(IsAccessorDescriptor(ownDesc));

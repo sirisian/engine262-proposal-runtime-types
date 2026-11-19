@@ -165,12 +165,8 @@ test.each([
     "function f(x:number,b:boolean){x*b;}f(2,true);"
   ],
   [
-    "control: typed string coercion",
-    "function f(x:uint8,y:string){x*y;}"
-  ],
-  [
-    "control: typed string shift count",
-    "function f(x:uint8,y:string){return x<<y;}f(uint8(2),\"3\");"
+    "control: typed string concatenation",
+    "function f(x:uint8,y:string){return x+y;}f(uint8(2),\"3\");"
   ]
 ])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
@@ -192,6 +188,15 @@ test.each([
   [
     "typed const alias",
     "function f(x:symbol){const s=x;s*2;}"
+  ],
+  // A String is a Number on this path, as a Boolean is (Question AQ).
+  [
+    "typed string coercion",
+    "function f(x:uint8,y:string){x*y;}"
+  ],
+  [
+    "typed string shift count",
+    "function f(x:uint8,y:string){return x<<y;}f(uint8(2),\"3\");"
   ]
 ])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);

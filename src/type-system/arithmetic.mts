@@ -262,13 +262,27 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
   // retain their own contexts", so a plain Number or BigInt that holds an
   // integer is a distance or an exponent as written, not a literal to adopt.
   const countOperator = op === '<<' || op === '>>' || op === '>>>' || op === '**';
+  // A Boolean, *null* and *undefined* reach the operator as the Number
+  // ToNumeric makes of them (#sec-tonumeric-revised), and a Number holding an
+  // integer is a count, so `z << true` shifts by 1 as `z << 1` does and
+  // `z ** null` is `z ** 0`. Each is refused beside a typed number everywhere
+  // else, as its Number is; *undefined* is NaN, which is no count either.
+  let count = y;
+  if (countOperator && x instanceof TypedNumberValue
+      && (y instanceof BooleanValue || y === Value.null || y === Value.undefined)) {
+    const converted = y === Value.true ? 1 : y === Value.undefined ? NaN : 0;
+    if (Number.isInteger(converted)) {
+      count = Value(converted);
+    }
+  }
   const shiftTarget = countOperator && x instanceof TypedNumberValue
-    ? (y instanceof TypedNumberValue ? ShiftDistanceExemptTarget(x as TypedNumberValue, y as TypedNumberValue) : CountOperandTarget(x as TypedNumberValue, y))
+    ? (count instanceof TypedNumberValue ? ShiftDistanceExemptTarget(x as TypedNumberValue, count as TypedNumberValue) : CountOperandTarget(x as TypedNumberValue, count))
     : undefined;
   const target = shiftTarget ?? TypedOperandType(x, y, literals);
   if (target instanceof AbruptCompletion) {
     return target as ThrowCompletion;
   }
+  y = count;
   // proposal-runtime-types #table-family-operations: a binary floating-point type
   // "does not define bitwiseNOT, the shifts, and the bitwise operations, since
   // each would require converting the operand to an integer type". The decimal
@@ -296,6 +310,30 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
       && target.Kind === 'primitive' && (target.Name === 'int' || target.Name === 'uint')
       && payload(y) === 0) {
     return Throw.RangeError('the divisor is zero') as ThrowCompletion;
+  }
+  // AN INTEGER POWER, computed exactly and then reduced, as #sec-integer-operations
+  // says of every operation. The Number path raised a double to the power and
+  // wrapped the rounded result, so a power past 2**53 lost the low bits the
+  // reduction keeps: `uint8(3) ** 300` answered 0, though an odd number to
+  // any power is odd, and `uint32(3) ** 40` answered 689956864 for 3**40
+  // modulo 2**32. The wide path computed the whole power before reducing it,
+  // which for a large exponent is a number of unbounded size. Reducing at each
+  // step of the square-and-multiply is exact, since the reduction is modulo
+  // 2**N and a product's residue is the product of the residues.
+  //
+  // A negative exponent names no integer result, so it throws, for the reason
+  // a negative shift distance does and as BigInt's `2n ** -1n` does. It
+  // truncated before: `uint8(3) ** -1` was 0, and so was `uint8(0) ** -1`, an
+  // operation that divides by zero.
+  if (op === '**' && target.Kind === 'primitive' && (target.Name === 'int' || target.Name === 'uint')) {
+    const bits = widthOf(target);
+    const exponent = payloadExact(y);
+    if (exponent < 0n) {
+      return Throw.RangeError('$1 with a negative exponent is not defined for an integer type', Value('**')) as ThrowCompletion;
+    }
+    if (bits !== null) {
+      return new TypedNumberValue(wrapToType(PowerAtWidth(payloadExact(x), exponent, bits), target), target);
+    }
   }
   // A SHIFT DISTANCE AT OR ABOVE THE WIDTH, answered here so that the three
   // carriers below cannot disagree about it - and they did: `1 << 8` at `uint8`
@@ -750,6 +788,19 @@ function CountOperandTarget(x: TypedNumberValue, y: Value): TypeRecord | undefin
   if (y instanceof BigIntValue) return xt;
   if (y instanceof NumberValue && !(y instanceof TypedNumberValue) && Number.isInteger(payload(y))) return xt;
   return undefined;
+}
+
+/** _base_ to the power _exponent_, modulo 2**_bits_, for a non-negative _exponent_. */
+function PowerAtWidth(base: bigint, exponent: bigint, bits: number): bigint {
+  let result = 1n;
+  let square = BigInt.asUintN(bits, base);
+  for (let e = exponent; e > 0n; e >>= 1n) {
+    if (e & 1n) {
+      result = BigInt.asUintN(bits, result * square);
+    }
+    square = BigInt.asUintN(bits, square * square);
+  }
+  return BigInt.asUintN(bits, result);
 }
 
 function ShiftDistanceExemptTarget(x: TypedNumberValue, y: TypedNumberValue): TypeRecord | undefined {

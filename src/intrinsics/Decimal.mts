@@ -363,6 +363,143 @@ export function decimalRemainder(x: DecimalObject, y: DecimalObject): { parts: D
   return { parts: atPreferredExponent(xs % ys, exponent, exponent, width), width };
 }
 
+/**
+ * A decimal to an integer power (Question AS, AS1): the exact power rounded
+ * once to the width, a negative exponent giving the reciprocal of the power,
+ * rounded once. decimal.md gives a decimal `**`, and the family table gives it
+ * `exponentiate`; it had none, so `d ** 2` was a TypeError. Java's
+ * `BigDecimal.pow(int)` and Swift's `pow(Decimal, Int)` take the same integer
+ * exponent. A power whose exponent is no integer has no exact value to round,
+ * and the caller refuses it.
+ *
+ * An exact power has the preferred exponent repeated multiplication gives it,
+ * _n_ x Q(_x_), and a reciprocal the one division gives it, -_n_ x Q(_x_), so
+ * `1.50 ** 2` is `2.2500` as `1.50 * 1.50` is. The power is computed exactly
+ * where it is of a size to compute; past that, which only an _x_ very near 1
+ * reaches inside the range, it is bracketed between two products rounded
+ * toward zero and away from it at a working precision that doubles until both
+ * round to one value. Such a power has more digits than the width holds and so
+ * is never a tie, and the bracket closes.
+ */
+export function decimalPow(x: DecimalObject, n: bigint): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' {
+  const width = x.DecimalWidth;
+  const precision = DecimalPrecision(width);
+  const range = DecimalExponentRange(width);
+  const odd = (n & 1n) === 1n;
+  const outOfRange = { parts: { significand: 1n, exponent: range.max + 1 }, width };
+  // IEEE 754 pown: x**0 is 1 for every x, a NaN included.
+  if (n === 0n) {
+    return { parts: { significand: 1n, exponent: 0 }, width };
+  }
+  if (x.DecimalSpecial === 'NaN') {
+    return nonFinite('NaN', width);
+  }
+  if (x.DecimalSpecial !== undefined) {
+    return n > 0n
+      ? nonFinite(x.DecimalSpecial === '-Infinity' && odd ? '-Infinity' : 'Infinity', width)
+      : { parts: { significand: 0n, exponent: 0 }, width };
+  }
+  const k = n < 0n ? -n : n;
+  if (x.DecimalSignificand === 0n) {
+    if (n < 0n) {
+      return 'divide-by-zero';
+    }
+    // The exponent of a zero is held to the width's own exponents.
+    const exponent = BigInt(x.DecimalExponent) * k;
+    const low = BigInt(range.min - precision + 1);
+    const high = BigInt(range.max - precision + 1);
+    return { parts: { significand: 0n, exponent: Number(exponent < low ? low : exponent > high ? high : exponent) }, width };
+  }
+  const sign = x.DecimalSignificand < 0n && odd ? -1n : 1n;
+  const reduced = ReduceDecimal(x.DecimalSignificand < 0n ? -x.DecimalSignificand : x.DecimalSignificand, x.DecimalExponent);
+  const magnitude = reduced.significand;
+  // Outside the range by any measure: the power is not computed to find that out.
+  const log = (Math.log10(Number(magnitude)) + reduced.exponent) * Number(n);
+  if (log > range.max + 2 || log < range.min - 2) {
+    return outOfRange;
+  }
+  const preferred = x.DecimalExponent * Number(n);
+  if (magnitude === 1n || BigInt(digitCount(magnitude)) * k <= 10000n) {
+    const power = magnitude ** k;
+    const exponent = reduced.exponent * Number(k);
+    if (n > 0n) {
+      return { parts: atPreferredExponent(sign * power, exponent, preferred, width), width };
+    }
+    // sign / (power x 10^exponent): terminating exactly where power has no
+    // prime factor but 2 and 5.
+    let rest = power;
+    let twos = 0;
+    let fives = 0;
+    while (rest % 2n === 0n) {
+      rest /= 2n;
+      twos += 1;
+    }
+    while (rest % 5n === 0n) {
+      rest /= 5n;
+      fives += 1;
+    }
+    if (rest === 1n) {
+      const K = Math.max(twos, fives);
+      const significand = sign * 2n ** BigInt(K - twos) * 5n ** BigInt(K - fives);
+      return {
+        parts: digitCount(significand) <= precision
+          ? atPreferredExponent(significand, -K - exponent, preferred, width)
+          : roundToPrecision(significand, -K - exponent, precision),
+        width,
+      };
+    }
+    const numerator = sign * (exponent < 0 ? 10n ** BigInt(-exponent) : 1n);
+    const denominator = power * (exponent > 0 ? 10n ** BigInt(exponent) : 1n);
+    return { parts: DecimalFromRational(numerator, denominator, width), width };
+  }
+  // The bracket. Each part is a significand and an exponent; `cut` keeps _w_
+  // digits, toward zero or away from it.
+  type Part = { s: bigint, e: number };
+  for (let w = precision + 10; ; w *= 2) {
+    const cut = (v: Part, up: boolean): Part => {
+      const excess = digitCount(v.s) - w;
+      if (excess <= 0) {
+        return v;
+      }
+      const scale = 10n ** BigInt(excess);
+      const q = v.s / scale;
+      return { s: up && q * scale !== v.s ? q + 1n : q, e: v.e + excess };
+    };
+    const times = (a: Part, b: Part, up: boolean): Part => cut({ s: a.s * b.s, e: a.e + b.e }, up);
+    let lo: Part = { s: 1n, e: 0 };
+    let hi: Part = { s: 1n, e: 0 };
+    let baseLo: Part = cut({ s: magnitude, e: reduced.exponent }, false);
+    let baseHi: Part = cut({ s: magnitude, e: reduced.exponent }, true);
+    for (let e = k; e > 0n; e >>= 1n) {
+      if ((e & 1n) === 1n) {
+        lo = times(lo, baseLo, false);
+        hi = times(hi, baseHi, true);
+      }
+      if (e > 1n) {
+        baseLo = times(baseLo, baseLo, false);
+        baseHi = times(baseHi, baseHi, true);
+      }
+    }
+    if (n < 0n) {
+      // 1/hi <= x**n <= 1/lo.
+      const reciprocal = (v: Part, up: boolean): Part => {
+        const shift = w + digitCount(v.s);
+        const scaled = 10n ** BigInt(shift);
+        const q = scaled / v.s;
+        return { s: up && q * v.s !== scaled ? q + 1n : q, e: -v.e - shift };
+      };
+      [lo, hi] = [reciprocal(hi, false), reciprocal(lo, true)];
+    }
+    const a = roundToPrecision(lo.s, lo.e, precision);
+    const b = roundToPrecision(hi.s, hi.e, precision);
+    const ra = ReduceDecimal(a.significand, a.exponent);
+    const rb = ReduceDecimal(b.significand, b.exponent);
+    if ((ra.significand === rb.significand && ra.exponent === rb.exponent) || w > 100000) {
+      return { parts: { significand: sign * b.significand, exponent: b.exponent }, width };
+    }
+  }
+}
+
 export function decimalNegate(x: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
   if (x.DecimalSpecial !== undefined) {
     return nonFinite(flipped(x.DecimalSpecial)!, x.DecimalWidth);

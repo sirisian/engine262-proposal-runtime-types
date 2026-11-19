@@ -71,9 +71,13 @@ test('the call refuses what := refuses, in the same phase', () => {
   // A class held by reference that declares a constructor is not filled from a literal.
   expect(outcome('class R { x: uint8 = 0; constructor(x: uint8) { this.x = x; } } R({ x: 1 });'))
     .toMatchObject({ bodyEntered: false, rule: 'rt-explicit-conversion' });
-  // A value of another type is refused when it runs, as by `:=`.
-  expectThrownKind(`${V} V("a");`, 'TypeError');
-  expectThrownKind(`${V} ("a" := V);`, 'TypeError');
+  // A string converts to `V` only by a constructor or conversion `V` declares, and it
+  // declares none, so the call and `:=` are both refused before running.
+  expect(outcome(`${V} V("a");`)).toMatchObject({ bodyEntered: false, rule: 'rt-explicit-conversion' });
+  expect(outcome(`${V} ("a" := V);`)).toMatchObject({ bodyEntered: false, rule: 'rt-explicit-conversion' });
+  // A value whose type is not known is refused when it runs, by both.
+  expectThrownKind(`${V} function f(a) { return V(a); } f("a");`, 'TypeError');
+  expectThrownKind(`${V} function f(a) { return a := V; } f("a");`, 'TypeError');
 });
 
 test('a call with no argument or several is still refused, and says what converts', () => {
@@ -124,11 +128,11 @@ test('a class imported from a module converts by a call', async () => {
   });
   expect(result).toMatchObject({ status: 'fulfilled', bodyEntries: ['dep', 'main'] });
   expect(result.errorClass).toBeUndefined();
-  // A call with no argument is refused when it runs: the refusal before the
-  // program runs does not follow an import, here as before.
+  // A call with no argument is refused before running, as it is for a class
+  // declared in the module (Question AI, AI1: every spelling of a class alike).
   const refused = await observeModuleGraph({
     dep: 'export class V { x: uint8 = 0; }',
     main: 'import { V } from "dep"; V();',
   });
-  expect(refused).toMatchObject({ status: 'rejected', errorClass: 'TypeError', bodyEntries: ['dep', 'main'] });
+  expect(refused).toMatchObject({ status: 'rejected', errorClass: 'StaticTypeError', bodyEntries: [] });
 });

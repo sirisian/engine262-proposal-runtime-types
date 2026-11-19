@@ -1950,7 +1950,17 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
   }
   const args = node.TypeArguments.TypeArgumentList;
   const element = args.length > 0 ? Q(yield* TypeNodeToTypeRecord(args[0]!)) : anyType;
-  const record = CanonicalizeType({ Kind: 'array', Element: element, Extent: extent } as never);
+  return ArrayTypeConstructorOf(CanonicalizeType({ Kind: 'array', Element: element, Extent: extent } as never) as TypeRecord & { Kind: 'array' });
+}
+
+/**
+ * The constructor of the array type _record_, as `[4].<uint8>` written in
+ * expression position evaluates to it. An alias of the type constructs
+ * through it too (Question AI, AI1).
+ */
+export function ArrayTypeConstructorOf(record: TypeRecord & { Kind: 'array' }): ObjectValue {
+  const element = record.Element;
+  const extent = record.Extent;
   // Keyed by the INTERNED Type Object rather than the record: canonicalizing
   // yields an equal record each time but not the same one, so a Map over
   // records never hit and `[4].<uint8>` gave a fresh constructor per mention.
@@ -1992,7 +2002,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     // `new [4].<float32>()` could be grown where `const a: [4].<float32>`
     // could not, and the same type would have two behaviours.
     if (extent !== 'dynamic') {
-      (array as { TypedExtent?: number }).TypedExtent = extent;
+      (array as { TypedExtent?: number }).TypedExtent = extent as number;
     }
     return array;
   }), 0, displayType(record as never), [], realm) as ObjectValue;

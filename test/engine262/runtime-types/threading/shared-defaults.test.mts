@@ -14,7 +14,7 @@ import { evaluated, expectThrown, observeScript } from '../harness.mts';
 // A default is the zero of each field's type: a field's initializer belongs to construction.
 const P = 'value class P { x: uint32; y: uint32 = 7; } value class G<T: type> { v: T; } ';
 
-test('a shared binding with no initializer holds its target’s default', () => {
+test('a shared binding with no initializer holds the default of its target', () => {
   expect(evaluated('let a: shared uint32; String(a);')).toBe('0');
   expect(evaluated('let a: shared [4].<uint8>; String(a.length) + ":" + a.join("");')).toBe('4:0000');
   expect(evaluated(`${P}let p: shared P; let q: P; String(p.x) + String(p.y) + String(p === q);`)).toBe('00true');
@@ -24,7 +24,7 @@ test('a shared binding with no initializer holds its target’s default', () => {
   expect(evaluated('let a: shared uint32 = 5; String(a);')).toBe('5');
 });
 
-test('a shared field with no initializer holds its target’s default', () => {
+test('a shared field with no initializer holds the default of its target', () => {
   expect(evaluated('class C { n: shared uint32; } String(new C().n);')).toBe('0');
   expect(evaluated(`${P}class C { f: shared P; #g: shared G.<uint32>; g() { return this.#g.v; } } const c = new C(); c.f.y = 7; String(c.f.y) + String(c.g());`)).toBe('70');
   expect(evaluated(`${P}class C { s: shared [4].<P>; } const c = new C(); c.s[3].y = 7; String(c.s.length) + String(c.s[2].y) + String(c.s[3].y);`)).toBe('407');
@@ -51,6 +51,6 @@ test('a generic class held by reference holds shared storage of its parameters',
   expectThrown(`${P}class R { r: uint8 = 0; } class C<T: type> { one: shared T; } new C.<R>();`, 'which is not a value type');
 });
 
-test('a shared binding of a type parameter is the application’s question', () => {
+test('a shared binding of a type parameter is a question for the application', () => {
   expect(evaluated(`${P}function f<T: type>() { let s: shared T; return s; } String(f.<P>().y) + String(f.<uint8>());`)).toBe('00');
 });

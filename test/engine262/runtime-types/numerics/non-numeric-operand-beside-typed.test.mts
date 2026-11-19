@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
  * A String, Boolean or nullish operand beside a typed number.
@@ -16,9 +16,11 @@ import { evaluated, expectThrown } from '../harness.mts';
 const Z = 'function f(z: uint32, s: any) { return ';
 
 test('a String operand beside a typed number is refused as its Number is, except by +', () => {
-  for (const source of [`${Z}z * s; } f(3, "2");`, `${Z}z - s; } f(3, "");`, `${Z}s * z; } f(3, "2");`, 'function f(z: uint32) { return z * "2"; } f(3);']) {
+  for (const source of [`${Z}z * s; } f(3, "2");`, `${Z}z - s; } f(3, "");`, `${Z}s * z; } f(3, "2");`]) {
     expectThrown(source, 'a value of the "string" type and a "uint.<32>" are different numeric types and do not mix');
   }
+  // Written beside a typed number, it is refused before running (Question AQ).
+  expectStaticTypeError('function f(z: uint32) { return z * "2"; } f(3);');
   expect(evaluated(`${Z}z + s; } f(3, "x");`)).toBe('3x');
   expect(evaluated('function f(z: uint32) { return z * 2; } String(f(3));')).toBe('6');
 });

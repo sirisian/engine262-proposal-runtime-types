@@ -29,7 +29,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf, InheritedWhereDeclarationOf, InheritedWhereDeclarationsOf, InterfaceOfSignature } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, UnderlyingOf, type TypeRecord, type TypeParameterRecord, type SignatureRecord, type ParameterRecord, substituteFreeTypeParameters, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, TuplePositionsAre, COLLECTION_LIBRARY_NAMES, InterfaceApplicationsOf } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver, IsValueType, ValueFieldsOf } from '../type-system/layout.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -1149,7 +1149,11 @@ function TypedNumericMismatch(value: Value, record: TypeRecord): ThrowCompletion
   const source = value instanceof TypedNumberValue || value instanceof TypedBigIntValue
     ? (value as unknown as { TypeRecord?: TypeRecord }).TypeRecord
     : RuntimeTypeOf(value);
-  if (target && source && scalarNumeric(source) && !IsAssignable(source, record)) {
+  // An enumerator is a value of its underlying type (#sec-enums), and is refused
+  // where that type is: `function f(i) { const n: number = i; } f(E.A)` for an
+  // `enum E : uint8` converted the enumerator to a Number, where `const n:
+  // number = E.A` is refused before running.
+  if (target && source && scalarNumeric(UnderlyingOf(source)) && !IsAssignable(source, record)) {
     return Throw.TypeError('$1 is not assignable to $2: $3', Value(displayType(source)), Value(displayType(record)),
       Value(record.Kind === 'union'
         ? 'convert it explicitly to one of its members'

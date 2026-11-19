@@ -509,9 +509,12 @@ test('the relational operators take the same rule as the arithmetic ones', () =>
   expect(evaluated('String((1 := uint8) < 2);')).toBe('true');
   expect(evaluated('String(1 < (2 := uint8));')).toBe('true');
   expect(evaluated('String(1 < 2) + "/" + String(1n < 2n) + "/" + String(1n < 2) + "/" + String("a" < "b");')).toBe('true/true/true/true');
-  // A String operand is not a numeric type, so the clause does not reach it and
-  // the existing coercion governs - the same reason `+` keeps concatenating.
-  expect(evaluated('String((1 := uint8) < "2");')).toBe('true');
+  // A String operand reaches the comparison as the Number ToNumeric makes of
+  // it, and is refused as that Number is (Question AQ): before running where
+  // it is known, and when run where it is not. `+` keeps concatenating.
+  expect(thrownKind('(1 := uint8) < "2";')).toBe('StaticTypeError');
+  expect(thrownKind('function s() { return "2"; } (1 := uint8) < s();')).toBe('TypeError');
+  expect(evaluated('String((1 := uint8) + "2");')).toBe('12');
 });
 
 test('two typed operands of different types do not mix, exactly as BigInt does not', () => {

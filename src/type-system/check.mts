@@ -1313,6 +1313,18 @@ export function FoldedRationalOf(node: object): { num: bigint, den: bigint, type
   return foldedRationals.get(node);
 }
 
+/**
+ * The `float128` counterpart, for an integer constant only: a constant with a
+ * bitwise operator or a shift at a `float128` type, which JavaScript computes
+ * as an `int32` and binary128 holds exactly (Question AO, AO1). The evaluator
+ * builds the value from the integer.
+ */
+const foldedFloat128s = new WeakMap<object, { value: bigint, type: TypeRecord }>();
+
+export function FoldedFloat128Of(node: object): { value: bigint, type: TypeRecord } | undefined {
+  return foldedFloat128s.get(node);
+}
+
 export function FoldedDecimalOf(node: object): { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord } | undefined {
   return foldedDecimals.get(node);
 }
@@ -2063,6 +2075,26 @@ function signedLiteralValue(node: ParseNode): bigint | null {
   return null;
 }
 
+/** The constructors of the language a class may extend, none of them a typed class. */
+const BUILTIN_CLASS_BASES: ReadonlySet<string> = new Set([
+  'Object', 'Function', 'Array', 'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError',
+  'URIError', 'AggregateError', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise',
+  'Date', 'RegExp', 'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Boolean', 'Number', 'String',
+  'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array',
+  'Float16Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array',
+]);
+
+/** Whether _node_ is an integer literal as written, under parentheses and a sign. */
+function writtenIntegerLiteral(node: ParseNode): boolean {
+  let at: ParseNode | undefined = node;
+  while (at?.type === 'ParenthesizedExpression'
+    || (at?.type === 'UnaryExpression' && ['-', '+'].includes((at as unknown as { operator?: string }).operator ?? ''))) {
+    const wrapped = at as unknown as { Expression?: ParseNode, UnaryExpression?: ParseNode };
+    at = wrapped.Expression ?? wrapped.UnaryExpression;
+  }
+  return at?.type === 'NumericLiteral' && signedLiteralValue(node) !== null;
+}
+
 /** The `NumericLiteral` inside any parentheses and unary signs, or the node itself. */
 function innermostLiteral(node: ParseNode): ParseNode {
   let n: ParseNode | undefined = node;
@@ -2699,7 +2731,7 @@ function foldRationalConstant(node: ParseNode): Rat | null {
   const e = node as ParseNode & {
     Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string,
     AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
-    ExponentiationExpression?: ParseNode, SourceText?: string,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode, SourceText?: string,
   };
   switch (e.type) {
     case 'NumericLiteral': {
@@ -2756,6 +2788,21 @@ function foldRationalConstant(node: ParseNode): Rat | null {
         return r.num === 0n ? null : canonicalRational(l.num * r.den, l.den * r.num);
       }
       return null;
+    }
+    // A power with an integer exponent is exact, a negative one inverting
+    // (rational.md), so `3 ** -1` at a rational is 1/3 and not the double's
+    // third (Question AS). A zero to a negative power declines, as a zero
+    // divisor does, and a large exponent is left to the run time.
+    case 'ExponentiationExpression': {
+      const l = fold(e.UpdateExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null || r.den !== 1n || r.num > 4096n || r.num < -4096n) {
+        return null;
+      }
+      if (r.num >= 0n) {
+        return canonicalRational(l.num ** r.num, l.den ** r.num);
+      }
+      return l.num === 0n ? null : canonicalRational(l.den ** -r.num, l.num ** -r.num);
     }
     default:
       return null;
@@ -13995,10 +14042,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Arguments: [],
       EnumMembers: memberValues,
       // An enum is a subtype of its underlying type (#sec-enums), which the
-      // relation in IsSubtype can only apply if the record carries it.
+      // relation in IsSubtype can only apply if the record carries it. An enum
+      // declared without one has the underlying type `int32`, as the run time
+      // gives it; reading `number` here refused `let i: int32 = e` for an
+      // `e: E`, which the subtype rule admits, and admitted `const n: number = e`.
       Underlying: decl.TypeAnnotation
         ? resolveType(decl.TypeAnnotation.Type) ?? undefined
-        : builtinTypeRecord('number') ?? undefined,
+        : builtinTypeRecord('int32') ?? undefined,
     } as unknown as Known;
     enumTypeMemo.set(node, built);
     return built;
@@ -19419,6 +19469,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * of class declarations this pass can read, ending at a class that extends
    * nothing.
    */
+  /** Whether a primitive block of this source declares a conversion, which may be one to a class. */
+  let primitiveConversionsDeclared: boolean | undefined;
+  const primitiveBlockConversionsDeclared = (): boolean => {
+    if (primitiveConversionsDeclared === undefined) {
+      let found = false;
+      const scan = (node: unknown): void => {
+        if (found || !node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(scan);
+          return;
+        }
+        const n = node as ParseNode & Record<string, unknown>;
+        if (typeof n.type !== 'string') return;
+        if (n.type === 'PrimitiveOperatorDeclaration') {
+          found = ((n as unknown as ParseNode.PrimitiveOperatorDeclaration).OperatorDefinitionList ?? [])
+            .some((e) => e.type === 'OperatorDefinition' && (e as ParseNode.OperatorDefinition).Type !== null);
+          return;
+        }
+        for (const key of Object.keys(n)) {
+          if (key !== 'parent' && key !== 'location' && key !== 'sourceText' && key !== 'strict') scan(n[key]);
+        }
+      };
+      scan(statementList);
+      primitiveConversionsDeclared = found;
+    }
+    return primitiveConversionsDeclared;
+  };
+  /** Whether a class of _declaration_'s chain declares an inbound conversion, `operator T(value)`. */
+  const chainDeclaresInboundConversion = (declaration: ParseNode): boolean => {
+    for (let at: ParseNode | undefined = declaration, depth = 0; at && depth < 32; at = heritageClassOf(at), depth += 1) {
+      if (classBodyOf(at).some((member) => member.type === 'OperatorDefinition'
+        && (member as ParseNode.OperatorDefinition).Type !== null
+        && ((member as ParseNode.OperatorDefinition).FormalParameters?.length ?? 0) > 0)) return true;
+    }
+    return false;
+  };
   const declaresNoConstructor = (declaration: ParseNode | null | undefined): boolean => {
     let at = declaration ?? undefined;
     for (let depth = 0; at && depth < 32; depth += 1) {
@@ -20456,6 +20542,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (alternatives.includes('possible')) return 'possible';
       return alternatives.every((result) => result === 'impossible') ? 'impossible' : 'unresolved';
     }
+    // A primitive converts to a class only by a conversion the class declares
+    // (#sec-user-defined-conversions): a constructor taking it, or an inbound
+    // `operator T(value)`. A class whose chain declares neither, and has no
+    // base this pass cannot read, has none, so `"s" := V` and `null := V` are
+    // refused as `"3" := uint8` is; they were refused only when they ran.
+    if (source.Kind === 'primitive' && target.Kind === 'nominal' && target.EnumMembers === undefined
+        && (isNumericOperandName(source.Name) || ['string', 'boolean', 'symbol', 'undefined', 'null', 'bigint'].includes(source.Name))) {
+      // A class of the chain that declares a constructor may take the value,
+      // and a base this pass cannot read may too; the run time decides those.
+      const declaration = classDeclarationOf(target) as ParseNode | undefined;
+      if (declaration && declaresNoConstructor(declaration) && !chainDeclaresInboundConversion(declaration)
+        && !primitiveBlockConversionsDeclared()) return 'impossible';
+      return 'unresolved';
+    }
     // This closed scalar domain needs neither member inspection nor user
     // evaluation. In particular, do not erase brands to manufacture a proof.
     if (source.Kind !== 'primitive' || target.Kind !== 'primitive') return 'unresolved';
@@ -21352,8 +21452,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * Whether a numeric constant expression is one a decimal or a `float128`
    * computes with its own operators: literals and named constants under `+`,
-   * `-`, `*`, `/` and `%`, and `**` where _power_ (the run time has none
-   * between decimals). A constant of `Math` is a Number and is not one.
+   * `-`, `*`, `/` and `%`, and `**` where _power_. A decimal's power takes an
+   * integer exponent (Question AS), and a fractional one is refused before
+   * this is asked. A constant of `Math` is a Number and is not one.
    */
   const computesInType = (node: ParseNode | null | undefined, power: boolean, depth = 0): boolean => {
     if (!node || depth > 256) return false;
@@ -23323,9 +23424,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // digits would enter the decimal silently, so it is refused in both
     // positions; the program converts a Number explicitly, `(2 ** 0.5) :=
     // decimal64`, as C# writes `(decimal)Math.Pow(2, 0.5)`.
-    if (contextual && contextual.Kind === 'primitive' && decimalWidthOf(contextual as TypeRecord) !== undefined
+    // The same integer is taken exactly at a `float128` and at a rational,
+    // each of which holds every `int32`: `q * (6 | 1)` is `q * 7`, as `const q:
+    // float128 = 6 | 1` is 7, where it was a TypeError beside the operand.
+    if (contextual && contextual.Kind === 'primitive'
+        && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128' || contextual.Name === 'rational')
         && node.type !== 'NumericLiteral' && !conversionOperands.has(node) && isNumericConstantExpression(node)) {
-      const fractional = fractionalPowerIn(node);
+      const width = decimalWidthOf(contextual as TypeRecord);
+      const fractional = width !== undefined ? fractionalPowerIn(node) : null;
       if (fractional) {
         reportType('rt-numeric-operator', fractional, '$1 with a fractional exponent is not defined for $2; convert a Number to it explicitly with :=', Value('**'), Value(displayType(contextual as TypeRecord)));
         return contextual;
@@ -23333,7 +23439,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (bitwiseConstantIn(node)) {
         const integer = foldConstantAt(node, int32ConstantType);
         if (integer !== null) {
-          const width = decimalWidthOf(contextual as TypeRecord)!;
+          if (width === undefined && contextual.Name === 'rational') {
+            if (!rationalFitsType(integer, 1n, contextual as TypeRecord)) {
+              reportType('rt-numeric-range', node, '$1 is not in the range of $2', Value(String(integer)), Value(displayType(contextual as TypeRecord)));
+              return contextual;
+            }
+            journalSet(foldedRationals, node, { num: integer, den: 1n, type: contextual as TypeRecord });
+            return contextual;
+          }
+          if (width === undefined) {
+            journalSet(foldedFloat128s, node, { value: integer, type: contextual as TypeRecord });
+            return contextual;
+          }
           if (!DecimalPartsInRange({ significand: integer, exponent: 0 }, width)) {
             reportType('rt-numeric-range', node, '$1 is not in the range of $2', Value(String(integer)), Value(displayType(contextual as TypeRecord)));
             return contextual;
@@ -23388,7 +23505,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // literals take the type, and the type's own operators compute it.
     if (contextual && contextual.Kind === 'primitive' && node.type !== 'NumericLiteral'
         && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128')
-        && isNumericConstantExpression(node) && computesInType(node, contextual.Name === 'float128')) {
+        && isNumericConstantExpression(node)
+        // A decimal's power is computed in the type where its exponent is an
+        // integer; a conversion's operand with a fractional one is a Number.
+        && computesInType(node, contextual.Name === 'float128' || fractionalPowerIn(node) === null)) {
       typeConstantOperands(node, contextual);
       return contextual;
     }
@@ -23497,16 +23617,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * #sec-arithmetic-never-promotes: a shift's right operand is a DISTANCE, "the
    * distance may be of any" integer type, "and the result has the left
    * operand's type" - so `a <<= b` stores `a << b`, never `b`, and judging the
-   * distance against the target refused a valid store. Every
+   * distance against the target refused a valid store. An exponent is a
+   * count in the same way, and a literal one is taken as written, so
+   * `a **= 300` stores `a ** 300` (Question AQ). Every
    * other arithmetic compound requires same-typed operands, so its right
    * operand is the fact the target is judged by, as before.
    */
   const compoundStoreSource = (a: { AssignmentOperator: string, AssignmentExpression: ParseNode }, target: Known): Known => (
-    (a.AssignmentOperator === '<<=' || a.AssignmentOperator === '>>=' || a.AssignmentOperator === '>>>=')
+    (a.AssignmentOperator === '<<=' || a.AssignmentOperator === '>>=' || a.AssignmentOperator === '>>>=' || a.AssignmentOperator === '**=')
       && isIntegerValueType(erasedForJudgment(target))
       // The exemption is for an integer distance ("where both operands are of
       // integer types"); any other distance keeps the judgment it had.
-      && isIntegerValueType(erasedForJudgment(staticType(a.AssignmentExpression)))
+      && (isIntegerValueType(erasedForJudgment(staticType(a.AssignmentExpression)))
+        || (a.AssignmentOperator === '**=' && writtenIntegerLiteral(a.AssignmentExpression)))
       ? compoundBinaryType(a as unknown as ParseNode.AssignmentExpression) : staticTypeIn(a.AssignmentExpression, target));
 
   const compoundBinaryType = (node: ParseNode.AssignmentExpression): Known => {
@@ -23689,15 +23812,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return isIntegerValueType(base) && value !== null && base.Kind === 'primitive'
             && !fitsNumericType(value, base.Name, base.Arguments);
         };
-        if (!l && leftLiteral && numeric(r)) result = literalFails(leftLiteral, r!);
-        else if (!r && rightLiteral && numeric(l)) result = literalFails(rightLiteral, l!);
-        else if (!numeric(l)) result = false;
-        else if (numericOperationUnavailable(operator, l)) result = true;
-        else if (!numeric(r)) result = false;
-        else if (numericOperationUnavailable(operator, r)) result = true;
-        else if (operator === '**' && (erasedForJudgment(l) as { Name?: string }).Name === 'rational'
-          && (isIntegerValueType(r!) || ['number', 'bigint'].includes((erasedForJudgment(r) as { Name?: string }).Name ?? ''))) result = false;
-        else result = !ordinaryNumericOrdering(operator, l, r) && !SameType(l!, r!);
+        // A Boolean, *null*, *undefined* and, but for `+`, a String reach the
+        // operator as the Number ToNumeric makes of them (Question AQ), so an
+        // alternative of one beside a sized numeric type is judged as `number`
+        // is: `n * x` for a `uint8` `n` and an `x: boolean | number` cannot run,
+        // as neither `n * b` nor `n * m` can. A primitive block may define the
+        // operation instead, as for one operand.
+        const ordinaryNumber = (type: Known): boolean => {
+          const at = erasedForJudgment(type);
+          return at?.Kind === 'primitive'
+            && (['boolean', 'null', 'undefined'].includes(at.Name) || (at.Name === 'string' && operator !== '+'));
+        };
+        const sized = (type: Known): boolean => {
+          const at = erasedForJudgment(type);
+          return at?.Kind === 'primitive' && isNumericValueTypeName(at.Name) && !['number', 'bigint'].includes(at.Name);
+        };
+        let lj: Known = l;
+        let rj: Known | undefined = r;
+        if (l && r && !primitiveBlockDeclares(operator, l) && !primitiveBlockDeclares(operator, r)) {
+          if (ordinaryNumber(r) && sized(l)) rj = makePrimitive('number');
+          else if (ordinaryNumber(l) && sized(r)) lj = makePrimitive('number');
+        }
+        const erasedLeft = erasedForJudgment(lj);
+        const erasedRight = erasedForJudgment(rj);
+        const baseName = (erasedLeft as { Name?: string } | null)?.Name;
+        if (!lj && leftLiteral && numeric(rj)) result = literalFails(leftLiteral, rj!);
+        else if (!rj && rightLiteral && numeric(lj)) result = literalFails(rightLiteral, lj!);
+        else if (!numeric(lj)) result = false;
+        else if (numericOperationUnavailable(operator, lj)) result = true;
+        else if (!numeric(rj)) result = false;
+        else if (numericOperationUnavailable(operator, rj)) result = true;
+        // A rational's or a decimal's exponent is an integer of any type (Question AS).
+        else if (operator === '**' && (baseName === 'rational' || (!!erasedLeft && decimalWidthOf(erasedLeft) !== undefined))
+          && (isIntegerValueType(erasedRight) || ['number', 'bigint'].includes((erasedRight as { Name?: string } | null)?.Name ?? ''))) result = false;
+        // A shift's distance and an integer's exponent are counts, which any
+        // integer type gives, as for one operand: `n << x` for an
+        // `x: uint16 | int8` was refused though `n << k` is admitted for each.
+        else if (['<<', '>>', '>>>', '**'].includes(operator) && isIntegerValueType(erasedLeft) && isIntegerValueType(erasedRight)) result = false;
+        else result = !ordinaryNumericOrdering(operator, lj, rj) && !SameType(lj!, rj!);
       }
       memo.get(l)!.set(r, result);
       return result;
@@ -25775,7 +25927,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (globalName === 'structuredClone' && !shadowedByProgram(globalName)) {
             const args = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
             const cloned = args[0] ? staticType(args[0]) : null;
-            return cloned ? widen(cloned) : null;
+            // The clone is a `T` only where it is one (Question AR, AR2): an
+            // instance of a class that is not typed comes back a plain object,
+            // as HTML says, so where the argument's type holds such a class
+            // anywhere the call's type is ~any~, and a program that names no
+            // type keeps JavaScript's answer. `const w = structuredClone(new
+            // U())` for `class U { x = 1; }` was a TypeError when it ran.
+            return cloned && !cloneLosesClass(widen(cloned)) ? widen(cloned) : null;
           }
         }
         if (calleeNode?.type === 'IdentifierReference'
@@ -27532,7 +27690,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // UNDERLYING type, as the run time's TypedOperandType reads it, so a
         // literal's range, numeric mixing and brands are judged there.
         const operandType = (operand: ParseNode): Known => {
-          const type = staticType(operand);
+          const type = staticType(operand) ?? enumeratorOperandType(operand);
           if (type || node.type !== 'AdditiveExpression' || node.operator !== '+') return type;
           // Reuse the existing lexical constant proof; do not turn an
           // unannotated mutable initializer into a permanent operand contract.
@@ -27615,8 +27773,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // same rule for the integer type the proposal did not add, and the
             // exponent beside it, since `**` is where BigInt has a throw
             // `int.<N>` lacks. Checked-only, as every rule on an existing type.
-            if (distance !== null && node.type === 'ExponentiationExpression' && distance < 0n && bigintOperand) {
-              reportType('rt-zero-divisor', node, 'a literal negative exponent of $1 is not a power at $2', Value(String(distance)), Value('bigint'));
+            // And at an integer type of this proposal, whose negative
+            // exponent throws as BigInt's does (Question AQ): the exponent is
+            // a count, read as written, so the error names it rather than a
+            // range it was never meant to fit.
+            if (distance !== null && node.type === 'ExponentiationExpression' && distance < 0n) {
+              reportType('rt-zero-divisor', node, 'a literal negative exponent of $1 is not a power at $2', Value(String(distance)), Value(bigintOperand ? 'bigint' : displayType(operandType!)));
             }
             if (distance !== null && node.type === 'ShiftExpression' && !bigintOperand) {
               const bits = (operandType as { Arguments?: readonly (TypeRecord | number)[] }).Arguments?.[0];
@@ -27772,8 +27934,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const base = at?.Kind === 'parameterized' ? (at as { Base?: TypeRecord }).Base : at;
               return base?.Kind === 'primitive' && isNumericOperandName((base as { Name?: string }).Name) ? base as TypeRecord : null;
             };
+            // A Boolean, *null*, *undefined* and, except under `+`, a String
+            // are the Number ToNumeric makes of them, and the run time refuses
+            // that Number at each lane as it refuses one written (Question AQ).
+            const convertedToNumber = (t: Known): TypeRecord | null => {
+              const at = erasedKeepingBrand(t);
+              const base = at?.Kind === 'literal' ? (at as { Base?: TypeRecord }).Base : at;
+              const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
+              return name !== undefined && (['boolean', 'null', 'undefined'].includes(name) || (name === 'string' && token !== '+'))
+                ? makePrimitive('number') : null;
+            };
             const lane = numericBaseOf(((vectorSide as { Arguments?: readonly unknown[] }).Arguments ?? [])[0] as Known);
-            const scalar = numericBaseOf(scalarSide);
+            // A primitive block may give the pair an operation of its own.
+            const scalar = numericBaseOf(scalarSide)
+              ?? (primitiveBlockDeclares(token, leftT) || primitiveBlockDeclares(token, rightT) ? null : convertedToNumber(scalarSide));
             if (lane && scalar && !SameType(lane, scalar)
                 && bodylessResult(token, leftT as TypeRecord, rightT as TypeRecord, false, node) === undefined) {
               reportType('rt-numeric-operator', node, '$1 and $2 are different numeric types and do not mix', Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)));
@@ -27868,6 +28042,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (lv && rightLit && lv.Kind !== 'parameterized') {
           const base = lv;
+          // An integer exponent beside an integer base is a count taken as
+          // written (#sec-arithmetic-never-promotes: "Integer exponent and
+          // shift-count rules retain their own contexts"), as the run time
+          // takes it, so `v ** 300` at a `uint8` is a power and not a literal
+          // that does not fit. A negative one is refused above.
+          if (token === '**' && (isIntegerValueType(base) || decimalWidthOf(base) !== undefined) && writtenIntegerLiteral(rightLit)) return lv;
           if (isNumericValueTypeName((base as { Name?: string }).Name)
             || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(leftNode))
             // A RATIONAL operand adopts a literal too - rational.md, "a literal
@@ -27888,9 +28068,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (base.Kind === 'primitive' && base.Name === 'rational' && token !== '**')) adopt(leftLit, rv);
           return rv;
         }
-        // Rational exponentiation takes an integer exponent, not a rational.
+        // Rational exponentiation takes an integer exponent, not a rational,
+        // and so does a decimal's (Question AS): `d ** k` for an `int32` `k`.
         if (token === '**' && erasedForJudgment(lv)?.Kind === 'primitive'
-          && (erasedForJudgment(lv) as { Name?: string }).Name === 'rational'
+          && ((erasedForJudgment(lv) as { Name?: string }).Name === 'rational' || decimalWidthOf(erasedForJudgment(lv) as TypeRecord) !== undefined)
           && rv?.Kind === 'primitive' && ['int', 'uint', 'number', 'bigint'].includes(rv.Name)) return lv;
         if (lv && rv) {
           if (SameType(lv, rv)) {
@@ -27938,8 +28119,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // A shift's distance is a count taken as written, not a value mixed
           // into the left operand: any integer type gives it, and the result
-          // has the left operand's type, as at run time.
-          if (token === '<<' || token === '>>' || token === '>>>') {
+          // has the left operand's type, as at run time. An exponent is a
+          // count in the same way (Question AQ): `n ** k` for a `uint8` `n`
+          // and an `int8` `k` ran and was refused here.
+          if (token === '<<' || token === '>>' || token === '>>>' || token === '**') {
             const integer = (t: Known | undefined) => t?.Kind === 'primitive'
               && ((t as { Name: string }).Name === 'int' || (t as { Name: string }).Name === 'uint');
             if (integer(erasedForJudgment(lv)) && integer(erasedForJudgment(rv))) {
@@ -30652,6 +30835,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const index = (declaration as ParseNode.EnumDeclaration).EnumMemberList.findIndex((member) => member.IdentifierName.name === key);
       const literal = index >= 0 ? (record as { EnumMembers?: readonly unknown[] } | null)?.EnumMembers?.[index] : undefined;
       return record && literal !== undefined && literal !== null ? { Kind: 'literal', Value: literal, Base: record } as unknown as TypeRecord : null;
+    } finally {
+      enumReadsInProgress.delete(declaration);
+    }
+  };
+
+  /**
+   * The enum a read of a declared enumerator is a value of, for the operator
+   * judgments alone. Round 4, Q7 keeps the read without a Static Type, so
+   * that `C.One === 3`, `E.A is E`, a `match` over `C.One` and a refinement
+   * `let x: Late = E.b` are what they were; but an operator computes in the
+   * enum's underlying type, as the run time's TypedOperandType reads it
+   * (#sec-enums), so `E.A * 300` for `enum E : uint8` is refused as `e * 300`
+   * is, where it was a RangeError only when it ran. Over a numeric or a
+   * String underlying type only: an enumerator that is a function or a type
+   * keeps the reading it has.
+   */
+  const enumeratorOperandType = (node: ParseNode): Known => {
+    const core = patternExpression(node);
+    if (core?.type !== 'MemberExpression') return null;
+    const m = core as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+    const base = m.MemberExpression;
+    const key = m.IdentifierName?.name;
+    if (base?.type !== 'IdentifierReference' || !key) return null;
+    const name = (base as ParseNode.IdentifierReference).name;
+    const declaration = enumNodes.get(name);
+    if (!declaration || declaration.type !== 'EnumDeclaration' || evaluatedEnums.get(declaration) || assignedNames.has(name)
+        || (declaration as ParseNode.EnumDeclaration).Decorators?.length || shadowedByProgram(name)
+        || enumReadsInProgress.has(declaration) || ResolveBindingDeclaration(base, name)?.node !== declaration
+        || !(declaration as ParseNode.EnumDeclaration).EnumMemberList.some((member) => member.IdentifierName.name === key)) return null;
+    enumReadsInProgress.add(declaration);
+    try {
+      const record = enumTypeOf(name, declaration);
+      const underlying = (record as { Underlying?: TypeRecord } | null)?.Underlying;
+      const numericOrString = underlying?.Kind === 'primitive'
+        && (isNumericValueTypeName((underlying as { Name: string }).Name) || (underlying as { Name: string }).Name === 'string');
+      return record && numericOrString ? record : null;
     } finally {
       enumReadsInProgress.delete(declaration);
     }
@@ -40130,6 +40349,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const receiver = base.Arguments && base.Arguments.length > 0 && typeof base.Arguments[0] === 'number' ? `${base.Name}${base.Arguments[0]}` : base.Name;
     return RegisteredPrimitiveOperators(receiver, operator).length > 0;
   };
+  /**
+   * Whether _type_ names, at any depth, an instance of a class that is not
+   * typed: a structured clone of one is a plain object (Question AR, AR2).
+   * A class over a built-in that is not typed clones to the built-in, and
+   * also loses its class.
+   */
+  const cloneLosesClass = (type: Known, seen = new Set<object>()): boolean => {
+    if (!type || seen.has(type as object)) return false;
+    seen.add(type as object);
+    const t = type as TypeRecord & Record<string, unknown>;
+    if (t.Kind === 'nominal' && t.EnumMembers === undefined && classDeclarationOf(t) !== undefined && !typedClassDeclarationOf(t)) return true;
+    const children: unknown[] = [];
+    for (const key of ['Element', 'Target', 'Base']) children.push(t[key]);
+    for (const key of ['Members', 'Arguments']) if (Array.isArray(t[key])) children.push(...(t[key] as unknown[]));
+    if (Array.isArray(t.Elements)) children.push(...(t.Elements as { Type?: unknown }[]).map((e) => e?.Type));
+    if (Array.isArray(t.Properties)) children.push(...(t.Properties as { type?: unknown }[]).map((p) => p?.type));
+    return children.some((child) => child !== null && typeof child === 'object' && 'Kind' in (child as object)
+      && cloneLosesClass(child as Known, seen));
+  };
   const typedClassDeclarationOf = (type: Known): ParseNode | undefined => {
     const t = type?.Kind === 'reference' ? type.Target as TypeRecord : type;
     if (!t || t.Kind !== 'nominal' || t.EnumMembers !== undefined) return undefined;
@@ -40178,9 +40416,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (classBodyOf(at).some((e) => e.type === 'FieldDefinition' && !(e as { static?: boolean }).static
         && (e as { TypeAnnotation?: unknown }).TypeAnnotation)) return 'typed';
       const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
-      if (heritage && !heritageClassOf(at)) return 'unknown';
+      // A built-in constructor is never a typed class, so a class over one is
+      // typed only by a field of its own: `E(1)` for `class E extends Error {
+      // m(): uint8 { ... } }` converts nothing, and is refused as a call on
+      // any class that is not typed is. It was left to the run time.
+      if (heritage && !heritageClassOf(at)) return builtinClassHeritage(heritage) ? 'untyped' : 'unknown';
     }
     return 'untyped';
+  };
+  /** Whether a class heritage names a constructor of the language's own, which no program declares. */
+  const builtinClassHeritage = (heritage: unknown): boolean => {
+    const base = patternExpression(heritage as ParseNode);
+    return base?.type === 'IdentifierReference' && BUILTIN_CLASS_BASES.has(base.name) && !shadowedByProgram(base.name);
   };
   /**
    * The class type a type expression written as a callee names: `V`, an
@@ -40220,7 +40467,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const verdict = conversionClassVerdict(declaration as ParseNode, ((aliased as { Arguments?: readonly unknown[] }).Arguments ?? []).length > 0);
       return verdict === 'typed' ? aliased : verdict === 'unknown' ? 'deferred' : undefined;
     }
-    const targets = (fact === undefined ? invocationFact(callee) : fact)?.classTargets;
+    const targets = (fact === undefined ? invocationFact(callee) ?? calleeClassFact(callee) : fact)?.classTargets;
     if (!targets?.length) return undefined;
     const verdicts = targets.map((target) => conversionClassVerdict(target.declaration, !!target.arguments));
     if (verdicts.every((verdict) => verdict === 'untyped')) return undefined;
@@ -40233,6 +40480,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? calleeClassType(patternExpression((applied as ParseNode.TypeArgumentsExpression).Expression) ?? applied, applied as ParseNode.TypeArgumentsExpression)
         : null;
     return declared?.Kind === 'nominal' ? declared : 'deferred';
+  };
+  /**
+   * The invocation fact of a callee that names a class through an import, a
+   * namespace member or a type alias, which `invocationFact` does not follow
+   * (Question AI, AI1: every spelling of a class behaves alike). A call on one
+   * was judged only when it ran: `V()`, `V(1, 2)` and `V({ x: "s" })` for an
+   * imported `V`, `m.V()` through a namespace, and `W()` and `W(1, 2)` for
+   * `type W = V`, where the same calls on `V` itself are refused before
+   * running. `new` already follows the import.
+   */
+  const calleeClassFact = (callee: ParseNode): InvocationFact | null => {
+    let node = patternExpression(callee);
+    while (node?.type === 'ParenthesizedExpression') node = patternExpression((node as unknown as { Expression: ParseNode }).Expression);
+    if (!node) return null;
+    const application = node.type === 'TypeArgumentsExpression' ? node as ParseNode.TypeArgumentsExpression : null;
+    const named = application ? patternExpression(application.Expression) : node;
+    let declaration: ParseNode | undefined;
+    if (named?.type === 'MemberExpression') {
+      const origin = namespaceClassOrigin(named as ParseNode.MemberExpression);
+      if (origin && !origin.bounded) declaration = origin.declaration;
+    } else if (named?.type === 'IdentifierReference') {
+      const binding = ResolveBindingDeclaration(named, named.name);
+      if (binding?.kind === 'import') {
+        const origin = stableClassOrigin(named);
+        if (origin && !origin.bounded) declaration = origin.declaration;
+      }
+      // An import is read as a type only where it imports an alias: a function
+      // imported and applied, `build.<number>(7)`, is no type to evaluate.
+      if (!declaration && (binding?.kind === 'type' || (binding?.kind === 'import' && importedAliasAt(named, named.name)))) {
+        const aliased = calleeClassType(named, application);
+        declaration = aliased ? classDeclarationOf(aliased) as ParseNode | undefined : undefined;
+      }
+    }
+    if (!declaration) return null;
+    const fact = invocationFact(declaration);
+    return fact && application
+      ? { ...fact, classTargets: fact.classTargets?.map((target) => ({ ...target, arguments: application.TypeArguments })) }
+      : fact;
   };
   const declaresPrimitiveConversion = (declaration: ParseNode): boolean => {
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
@@ -40285,7 +40570,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const ordered = ['<', '>', '<=', '>='].includes(operator);
     const hint = operator === '+' ? 'default' : 'number';
     const operandType = (expression: ParseNode): Known => {
-      const type = staticType(expression);
+      // An enum operand is read at its underlying type, as the arithmetic arm
+      // reads it (#sec-enums), so `e * b` for a `boolean` `b` is judged as
+      // the `uint8` it computes in.
+      const type = enumUnderlying(staticType(expression) ?? enumeratorOperandType(expression));
       const inner = innermostLiteral(expression);
       // Numeric const uses receive literal context at the operation, while the
       // binding itself remains dynamic. Recover only that local category.
@@ -40307,11 +40595,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return converted(l, leftParticipates, (leftResult) => converted(r, rightParticipates, (rightResult) => {
         const ln = leftResult.Kind === 'primitive' ? leftResult.Name : null;
         const rn = rightResult.Kind === 'primitive' ? rightResult.Name : null;
-        // #sec-arithmetic-never-promotes: Boolean and nullish ToNumeric
-        // outcomes are ordinary Numbers, not values of the sized peer's type.
-        // String and literal adoption have different rules. A primitive block
-        // can supply the operation instead of this built-in path.
-        const ordinaryNumber = (name: string | null): boolean => name !== null && ['boolean', 'null', 'undefined'].includes(name);
+        // #sec-arithmetic-never-promotes: Boolean, nullish and String
+        // ToNumeric outcomes are ordinary Numbers, not values of the sized
+        // peer's type, so `n * s` for a `uint8` `n` and a `string` `s` is the
+        // TypeError `n * m` is for a Number `m` (Question AQ). `+` concatenates
+        // a String instead, and literal adoption has its own rule. A primitive
+        // block can supply the operation instead of this built-in path.
+        const ordinaryNumber = (name: string | null): boolean => name !== null
+          && (['boolean', 'null', 'undefined'].includes(name) || (name === 'string' && operator !== '+'));
         const sizedNumeric = (name: string | null): boolean => name !== null && isNumericValueTypeName(name)
           && !['number', 'bigint'].includes(name);
         if (!primitiveBlockDeclares(operator, l) && !primitiveBlockDeclares(operator, r)
@@ -40325,7 +40616,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const becomesNumber = (name: string | null) => name !== null
           && ['number', 'boolean', 'null', 'undefined', 'string'].includes(name);
         // Other numeric families have their own literal-adoption and mixing
-        // rules. In particular, do not forbid a working uint8 * String coercion.
+        // rules, judged above.
         const adoptingLiteral = (expression: ParseNode): boolean => {
           if (literalOperand(expression)) return true;
           // An operand that selects among literals adapts as one does.
@@ -43947,7 +44238,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // #sec-function-types: conversion callability does not supply [[Construct]].
     const denoted = establishedTypeObjectTarget(node);
     if (denoted && !mentionsTypeParameter(denoted) && denoted.Kind !== 'any') {
-      return { callable: true, constructible: false, typed: true };
+      // An array type constructs, as `new ([4].<uint8>)()` does, and an alias
+      // names it as it names a class (Question AI, AI1): `new A4()` for
+      // `type A4 = [4].<uint8>` was "this typed function is not a constructor".
+      return { callable: true, constructible: denoted.Kind === 'array', typed: true };
     }
     if (node.type === 'IdentifierReference') {
       for (let i = scope; i >= 0; i -= 1) {
@@ -45234,7 +45528,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const literals = produced.map((operand) => literalOperand(operand)).filter((lit): lit is ParseNode => !!lit);
       const constants = produced.filter((operand) => !literalOperand(operand) && constantOperandCore(operand));
       if ((literals.length === 0 && constants.length === 0) || literalOperand(contextualResultOperand(other))) continue;
-      const raw = erasedKeepingBrand(staticType(other));
+      const raw = erasedKeepingBrand(staticType(other) ?? enumeratorOperandType(other));
       const t = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
       const base = t?.Kind === 'parameterized' ? t.Base : t;
       if (!isIntegerValueType(base)) continue;
@@ -47601,7 +47895,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkArgumentSpreads(n.Arguments);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         {
-          const fact = invocationFact(c.CallExpression);
+          const fact = invocationFact(c.CallExpression) ?? calleeClassFact(c.CallExpression);
           checkInvocation(c.CallExpression, false, c.CallExpression, fact, !!fact?.classTargets?.length
             && fact.classTargets.every((target) => conversionClassVerdict(target.declaration, !!target.arguments) === 'typed'));
         }
@@ -47680,6 +47974,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ? vectorConstructorType(conversionTarget, argNodes as readonly ParseNode[]) : null;
           if (vectorLanes) {
             checkCallArguments(c, vectorLanes, n);
+          } else if (argNodes.length === 0 && (c.Arguments ?? []).length === 0 && typeof laneCount !== 'number') {
+            // A conversion with no argument converts *undefined*: `uint8()` is
+            // `undefined := uint8`, which is refused before running; the call
+            // was refused only when it ran.
+            requireExplicitConversion(undefinedType, conversionTarget);
           } else if (argNodes.length === 1) {
             requireExplicitConversion(staticType(argNodes[0]!), conversionTarget);
             // The argument is typed IN the target's context, which is what

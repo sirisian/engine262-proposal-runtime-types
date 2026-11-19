@@ -34,13 +34,15 @@ test('an enum follows its UNDERLYING type, not its nominal kind', () => {
   // No value of `E` is a string.
   expectThrown(dead(`${D}let q = e === s;`), 'disjoint');
   expectThrown(dead(`${D}let q = s === e;`), 'disjoint');
-  // ...and its underlying `number` is disjoint from `uint8`, exactly as a
-  // `number` binding already is.
+  // ...and its underlying `int32`, the type of an enum declared without one
+  // (#sec-enums), is disjoint from `uint8` and from `number`, exactly as an
+  // `int32` binding already is.
   expectThrown(dead(`${D}let x: number = 1; let q = n === x;`), 'disjoint');
   expectThrown(dead(`${D}let q = e === n;`), 'disjoint');
+  expectThrown(dead(`${D}let x: number = 1; let q = e === x;`), 'disjoint');
   // An enum against its own underlying type, and against its own members, is
   // ordinary.
-  expect(ok(dead(`${D}let x: number = 1; let q = e === x;`))).toBe(true);
+  expect(ok(dead(`${D}let x: int32 = 1; let q = e === x;`))).toBe(true);
   expect(ok(dead(`${D}let q = e === E.B;`))).toBe(true);
   expect(ok(dead(`${D}let q = e === 1;`))).toBe(true);
   expect(ok(dead('enum F: int32 { A = 1 } let f: F = F.A; let i: int32 = int32(1); let q = f === i;'))).toBe(true);

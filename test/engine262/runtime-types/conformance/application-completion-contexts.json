@@ -450,7 +450,7 @@
     },
     {
       "name": "enum underlying same value",
-      "source": "function unused(){enum E{A=1}let e:E=E.A;let n:number=1;e===n;}\"ok\";",
+      "source": "function unused(){enum E{A=1}let e:E=E.A;let n:int32=1;e===n;}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,

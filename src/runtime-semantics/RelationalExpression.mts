@@ -1,10 +1,15 @@
 import { IsMaskReductionReceiver, vectorComparison } from '../type-system/vector-ops.mts';
 import { contextualTypeFor } from '../type-system/runtime.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
+import { isDecimalObject } from '../intrinsics/Decimal.mts';
+import { isRationalObject } from '../intrinsics/Rational.mts';
+import { isFloat128Object } from '../intrinsics/Float128.mts';
+import { isComplexObject } from '../intrinsics/Complex.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import {
   TypedStringValue,
   ObjectValue,
+  SymbolValue,
   Value,
   wellKnownSymbols,
 } from '../value.mts';
@@ -27,6 +32,8 @@ import {
   IsCallable,
   OrdinaryHasInstance,
   ToBoolean,
+  ToNumeric,
+  ToPrimitive,
   ToPropertyKey,
   PrivateElementFind,
   Throw,
@@ -221,12 +228,21 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // arithmetic, so the operand nodes decide it.
   if (surroundingAgent.feature('runtime-types')
       && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
-      && (lval instanceof TypedNumberValue || rval instanceof TypedNumberValue)
-      // A String operand is not a numeric type, so the clause does not reach
-      // it and the existing coercion governs, exactly as the string behaviour
-      // of `+` is left alone.
-      && !(lval instanceof JSStringValue)
-      && !(rval instanceof JSStringValue)) {
+      && (lval instanceof TypedNumberValue || rval instanceof TypedNumberValue)) {
+    // An Object reaches the comparison as the value its ToPrimitive gives, as
+    // IsLessThan converts it, and is judged as that value (#sec-operator-dispatch):
+    // `uint8(3) < { valueOf() { return uint8(4); } }` was refused as though the
+    // Object were a Number, where the two uint8 values compare. The left operand
+    // converts first in every spelling, as IsLessThan's LeftFirst has it for `<`
+    // and `>` alike, and a primitive converts to itself, so nothing is read twice.
+    // A decimal, a rational, a float128 or a complex value is an object that is a
+    // numeric value, and is judged as one.
+    const plainObject = (v: Value) => v instanceof ObjectValue
+      && !isDecimalObject(v) && !isRationalObject(v) && !isFloat128Object(v) && !isComplexObject(v);
+    if (plainObject(lval) || plainObject(rval)) {
+      lval = Q(yield* ToPrimitive(lval, 'number'));
+      rval = Q(yield* ToPrimitive(rval, 'number'));
+    }
     const leftLiteral = leftRead.literal;
     const rightLiteral = rightRead.literal;
     // A value generic reads as the literal its value is: held as a typed
@@ -234,11 +250,25 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
     const typedLiteralMeetsNumber = (lval instanceof TypedNumberValue && leftLiteral && !(rval instanceof TypedNumberValue))
       || (rval instanceof TypedNumberValue && rightLiteral && !(lval instanceof TypedNumberValue));
     if (!typedLiteralMeetsNumber) {
-      const decided = TypedOperandType(lval, rval, {
-        left: leftLiteral,
-        right: rightLiteral,
+      // A String reaches the comparison as the Number ToNumeric makes of it,
+      // as IsLessThan converts it when the other operand is no String, and
+      // is refused as that Number is: `uint8(3) < "4"` compared 3 with 4,
+      // where `uint8(3) < 4` with a Number value is a TypeError. This is the
+      // dispatch rule of `*` (#sec-operator-dispatch) at a comparison, and
+      // the clause names "an arithmetic, bitwise, shift, or relational
+      // operator" alike. A Symbol converts by the same step, which throws for
+      // it. A String is no numeric literal and adopts nothing.
+      const leftString = lval instanceof JSStringValue;
+      const rightString = rval instanceof JSStringValue;
+      const left = leftString || lval instanceof SymbolValue ? Q(yield* ToNumeric(lval)) : lval;
+      const right = rightString || rval instanceof SymbolValue ? Q(yield* ToNumeric(rval)) : rval;
+      const decided = TypedOperandType(left, right, {
+        left: leftLiteral && !leftString,
+        right: rightLiteral && !rightString,
         leftComputed: leftLiteral ? IsComputedConstantOperand(leftRead.node) : undefined,
         rightComputed: rightLiteral ? IsComputedConstantOperand(rightRead.node) : undefined,
+        leftString,
+        rightString,
       });
       if (decided instanceof AbruptCompletion) {
         return decided;
