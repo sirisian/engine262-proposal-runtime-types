@@ -1,6 +1,6 @@
 import { Q, X } from '../completion.mts';
 import { AdoptLiteralOperand, DecayEnumOperands } from '../type-system/arithmetic.mts';
-import { vectorComparison } from '../type-system/vector-ops.mts';
+import { IsMaskReductionReceiver, vectorComparison } from '../type-system/vector-ops.mts';
 import { contextualTypeFor } from '../type-system/runtime.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Value, ObjectValue } from '../value.mts';
@@ -66,7 +66,7 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
   if (surroundingAgent.feature('runtime-types')
       && (lval.type === 'Vector' || rval.type === 'Vector')
       && (operator === '==' || operator === '!=')) {
-    return Q(yield* vectorComparison(lval, operator, rval, contextualTypeFor(node as object))) as never;
+    return Q(yield* vectorComparison(lval, operator, rval, contextualTypeFor(node as object), IsMaskReductionReceiver(node))) as never;
   }
   if (surroundingAgent.feature('runtime-types')
       && lval instanceof ObjectValue

@@ -92,6 +92,21 @@ export function* ConvertSuppliedField(supplied: SuppliedField, fieldType: TypeRe
   return Q(yield* ConvertValue(supplied.value, fieldType));
 }
 
+/**
+ * The explicit conversion of an operand's _value_ to _t_, as `operand := T`
+ * makes it (#sec-explicit-conversion): an object literal converted to a class
+ * fills it, and any other value converts as a typed binding would. A call on a
+ * typed class with one argument is the same operation, and is evaluated by it.
+ */
+export function* ConvertOperandValue(operand: ParseNode, value: Value, t: TypeRecord): ValueEvaluator {
+  const literal = objectLiteralOf(operand);
+  if (literal && value instanceof ObjectValue) {
+    const filled = Q(yield* FillClassFromObjectLiteral(literal, value, t));
+    if (filled !== undefined) return filled;
+  }
+  return Q(yield* ConvertValue(value, t));
+}
+
 /** The object literal _node_ is, under its parentheses. */
 export function objectLiteralOf(node: ParseNode | undefined): ParseNode.ObjectLiteral | undefined {
   let n = node;

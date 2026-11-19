@@ -1,4 +1,4 @@
-import { vectorComparison } from '../type-system/vector-ops.mts';
+import { IsMaskReductionReceiver, vectorComparison } from '../type-system/vector-ops.mts';
 import { contextualTypeFor } from '../type-system/runtime.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { StringValue } from '../static-semantics/all.mts';
@@ -158,7 +158,7 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   if (surroundingAgent.feature('runtime-types')
       && (lval.type === 'Vector' || rval.type === 'Vector')
       && (operator === '<' || operator === '>' || operator === '<=' || operator === '>=')) {
-    return Q(yield* vectorComparison(lval, operator, rval, contextualTypeFor(expr as object)));
+    return Q(yield* vectorComparison(lval, operator, rval, contextualTypeFor(expr as object), IsMaskReductionReceiver(expr)));
   }
   if (surroundingAgent.feature('runtime-types')
       && lval instanceof ObjectValue

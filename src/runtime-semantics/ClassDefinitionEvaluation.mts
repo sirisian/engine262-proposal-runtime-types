@@ -1561,6 +1561,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         ? parentRecord!
         : (constructorParent as { ValueArrayBase?: TypeRecord | null } | undefined | null)?.ValueArrayBase ?? null;
       (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped || isValue) && !isDynamic;
+      // #sec-typed-classes: a class is typed by a typed instance field, declared or
+      // inherited, or by being a value class, `dynamic` or not. A call on a typed
+      // class with one argument is the explicit conversion of that argument to it
+      // (#sec-explicit-conversion); a call on any other class keeps ECMA-262's
+      // TypeError.
+      (F as { TypedClass?: boolean }).TypedClass = hasTypedInstanceField || isValue
+        || (constructorParent as { TypedClass?: boolean } | undefined | null)?.TypedClass === true;
       // proposal-runtime-types #sec-value-classes: a typed class that is not a value type
       // class is a REFERENCE TYPE, and so is a `sealed` or an `abstract` one, so its
       // instances have identity. [[SealInstances]] alone cannot say so - it is *true* for

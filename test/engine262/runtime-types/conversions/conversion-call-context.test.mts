@@ -36,9 +36,10 @@ test('a callee may be an alias, an applied primitive, or a generic application',
   expect(evaluated('type A<T: type> = T; String(Number(A.<uint32>(1)));')).toBe('1');
 });
 
-test('a CLASS callee is not a conversion', () => {
-  // Already a different error, which is what keeps conversions and constructions
-  // distinct without a new rule.
+test('a class that is not typed is not a conversion callee', () => {
+  // Annotated only on its constructor's parameter, the class is not typed
+  // (#sec-typed-classes), so its call keeps the refusal. A call on a typed class
+  // with one argument is the conversion (class-call-conversion.test.mts).
   expectThrown('class C { constructor(a: uint32) {} } C(1);', 'cannot be invoked without');
 });
 

@@ -100,7 +100,7 @@ import {
 } from './type-argument-order.mts';
 import { ArrayWithMembers, SameTuplePositions, InterfaceApplicationOf, InterfaceApplicationsOf, OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { NominalAssignmentEvidence } from './nominal-evidence.mts';
-import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
+import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName, IsMaskReductionReceiver } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
 import { type CapturedTypeContext, ProjectMetadataObjectFromType, ProjectMetadataValueFromType, MetaTypeNamedByArgument, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
@@ -20569,6 +20569,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const foldDecimal = (node: ParseNode): Dec | null => foldDecimalConstant(node, constDecimalValue);
 
   /**
+   * The checks an explicit conversion makes of its operand, in either spelling:
+   * `x := T`, and the call on a typed class that is the same operation (AE1).
+   */
+  const checkConversionOperand = (operand: ParseNode, target: Known): void => {
+    if (operand.type === 'NumericLiteral' || isNumericConstantExpression(operand)) {
+      markConversionOperand(operand);
+      staticTypeIn(operand, target);
+      if (target && mentionsTypeParameter(target)) recordDeferredLiteral(operand);
+    } else if (target && target.Kind === 'nominal' && unparenthesized(operand).type === 'ObjectLiteral'
+      && /^Class(Declaration|Expression)$/.test((target as { Declaration?: ParseNode }).Declaration?.type ?? '')) {
+      // #sec-object-literal-conversion: an object literal converted to a
+      // class fills its fields, each value converted to its field's type as
+      // a structural target's member is, so a literal value is read at the
+      // field's type and a constant one wraps.
+      markCreationMembers(operand);
+      typeCreationMembers(operand, target);
+      checkLiteralFill(unparenthesized(operand) as ParseNode.ObjectLiteral, target);
+    } else if (target && (target.Kind === 'array' || target.Kind === 'tuple')) {
+      // An ARRAY or TUPLE literal operand: each element is the operand of its
+      // own element's conversion - `[x] := [].<T>` holds what `[x := T]`
+      // holds - so a literal element is read from its digits, and a constant
+      // element folds and wraps, as the scalar operand does. The walk is
+      // typed creation's, which does the same for a member's literals; the
+      // whole literal is NOT typed at the target, which would bring in an
+      // annotation's assignment checks and refuse the 300 a conversion wraps.
+      let inner: ParseNode | undefined = operand;
+      while (inner?.type === 'ParenthesizedExpression') inner = (inner as unknown as { Expression?: ParseNode }).Expression;
+      if (inner?.type === 'ArrayLiteral') {
+        markCreationMembers(operand);
+        typeCreationMembers(operand, target);
+      }
+    }
+    requireExplicitConversion(staticType(operand), target);
+  };
+  /**
    * Records the exact value of a conversion's literal operand where the target
    * is a type parameter (`DeferredConversionLiteral`). Each reading is the one
    * the marks make where the target is written: the integer fold, the rational
@@ -25295,6 +25330,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
 
       case 'CallExpression': {
+        // Question AE, AE1: a call on a typed class with one argument is the
+        // conversion `argument := C`, so it has the class's type, as `:=` does.
+        const classConversion = classConversionTarget(node);
+        if (classConversion) return classConversion === 'deferred' ? null : classConversion;
         if (originalBooleanCall(node)) {
           const argument = staticType(node.Arguments[0]);
           if (argument && argument.Kind !== 'any') {
@@ -39775,6 +39814,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return undefined;
   };
+  /**
+   * Question AE, direction AE1: a call on a TYPED class with one argument is the
+   * explicit conversion of the argument to the class. The spec writes "An
+   * explicit conversion is written as a call on the type, `uint8(v)`, or with
+   * the conversion operator after the value, `v := uint8`. The two are the same
+   * operation" (#sec-explicit-conversion), and the README casts a class as
+   * `MyType(5)` and `BinaryNode({ ... })`.
+   *
+   * The answer is the class's instance type where _call_ is such a call on one
+   * class the checker identifies; 'deferred' where the callee may be such a
+   * class and the checker cannot say which, or whether it is typed, so the run
+   * time decides; and undefined for any other call, which keeps its own rules.
+   * The callee is identified as the refusal of a call without `new` identifies
+   * it (#sec-function-types), so a call the checker would refuse as an
+   * invocation is the one it reads as a conversion instead.
+   *
+   * Typed is #sec-typed-classes': a typed instance field, declared or
+   * inherited, or a value class. A generic class is not converted to by a call:
+   * its constructor is the family's, and a call on an application of it is
+   * refused as before.
+   */
+  const conversionClassVerdict = (declaration: ParseNode): 'typed' | 'untyped' | 'unknown' => {
+    if ((declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length) return 'untyped';
+    const seen = new Set<ParseNode>();
+    for (let at: ParseNode | undefined = declaration; at && !seen.has(at); at = heritageClassOf(at)) {
+      seen.add(at);
+      if (((at as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('value')) return 'typed';
+      if (classBodyOf(at).some((e) => e.type === 'FieldDefinition' && !(e as { static?: boolean }).static
+        && (e as { TypeAnnotation?: unknown }).TypeAnnotation)) return 'typed';
+      const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
+      if (heritage && !heritageClassOf(at)) return 'unknown';
+    }
+    return 'untyped';
+  };
+  const classConversionTarget = (call: ParseNode): TypeRecord | 'deferred' | undefined => {
+    if (call.type !== 'CallExpression') return undefined;
+    const args = (call as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+    if (args.length !== 1 || args[0]!.type === 'AssignmentRestElement' || args[0]!.type === 'NamedArgument') return undefined;
+    const targets = invocationFact((call as unknown as { CallExpression: ParseNode }).CallExpression)?.classTargets;
+    if (!targets?.length) return undefined;
+    const verdicts = targets.map((target) => (target.arguments ? 'untyped' : conversionClassVerdict(target.declaration)));
+    if (verdicts.every((verdict) => verdict === 'untyped')) return undefined;
+    if (targets.length > 1 || verdicts[0] !== 'typed') return 'deferred';
+    const declared = instanceTypeOf(targets[0]!.declaration);
+    return declared?.Kind === 'nominal' ? declared : 'deferred';
+  };
   const declaresPrimitiveConversion = (declaration: ParseNode): boolean => {
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
       for (const element of classBodyOf(at)) {
@@ -43997,7 +44082,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
-  const checkInvocation = (expression: ParseNode, construct: boolean, site = expression, fact = invocationFact(expression)): void => {
+  const checkInvocation = (expression: ParseNode, construct: boolean, site = expression, fact = invocationFact(expression), converts = false): void => {
     if (fact?.typed && !(construct ? fact.constructible : fact.callable)) {
       // The class-constructor wording is TRUE ONLY OF A CLASS - a target that is
       // constructible and not callable. It was chosen on `!callable` alone, so
@@ -44009,10 +44094,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       //
       // Only the MESSAGE changes. Whether the call is refused is decided above
       // and is unchanged, so every case refused before is refused now.
+      // A typed class converts the one argument of a call on it (Question AE,
+      // AE1), so a call with none or several says that it is constructed with
+      // `new` and converts one value.
       const message = construct
         ? 'this typed function is not a constructor'
         : fact.constructible
-          ? 'a typed class constructor cannot be invoked without new'
+          ? converts
+            ? 'a typed class constructor cannot be invoked without new, except with one argument, which it converts'
+            : 'a typed class constructor cannot be invoked without new'
           : 'this value is not callable';
       reportType(construct ? 'rt-proposal-construction' : fact.constructible ? 'rt-declared-call' : 'rt-not-callable', site, message);
     }
@@ -45623,36 +45713,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // that does not fit WRAPS rather than being refused, at every integer
         // target - `(200 + 100) := uint8` is 44, and `(9007199254740992 + 1) :=
         // uint64` is folded exactly rather than through a Number.
-        const operand = tc.Expression as ParseNode;
-        if (operand.type === 'NumericLiteral' || isNumericConstantExpression(operand)) {
-          markConversionOperand(operand);
-          staticTypeIn(operand, target);
-          if (target && mentionsTypeParameter(target)) recordDeferredLiteral(operand);
-        } else if (target && target.Kind === 'nominal' && unparenthesized(operand).type === 'ObjectLiteral'
-          && /^Class(Declaration|Expression)$/.test((target as { Declaration?: ParseNode }).Declaration?.type ?? '')) {
-          // #sec-object-literal-conversion: an object literal converted to a
-          // class fills its fields, each value converted to its field's type as
-          // a structural target's member is, so a literal value is read at the
-          // field's type and a constant one wraps.
-          markCreationMembers(operand);
-          typeCreationMembers(operand, target);
-          checkLiteralFill(unparenthesized(operand) as ParseNode.ObjectLiteral, target);
-        } else if (target && (target.Kind === 'array' || target.Kind === 'tuple')) {
-          // An ARRAY or TUPLE literal operand: each element is the operand of its
-          // own element's conversion - `[x] := [].<T>` holds what `[x := T]`
-          // holds - so a literal element is read from its digits, and a constant
-          // element folds and wraps, as the scalar operand does. The walk is
-          // typed creation's, which does the same for a member's literals; the
-          // whole literal is NOT typed at the target, which would bring in an
-          // annotation's assignment checks and refuse the 300 a conversion wraps.
-          let inner: ParseNode | undefined = operand;
-          while (inner?.type === 'ParenthesizedExpression') inner = (inner as unknown as { Expression?: ParseNode }).Expression;
-          if (inner?.type === 'ArrayLiteral') {
-            markCreationMembers(operand);
-            typeCreationMembers(operand, target);
-          }
-        }
-        requireExplicitConversion(staticType(tc.Expression as ParseNode), target);
+        checkConversionOperand(tc.Expression as ParseNode, target);
         walk(tc.Expression as ParseNode);
         return;
       }
@@ -47126,13 +47187,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const name of capturedMutationNames()) {
           invalidateNarrowing(name, true);
         }
+        // Question AE, AE1: a call on a typed class with one argument is the
+        // explicit conversion `argument := C` (#sec-explicit-conversion), so its
+        // argument is checked as the operand of `:=` is, and the call is not
+        // refused as an invocation of a class constructor without `new`.
+        const classConversion = classConversionTarget(n as ParseNode);
+        if (classConversion) {
+          const operand = (n as { Arguments: readonly ParseNode[] }).Arguments[0]!;
+          if (classConversion !== 'deferred') checkConversionOperand(operand, classConversion);
+          walk((n as { CallExpression: ParseNode }).CallExpression);
+          walk(operand);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
+          invalidateCapturedAliases();
+          return;
+        }
         // With no context from the position: the diagnostics of the numeric
         // resolution (mixed families, a family with no row, an unfitting
         // literal beside a typed argument) apply at every call site.
         checkNumericCall(n, null);
         checkArgumentSpreads(n.Arguments);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
-        checkInvocation(c.CallExpression, false);
+        {
+          const fact = invocationFact(c.CallExpression);
+          checkInvocation(c.CallExpression, false, c.CallExpression, fact, !!fact?.classTargets?.length
+            && fact.classTargets.every((target) => !target.arguments && conversionClassVerdict(target.declaration) === 'typed'));
+        }
         const callee = callableForm(staticType(c.CallExpression));
         checkCallReceiver(c.CallExpression, callee);
         checkUndeclaredMemberCall(c.CallExpression, n as ParseNode);
@@ -48830,6 +48909,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const shown = target ? vectorTypeName(target) : undefined;
       if (shown !== undefined && (shown === forms.wide || shown === forms.compact || shown === forms.compared)) continue;
     } else if (comparisonContextual.has(node)) {
+      continue;
+    } else if (IsMaskReductionReceiver(node as ParseNode)) {
+      // Question AF, AF2: the receiver of `all`, `any` or `select`, which every
+      // form answers alike, is the wide mask.
       continue;
     }
     reportType('rt-ambiguous-result', root, 'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)', Value(forms.wide), Value(forms.compact), Value(forms.compared));

@@ -604,11 +604,35 @@ function* allOnesLaneValue(laneType: TypeRecord): PlainEvaluator<Value> {
   return Q(yield* CheckedConvertValue(Value(NaN), laneType)) as Value;
 }
 
+/**
+ * Question AF, direction AF2: whether the comparison _node_ is, under any
+ * parentheses, the receiver of a call of `all`, `any` or `select`. Both masks
+ * have these members and give each the same type and value, and the compared
+ * vector type has none of them unless it is itself a mask, whose all-ones lanes
+ * are set lanes; so the form does not change the answer, and the comparison is
+ * the wide mask, the form a comparison instruction produces, without a written
+ * type (#sec-vector-comparisons). Any other member, and the comparison itself
+ * stored or returned, still asks for the type to be written.
+ */
+export function IsMaskReductionReceiver(node: ParseNode): boolean {
+  let receiver: ParseNode = node;
+  let holder = receiver.parent;
+  while (holder?.type === 'ParenthesizedExpression') {
+    receiver = holder;
+    holder = holder.parent;
+  }
+  if (holder?.type !== 'MemberExpression' || holder.MemberExpression !== receiver || holder.Expression || !holder.IdentifierName) return false;
+  if (!['all', 'any', 'select'].includes(holder.IdentifierName.name)) return false;
+  const call = holder.parent;
+  return call?.type === 'CallExpression' && call.CallExpression === holder;
+}
+
 export function* vectorComparison(
   lval: Value,
   operator: string,
   rval: Value,
   expected: TypeRecord | undefined = undefined,
+  reduction = false,
 ): PlainEvaluator<Value> {
   const leftShape = lval.type === 'Vector' ? vectorShape(lval as VectorValue) : null;
   const rightShape = rval.type === 'Vector' ? vectorShape(rval as VectorValue) : null;
@@ -636,6 +660,13 @@ export function* vectorComparison(
   // (contextualTypeFor) and passed in; read off the stack from here it was
   // whatever enclosing position had pushed, which is the leaky reading the
   // position-precise stack replaced.
+  // Question AF, AF2: the receiver of `all`, `any` or `select` is the wide mask,
+  // which every form agrees with there (IsMaskReductionReceiver).
+  let widen: TypeRecord | undefined;
+  if (!expected && reduction) {
+    widen = wideMaskTypeFor(shape.laneType, shape.laneCount) ?? undefined;
+    expected = widen ?? maskTypeFor(shape.laneCount);
+  }
   if (!expected) {
     // The three forms NAMED. The clause defines them - the wide mask, the
     // compact mask, and the compared vector type itself - and the remedy is to
@@ -677,7 +708,11 @@ export function* vectorComparison(
     const holds = comparisonHolds(operator, laneNumber(left), laneNumber(right));
     lanes.push(Q(yield* CheckedConvertValue(Value(holds ? 1 : 0), bitType)) as Value);
   }
-  return new VectorValue(lanes, maskType);
+  const compact = new VectorValue(lanes, maskType);
+  if (widen) {
+    return Q(yield* CheckedConvertValue(compact, widen)) as Value;
+  }
+  return compact;
 }
 
 /**

@@ -19,6 +19,8 @@ import { DecayReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
 import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { CopyArgumentResults } from '../type-system/result-dependencies.mts';
+import { ConvertOperandValue } from '../abstract-ops/literal-fill.mts';
+import { Evaluate } from '../evaluator.mts';
 import { signaturesInView, BindCallArgumentItems, ArgumentContexts, parameterInfo } from './ArgumentListEvaluation.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { isNumericLiteralOperand, isSelectingOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
@@ -30,6 +32,7 @@ import {
   PrepareForTailCall,
   Call,
   EnvironmentRecord,
+  GetValue,
   surroundingAgent,
   Throw,
   R,
@@ -83,6 +86,22 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   } else {
     // a. Let thisValue be undefined.
     thisValue = Value.undefined;
+  }
+  // Question AE, AE1: a call on a typed class with one argument is the explicit
+  // conversion of the argument to the class, `argument := C`, and is evaluated
+  // as that is (#sec-explicit-conversion). A call with no argument, with
+  // several, with a spread or a named argument, an optional call and a tagged
+  // template keep ECMA-262's TypeError, as a call on any other class does.
+  if (surroundingAgent.feature('runtime-types') && !evaluatedArguments && callExpression?.type === 'CallExpression'
+      && Array.isArray(args) && args.length === 1 && func instanceof ObjectValue) {
+    const operand = args[0] as ParseNode;
+    const record = (func as { TypeRecord?: TypeRecord }).TypeRecord;
+    if (operand.type !== 'AssignmentRestElement' && operand.type !== 'NamedArgument'
+        && (func as { IsClassConstructor?: Value }).IsClassConstructor === Value.true
+        && (func as { TypedClass?: boolean }).TypedClass === true && record?.Kind === 'nominal') {
+      const value = Q(yield* GetValue(Q(yield* Evaluate(operand as ParseNode.AssignmentExpressionOrHigher))));
+      return Q(yield* ConvertOperandValue(operand, value, record));
+    }
   }
   // 3. Let argList be ? ArgumentListEvaluation of arguments.
   // The declared view supplies names/defaults after argument evaluation. Spread

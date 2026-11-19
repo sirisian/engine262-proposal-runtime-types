@@ -102,3 +102,36 @@ test.each(['===', '!=='])('discarded disjoint strict equality is an operator err
   expect(ok(`function compatible(a: string, b: string) { a ${operator} b; }`)).toBe(true);
   expect(ok(`function unknown(a: any, b: any) { a ${operator} b; }`)).toBe(true);
 });
+
+/**
+ * Question AF, direction AF2. operatoroverloading.md's `Vector4` writes
+ * `return (this.v == rhs.v).all();`, which was refused as ambiguous. `all`,
+ * `any` and `select` are members of both masks, each giving the same type and
+ * value on either, and of neither all-ones vector, so the form cannot change
+ * what such a call answers. The comparison there is the wide mask, the form a
+ * comparison instruction produces.
+ */
+test('the receiver of all, any or select is the wide mask', () => {
+  const ab = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(1, 2, 0, 4); ';
+  expect(evaluated(`${ab}[(a == b).all(), (a == b).any(), (a < b).any(), (a != b).any()].join();`)).toBe('false,true,false,true');
+  expect(evaluated(`${ab}String(((a == b)).all());`)).toBe('false');
+  expect(evaluated(`${ab}String((a == b).select(int32x4(1, 1, 1, 1), int32x4(0, 0, 0, 0)));`)).toBe('(1, 1, 0, 1)');
+  // The answer is the one the written forms give.
+  expect(evaluated(`${ab}const w: boolean32x4 = a == b; const c: vector.<uint.<1>, 4> = a == b; [w.all(), c.all(), w.any(), c.any()].join();`))
+    .toBe('false,false,true,true');
+  expect(evaluated('const a = int32x4(1, 2, 3, 4); String((a == a).all()) + String((a != a).any());')).toBe('truefalse');
+  // The design's example.
+  expect(evaluated('value class V4 { v: float32x4 = float32x4(0, 0, 0, 0); operator==(rhs: V4): boolean { return (this.v == rhs.v).all(); } } '
+    + 'const p = new V4(); const q = new V4(); String(p == q);')).toBe('true');
+  // Where the checker cannot see the operands, the run time reads the position the same way.
+  expect(evaluated('const a: any = float32x4(1, 2, 3, 4); String((a == a).all());')).toBe('true');
+});
+
+test('any other use of an unannotated comparison is still ambiguous', () => {
+  const ab = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(1, 2, 0, 4); ';
+  // A member the forms do not share, or answer alike, and the method read without a call.
+  for (const use of ['(a == b).sum();', '(a == b)[0];', '(a == b).all;', '(a == b)?.all();', 'const m = a == b; m.all();']) {
+    expectStaticTypeError(`${ab}${use}`);
+  }
+  expectThrownKind('const a: any = float32x4(1, 2, 3, 4); (a == a).sum();', 'TypeError');
+});

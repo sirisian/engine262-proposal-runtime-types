@@ -99,15 +99,15 @@
       ]
     },
     {
-      "name": "calling a class constructor does not perform a conversion",
+      "name": "calling a typed class constructor converts one argument, and a call with two converts nothing",
       "steps": [
         {
-          "source": "let log=\"\";value class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const callable:any=(type P);let error=\"\";try{callable(raw);}catch(e){error=e.name;}error+\"/\"+log;",
+          "source": "let log=\"\";value class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const callable:any=(type P);let error=\"\";try{callable(raw,1);}catch(e){error=e.name+\"/\"+log;}callable(raw);error+\"/\"+log;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "TypeError/"
+            "value": "TypeError//s"
           }
         }
       ]

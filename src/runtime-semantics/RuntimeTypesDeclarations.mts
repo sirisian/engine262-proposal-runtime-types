@@ -20,7 +20,7 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { RequiredModuleInputFailure } from '../type-system/required-module-inputs.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols, Descriptor } from '../value.mts';
-import { FillClassFromObjectLiteral, objectLiteralOf } from '../abstract-ops/literal-fill.mts';
+import { ConvertOperandValue } from '../abstract-ops/literal-fill.mts';
 import { DefinePropertyOrThrow, GetV } from '../abstract-ops/all.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf, DeferredConversionLiteral } from '../type-system/check.mts';
 import { DeferredLiteralValue } from '../static-semantics/NumericValue.mts';
@@ -1658,12 +1658,7 @@ export function* Evaluate_TypedConversionExpression({ Expression, Type }: ParseN
   const record = comparisonForm ?? Q(yield* TypeNodeToTypeRecord(Type));
   // #sec-object-literal-conversion: an object literal converted to a class
   // that declares no constructor fills the class's fields.
-  const literal = surroundingAgent.feature('runtime-types') ? objectLiteralOf(Expression as ParseNode) : undefined;
-  if (literal && value instanceof ObjectValue) {
-    const filled = Q(yield* FillClassFromObjectLiteral(literal, value, record));
-    if (filled !== undefined) return filled;
-  }
-  return Q(yield* ConvertValue(value, record));
+  return Q(yield* ConvertOperandValue(Expression as ParseNode, value, record));
 }
 
 export function* Evaluate_TypeOperatorExpression({ Type }: ParseNode.TypeOperatorExpression): ValueEvaluator {
