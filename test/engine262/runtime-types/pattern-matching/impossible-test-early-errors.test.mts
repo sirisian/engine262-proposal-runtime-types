@@ -1,5 +1,12 @@
 import { expect, test } from 'vitest';
-import { expectStaticTypeError, ok } from '../harness.mts';
+import { expectStaticTypeError, expectThrown, ok } from '../harness.mts';
+
+// A pattern that is not a type is named by what it writes, as a range test is;
+// it was named `the "is" test`.
+test('an impossible pattern test names its pattern', () => {
+  expectThrown('function f(k: uint8) { if (k is "a") return 1; return 0; } f(1);', 'the "is \\"a\\"" test can never succeed');
+  expectThrown('function f(k: uint8) { if (k is not null) return 1; return 0; } f(1);', 'the "is null" test can never fail');
+});
 
 // Early errors for narrowing and pattern tests the spec already makes type errors (#sec-narrowfrom, "a
 // narrowing form where the test can never succeed or can never fail", and #sec-match-exhaustiveness). Each is

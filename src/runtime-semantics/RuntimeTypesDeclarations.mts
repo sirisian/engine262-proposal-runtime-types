@@ -23,6 +23,7 @@ import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumbe
 import { ConvertOperandValue } from '../abstract-ops/literal-fill.mts';
 import { DefinePropertyOrThrow, GetV } from '../abstract-ops/all.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf, DeferredConversionLiteral } from '../type-system/check.mts';
+import { AdoptLiteralOperand } from '../type-system/arithmetic.mts';
 import { DeferredLiteralValue } from '../static-semantics/NumericValue.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
@@ -69,7 +70,7 @@ import { anyType, ArgumentWeight, GROWING_APPLICATION_LIMIT } from '../type-syst
 import { ConvertValue, AssociateClassType, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import { JSStringValue as JSStringValueClass } from '../value.mts';
 import {
-  SameValue, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
+  SameValue, SameValueZero, HasProperty, Get, Call, IsCallable, IteratorToList, GetIterator,
   GetMethod, LengthOfArrayLike, ToBoolean, ToNumber, ArrayCreate, CreateBuiltinFunction,
   GetPrototypeFromConstructor,
 } from '../abstract-ops/all.mts';
@@ -1309,11 +1310,26 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
       let literal = Q(yield* GetValue(ref as never));
       const position = PatternLiteralTypeOf(P);
       if (position) literal = Q(yield* CheckedConvertValue(literal, position));
+      else {
+        // Question BB: where the checker gave the position no type, a numeric
+        // literal takes the subject's numeric type when the clause runs, as a
+        // `case` label takes the discriminant's (#sec-arithmetic-never-promotes),
+        // so `when 1` over an untyped `uint8` 1 matches it as `case 1` does.
+        // A BigInt subject keeps JavaScript's answer, as it does at `===`.
+        const adopted = AdoptLiteralOperand(subject, literal, { left: false, right: true, rightNode: P.Literal as ParseNode });
+        if (adopted) literal = adopted.right;
+      }
       // The BARE-ZERO step: a bare `0` matches both zeros of the position's
-      // type, while an explicit `+0` or `-0` distinguishes them.
-      if (P.BareZero && literal instanceof NumberValue && R(literal) === 0
-          && subject instanceof NumberValue && R(subject) === 0) {
-        return true;
+      // type, while an explicit `+0` or `-0` distinguishes them. It is the
+      // sameValueZero comparison within the type (#sec-patternmatches), which
+      // a `float32` and a decimal zero take too (Question BH): read only for a
+      // plain Number, `when 0` missed a `float32` -0. `BareZero` says only
+      // that no sign was written, so the literal must be a zero as well; any
+      // other literal is compared within its cohort, `when 1.50` missing a
+      // decimal 1.5.
+      const written = P.Literal as { type?: string, value?: unknown };
+      if (P.BareZero && written.type === 'NumericLiteral' && (written.value === 0 || written.value === 0n)) {
+        return SameValueZero(subject, literal);
       }
       return MatchConstant(subject, literal);
     }

@@ -1,5 +1,6 @@
 import { IsMaskReductionReceiver, vectorComparison } from '../type-system/vector-ops.mts';
 import { contextualTypeFor } from '../type-system/runtime.mts';
+import { displayType } from '../type-system/records.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject } from '../intrinsics/Decimal.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
@@ -19,7 +20,7 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { AbruptCompletion } from '../completion.mts';
 import { JSStringValue, TypedNumberValue } from '../value.mts';
-import { AdoptLiteralOperand, TypedOperandType } from '../type-system/arithmetic.mts';
+import { AdoptLiteralOperand, TypedOperandType, UnheldLiteralOperand } from '../type-system/arithmetic.mts';
 import { ReadLiteralOperand, IsComputedConstantOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
@@ -140,6 +141,13 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   let rval = Q(yield* GetValue(rref));
   const rightRead = ReadLiteralOperand(ShiftExpression as ParseNode);
   if (surroundingAgent.feature('runtime-types') && ['<', '>', '<=', '>='].includes(operator)) {
+    // Question BJ: a literal the operand beside it cannot hold is a RangeError,
+    // as in arithmetic; only an equality finds it equal to nothing. A complex
+    // has no order, which is the error it reports.
+    const unheld = isComplexObject(lval) || isComplexObject(rval) ? undefined : UnheldLiteralOperand(lval, rval, {
+      left: leftRead.literal, right: rightRead.literal, leftNode: leftRead.node, rightNode: rightRead.node,
+    });
+    if (unheld) return Throw.RangeError('$1 is not in the range of $2', Value(unheld.text), Value(displayType(unheld.type)));
     const adopted = AdoptLiteralOperand(lval, rval, {
       left: leftRead.literal,
       right: rightRead.literal,

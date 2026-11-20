@@ -103,7 +103,7 @@ import { NominalAssignmentEvidence } from './nominal-evidence.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName, IsMaskReductionReceiver } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
 import { type CapturedTypeContext, ProjectMetadataObjectFromType, ProjectMetadataValueFromType, MetaTypeNamedByArgument, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
-import { isWideIntegerType, wrapToType } from './arithmetic.mts';
+import { BinaryFloatWidthOf, isWideIntegerType, LiteralOperandText, LiteralOverflowsBinaryFloat, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
 import { ReferenceRoutePossible, type RoutingContribution } from './reference-routing.mts';
@@ -1190,6 +1190,21 @@ const rationalLiterals = new WeakMap<object, { sig: bigint, exp: number, type: T
 
 export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: number, type: TypeRecord } | undefined {
   return rationalLiterals.get(node);
+}
+
+/**
+ * Question BJ: whether the numeric literal `lit`, under its parentheses and
+ * sign, is one the binary float or complex type `t` rounds to an infinity, and
+ * so no value of it (#sec-literalvalueintype). A complex holds it as its real
+ * component, a bare one's being a binary64. `number` is the language's own
+ * type, of which a literal is already a value, and is not judged.
+ */
+function literalOverflowsFloatAt(lit: ParseNode, t: TypeRecord): boolean {
+  const base = t.Kind === 'parameterized' ? t.Base : t;
+  if (base.Kind !== 'primitive' || base.Name === 'number') return false;
+  const component = base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
+  const width = BinaryFloatWidthOf(component);
+  return width !== undefined && LiteralOverflowsBinaryFloat(lit, width) === true;
 }
 
 /**
@@ -21625,6 +21640,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
   /**
+   * Question BJ: a named constant or a constant expression beside a binary
+   * float, or a complex over one, that the type rounds to an infinity: the
+   * value refused, or null. A constant bound to a literal is that literal,
+   * read from its digits; any other constant is judged by its Number, which
+   * shows the answer at a `float16` or a `float32` only. `const K = 1e39` and
+   * then `x * K` beside a `float32` was Infinity, the literal taking the type
+   * through the constant without the check.
+   */
+  const constantOverflowsFloat = (operand: ParseNode, t: TypeRecord, outerNegative = false): string | null => {
+    const base = t.Kind === 'parameterized' ? t.Base : t;
+    if (base.Kind !== 'primitive' || base.Name === 'number') return null;
+    const component = base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
+    const width = BinaryFloatWidthOf(component);
+    if (width === undefined) return null;
+    const constant = constantOperandCore(operand);
+    if (!constant) return null;
+    let core: ParseNode = constant.core;
+    let negative = constant.negative !== outerNegative;
+    for (let depth = 0; depth < 64 && core.type === 'IdentifierReference'; depth += 1) {
+      const initializer = constClosedInitializer((core as unknown as { name: string }).name);
+      if (!initializer) break;
+      if (exactOfLiteralText(initializer)) {
+        core = initializer;
+        break;
+      }
+      const inner = constantOperandCore(initializer);
+      if (!inner) break;
+      core = inner.core;
+      negative = negative !== inner.negative;
+    }
+    if (exactOfLiteralText(core)) return LiteralOverflowsBinaryFloat(core, width) ? LiteralOperandText(core, negative) : null;
+    if (width !== 16 && width !== 32) return null;
+    const value = numberOfConstant(core);
+    if (value === null || !Number.isFinite(value)) return null;
+    const rounded = width === 32 ? Math.fround(value) : (Math.abs(value) >= 65520 ? Infinity : value);
+    return Number.isFinite(rounded) ? null : String(negative ? -value : value);
+  };
+  /**
    * What a numeric constant operand is beside an integer of type _peer_, which
    * is its context (#sec-contextual-types): the integer it folds to there,
    * with `/` the integer's division, or the reason it is not a value of the
@@ -23267,6 +23320,77 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
+        return contextual;
+      }
+    }
+    // Question BJ, #sec-literalvalueintype: "If _v_ is an infinity and _mv_ is
+    // finite, return ~unrepresentable~". A `float16` or a `float32` shows it in
+    // the literal's Number, which the boundary refuses (`const y: float32 =
+    // 1e39`); a `float64` does not, its Number being already the infinity, nor
+    // does a `float128`, which the Number does not reach, so `const x: float64
+    // = 1e309` and `const q: float128 = 1e5000` were infinities. A complex
+    // holds the literal as its real component, a bare one's being a binary64.
+    // A conversion's operand rounds instead (#sec-explicit-conversion).
+    // A signed literal is judged as the literal it signs, and the context does
+    // not reach that literal at a binary64 or a decimal, so it is judged here:
+    // `const x: float64 = -1e309` was -Infinity, and `const d: decimal64 =
+    // -1e400` a RangeError when it ran that wrote out all 401 digits.
+    const signed = contextual && node.type === 'UnaryExpression' && ['-', '+'].includes((node as { operator?: string }).operator ?? '')
+      && innermostLiteral(node).type === 'NumericLiteral' && !(innermostLiteral(node) as { Imaginary?: boolean }).Imaginary;
+    const signedWidth = signed ? decimalWidthOf(contextual as TypeRecord) : undefined;
+    if (signed && signedWidth !== undefined) {
+      const exact = exactOfLiteralText(node);
+      if (exact && exact.special === undefined && !DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, signedWidth) && !conversionOperands.has(node)) {
+        const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(LiteralOperandText(node)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+        return contextual;
+      }
+    }
+    if (contextual && (signed || (node.type === 'NumericLiteral' && !(node as { Imaginary?: boolean }).Imaginary))) {
+      // Each numeric member the literal could take, in a union as alone: `const
+      // x: float64 | null = 1e309` was an infinity too. A union with any other
+      // numeric member is left to the boundary, which judges the literal there.
+      const union = contextual.Kind === 'union';
+      const widths: (64 | 128)[] = [];
+      let otherNumeric = false;
+      for (const member of (contextual.Kind === 'union' ? contextual.Members as TypeRecord[] : [contextual as TypeRecord])) {
+        const base = member.Kind === 'parameterized' ? member.Base : member;
+        if (base.Kind !== 'primitive') continue;
+        const component = base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
+        const width = base.Name === 'number' ? undefined : BinaryFloatWidthOf(component);
+        if (width === 64 || width === 128) widths.push(width);
+        else if (isNumericOperandName(base.Name)) otherNumeric = true;
+      }
+      // Alone, a `float128` reads a signed literal's digits from the literal
+      // itself, and is judged there.
+      const judged = widths.filter((w) => union || w === 64 || !signed);
+      if (!otherNumeric && judged.length > 0 && judged.length === widths.length && judged.every((w) => LiteralOverflowsBinaryFloat(node, w))) {
+        let operand: ParseNode = node;
+        while (operand.parent?.type === 'ParenthesizedExpression' || (operand.parent?.type === 'UnaryExpression' && ['-', '+'].includes((operand.parent as { operator?: string }).operator ?? ''))) operand = operand.parent;
+        const host = operand.parent as ParseNode | undefined;
+        const converted = conversionOperands.has(operand) || host?.type === 'TypedConversionExpression'
+          || (host?.type === 'CallExpression' && !!typeObjectTarget((host as ParseNode.CallExpression).CallExpression));
+        if (!converted) {
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(LiteralOperandText(node)), Value(displayType(contextual))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return contextual;
+        }
+      }
+    }
+    // ...and a constant expression at a `float16` or a `float32`, or a complex
+    // over one, whose Number shows the answer there, as `const k: uint8 = 200 +
+    // 100` is refused: `const y: float32 = 1e38 * 10` was a RangeError when it
+    // ran. A conversion's operand rounds.
+    if (contextual && !signed && node.type !== 'NumericLiteral' && node.type !== 'IdentifierReference' && isNumericConstantExpression(node)
+        && !conversionOperands.has(node) && !(node.parent?.type === 'TypedConversionExpression'
+          || (node.parent?.type === 'CallExpression' && !!typeObjectTarget((node.parent as ParseNode.CallExpression).CallExpression)))) {
+      const base = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
+      const component = base.Kind === 'primitive' && base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
+      const width = BinaryFloatWidthOf(component);
+      const refused = width === 16 || width === 32 ? constantOverflowsFloat(node, contextual as TypeRecord) : null;
+      if (refused !== null) {
+        const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(refused), Value(displayType(contextual))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
         return contextual;
       }
     }
@@ -28051,6 +28175,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(String(refused)), Value(displayType(t))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
+          } else if (errors.length === reported && literalOverflowsFloatAt(lit, t)) {
+            // Question BJ: a literal a binary float rounds to an infinity is
+            // refused here as one an integer cannot hold is, and as `const y:
+            // float32 = 1e39` is: `x * 1e39` beside a `float32` was Infinity.
+            const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(LiteralOperandText(lit, outerNegative)), Value(displayType(t))) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          } else if (errors.length === reported && !literalOperand(lit)) {
+            const refused = constantOverflowsFloat(lit, t, outerNegative);
+            if (refused !== null) {
+              const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(refused), Value(displayType(t))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
           }
         };
         for (const produced of rightLeafLiterals) if (lv) adopt(produced, lv.Kind === 'parameterized' ? lv.Base : lv);
@@ -28102,6 +28238,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // and a rational with a Number operand is a TypeError. Not as an
             // exponent: `**` takes an integer exponent, not a rational.
             || (base.Kind === 'primitive' && base.Name === 'rational' && token !== '**')) adopt(rightLit, lv);
+          else {
+            // Question BJ: a complex takes a real literal as its real
+            // component, and one the component rounds to an infinity is no
+            // value of it: `c * 1e39` beside a `complex64` was Infinity+0i.
+            const refused = literalOverflowsFloatAt(rightLit, base) ? LiteralOperandText(rightLit) : constantOverflowsFloat(rightLit, base);
+            if (refused !== null) reportType('rt-numeric-range', rightLit, '$1 is not in the range of $2', Value(refused), Value(displayType(base)));
+          }
           return lv;
         }
         if (rv && leftLit && rv.Kind !== 'parameterized' && !lv) {
@@ -28110,9 +28253,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(rightNode))
             // A RATIONAL operand adopts a literal too - rational.md, "a literal
             // propagates" - so `r + 0.5` is `r + 1/2`; it was left a Number,
-            // and a rational with a Number operand is a TypeError. Not as an
-            // exponent: `**` takes an integer exponent, not a rational.
-            || (base.Kind === 'primitive' && base.Name === 'rational' && token !== '**')) adopt(leftLit, rv);
+            // and a rational with a Number operand is a TypeError. Here the
+            // literal is the left operand, so in `2 ** q` it is the BASE, and
+            // a rational base takes it as a `uint8` or a decimal base does
+            // (Question BG): the exponent is the rational, judged as a count
+            // when the power runs. Excluding `**` here made `2 ** q` a
+            // TypeError where `rational64(2) ** q` was 8.
+            || (base.Kind === 'primitive' && base.Name === 'rational')) adopt(leftLit, rv);
+          else {
+            const refused = literalOverflowsFloatAt(leftLit, base) ? LiteralOperandText(leftLit) : constantOverflowsFloat(leftLit, base);
+            if (refused !== null) reportType('rt-numeric-range', leftLit, '$1 is not in the range of $2', Value(refused), Value(displayType(base)));
+          }
           return rv;
         }
         // Rational exponentiation takes an integer exponent, not a rational,
@@ -29996,6 +30147,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const admitsNumericLiteral = (t: TypeRecord): boolean => {
     if (t.Kind === 'any' || mentionsTypeParameter(t)) return true;
     if (t.Kind === 'union') return (t.Members as TypeRecord[]).some(admitsNumericLiteral);
+    // A rational and a complex are Objects, and a numeric literal takes either
+    // type (#sec-literalvalueintype), so `when 1` over a `rational64` is a
+    // rational 1 rather than a test that can never succeed.
+    const base = t.Kind === 'parameterized' ? t.Base : t;
+    if (base.Kind === 'primitive' && (base.Name === 'rational' || base.Name === 'complex')) return true;
     const tag = typeofTagOfType(t);
     return tag === null || tag === 'number' || tag === 'bigint';
   };
@@ -30203,7 +30359,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const digits = foldDecimal(p.Literal);
             if (!base || !literal || literal.Kind !== 'literal' || !digits) return null;
             if (base.Kind === 'primitive' && base.Name === 'number') {
-              return exact(p.BareZero ? CanonicalizeType({ Kind: 'union', Members: [literal,
+              // `BareZero` says only that no sign was written: a bare `5`
+              // matches 5 alone, and narrowing it to `5 | -0` refused `const z:
+              // 5 = k` under `k is 5`.
+              const zero = literal.Value instanceof NumberValue && R(literal.Value) === 0;
+              return exact(p.BareZero && zero ? CanonicalizeType({ Kind: 'union', Members: [literal,
                 { ...literal, Value: Value(-0) } as TypeRecord] }) : literal);
             }
             if (!literalFitsNumericType(literal, eraseMetadata(base))) return null;
@@ -30946,6 +31106,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || ((t.Kind === 'union' || t.Kind === 'intersection') && t.Members.some(refined));
     if (refined(target)) return null;
     const core = patternExpression(node);
+    // Question BF: an arm of a conditional is received as the conditional is,
+    // so `const b: boolean = c ? E.A : true` is judged as `c ? e : true` is
+    // for an `e: E`: each arm typed under the test, as the conditional's own
+    // type is (conditionalArmTypes), the enumerator read at the reading
+    // above. Taken only where an arm is such a read, the case no Static Type
+    // of the conditional covers.
+    if (core?.type === 'ConditionalExpression') {
+      const c = core as unknown as { ShortCircuitExpression?: ParseNode, AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
+      const enumeratorArm = (arm: ParseNode | undefined): boolean => {
+        const inner = arm ? patternExpression(arm) : undefined;
+        if (inner?.type === 'ConditionalExpression') {
+          const nested = inner as unknown as { AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
+          return enumeratorArm(nested.AssignmentExpression_a) || enumeratorArm(nested.AssignmentExpression_b);
+        }
+        return !!inner && enumeratorOperandType(inner) !== null;
+      };
+      if (!enumeratorArm(c.AssignmentExpression_a) && !enumeratorArm(c.AssignmentExpression_b)) return null;
+      const received = (arm: ParseNode | undefined): Known => (arm ? staticTypeIn(arm, target) ?? enumeratorReceivedType(arm, target) : null);
+      const [a, b] = conditionalArmTypes(c.ShortCircuitExpression, () => received(c.AssignmentExpression_a), () => received(c.AssignmentExpression_b));
+      return a && b ? joinTypes(a, b) : null;
+    }
     const enumType = core ? enumeratorOperandType(core) : null;
     if (!enumType) return null;
     const literal = enumeratorLiteralOf(core!);
@@ -31751,9 +31932,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let shown: ParseNode.MatchPattern = ie.Pattern;
       while (shown.type === 'MatchNotPattern') shown = shown.Operand;
       const shownType = shown.type === 'MatchTypePattern' ? resolveType(shown.Type) : null;
+      // A pattern that is not a type is named by what it writes, as a range
+      // test's label is: `the "is" test can never succeed` named no test.
+      const written = (shown as { sourceText?: string }).sourceText?.replace(/\s+/g, ' ');
       return {
         name: subject, type: shownType ?? anyTypeRecord, pattern: ie.Pattern, patternSubject: ie.Expression, subjectType: staticType(ie.Expression), negated,
-        display: shownType ? undefined : 'is',
+        display: shownType ? undefined : written ? `is ${written}` : 'is',
       };
     }
     // `instanceof` is a narrowing form. The README says so where it introduces
@@ -35964,13 +36148,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * position, as `when 1` and `k is 1` do: `o is { a: 1 }` and `when [1, 2]`
    * over a `uint8` field or pair match a `uint8` 1, where the literal of
    * `number` matched nothing and `when { a: 1 }` was refused as unable to
-   * match. Recorded where the position has one numeric domain, as the
-   * literal pattern's singleton reads it, other than `number`, for the
-   * checker's resolution and the run time's (TypePatternLiteralOf).
-   * Elsewhere the literal keeps its reading and is judged as before: a
-   * literal an integer or binary float type cannot hold, a `number`
-   * position, and a rational or complex one, which a literal pattern does not
-   * adopt either.
+   * match. Recorded where the position has the one numeric type a literal
+   * pattern would take there, other than `number`, for the checker's
+   * resolution and the run time's (TypePatternLiteralOf). Elsewhere the
+   * literal keeps its reading and is judged as before: a literal the type
+   * cannot hold, a `number` position, and a position of two numeric types.
    */
   const recordTypePatternLiterals = (node: ParseNode.Type | null | undefined, position: Known): void => {
     if (!node || !position || position.Kind === 'any' || mentionsTypeParameter(position)) return;
@@ -35984,28 +36166,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LiteralType': {
         if (node.kind !== 'number' || typeof node.value !== 'number' || typePatternLiterals.has(node)) return;
         const raw = node.negated ? -node.value : node.value;
-        // One numeric domain, as the literal pattern's own singleton reads it
-        // (singleNumericDomain), built as the run time holds its values.
-        const domain = singleNumericDomain(position);
-        const at = domain ? eraseMetadata(domain) : null;
-        if (at?.Kind !== 'primitive') return;
+        // The one numeric type among the position's members that a literal
+        // pattern takes there, `number` excepted, which needs no record.
+        const domains: TypeRecord[] = [];
+        for (const member of position.Kind === 'union' ? position.Members : [position]) {
+          const base = eraseMetadata(member.Kind === 'literal' ? member.Base : member);
+          if (base.Kind === 'primitive' && isNumericOperandName(base.Name) && !domains.some((seen) => SameType(seen, base))) domains.push(base);
+        }
+        const at = domains.length === 1 ? domains[0] : null;
+        if (at?.Kind !== 'primitive' || at.Name === 'number') return;
         if (['uint', 'int', 'float16', 'float32', 'float64'].includes(at.Name)) {
           if (!fitsNumericType(raw, at.Name, at.Arguments)) return;
           const held = isWideIntegerType(at) ? wrapToType(BigInt(raw), at) : wrapToType(raw, at);
           typePatternLiterals.set(node, { Kind: 'literal', Value: new TypedNumberValue(held as never, at as never), Base: at, SourceText: node.SourceText } as TypeRecord);
           return;
         }
-        // A decimal and a `float128` hold their values as objects: the
-        // literal's digits are read at the type, as a literal written at a
-        // decimal type is (NumericValue), and not through the double.
-        if ((decimalWidthOf(at) === undefined && at.Name !== 'float128') || !node.SourceText) return;
+        // A decimal, a rational, a complex and a `float128` hold their values
+        // as objects, and a `bigint` as a BigInt: the literal's digits are read
+        // at the type, as a literal written there is (NumericValue), and not
+        // through the double. A value the type cannot hold, or a mark the
+        // type does not take, leaves the literal as it was.
+        if (!node.SourceText || (at.Name === 'bigint' && !Number.isInteger(raw))) return;
         const digits = { type: 'NumericLiteral', SourceText: node.SourceText, value: raw } as unknown as ParseNode.NumericLiteral;
         const before = errors.length;
         staticTypeIn(digits, at);
         const value = EnsureCompletion(NumericValue(digits));
         errors.length = before;
-        if (value.Type !== 'normal') return;
-        typePatternLiterals.set(node, { Kind: 'literal', Value: value.Value as Value, Base: at, SourceText: node.SourceText } as TypeRecord);
+        const held = value.Value as Value;
+        if (value.Type !== 'normal' || (held instanceof NumberValue && !(held instanceof TypedNumberValue))) return;
+        typePatternLiterals.set(node, { Kind: 'literal', Value: held, Base: at, SourceText: node.SourceText } as TypeRecord);
         return;
       }
       case 'ObjectType': {
@@ -36210,8 +36399,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (numeric !== null && positionType) {
           const at = narrowedBase ?? positionType;
+          // A rational and a complex take a literal as the other numeric types
+          // do (Question BA), and the run time converts it from its digits.
           const numericTypes = (at.Kind === 'union' ? at.Members : [at])
-            .filter((type) => type.Kind === 'primitive' && (isNumericValueTypeName(type.Name) || type.Name === 'number' || type.Name === 'bigint'));
+            .filter((type) => type.Kind === 'primitive' && isNumericOperandName(type.Name));
           if (numericTypes.length === 1) {
             patternLiteralTypes.set(pattern, numericTypes[0]);
             staticTypeIn(pattern.Literal, numericTypes[0]);
@@ -45599,6 +45790,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const lit = literalOperand(produced)
           ?? (produced.type === 'IdentifierReference' && isNumericConstantExpression(produced) ? produced : null)
           ?? constantExpressionOperand(produced);
+        // Question BJ: a literal a `float128` or a complex rounds to an
+        // infinity is equal to none of its values (#sec-arithmetic-never-
+        // promotes), so an equality does not take it, and the literal keeps
+        // its own type; an ordered comparison refuses it, and one of a
+        // complex, which has no order, is refused for that.
+        if (lit && (['==', '!=', '===', '!=='].includes(comparison ?? '') || name === 'complex') && (name === 'float128' || name === 'complex')
+            && literalOverflowsFloatAt(lit, base as TypeRecord)) continue;
         if (lit) staticTypeIn(innermostLiteral(lit), base!);
       }
     }
@@ -45741,7 +45939,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const raw = erasedKeepingBrand(staticType(other) ?? enumeratorOperandType(other));
       const t = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
       const base = t?.Kind === 'parameterized' ? t.Base : t;
-      if (!isIntegerValueType(base)) continue;
+      if (!isIntegerValueType(base)) {
+        // Question BJ: a binary float holds every literal it does not round to
+        // an infinity. A `float128` is judged where the comparison takes the
+        // literal (adoptComparisonLiteral), and a complex has no order.
+        const unheld = base && BinaryFloatWidthOf(base) !== 128 ? literals.find((lit) => literalOverflowsFloatAt(lit, base as TypeRecord)) : undefined;
+        const refusedConstant = base && !unheld ? constants.map((operand) => constantOverflowsFloat(operand, base as TypeRecord)).find((refused) => refused !== null) : undefined;
+        if (unheld) reportType('rt-numeric-range', a, '$1 is not in the range of $2', Value(LiteralOperandText(unheld)), Value(displayType(base as TypeRecord)));
+        else if (refusedConstant) reportType('rt-numeric-range', a, '$1 is not in the range of $2', Value(refusedConstant), Value(displayType(base as TypeRecord)));
+        continue;
+      }
       // A named constant or a constant expression is a literal here
       // (#sec-contextual-types), so one the type cannot hold is refused as the
       // literal is: `z < 200 + 100` beside a `uint8`, which was a RangeError

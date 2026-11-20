@@ -1,7 +1,7 @@
 import { ObjectValue, Value, wellKnownSymbols, type Descriptor } from '../value.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
+import { AddWrittenNames, EffectFreeConstruction, IsDeclaredEnumeratorRead, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 
 const methods = new Set(['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'map', 'flatMap', 'forEach', 'toReversed', 'splice', 'concat', 'push', 'pop', 'shift', 'unshift', 'reverse', 'copyWithin', 'fill']);
 const originals = new WeakMap<Realm, Map<string, Value>>();
@@ -71,6 +71,8 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
     if (['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral'].includes(node.type)) return true;
     if (node.type === 'UnaryExpression' && ['+', '-'].includes(node.operator)) return node.UnaryExpression.type === 'NumericLiteral';
     if (node.type === 'ArrayLiteral') return node.ElementList.every((entry) => literalInput(entry, new Set(seen)));
+    // An enumerator is a constant of the program, read without running code.
+    if (IsDeclaredEnumeratorRead(node, definitions, (name) => ambiguous.has(name) || written.has(name) || directEval)) return true;
     if (node.type !== 'IdentifierReference' || ambiguous.has(node.name)) return false;
     const declaration = definitions.get(node.name);
     if (!declaration) return node.name === 'undefined' && intrinsicData(realm.GlobalObject, Value('undefined')) === Value.undefined;

@@ -20,7 +20,11 @@ import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '
 import { isArrayIndex } from '../abstract-ops/all.mts';
 import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
 import { ArraySpanBackingOf } from '../abstract-ops/array-view.mts';
-import { AdoptIntegerContextOperand } from '../type-system/arithmetic.mts';
+import { AdoptIntegerContextOperand, AdoptLiteralOperand, UnheldLiteralOperand } from '../type-system/arithmetic.mts';
+import { isDecimalObject } from '../intrinsics/Decimal.mts';
+import { isRationalObject } from '../intrinsics/Rational.mts';
+import { isFloat128Object } from '../intrinsics/Float128.mts';
+import { isComplexObject } from '../intrinsics/Complex.mts';
 import {
   NamedEvaluation,
   ApplyStringOrNumericBinaryOperator,
@@ -485,6 +489,15 @@ export function* Evaluate_AssignmentExpression({
     // The conversion is the ordinary one, so it range-checks: `a += 300` at a
     // `uint8` is still refused, and now for the reason the desugaring gives
     // rather than for the operands failing to mix.
+    //
+    // Question BJ: a literal the target cannot hold is the RangeError it is in
+    // `a = a + 1e309`. A shift distance is a count, and so is a decimal's or a
+    // rational's exponent.
+    if (surroundingAgent.feature('runtime-types') && ['+', '-', '*', '/', '%', '**'].includes(opText)
+        && isNumericLiteralOperand(AssignmentExpression) && !(opText === '**' && (isDecimalObject(lval) || isRationalObject(lval)))) {
+      const unheld = UnheldLiteralOperand(lval, rval, { left: false, right: true, rightNode: AssignmentExpression });
+      if (unheld) return Throw.RangeError('$1 is not in the range of $2', Value(unheld.text), Value(displayType(unheld.type)));
+    }
     let operand = rval;
     // An exponent and a shift distance beside an integer target are counts,
     // which a Number holding an integer gives as written (Question AQ), so
@@ -533,6 +546,15 @@ export function* Evaluate_AssignmentExpression({
       // compound assignment's target is the left operand, so this arises only
       // where the target itself is untyped and holds a Number.
       operand = rval;
+    } else if ((isDecimalObject(lval) || isRationalObject(lval) || isFloat128Object(lval) || isComplexObject(lval))
+        && rval instanceof NumberValue && isNumericLiteralOperand(AssignmentExpression)
+        && !['<<', '>>', '>>>'].includes(opText) && !(opText === '**' && (isDecimalObject(lval) || isRationalObject(lval)))) {
+      // Question BA: a literal beside a decimal, a rational, a `float128` or a
+      // complex target takes the target's type from its digits, as it does in
+      // `a = a + 1`, which already ran; `a += 1` refused the Number. A
+      // decimal's or a rational's exponent is a count, taken as written.
+      const adopted = AdoptLiteralOperand(lval, rval, { left: false, right: true, rightNode: AssignmentExpression });
+      if (adopted) operand = adopted.right;
     }
     // 7. Let r be ApplyStringOrNumericBinaryOperator(lval, opText, rval).
     const r = Q(yield* ApplyStringOrNumericBinaryOperator(lval, opText, operand));

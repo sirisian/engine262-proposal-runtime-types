@@ -372,6 +372,8 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
           && intrinsicData(realm.GlobalObject, Value(key)) !== undefined) continue;
       if (!write && key === 'revocable' && base.type === 'IdentifierReference' && base.name === 'Proxy'
           && parent?.type === 'CallExpression' && parent.CallExpression === node) continue;
+      if (!write && parent?.type !== 'UpdateExpression'
+          && IsDeclaredEnumeratorRead(node, definitions, (name) => ambiguous.has(name) || mutated.has(name))) continue;
       // `xs.length` at an array or a string, and `xs[i]` at an array with a
       // primitive index, read own storage: no accessor can sit on either.
       const container = write ? null : arrayOrStringBinding(node.MemberExpression);
@@ -444,6 +446,33 @@ export function AddWrittenNames(node: ParseNode, into: Set<string>): void {
   if (!target) return;
   if (target.type === 'IdentifierReference') into.add(target.name);
   else if (target.type === 'ArrayLiteral' || target.type === 'ObjectLiteral') collect(target);
+}
+
+/**
+ * Question BD: whether _node_ reads an enumerator of an enum this source
+ * declares, `E.A`, and so runs no code. An enumerator is a constant of the
+ * program (#sec-enums): a non-writable, non-configurable data property of a
+ * Type Object that admits no other property, so reading it consults no getter
+ * and no Proxy, and an enum binding is immutable. A decorated enum or
+ * enumerator may be replaced, so neither is one; nor is an enum over a type
+ * that is not primitive, whose value a later conversion or iteration enters.
+ */
+export function IsDeclaredEnumeratorRead(node: ParseNode, definitions: ReadonlyMap<string, ParseNode>,
+  unstable: (name: string) => boolean): boolean {
+  if (node.type !== 'MemberExpression' || !node.IdentifierName) return false;
+  let base = node.MemberExpression as ParseNode;
+  while (base.type === 'ParenthesizedExpression') base = base.Expression;
+  if (base.type !== 'IdentifierReference' || unstable(base.name)) return false;
+  const declaration = definitions.get(base.name);
+  if (declaration?.type !== 'EnumDeclaration' || declaration.Decorators?.length) return false;
+  const key = node.IdentifierName.name;
+  if (!declaration.EnumMemberList.some((member) => member.IdentifierName.name === key && !member.Decorators?.length)) return false;
+  const underlying = declaration.TypeAnnotation?.Type;
+  if (!underlying) return true;
+  if (underlying.type !== 'TypeReference' || underlying.TypeArguments || underlying.TypeName.MemberNames.length) return false;
+  const name = underlying.TypeName.IdentifierReference.name;
+  return !definitions.has(name) && (/^u?int(8|16|32|64|128)$/.test(name) || /^float(16|32|64|128)$/.test(name)
+    || /^decimal(32|64|128)$/.test(name) || ['number', 'bigint', 'string', 'boolean'].includes(name));
 }
 
 /** A direct `eval` call, which may write any binding in scope. */

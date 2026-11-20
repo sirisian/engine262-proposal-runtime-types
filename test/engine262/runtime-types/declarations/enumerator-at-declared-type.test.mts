@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
  * Question AV: a read of a declared enumerator is judged where a declared type
@@ -66,4 +66,27 @@ test('the read keeps no Static Type of its own', () => {
   // An operator that does not store its right operand as it is, is judged as
   // an operator: `s += E.A` concatenates.
   expect(evaluated(`${E}let s: string = "s"; s += E.A; let x: uint8 = 1; x += E.A; s + String(x);`)).toBe('s12');
+});
+
+test('an arm of a conditional is received as the conditional is', () => {
+  // Question BF.
+  expectStaticTypeError(`${E}function f(c: boolean) { const b: boolean = c ? E.A : true; return b; }`);
+  expectStaticTypeError(`${E}function f(c: boolean): boolean { return c ? true : E.A; }`);
+  expectStaticTypeError(`${E}function g(b: boolean) { return b; } function f(c: boolean) { return g(c ? E.A : true); }`);
+  expect(evaluated(`${E}function f(c: boolean) { const x: E = c ? E.A : E.B; const n: uint8 = c ? E.A : 1; return String(x) + String(n); } f(true);`)).toBe('11');
+});
+
+test('a message names the enumerator, as the program does', () => {
+  // Question BE: a literal over an enum printed as its value.
+  expectThrown(`${E}const b: boolean = E.A;`, '"E.A" is not assignable to "boolean"');
+  expectThrown(`${E}let x: E.A = E.B;`, '"E.B" is not assignable to "E.A"');
+  expectThrown('enum S : string { A = "a" } const n: number = S.A;', '"S.A" is not assignable to "number"');
+});
+
+test('a push of an enumerator is judged where a push of a literal is', () => {
+  // Question BD: reading an enumerator runs no code, so it no longer stands
+  // down the proof that `a.push` is the intrinsic.
+  expectStaticTypeError(`${E}const a: [].<boolean> = []; a.push(E.A);`);
+  expectStaticTypeError(`${E}const n = E.A; const a: [].<boolean> = []; a.push(1);`);
+  expect(evaluated(`${E}const a: [].<E> = []; a.push(E.A); String(a[0]);`)).toBe('1');
 });

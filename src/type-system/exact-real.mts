@@ -37,7 +37,11 @@ export function exactOfLiteralText(node: ParseNode): ExactReal | undefined {
     }
   }
   if (n.type !== 'NumericLiteral') return undefined;
-  const text = n.sourceText.replace(/_/g, '');
+  // A literal the checker builds for a literal type carries its text as
+  // `SourceText`, having no source range of its own.
+  const written = (n as { sourceText?: string }).sourceText ?? (n as { SourceText?: string }).SourceText;
+  if (typeof written !== 'string') return undefined;
+  const text = written.replace(/_/g, '');
   let significand: bigint;
   let exponent = 0;
   if (/^0[xXoObB]/.test(text) || text.endsWith('n')) {

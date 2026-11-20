@@ -242,6 +242,13 @@ export function exponentiate(base: Binary128, exponent: Binary128): Binary128 | 
 /** significand x 10**exponent - a decimal literal's exact value - rounded once to binary128. */
 export function fromDecimal(significand: bigint, exponent: number): Binary128 {
   if (significand === 0n) return zero(1);
+  // A value a decade or more past the format's largest finite value, about
+  // 1.19e4932, rounds to an infinity, and one below half its least subnormal,
+  // about 3.2e-4966, to a zero, without the power of ten being computed:
+  // `1e-999999999` wrote out a billion digits first.
+  const magnitude = (significand < 0n ? -significand : significand).toString().length + exponent;
+  if (magnitude > 4934) return infinity(significand < 0n ? -1 : 1);
+  if (magnitude < -4967) return zero(significand < 0n ? -1 : 1);
   return exponent >= 0
     ? finite(significand * 10n ** BigInt(exponent), 0)
     : quotient(significand, 0, 10n ** BigInt(-exponent), 0);

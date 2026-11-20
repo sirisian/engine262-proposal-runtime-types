@@ -4,9 +4,13 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { IsConstLiteralUse, IsLetConstantUse } from '../type-system/check.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { AdoptIntegerContextOperand, type ComputedConstant } from '../type-system/arithmetic.mts';
+import { AdoptIntegerContextOperand, AdoptLiteralOperand, UnheldLiteralOperand, type ComputedConstant } from '../type-system/arithmetic.mts';
+import { displayType } from '../type-system/records.mts';
+import { isDecimalObject } from '../intrinsics/Decimal.mts';
+import { isRationalObject } from '../intrinsics/Rational.mts';
+import { isFloat128Object } from '../intrinsics/Float128.mts';
 import { ApplyStringOrNumericBinaryOperator, type BinaryOperator } from './all.mts';
-import { GetValue, surroundingAgent, DeclarativeEnvironmentRecord, Value } from '#self';
+import { GetValue, surroundingAgent, DeclarativeEnvironmentRecord, Throw, Value } from '#self';
 
 /**
  * #sec-arithmetic-never-promotes: "Where one operand is a literal it takes the
@@ -216,10 +220,46 @@ export function* EvaluateStringOrNumericBinaryExpression(leftOperand: ParseNode.
   // 4. Let rval be ? GetValue(rref).
   let rval = Q(yield* GetValue(rref));
   const rightRead = ReadLiteralOperand(rightOperand as ParseNode);
+  // Question BJ: a literal the operand beside it cannot hold is a RangeError
+  // when the expression runs, where the checker did not know that operand's
+  // type (#sec-arithmetic-never-promotes), as it is beside a `uint8` or a
+  // `float32`. Beside a decimal, a rational, a `float128` or a complex it fell
+  // to the error for operands that do not mix, and beside a `float64` to an
+  // infinity. A shift distance is a count, and so is a decimal's or a
+  // rational's exponent; no such type has a bitwise operator.
+  if (surroundingAgent.feature('runtime-types') && (leftRead.literal || rightRead.literal) && ['+', '-', '*', '/', '%', '**'].includes(opText)) {
+    const unheld = UnheldLiteralOperand(lval, rval, {
+      left: leftRead.literal,
+      right: rightRead.literal && !(opText === '**' && (isDecimalObject(lval) || isRationalObject(lval))),
+      leftNode: leftRead.node,
+      rightNode: rightRead.node,
+    });
+    if (unheld) return Throw.RangeError('$1 is not in the range of $2', Value(unheld.text), Value(displayType(unheld.type)));
+  }
   // A literal or a constant operand beside an integer whose type the checker
   // did not know is the integer it writes, which past 2**53 its Number is not.
   if (surroundingAgent.feature('runtime-types') && (leftRead.literal || rightRead.literal)) {
     const adopted = AdoptIntegerContextOperand(lval, rval, {
+      left: leftRead.literal, right: rightRead.literal, leftNode: leftRead.node, rightNode: rightRead.node,
+    });
+    if (adopted) {
+      lval = adopted.left;
+      rval = adopted.right;
+    }
+  }
+  // Question BA: beside a decimal, a rational or a `float128` the checker did
+  // not know, a literal operand is that type's value of its digits when the
+  // expression runs, as it is beside a typed integer and a complex, and as the
+  // checker reads it where the type is known (#sec-arithmetic-never-promotes).
+  // An exponent of a decimal or a rational is a count and is taken as written
+  // (#sec-integer-operations), as the checker takes it; a `float128` has a
+  // real power, and the base of a power takes its exponent's type.
+  const objectNumeric = (v: Value) => isDecimalObject(v) || isRationalObject(v) || isFloat128Object(v);
+  const adoptsAtRunTime = opText === '**'
+    ? (rightRead.literal && isFloat128Object(lval)) || (leftRead.literal && objectNumeric(rval))
+    : !['<<', '>>', '>>>'].includes(opText) && (objectNumeric(lval) || objectNumeric(rval));
+  if (surroundingAgent.feature('runtime-types') && (leftRead.literal || rightRead.literal) && adoptsAtRunTime) {
+    const adopted = AdoptLiteralOperand(lval, rval, {
       left: leftRead.literal, right: rightRead.literal, leftNode: leftRead.node, rightNode: rightRead.node,
     });
     if (adopted) {

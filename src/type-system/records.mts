@@ -1713,6 +1713,16 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       // Where the value is not a printable leaf the base is still the best
       // available description.
       const v = (t as { Value?: { stringValue?(): string } }).Value;
+      // A literal over an enum is an enumerator, and reads as the program
+      // names it (Question BE): `E.A` rather than its value, which printed
+      // `"1" is not assignable to "boolean"` for `const b: boolean = E.A`
+      // where `e: E` printed `"E"`. TypeScript prints `E.A` for the same type.
+      const enumBase = t.Base as { Kind?: string, EnumMembers?: readonly unknown[], Declaration?: { type?: string, EnumMemberList?: readonly { IdentifierName: { name: string } }[] } } | undefined;
+      if (enumBase?.Kind === 'nominal' && enumBase.EnumMembers && enumBase.Declaration?.type === 'EnumDeclaration') {
+        const index = enumBase.EnumMembers.findIndex((member) => member === v);
+        const name = index >= 0 ? enumBase.Declaration.EnumMemberList?.[index]?.IdentifierName.name : undefined;
+        if (name !== undefined) return `${displayType(t.Base)}.${name}`;
+      }
       if (v && typeof v.stringValue === 'function') {
         return `'${v.stringValue()}'`;
       }

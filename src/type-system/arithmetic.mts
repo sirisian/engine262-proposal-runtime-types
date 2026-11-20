@@ -2,10 +2,15 @@ import { BooleanValue, NumberValue, TypedNumberValue, Value, BigIntValue, Object
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateDecimalValue, DecimalPartsInRange, isDecimalObject } from '../intrinsics/Decimal.mts';
+import { CreateRationalValue, isRationalObject } from '../intrinsics/Rational.mts';
+import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
+import { Binary128ToFloat128, isFloat128Object } from '../intrinsics/Float128.mts';
+import { fromDecimal as Float128FromDecimal } from '../intrinsics/Float128Arithmetic.mts';
+import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
-import { fitsNumericType } from './runtime.mts';
+import { fitsNumericType, RuntimeTypeOf } from './runtime.mts';
 import { exactOfLiteralText } from './exact-real.mts';
 import { BigIntComparisonOperandValue, IntegerContextOperandValue, ProducingOperand } from './numeric-constants.mts';
 import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, Z, type ThrowCompletion } from '#self';
@@ -542,6 +547,106 @@ export function AdoptIntegerContextOperand(x: Value, y: Value, literals: { left:
   return literalIsRight ? { left: x, right: adopted } : { left: adopted, right: y };
 }
 
+/** The width of a binary float type, a `number` being a binary64; undefined for any other type. */
+export function BinaryFloatWidthOf(t: TypeRecord | undefined): 16 | 32 | 64 | 128 | undefined {
+  const base = t?.Kind === 'parameterized' ? t.Base : t;
+  if (base?.Kind !== 'primitive') return undefined;
+  return ({ float16: 16, float32: 32, float64: 64, number: 64, float128: 128 } as Record<string, 16 | 32 | 64 | 128 | undefined>)[base.Name];
+}
+
+/**
+ * #sec-literalvalueintype: "If _v_ is an infinity and _mv_ is finite, return
+ * ~unrepresentable~". Whether the numeric literal `node`, under its
+ * parentheses and sign, whose value is always finite, rounds to an infinity in
+ * the binary float of `width` bits; undefined where it is no numeric literal.
+ * Its Number shows this at a `float16` or a `float32`, and not at a binary64,
+ * where the Number is already the infinity, nor at a binary128.
+ */
+export function LiteralOverflowsBinaryFloat(node: ParseNode, width: 16 | 32 | 64 | 128): boolean | undefined {
+  const exact = exactOfLiteralText(node);
+  if (!exact || exact.special !== undefined) return undefined;
+  const magnitude = exact.significand < 0n ? -exact.significand : exact.significand;
+  if (magnitude === 0n) return false;
+  // At each width 10**L is below the largest finite value and 10**(L + 1) is
+  // above the point at which rounding reaches the infinity, and the literal
+  // lies in [10**(m - 1), 10**m) for m its digits and its exponent together.
+  const L = ({ 16: 4, 32: 38, 64: 308, 128: 4932 } as const)[width];
+  const m = magnitude.toString().length + exact.exponent;
+  if (m <= L) return false;
+  if (m >= L + 2) return true;
+  if (width === 128) return Float128FromDecimal(magnitude, exact.exponent).cls === 'infinity';
+  const [num, den] = exact.exponent >= 0 ? [magnitude * 10n ** BigInt(exact.exponent), 1n] : [magnitude, 10n ** BigInt(-exact.exponent)];
+  return !Number.isFinite(roundRationalToBinaryFloat(num, den, width));
+}
+
+/** A numeric literal operand as the program wrote it, with its sign: for a message. */
+export function LiteralOperandText(node: ParseNode, outerNegative = false): string {
+  let n = node;
+  let negative = outerNegative;
+  for (;;) {
+    if (n.type === 'ParenthesizedExpression') n = n.Expression;
+    else if (n.type === 'CommaOperator') n = n.ExpressionList.at(-1)!;
+    else if (n.type === 'UnaryExpression' && (n.operator === '-' || n.operator === '+')) {
+      if (n.operator === '-') negative = !negative;
+      n = n.UnaryExpression;
+    } else break;
+  }
+  const written = (n as { sourceText?: string }).sourceText ?? (n as { SourceText?: string }).SourceText ?? String((n as { value?: unknown }).value);
+  return `${negative ? '-' : ''}${written}`;
+}
+
+/** The binary float width of the component of a complex value. */
+function complexComponentWidth(peer: Value): 16 | 32 | 64 | 128 | undefined {
+  return BinaryFloatWidthOf(((peer as { ComplexComponent?: TypeRecord }).ComplexComponent) ?? { Kind: 'primitive', Name: 'number', Arguments: [] } as unknown as TypeRecord);
+}
+
+/**
+ * #sec-arithmetic-never-promotes: where the other operand's type is known only
+ * when the expression runs, a literal's "value takes the type then, as a
+ * literal's does, or a RangeError is thrown where the type has no such value".
+ * The literal operand of an arithmetic or relational operator that the decimal,
+ * rational, `float128`, complex or `float64` beside it cannot hold: its text
+ * and that operand's type, for the RangeError. Each fell to the error for
+ * operands that do not mix, as a decimal with a Number does, or to an infinity;
+ * an integer and a narrower float refuse their literal where it is converted
+ * (TypedOperandType), since its Number shows the answer there.
+ */
+export function UnheldLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { text: string, type: TypeRecord } | undefined {
+  for (const [peer, other, written, node] of [[x, y, literals.right, literals.rightNode], [y, x, literals.left, literals.leftNode]] as const) {
+    if (!written || !node || !(other instanceof NumberValue) || isTypedNumber(other)) continue;
+    if (!(isDecimalObject(peer) || isRationalObject(peer) || isFloat128Object(peer) || isComplexObject(peer)
+      || (peer instanceof TypedNumberValue && BinaryFloatWidthOf(UnderlyingOf(peer.TypeRecord as TypeRecord)) === 64))) continue;
+    const exact = exactOfLiteralText(node);
+    if (!exact || exact.special !== undefined) continue;
+    let held: boolean | undefined;
+    if (isDecimalObject(peer)) {
+      held = DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, peer.DecimalWidth);
+    } else if (isRationalObject(peer)) {
+      const record = peer.TypeRecord as TypeRecord | undefined;
+      const parts = record?.Kind === 'primitive' ? record.Arguments : [];
+      // `rational.<bigint>` holds every value a literal writes.
+      if (parts.length > 0 && typeof parts[0] === 'object' && (parts[0] as { Name?: string }).Name === 'bigint') continue;
+      if (Math.abs(exact.exponent) > 4096) {
+        held = false;
+      } else {
+        const realm = surroundingAgent.currentRealmRecord;
+        const fraction = exact.exponent >= 0
+          ? CreateRationalValue(exact.significand * 10n ** BigInt(exact.exponent), 1n, realm, peer.TypeRecord)
+          : CreateRationalValue(exact.significand, 10n ** BigInt(-exact.exponent), realm, peer.TypeRecord);
+        held = isRationalObject(fraction as Value);
+      }
+    } else {
+      const width = isFloat128Object(peer) ? 128
+        : isComplexObject(peer) ? complexComponentWidth(peer)
+          : peer instanceof TypedNumberValue && BinaryFloatWidthOf(UnderlyingOf(peer.TypeRecord as TypeRecord)) === 64 ? 64 : undefined;
+      const overflows = width === undefined ? undefined : LiteralOverflowsBinaryFloat(node, width);
+      held = overflows === undefined ? undefined : !overflows;
+    }
+    if (held === false) return { text: LiteralOperandText(node), type: RuntimeTypeOf(peer) };
+  }
+  return undefined;
+}
+
 export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { left: Value, right: Value } | undefined {
   // Question AN, AN1: beside a BigInt the checker knew to be of the `bigint`
   // type, a literal or a constant that writes an integer is that integer, as it
@@ -570,6 +675,45 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
     const exact = exactOfLiteralText(node);
     if (!exact || exact.special !== undefined || !DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, peer.DecimalWidth)) return undefined;
     const adopted = CreateDecimalValue(exact.significand, exact.exponent, peer.DecimalWidth, surroundingAgent.currentRealmRecord, (peer as { TypeRecord?: unknown }).TypeRecord);
+    return literalOnRight ? { left: x, right: adopted } : { left: adopted, right: y };
+  }
+  // Question BA: a rational, a `float128` and a complex peer take the literal
+  // as a decimal one does, at the value its source text denotes in the peer's
+  // type (#sec-literalvalueintype): the exact fraction, the binary128 nearest
+  // it, and the real axis. They were not peers at all, so `case 1` in a
+  // `switch` over a `rational64` took no case, and `a === 1` for an untyped
+  // `a` holding one was *false* where a decimal's was *true*. A literal the
+  // type cannot represent is equal to none of its values, so adoption declines.
+  for (const [peer, literalOnRight] of [[x, true], [y, false]] as const) {
+    const node = literalOnRight ? literals.rightNode : literals.leftNode;
+    if (!(isRationalObject(peer) || isFloat128Object(peer) || isComplexObject(peer)) || !(literalOnRight ? literals.right : literals.left) || !node) continue;
+    const other = literalOnRight ? y : x;
+    if (!(other instanceof NumberValue) || isTypedNumber(other)) return undefined;
+    const realm = surroundingAgent.currentRealmRecord;
+    let adopted: Value;
+    if (isComplexObject(peer)) {
+      // A literal the component rounds to an infinity is no value of it
+      // (#sec-literalvalueintype), and equal to none.
+      const width = complexComponentWidth(peer);
+      if (width !== undefined && LiteralOverflowsBinaryFloat(node, width)) return undefined;
+      adopted = CreateComplexValue(other.numberValue(), 0, peer.ComplexComponent, realm, (peer as { ComplexTypeRecord?: unknown }).ComplexTypeRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, as a complex literal's real part is
+    } else {
+      const exact = exactOfLiteralText(node);
+      if (!exact || exact.special !== undefined) return undefined;
+      if (isFloat128Object(peer)) {
+        // Over the whole binary128 range, whose exponents pass 4096: a literal
+        // past its largest value is equal to none of its values.
+        if (LiteralOverflowsBinaryFloat(node, 128)) return undefined;
+        adopted = Binary128ToFloat128(Float128FromDecimal(exact.significand, exact.exponent), realm);
+      } else {
+        if (Math.abs(exact.exponent) > 4096) return undefined;
+        const fraction = exact.exponent >= 0
+          ? CreateRationalValue(exact.significand * 10n ** BigInt(exact.exponent), 1n, realm, peer.TypeRecord)
+          : CreateRationalValue(exact.significand, 10n ** BigInt(-exact.exponent), realm, peer.TypeRecord);
+        if (!isRationalObject(fraction as Value)) return undefined;
+        adopted = fraction as Value;
+      }
+    }
     return literalOnRight ? { left: x, right: adopted } : { left: adopted, right: y };
   }
   const xt = x instanceof TypedNumberValue ? ((x as TypedNumberValue).TypeRecord as TypeRecord) : null;
@@ -624,6 +768,12 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
     }
   }
   const literalValue = payload(untyped);
+  // A literal a `float64` rounds to an infinity is no value of it either,
+  // though its Number, already that infinity, fits (#sec-literalvalueintype):
+  // `x === 1e309` for a `float64` infinity is *false*, as `x === 1e39` is for
+  // a `float32` one.
+  const literalNode = literalIsRight ? literals.rightNode : literals.leftNode;
+  if (BinaryFloatWidthOf(target) === 64 && literalNode && LiteralOverflowsBinaryFloat(literalNode, 64)) return undefined;
   if (!fitsNumericType(literalValue, prim.Name, prim.Arguments)) {
     // A literal the type cannot represent is simply not equal to any value of
     // it, which is the answer a comparison wants. Adoption declines and the
