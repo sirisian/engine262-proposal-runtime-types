@@ -1314,6 +1314,35 @@ export function SoAColumnsOf(element: TypeRecord): SoAColumn[] | null {
   return columns;
 }
 
+/** Why SoAColumnsOf declines _element_, for the message that names it. */
+export type SoAColumnsRefusal =
+  | { readonly kind: 'not-value-class' }
+  | { readonly kind: 'no-layout' }
+  | { readonly kind: 'bit-field', readonly field: string }
+  | { readonly kind: 'private-field' };
+
+export function SoAColumnsRefusalOf(element: TypeRecord): SoAColumnsRefusal {
+  if (element.Kind === 'primitive' || element.Kind === 'array') {
+    return { kind: 'no-layout' };
+  }
+  if (element.Kind !== 'nominal' || !IsDeclaredValueClass(element)) {
+    return { kind: 'not-value-class' };
+  }
+  const instance = (element.Constructor as { InstanceLayout?: ClassLayout | null } | undefined)?.InstanceLayout;
+  if (!instance) {
+    return { kind: 'no-layout' };
+  }
+  for (const field of instance.fields) {
+    if (field.isBitField) {
+      return typeof field.key === 'string' ? { kind: 'bit-field', field: field.key } : { kind: 'private-field' };
+    }
+    if (typeof field.key !== 'string') {
+      return { kind: 'private-field' };
+    }
+  }
+  return { kind: 'no-layout' };
+}
+
 /**
  * proposal-runtime-types #sec-threading-shared-modifier: whether a type admits the
  * `shared` modifier. The admitted set is the value types - the sized numerics,

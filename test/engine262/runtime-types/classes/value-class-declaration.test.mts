@@ -203,7 +203,10 @@ test('what asks for a value type is answered by the declaration', () => {
   expect(observeScript('class P { x: uint8 = 0; } function f(p: shared P) { }')).toMatchObject(notType);
   expect(observeScript('class P { x: uint8 = 0; } type S = shared [2].<P>;')).toMatchObject(notType);
   expect(evaluated('value class P { x: uint8 = 0; y: float32 = 0; } const s = new SoA.<P, 4>(); String(s.length) + String((type SoA.<P, 4>).hasLayout);')).toBe('4true');
-  expectThrown('class P { x: uint8 = 0; y: float32 = 0; } const s = new SoA.<P, 4>();', 'cannot be stored as columns');
+  // #sec-structure-of-arrays: "_T_ must be a value type class or a primitive", so naming the
+  // type is the type error, before the program runs, and not only constructing one.
+  expectThrown('class P { x: uint8 = 0; y: float32 = 0; } const s = new SoA.<P, 4>();', 'cannot be split into columns: it is not a value class');
+  expect(observeScript('class P { x: uint8 = 0; y: float32 = 0; } let s: SoA.<P, 4>;')).toMatchObject({ bodyEntered: false, errorClass: 'StaticTypeError', diagnostic: { rule: 'rt-layout' } });
   expect(evaluated('class P { x: uint8 = 0; y: float32 = 0; } String((type SoA.<P, 4>).hasLayout);')).toBe('false');
 });
 

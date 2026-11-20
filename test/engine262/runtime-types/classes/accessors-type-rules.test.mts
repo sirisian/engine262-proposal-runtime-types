@@ -114,10 +114,12 @@ test('the worked Shelter/Kennel example, both directions', () => {
   expect(outcome(`${decl} class Kennel extends Shelter { set resident(value: Dog) {} }`)).toBe('StaticTypeError');
 });
 
-test('the one rule not implemented: field and accessor substitution', () => {
-  // Field/accessor substitution, which needs the member KIND recorded on the
-  // class type - only accessor keys are tracked, and only within one walk.
-  expect(outcome('value class B { a: uint8 = 1; } value class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
+test('field and accessor substitution along a value class chain', () => {
+  // "Replacing an inherited field with an accessor of the same name, or the
+  // reverse, is a TypeError" (the README's accessors section). It was the one
+  // rule not implemented; along a value class chain it is, where the checker
+  // sees the chain (value-member-kinds.test.mts).
+  expect(outcome('value class B { a: uint8 = 1; } value class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('StaticTypeError');
   // NOT a gap: a value of one value type never implicitly becomes another, so
   // refusing this is correct - statically and, since the stricter-runtime
   // decision, at run time too. The run time used to CONVERT a typed value that

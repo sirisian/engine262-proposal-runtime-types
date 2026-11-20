@@ -277,6 +277,8 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
         rightComputed: rightLiteral ? IsComputedConstantOperand(rightRead.node) : undefined,
         leftString,
         rightString,
+        leftNode: leftLiteral && !leftString ? leftRead.node : undefined,
+        rightNode: rightLiteral && !rightString ? rightRead.node : undefined,
       });
       if (decided instanceof AbruptCompletion) {
         return decided;

@@ -171,10 +171,12 @@ test('a result whose function is not certain is not judged', () => {
   // A subclass of a reference class may declare the member a field, which a store reaches.
   expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } class C extends B { inner: P; } const c: B = new C(); c.inner.x = 4; String(c.inner.x);`)).toBe('4');
   expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } const b: B = new B(); b.inner.x = 4; String(b.p.x);`)).toBe('0');
-  // `this` may be of a subclass too.
-  expect(evaluated(`${P}value class B { p: P; get inner(): P { return this.p; } poke(): void { this.inner.x = 4; } } value class C extends B { inner: P; } const c: C = new C(); c.poke(); String(c.inner.x);`)).toBe('4');
+  // `this` may be of a subclass too. Along a value class chain a field may not
+  // replace an inherited getter (value-member-kinds.test.mts), so these are
+  // classes held by reference.
+  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } poke(): void { this.inner.x = 4; } } class C extends B { inner: P; } const c: C = new C(); c.poke(); String(c.inner.x);`)).toBe('4');
   // A name narrowed to the class may hold a subclass's value.
-  expect(evaluated(`${P}value class B { p: P; get inner(): P { return this.p; } } value class C extends B { inner: P; } function f(v: B | C): string { if (v instanceof B) { v.inner.x = 4; } return String(v.inner.x); } f(new C());`)).toBe('4');
+  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } class C extends B { inner: P; } function f(v: B | C): string { if (v instanceof B) { v.inner.x = 4; } return String(v.inner.x); } f(new C());`)).toBe('4');
   // A function that was assigned to, and one declared at the top level of a script.
   expect(evaluated(`${PS}{ function pick(i: uint8): P { return ps[i]; } pick = () => ps[0]; pick(0).x = 4; } String(ps[0].x);`)).toBe('0');
   expect(evaluated(`${PS}function pick(i: uint8): P { return ps[i]; } pick(0).x = 1; String(ps[0].x);`)).toBe('0');

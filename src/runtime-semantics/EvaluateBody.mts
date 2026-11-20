@@ -14,6 +14,7 @@ import { pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFram
 import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { returnTypeRecordOf, SetGeneratorProtocolType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { CopyReturnedValue } from './ReturnStatement.mts';
 import {
   Evaluate_FunctionStatementList,
   FunctionDeclarationInstantiation,
@@ -159,7 +160,8 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
   if (expressionResult.Type !== 'normal') return expressionResult;
   const valueResult = EnsureCompletion(yield* GetResultValue(expressionResult));
   if (valueResult.Type !== 'normal') return valueResult;
-  const exprValue = valueResult.Value;
+  // A concise body returns its expression, and copies it as a `return` does.
+  const exprValue = Q(yield* CopyReturnedValue(AssignmentExpression, valueResult.Value));
   // 3. Return Completion { [[Type]]: return, [[Value]]: exprValue, [[Target]]: empty }.
   return ForwardResultDependency(valueResult, new Completion({ Type: 'return', Value: exprValue, Target: undefined }));
 }

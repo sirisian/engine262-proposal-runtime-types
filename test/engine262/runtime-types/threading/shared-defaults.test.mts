@@ -47,8 +47,9 @@ test('a generic class held by reference holds shared storage of its parameters',
   expect(evaluated(`${C}const c = new C.<P, 4>(); c.s[0].y = 7; c.one.y = 7; String(c.s.length) + String(c.s[0].y) + String(c.s[1].y) + String(c.one.y);`)).toBe('4707');
   expect(evaluated(`${C}const c = new C.<uint8, 2>(); c.s[1] = 9; c.one = 3; String(c.s[1]) + String(c.one);`)).toBe('93');
   // The obligation is discharged when an application closes the operand.
-  expectThrown(`${C}new C.<string, 2>();`, 'which is not a value type');
-  expectThrown(`${P}class R { r: uint8 = 0; } class C<T: type> { one: shared T; } new C.<R>();`, 'which is not a value type');
+  // A `string` is a value type with no layout (#sec-value-types), and the refusal says which.
+  expectThrown(`${C}new C.<string, 2>();`, '"shared [2].<string>" is not a valid type: "[2].<string>" has no layout');
+  expectThrown(`${P}class R { r: uint8 = 0; } class C<T: type> { one: shared T; } new C.<R>();`, '"shared R" is not a valid type: "R" is not a value type');
 });
 
 test('a shared binding of a type parameter is a question for the application', () => {

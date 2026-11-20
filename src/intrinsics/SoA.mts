@@ -6,7 +6,7 @@ import {
 } from '../value.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { LayoutOf, SoAColumnsOf, type SoAColumn } from '../type-system/layout.mts';
+import { LayoutOf, SoAColumnsOf, SoAColumnsRefusalOf, type SoAColumn } from '../type-system/layout.mts';
 import { BufferElementType, SetPlacementBacking, WritePlacedField } from '../abstract-ops/placement.mts';
 import { RecordClassConstructors, SealTypedInstance } from '../abstract-ops/function-operations.mts';
 import { SubclassAddsStorageOver } from '../type-system/layout.mts';
@@ -95,6 +95,27 @@ export function ColumnLayoutFor(columns: readonly SoAColumn[], capacity: number)
   return { offsets, byteLength: cursor, alignment };
 }
 
+/**
+ * The refusal of an element type a structure of arrays cannot split, naming
+ * the type and the reason (#sec-structure-of-arrays: "_T_ must be a value
+ * type class or a primitive"). It named neither: the message read "this
+ * element type" cannot be stored as columns, the placeholder quoted as if it
+ * were the type.
+ */
+function SoARefusal(element: TypeRecord) {
+  const refusal = SoAColumnsRefusalOf(element);
+  switch (refusal.kind) {
+    case 'not-value-class':
+      return Throw.TypeError('$1 cannot be stored as columns: it is not a value class, and a structure of arrays holds a value class or a primitive', Value(displayType(element)));
+    case 'bit-field':
+      return Throw.TypeError('$1 cannot be stored as columns: its field $2 is a bit-field, which no column can hold', Value(displayType(element)), Value(refusal.field));
+    case 'private-field':
+      return Throw.TypeError('$1 cannot be stored as columns: a private field has no name for a column to be read by', Value(displayType(element)));
+    default:
+      return Throw.TypeError('$1 cannot be stored as columns: it has no layout, and a field of no layout has nothing to split', Value(displayType(element)));
+  }
+}
+
 /** The type arguments a construction supplied, set by the NewExpression intercept. */
 let pendingTypeArguments: readonly TypeRecord[] | undefined;
 
@@ -125,7 +146,7 @@ function* SoAConstructor(args: Arguments, { NewTarget }: FunctionCallContext): V
   const declaredExtent = typeArgs.length > 1 && typeof typeArgs[1] === 'number' ? typeArgs[1] as unknown as number : 0;
   const columns = SoAColumnsOf(element);
   if (columns === null) {
-    return Throw.TypeError('$1 cannot be stored as columns', Value('this element type'));
+    return SoARefusal(element);
   }
   // A fixed extent is the length from construction; a growable form takes an
   // optional initial length, and otherwise starts empty.
@@ -811,7 +832,7 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
   }
   const columns = SoAColumnsOf(element);
   if (columns === null) {
-    return Throw.TypeError('this element type cannot be stored as columns');
+    return SoARefusal(element);
   }
   const source = args[0];
   let buffer: ArrayBufferObject | undefined;
@@ -900,7 +921,7 @@ function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
   }
   const columns = SoAColumnsOf(element);
   if (columns === null) {
-    return Throw.TypeError('this element type cannot be stored as columns');
+    return SoARefusal(element);
   }
   const lengthValue = Q(yield* Get(values, Value('length')));
   const length = Number(Q(yield* ToIndex(lengthValue)));
@@ -939,7 +960,7 @@ function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
 export function* SoAWithCapacity(element: TypeRecord, n: number): ValueEvaluator {
   const columns = SoAColumnsOf(element);
   if (columns === null) {
-    return Throw.TypeError('this element type cannot be stored as columns');
+    return SoARefusal(element);
   }
   const placement = ColumnLayoutFor(columns, n);
   const buffer = Q(yield* AllocateArrayBuffer(surroundingAgent.intrinsic('%ArrayBuffer%'), placement.byteLength));

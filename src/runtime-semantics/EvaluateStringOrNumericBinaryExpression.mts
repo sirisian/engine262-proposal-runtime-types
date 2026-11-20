@@ -277,5 +277,7 @@ export function* EvaluateStringOrNumericBinaryExpression(leftOperand: ParseNode.
     rightLetConst: IsLetConstantUse(rightOperand as object),
     leftComputed: leftRead.literal ? IsComputedConstantOperand(leftRead.node) : undefined,
     rightComputed: rightRead.literal ? IsComputedConstantOperand(rightRead.node) : undefined,
+    leftNode: leftRead.literal ? leftRead.node : undefined,
+    rightNode: rightRead.literal ? rightRead.node : undefined,
   }, contextualTypeFor(leftOperand.parent)));
 }

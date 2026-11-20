@@ -2018,6 +2018,37 @@ function exactBigIntOf(node: ParseNode.NumericLiteral): bigint | null {
 }
 
 /**
+ * The bits an exact fold computes a power or a shift with, at most: 2**16.
+ * That holds every value of every bounded numeric type, `float128` reaching
+ * 2**16384 and `decimal128` 10**6145, so a constant that overflows one is
+ * computed exactly and refused. The folds stopped at an exponent of 4096
+ * instead, and a power past it was left to the type's arithmetic: `2 ** 20000`
+ * at a `float128` was Infinity where `2 ** 1024` at a `float64` is refused,
+ * and beside a rational known only at run time `2 ** 5000` was computed as a
+ * Number and refused as one.
+ */
+const EXACT_FOLD_BITS = 65536n;
+function exactPowerFits(base: bigint, exponent: bigint): boolean {
+  const n = exponent < 0n ? -exponent : exponent;
+  const magnitude = base < 0n ? -base : base;
+  if (magnitude <= 1n || n <= 1n) return true;
+  return BigInt(magnitude.toString(2).length) * n <= EXACT_FOLD_BITS;
+}
+/**
+ * What a range refusal names for a constant folded to _value_: the value, as
+ * `200 + 100` at a `uint8` is refused as 300 and a `case` of it is "the 300
+ * test", or, where the value's digits would run past a line, the constant as
+ * it is written. `2 ** 5000` at a `rational64` printed all 1,506 digits.
+ */
+function foldedRangeText(value: string, written: () => string): string {
+  return value.length <= 40 ? value : written();
+}
+function exactShiftFits(value: bigint, count: bigint): boolean {
+  const magnitude = value < 0n ? -value : value;
+  return count <= EXACT_FOLD_BITS - BigInt(magnitude.toString(2).length);
+}
+
+/**
  * The integer a Number literal denotes however it is spelled, or *null* where
  * it denotes none: `3`, `3.0` and `3e0` all denote 3, as `const k: uint32 =
  * 7.0` holds 7 (#sec-literalvalueintype). A constant expression reads its
@@ -2032,7 +2063,7 @@ function integerOfLiteral(node: ParseNode.NumericLiteral): bigint | null {
   if (integer !== null) return integer;
   if (!Number.isFinite(node.value)) return null;
   const exact = exactOfLiteralText(node);
-  if (!exact || exact.special !== undefined || Math.abs(exact.exponent) > 4096) return null;
+  if (!exact || exact.special !== undefined || !exactPowerFits(10n, BigInt(exact.exponent))) return null;
   if (exact.exponent >= 0) return exact.significand * 10n ** BigInt(exact.exponent);
   const scale = 10n ** BigInt(-exact.exponent);
   return exact.significand % scale === 0n ? exact.significand / scale : null;
@@ -2285,7 +2316,7 @@ function foldBigIntConstant(node: ParseNode): bigint | null {
     case 'ExponentiationExpression': {
       const l = e.UpdateExpression ? foldBigIntConstant(e.UpdateExpression) : null;
       const r = e.ExponentiationExpression ? foldBigIntConstant(e.ExponentiationExpression) : null;
-      return l !== null && r !== null && r >= 0n && r < 4096n ? l ** r : null;
+      return l !== null && r !== null && r >= 0n && exactPowerFits(l, r) ? l ** r : null;
     }
     default:
       return null;
@@ -2475,8 +2506,9 @@ function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
  * from the literals' source text so nothing has been rounded. Returns null
  * where any leaf is not an integer literal, where an operator is not one this
  * folds, or where a result would not be an integer (a `/` that does not
- * divide, a negative shift count). `**` with a negative exponent, and shifts
- * past 4096 bits, are refused as null rather than computed.
+ * divide, a negative shift count). `**` with a negative exponent, and a
+ * power or a shift past EXACT_FOLD_BITS bits, are refused as null rather than
+ * computed.
  */
 /**
  * The representation in which a constant expression's bitwise operators and
@@ -2538,7 +2570,7 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
       const r = l === null ? null : fold(e.AdditiveExpression!);
       if (l === null || r === null || !held(l)) return null;
       if (!sized) {
-        if (r < 0n || r > 4096n || e.operator === '>>>') return null;
+        if (r < 0n || !exactShiftFits(l, r) || e.operator === '>>>') return null;
         return e.operator === '<<' ? l << r : l >> r;
       }
       if (r < 0n || r >= width) {
@@ -2612,7 +2644,7 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
     case 'ExponentiationExpression': {
       const l = fold(e.UpdateExpression!);
       const r = fold(e.ExponentiationExpression!);
-      if (l === null || r === null || r < 0n || r > 4096n) {
+      if (l === null || r === null || r < 0n || !exactPowerFits(l, r)) {
         return null;
       }
       return l ** r;
@@ -2666,7 +2698,7 @@ function foldExactInteger(node: ParseNode | null | undefined, initializerOf: (na
     case 'ExponentiationExpression': {
       const l = fold(e.UpdateExpression);
       const r = l === null ? null : fold(e.ExponentiationExpression);
-      return l === null || r === null || r < 0n || r > 4096n ? null : l ** r;
+      return l === null || r === null || r < 0n || !exactPowerFits(l, r) ? null : l ** r;
     }
     default:
       return null;
@@ -2792,7 +2824,7 @@ function foldExactRational(node: ParseNode | null | undefined, initializerOf: (n
     case 'ExponentiationExpression': {
       const l = fold(e.UpdateExpression);
       const r = l === null ? null : fold(e.ExponentiationExpression);
-      if (l === null || r === null || r.den !== 1n || r.num > 4096n || r.num < -4096n) return null;
+      if (l === null || r === null || r.den !== 1n || !exactPowerFits(l.num, r.num) || !exactPowerFits(l.den, r.num)) return null;
       if (r.num >= 0n) return canonicalRational(l.num ** r.num, l.den ** r.num);
       return l.num === 0n ? null : canonicalRational(l.den ** -r.num, l.num ** -r.num);
     }
@@ -2996,7 +3028,7 @@ function foldRationalConstant(node: ParseNode, bitwise?: BitwiseConstantValue): 
     case 'ExponentiationExpression': {
       const l = fold(e.UpdateExpression!);
       const r = fold(e.ExponentiationExpression!);
-      if (l === null || r === null || r.den !== 1n || r.num > 4096n || r.num < -4096n) {
+      if (l === null || r === null || r.den !== 1n || !exactPowerFits(l.num, r.num) || !exactPowerFits(l.den, r.num)) {
         return null;
       }
       if (r.num >= 0n) {
@@ -3095,7 +3127,7 @@ function foldDecimalStep(node: ParseNode, resolveConst?: (name: string) => Dec |
         return null;
       }
       const n = r.sig * 10n ** BigInt(r.exp);
-      return n > 4096n ? null : { sig: l.sig ** n, exp: l.exp * Number(n) };
+      return !exactPowerFits(l.sig, n) ? null : { sig: l.sig ** n, exp: l.exp * Number(n) };
     }
     default:
       return null;
@@ -3247,6 +3279,28 @@ function writtenAnnotationAbove(node: object): boolean {
  * take a rest parameter, and an argument loop that checked only their first
  * argument would be worse than the run time, which already enforces them.
  */
+/**
+ * What a window's `concat` takes. Its copy is an owned array of the window's
+ * element type (#sec-span-coercion), and an element it takes from an argument
+ * is converted to that type and checked (#sec-value-type-copying); an array's
+ * `concat` joins its arguments' element types instead, in `arrayContract`. An
+ * argument is an element or a run of elements, since the method spreads an
+ * array and a window one level: an array of the element, which an array
+ * literal is typed against, or, for an element with a layout, any storage a
+ * read-only window of the element accepts, an array of fixed extent, a tuple
+ * and a window among them. Anything else is refused at the argument.
+ */
+const ConcatArgumentType = (element: TypeRecord): TypeRecord => {
+  const array = { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord;
+  const window = element.Kind !== 'any' && LayoutOf(element) ? libraryTypeRecord('ReadonlySpan', [element]) : null;
+  const canonical = CanonicalizeType({ Kind: 'union', Members: window ? [element, window] : [element, array] } as TypeRecord) as TypeRecord;
+  // The window subsumes the array of the element, and canonical form drops
+  // the array; it is kept as a member of its own, since an array literal is
+  // typed against an array member of a union and a plain array reaches a
+  // window only by a coercion `concat` does not need: it spreads the array.
+  return window && canonical.Kind === 'union' ? { ...canonical, Members: [...canonical.Members, array] } as TypeRecord : canonical;
+};
+
 const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
   // What a method that copies the receiver's elements returns: the receiver's
@@ -3408,14 +3462,13 @@ const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: 
       // `Array.prototype.concat` flattens one level: `[1].concat(2)` is
       // `[1, 2]`. A parameter accepting only the array form refuses half of the
       // method's uses.
-      const concatArgument = CanonicalizeType({
-        Kind: 'union', Members: [element, arrayOfElement],
-      } as TypeRecord) as TypeRecord;
       return {
         Kind: 'function',
-        // Optional from the FIRST parameter: `a.concat(b)` passes one and
-        // `a.concat()` copies, so requiring two refuses both.
-        Signatures: [{ Parameters: shapes([concatArgument, concatArgument], 1), Return: copiedFrom(receiver) }],
+        // A rest, so that `a.concat()` copies and `a.concat(b, c, d)` joins
+        // three: two optional parameters refused a third argument. The copy is
+        // a dynamic array, whatever the receiver's extent
+        // (#sec-intrinsic-array-contracts).
+        Signatures: [{ Parameters: [parameter(ConcatArgumentType(element), { Rest: true })], Return: arrayOfElement }],
       } as Known;
     }
     case 'toReversed':
@@ -11398,9 +11451,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-value-classes: along a value class chain a member keeps the kind it
+   * was first declared with. "Replacing an inherited field with an accessor of
+   * the same name, or the reverse, is a TypeError. A field occupies a slot in
+   * the base's memory layout and an accessor doesn't" (the README's accessors
+   * section). Accepted until now: the instance holds the base's field as an own
+   * property, which shadows the subclass's accessor on the prototype, so
+   * `get a()` over an inherited field `a` was never called; and a field over an
+   * inherited getter left the base's getter unreachable on a value of the
+   * subclass.
+   *
+   * Judged as an inherited field redeclaration is, where the checker sees the
+   * chain. A class held by reference is not judged here: there the rule is the
+   * open question of what a subclass may replace a getter with.
+   */
+  const memberKindOf = (element: ParseNode): 'field' | 'accessor' | null => {
+    if (element.type === 'FieldDefinition') return (element as { accessor?: boolean }).accessor ? 'accessor' : 'field';
+    if (element.type !== 'MethodDefinition') return null;
+    const method = element as ParseNode.MethodDefinition;
+    return method.PropertySetParameterList || !method.UniqueFormalParameters ? 'accessor' : null;
+  };
+  const publicMemberName = (element: ParseNode): string | null => {
+    if ((element as { static?: boolean }).static) return null;
+    const name = nodeField<ParseNode.ClassElementName>(element, 'ClassElementName');
+    if (!name || name.type === 'PrivateIdentifier') return null;
+    const key = classElementKey(name);
+    return typeof key === 'string' ? key : null;
+  };
+  const checkValueMemberKinds = (cls: ParseNode): void => {
+    if (!nodeField<readonly string[] | null>(cls, 'ClassModifiers')?.includes('value')) return;
+    const inherited = new Map<string, { kind: 'field' | 'accessor', from: string }>();
+    const seen = new Set<ParseNode>([cls]);
+    for (let base = heritageClassOf(cls, true); base && !seen.has(base); base = heritageClassOf(base, true)) {
+      seen.add(base);
+      const from = (base as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? 'its base';
+      for (const element of classBodyOf(base)) {
+        const name = publicMemberName(element);
+        const kind = memberKindOf(element);
+        if (name !== null && kind !== null && !inherited.has(name)) inherited.set(name, { kind, from });
+      }
+    }
+    if (inherited.size === 0) return;
+    const className = (cls as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? '(anonymous class)';
+    const reported = new Set<string>();
+    for (const element of classBodyOf(cls)) {
+      const name = publicMemberName(element);
+      const kind = memberKindOf(element);
+      const prior = name === null ? undefined : inherited.get(name);
+      if (!prior || kind === null || kind === prior.kind || reported.has(name!)) continue;
+      reported.add(name!);
+      if (kind === 'accessor') {
+        reportType('rt-inherited-contract', element, '$1 declares $2 an accessor, where $3 declares it a field; along a value class chain a member keeps its kind, since a field holds a slot of the layout and an accessor holds none',
+          Value(className), Value(name!), Value(prior.from));
+      } else {
+        reportType('rt-inherited-contract', element, '$1 declares $2 a field, where $3 declares it an accessor; along a value class chain a member keeps its kind, since a field holds a slot of the layout and an accessor holds none',
+          Value(className), Value(name!), Value(prior.from));
+      }
+    }
+  };
+
   const checkInheritedFieldRedeclarations = (cls: ParseNode): void => {
     if (checkedFieldRedeclarations.has(cls)) return;
     checkedFieldRedeclarations.add(cls);
+    checkValueMemberKinds(cls);
     const inherited = new Map<string, string>();
     const seen = new Set<ParseNode>([cls]);
     // A bounded origin serves: every subclass of a base keeps its fields.
@@ -16228,9 +16342,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (type.Kind === 'union' || type.Kind === 'intersection') return type.Members.some((part) => pendingLayout(part, seen));
       return false;
     };
-    if (Target.Kind === 'shared' || Target.Kind === 'reference'
-        || (!pendingLayout(Target) && !IsSharableValueType(Target))) {
+    // A value class whose declaration already shows a field of no layout has
+    // none, whatever is evaluated: `shared P` for `value class P { name:
+    // string; }` was left to the run time with the class's layout.
+    const knownWithoutLayout = (type: TypeRecord, seen = new Set<TypeRecord>()): boolean => {
+      if (seen.has(type)) return false;
+      seen.add(type);
+      if (type.Kind === 'array') return typeof type.Extent === 'number' && knownWithoutLayout(type.Element, seen);
+      if (type.Kind === 'tuple') return type.Elements.some((position) => knownWithoutLayout(position.Type, seen));
+      if (type.Kind !== 'nominal' || type.LibraryName || type.Constructor) return false;
+      const declaration = (type as { Declaration?: ParseNode & { ClassModifiers?: readonly string[] | null } }).Declaration;
+      if (!declaration || (declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression')
+          || !declaration.ClassModifiers?.includes('value')) return false;
+      const problem = soaFieldWithoutLayout(declaration);
+      return problem !== null && problem !== 'unknown';
+    };
+    if (Target.Kind === 'shared' || Target.Kind === 'reference') {
       reportType('rt-type-required', root, '$1 is not a valid type', Value(`shared ${displayType(Target)}`));
+      return;
+    }
+    const withoutLayout = knownWithoutLayout(Target);
+    if (withoutLayout || (!pendingLayout(Target) && !IsSharableValueType(Target))) {
+      // #sec-threading-shared-modifier admits a value type with a layout. The
+      // message named neither reason, and the two are different refusals.
+      if (!withoutLayout && !IsValueType(Target)) {
+        reportType('rt-type-required', root, '$1 is not a valid type: $2 is not a value type, and an object is reached from every thread already', Value(`shared ${displayType(Target)}`), Value(displayType(Target)));
+      } else {
+        reportType('rt-type-required', root, '$1 is not a valid type: $2 has no layout, and shared storage holds a value of a fixed size', Value(`shared ${displayType(Target)}`), Value(displayType(Target)));
+      }
     }
   };
 
@@ -20672,14 +20811,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (element === undefined || typeof element === 'number' || element.Kind !== 'nominal') return;
     const declaration = (element as { Declaration?: ParseNode }).Declaration;
     let problem: { field: string, type: string } | 'unknown' | null = null;
-    if (declaration && (declaration.type === 'ClassDeclaration' || declaration.type === 'ClassExpression')
-        && (element as { Constructor?: unknown }).Constructor === undefined) {
-      problem = soaFieldWithoutLayout(declaration);
+    const isClass = declaration && (declaration.type === 'ClassDeclaration' || declaration.type === 'ClassExpression');
+    // #sec-structure-of-arrays: "_T_ must be a value type class or a
+    // primitive". A class held by reference has no columns to split into,
+    // and the run time refused one when it was constructed; it was accepted
+    // here because every field of it had a layout.
+    if (isClass && !(declaration as { ClassModifiers?: readonly string[] | null }).ClassModifiers?.includes('value')) {
+      reportType('rt-layout', root, '$1 cannot be split into columns: it is not a value class, and a structure of arrays holds a value class or a primitive', Value(displayType(element)));
+      return;
+    }
+    if (isClass && (element as { Constructor?: unknown }).Constructor === undefined) {
+      problem = soaFieldWithoutLayout(declaration!);
     } else if ((element as { Constructor?: unknown }).Constructor !== undefined && element.EnumMembers === undefined && !LayoutOf(element)) {
-      problem = { field: '(a field)', type: 'a type with no layout' };
+      reportType('rt-layout', root, '$1 cannot be split into columns: it has no layout, and a structure of arrays holds a value class or a primitive', Value(displayType(element)));
+      return;
     }
     if (problem && problem !== 'unknown') {
-      reportType('rt-layout', root, '$1 cannot be split into columns: its field $2 has $3, and a field of no layout has nothing to split', Value(displayType(element)), Value(problem.field), Value(problem.type === 'no annotation' ? 'no annotation' : `type ${problem.type}`));
+      if (problem.type === 'no annotation') {
+        reportType('rt-layout', root, '$1 cannot be split into columns: its field $2 has no annotation, and a field of no layout has nothing to split', Value(displayType(element)), Value(problem.field));
+      } else {
+        reportType('rt-layout', root, '$1 cannot be split into columns: its field $2 has the type $3, which has no layout, and a field of no layout has nothing to split', Value(displayType(element)), Value(problem.field), Value(problem.type));
+      }
     }
   };
 
@@ -23261,6 +23413,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // (#sec-array-and-tuple-types).
       return null;
     }
+    // #sec-contextual-types: an array literal at a union is typed against the
+    // array or tuple member it fits, as an object literal is typed against the
+    // alternative it satisfies and a numeric literal takes the member it fits
+    // (#sec-literal-propagation). The boundary then builds that member when the
+    // program runs, as it does at the member alone, so the literal again
+    // reports no type. It was typed `[].<number>` before any member was asked,
+    // so `const a: [].<uint8> | null = [3]` was refused, and so was every array
+    // literal passed to a window's `concat`, whose parameter is an element or a
+    // run of them. With several such members the first one each element's own type
+    // fits is taken; where none fits, the literal is refused as before.
+    if (node.type === 'ArrayLiteral' && contextual && contextual.Kind === 'union') {
+      const candidates = (contextual.Members as readonly TypeRecord[])
+        .filter((member): member is TypeRecord & { Kind: 'array' | 'tuple' } => member.Kind === 'array' || member.Kind === 'tuple');
+      const chosen = candidates.length === 1 ? candidates[0]
+        : candidates.find((candidate) => arrayLiteralMayFit(node as ParseNode.ArrayLiteral, candidate));
+      if (chosen) return staticTypeIn(node, chosen);
+    }
     if (inner && inner.type === 'ObjectLiteral' && contextual) {
       // A nominal carrying [[Arguments]] has them SUBSTITUTED into its structure
       // before the literal is checked member by member. `structureOf`
@@ -23915,7 +24084,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           folded = BigInt(wrapToType(folded, prim));
         }
         if (!foldedBigint && !fitsNumericType(folded, prim.Name, prim.Arguments)) {
-          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(String(folded)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(foldedRangeText(String(folded), () => LiteralOperandText(node))), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return contextual;
         }
@@ -24016,7 +24185,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         journalSet(foldedRationals, node, { ...rat, type: contextual as TypeRecord });
         // A folded constant is a literal of the type as much as a bare one is.
         if (!rationalFitsType(rat.num, rat.den, contextual as TypeRecord)) {
-          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(rat.den === 1n ? String(rat.num) : `${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(foldedRangeText(rat.den === 1n ? String(rat.num) : `${rat.num}/${rat.den}`, () => LiteralOperandText(node))), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         return contextual;
@@ -24044,7 +24213,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // a TypeError and `d === 7 / 2` *false* for a `d` that is 3.5. Here its
     // literals take the type, and the type's own operators compute it.
     // Question BR: and at a rational where the exact fold declines, which it
-    // does for a zero divisor, a power past 4096 and a literal past every
+    // does for a zero divisor, a power past EXACT_FOLD_BITS and a literal past every
     // width: `const q: rational64 = 1e999999999 * 2` and `1 / 0` there were
     // Numbers, refused as Infinity when they ran, `q * (1 / 0)` a TypeError,
     // and `const r: rational.<bigint> = 2 ** 5000` Infinity, where 2**5000 is
@@ -28957,6 +29126,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (literal?.type === 'RangeExpression' && target
         && (isIntegerValueType(target) || (target.Kind === 'primitive' && isFloatTypeName(target.Name)))) return target;
     return StaticIterationContribution(staticType(expr), structureOf).element;
+  };
+
+  /**
+   * Whether every element of an array literal may be a value of what one
+   * array or tuple member of a union gives it there, read from the element's
+   * own type. A try at the member is not made, since typing an element at a
+   * position records what it was read at; the member chosen is then checked
+   * as a position of its own. An element whose own type is unknown, a spread
+   * among them, may fit.
+   */
+  const arrayLiteralMayFit = (node: ParseNode.ArrayLiteral, candidate: TypeRecord & { Kind: 'array' | 'tuple' }): boolean => {
+    const elements = (node.ElementList ?? []) as readonly ParseNode[];
+    const spread = elements.some((element) => element.type === 'SpreadElement');
+    const fits = (element: ParseNode, wanted: Known): boolean => {
+      if (!wanted || wanted.Kind === 'any' || element.type === 'SpreadElement') return true;
+      if (element.type === 'Elision') return IsAssignable(undefinedType, wanted as TypeRecord);
+      const own = staticType(element);
+      return !own || own.Kind === 'any' || IsAssignable(own as TypeRecord, wanted as TypeRecord)
+        || literalFitsNumericType(own as TypeRecord, wanted as TypeRecord);
+    };
+    if (candidate.Kind === 'array') {
+      if (typeof candidate.Extent === 'number' && !spread && elements.length !== candidate.Extent) return false;
+      return elements.every((element) => fits(element, candidate.Element));
+    }
+    if (spread) return true;
+    const range = TupleSequenceLengthRange(candidate);
+    if (range && (elements.length < range.min || elements.length > range.max)) return false;
+    const restIndex = candidate.Elements.findIndex((position) => position.Rest);
+    return elements.every((element, index) => {
+      const fixed = restIndex === -1 || index < restIndex ? candidate.Elements[index] : undefined;
+      const wanted = fixed ? fixed.Type as Known
+        : restIndex === -1 ? null : restElementType(candidate.Elements[restIndex]!.Type) as Known;
+      return fits(element, wanted);
+    });
   };
 
   const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {

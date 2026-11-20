@@ -63,7 +63,7 @@ test('it has no layout and no default, and is no value type', () => {
   // A field of it with no initializer is its constructor's to assign (classes/constructor-assigned-fields.test.mts).
   expectThrown(`${E}class H { e: PE; } new H();`, 'has no default value');
   expectStaticTypeError(`${E}class Store<T: type extends value> { xs: [].<T> = []; } new Store.<PE>();`);
-  expectThrown(`${E}new SoA.<PE>(2);`, 'cannot be stored as columns');
+  expectThrown(`${E}new SoA.<PE>(2);`, 'cannot be split into columns: it is not a value class');
 });
 
 test('a subclass of one is one, and is held at a position of its base', () => {

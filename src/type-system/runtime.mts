@@ -63,7 +63,7 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
-import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter, SubclassAddsStorageOver } from './layout.mts';
+import { FirstInlineCycle, IsReferenceClass, IsSharableValueType, IsValueType, LayoutOf, setLayoutSubstituter, SubclassAddsStorageOver } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -7736,8 +7736,15 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
       // operand cannot be judged until an application closes it - which the
       // checking pass does, for every application it sees. Judging the open
       // operand here refused every generic class that holds shared storage.
+      // The two refusals are told apart: the type that is not a value type,
+      // and the value type with no layout, a `string` or a value class with a
+      // field of one. The message said "which is not a value type" of both,
+      // and of the second it is false (#sec-value-types).
       if (!mentionsTypeParameter(Target) && !IsSharableValueType(Target)) {
-        return Throw.TypeError('$1 is not a valid type', Value(`shared ${displayType(Target)}, which is not a value type`));
+        if (!IsValueType(Target)) {
+          return Throw.TypeError('$1 is not a valid type: $2 is not a value type, and an object is reached from every thread already', Value(`shared ${displayType(Target)}`), Value(displayType(Target)));
+        }
+        return Throw.TypeError('$1 is not a valid type: $2 has no layout, and shared storage holds a value of a fixed size', Value(`shared ${displayType(Target)}`), Value(displayType(Target)));
       }
       return { Kind: 'shared', Target };
     }

@@ -20,7 +20,7 @@ import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '
 import { isArrayIndex } from '../abstract-ops/all.mts';
 import { DeclaredProxyMemberType } from '../abstract-ops/proxy-objects.mts';
 import { ArraySpanBackingOf } from '../abstract-ops/array-view.mts';
-import { AdoptIntegerContextOperand, AdoptLiteralOperand, UnheldLiteralOperand } from '../type-system/arithmetic.mts';
+import { AdoptIntegerContextOperand, AdoptLiteralOperand, RangeOperandText, UnheldLiteralOperand } from '../type-system/arithmetic.mts';
 import { isDecimalObject } from '../intrinsics/Decimal.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
 import { isFloat128Object } from '../intrinsics/Float128.mts';
@@ -532,6 +532,11 @@ export function* Evaluate_AssignmentExpression({
         if (computed === 'bitwise' || (computed === 'arithmetic' && !Number.isInteger(held))) {
           return Throw.RangeError('$1 is not in the range of $2; no type is declared where this constant is written, so it was computed as a number',
             rval, Value(displayType((lval as { TypeRecord: TypeRecord }).TypeRecord)));
+        }
+        // Named as it is written, as the binary operator's refusal names it.
+        const refusal = converted.Value;
+        if (refusal instanceof ObjectValue && (refusal as unknown as { Prototype?: unknown }).Prototype === surroundingAgent.intrinsic('%RangeError.prototype%')) {
+          return Throw.RangeError('$1 is not in the range of $2', Value(RangeOperandText(AssignmentExpression, held)), Value(displayType((lval as { TypeRecord: TypeRecord }).TypeRecord)));
         }
       }
       operand = Q(converted);

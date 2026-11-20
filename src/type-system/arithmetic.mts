@@ -580,6 +580,17 @@ export function LiteralOverflowsBinaryFloat(node: ParseNode, width: 16 | 32 | 64
 }
 
 /** A numeric literal operand as the program wrote it, with its sign: for a message. */
+/**
+ * What a run-time range refusal of a literal operand names: the operand as it
+ * is written, or, for a named constant, `K` or `Math.PI`, the value it holds.
+ */
+export function RangeOperandText(node: ParseNode | undefined, value: number | bigint): string {
+  let core = node;
+  while (core?.type === 'ParenthesizedExpression') core = (core as unknown as { Expression: ParseNode }).Expression;
+  if (!core || core.type === 'IdentifierReference' || core.type === 'MemberExpression') return String(value);
+  return LiteralOperandText(node!);
+}
+
 export function LiteralOperandText(node: ParseNode, outerNegative = false): string {
   let n = node;
   let negative = outerNegative;
@@ -915,7 +926,7 @@ function arithmeticUnderlyingOf(t: TypeRecord): TypeRecord {
  */
 export type ComputedConstant = 'arithmetic' | 'bitwise';
 
-export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant, leftString?: boolean, rightString?: boolean }): TypeRecord | ThrowCompletion {
+export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean, leftComputed?: ComputedConstant, rightComputed?: ComputedConstant, leftString?: boolean, rightString?: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): TypeRecord | ThrowCompletion {
   // proposal-runtime-types #sec-enums: an operand of an enum type is read at its
   // UNDERLYING type here, which is what the clause means by "an enum can be used
   // for arithmetic, indexing, and comparison without a cast" and by `comp / 32`
@@ -1004,7 +1015,12 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
       if (computed === 'bitwise' || (computed === 'arithmetic' && !(typeof literalValue === 'number' && Number.isInteger(literalValue)))) {
         return Throw.RangeError('$1 is not in the range of $2; no type is declared where this constant is written, so it was computed as a number', Value(literalValue), Value(displayType(target)));
       }
-      return Throw.RangeError('$1 is not in the range of $2', Value(literalValue), Value(displayType(target)));
+      // The literal as it is written, as the checker names it and as a literal
+      // beside a decimal, a rational or a `float128` is named when it runs: the
+      // Number printed `1e39` as `1e+39`, unquoted. A named constant is named by
+      // its value, which its name does not show.
+      const written = xt ? literals?.rightNode : literals?.leftNode;
+      return Throw.RangeError('$1 is not in the range of $2', Value(RangeOperandText(written, literalValue)), Value(displayType(target)));
     }
   }
   return target;

@@ -61,8 +61,16 @@ import {
 function* ArrayProto_concat(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
   const A = Q(yield* ArraySpeciesCreate(O, 0));
+  // #sec-span-coercion: "Every method of a window that copies its elements
+  // returns an owned array", and a window's `concat` takes its arguments at
+  // the window's element type (#sec-value-type-copying), so each element it
+  // takes from one is converted to that type and checked, and the copy carries
+  // it. An array's copy joins its arguments' element types and stays a plain
+  // array, as before.
+  const element = windowElementOf(O);
   let n = 0;
   const items = [O, ...args];
+  let fromReceiver = true;
   while (items.length > 0) {
     const E = items.shift()!;
     const spreadable = Q(yield* IsConcatSpreadable(E));
@@ -77,7 +85,10 @@ function* ArrayProto_concat(args: Arguments, { thisValue }: FunctionCallContext)
         const P = X(ToString(F(k)));
         const exists = Q(yield* HasProperty(E, P));
         if (exists === Value.true) {
-          const subElement = Q(yield* Get(E, P));
+          let subElement = Q(yield* Get(E, P));
+          if (element !== undefined && !fromReceiver) {
+            subElement = Q(yield* RequireType(subElement, element));
+          }
           const nStr = X(ToString(F(n)));
           Q(yield* CreateDataPropertyOrThrow(A, nStr, subElement));
         }
@@ -89,14 +100,36 @@ function* ArrayProto_concat(args: Arguments, { thisValue }: FunctionCallContext)
         return Throw.TypeError('Cannot make length of array-like object surpass the bounds of an integer index');
       }
       const nStr = X(ToString(F(n)));
-      Q(yield* CreateDataPropertyOrThrow(A, nStr, E));
+      const item = element !== undefined && !fromReceiver ? Q(yield* RequireType(E, element)) : E;
+      Q(yield* CreateDataPropertyOrThrow(A, nStr, item));
       n += 1;
     }
+    fromReceiver = false;
   }
   Q(yield* Set(A, Value('length'), F(n), Value.true));
   // The receiver's elements are stored into the result, so an inline one is copied.
   Q(yield* copyInlineElements(O, A));
+  if (element !== undefined && A instanceof ObjectValue) {
+    StampTypedArray(A, element);
+  }
   return A;
+}
+
+/** The element type of a window, which its `concat` builds its copy at; undefined for any other receiver. */
+function windowElementOf(O: ObjectValue): TypeRecord | undefined {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return undefined;
+  }
+  // A window by its prototype: an array placed on a buffer is viewed too, and
+  // is an array, whose copy joins its arguments' element types.
+  const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics;
+  const proto = (O as unknown as { Prototype?: unknown }).Prototype;
+  if (proto !== intrinsics['%Span.prototype%'] && proto !== intrinsics['%ReadonlySpan.prototype%']) {
+    return undefined;
+  }
+  return ArraySpanBackingOf(O as unknown as object)?.Element
+    ?? ArrayViewBackingOf(O as unknown as object)?.Element
+    ?? (O as unknown as { TypedElement?: TypeRecord }).TypedElement;
 }
 
 /** https://tc39.es/ecma262/#sec-array.prototype.copywithin */
