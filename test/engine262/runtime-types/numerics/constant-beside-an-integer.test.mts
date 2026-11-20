@@ -138,6 +138,10 @@ test('and at a position of the type', () => {
   expect(evaluated('const a: uint8 = 7.5 * 2; const b: uint8 = 0.5 + 0.5; const c: uint8 = 7 / 2; String(a) + "," + String(b) + "," + String(c);')).toBe('15,1,3');
   // A conversion converts: it truncates, and does not refuse.
   expect(evaluated('String(uint8(7.5 / 2)) + String((7.5 / 2) := uint8);')).toBe('33');
-  // A position of another type is not an integer's.
-  expect(evaluated('const f: float32 = 7.5 / 2; const u: uint8 | string = 7.5 / 2; String(f) + "," + String(u);')).toBe('3.75,3.75');
+  // A position of another type is not an integer's. At a union the constant
+  // takes a member as the literal 3.75 would, and none takes it (Question BS):
+  // it was stored as the string "3.75", where the literal was refused.
+  expect(evaluated('const f: float32 = 7.5 / 2; String(f);')).toBe('3.75');
+  expect(observeScript('const u: uint8 | string = 7.5 / 2;')).toMatchObject(early);
+  expect(observeScript('const u: uint8 | string = 3.75;')).toMatchObject(early);
 });

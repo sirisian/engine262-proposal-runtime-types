@@ -13,7 +13,9 @@ import { setNodeParent } from '../parse.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { type PrimitiveOperatorEntry, ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
 import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
-import { DecimalPartsInRange, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { DecimalPartsRepresentable, DecimalValueRepresentable, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
+import { fromRational as Float128FromRational } from '../intrinsics/Float128Arithmetic.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { NumericValue } from '../static-semantics/NumericValue.mts';
 import { LexicallyDeclaredNames } from '../static-semantics/LexicallyDeclaredNames.mts';
@@ -53,7 +55,7 @@ import { CompletionPaths, CompletionValues } from './completion-values.mts';
 import { templateArgumentType, isTemplateArgumentType, templateMembersType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
-import { isWellKnownNumericConstant, integerContextOperands, bigIntComparisonOperands } from './numeric-constants.mts';
+import { isWellKnownNumericConstant, integerContextOperands, bigIntComparisonOperands, exactConstantOperands } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias, resolvedAliasContext, resolvedAliasDeclaration, resolvedNamespaceBinding } from './resolving-aliases.mts';
 import { PublishedClassDenotation } from './class-denotation.mts';
@@ -1205,6 +1207,45 @@ function literalOverflowsFloatAt(lit: ParseNode, t: TypeRecord): boolean {
   const component = base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
   const width = BinaryFloatWidthOf(component);
   return width !== undefined && LiteralOverflowsBinaryFloat(lit, width) === true;
+}
+
+/**
+ * Question BK: whether the numeric literal `lit`, under its parentheses and
+ * sign, is a value of the decimal, rational, binary float or complex type `t`,
+ * read from its digits (#sec-literalvalueintype); undefined for another type
+ * or an operand that is no numeric literal. A literal's Number answers this
+ * for an integer and a narrower float, and not here: `1e400` is the Number
+ * Infinity, which a `decimal64` has, though the literal is no decimal64, and
+ * `1e30` is a Number while no `rational64` holds it. `number` is the
+ * language's own type and is not judged.
+ */
+function literalHeldByDigits(lit: ParseNode, t: TypeRecord): boolean | undefined {
+  const base = t.Kind === 'parameterized' ? t.Base : t;
+  // A union holds what one of its members holds: `case 0.1` over a
+  // `decimal64 | decimal128` was refused as a test that can never succeed.
+  if (base.Kind === 'union') {
+    const answers = (base.Members as TypeRecord[]).map((m) => literalHeldByDigits(lit, m));
+    return answers.includes(true) ? true : answers.length > 0 && answers.every((a) => a === false) ? false : undefined;
+  }
+  if (base.Kind !== 'primitive' || base.Name === 'number') return undefined;
+  const exact = exactOfLiteralText(lit);
+  if (!exact || exact.special !== undefined) return undefined;
+  const width = decimalWidthOf(base);
+  if (width !== undefined) return DecimalPartsRepresentable(exact, width);
+  if (base.Name === 'rational') {
+    const part = base.Arguments[0];
+    if (typeof part === 'object' && part !== null && (part as { Name?: string }).Name === 'bigint') return true;
+    // No width a rational is written at reaches a power of ten this far.
+    if (Math.abs(exact.exponent) > 20000) return false;
+    return exact.exponent >= 0
+      ? rationalFitsType(exact.significand * 10n ** BigInt(exact.exponent), 1n, base)
+      : rationalFitsType(exact.significand, 10n ** BigInt(-exact.exponent), base);
+  }
+  const component = base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
+  const floatWidth = BinaryFloatWidthOf(component);
+  if (floatWidth === undefined) return undefined;
+  const overflows = LiteralOverflowsBinaryFloat(lit, floatWidth);
+  return overflows === undefined ? undefined : !overflows;
 }
 
 /**
@@ -2633,6 +2674,134 @@ function foldExactInteger(node: ParseNode | null | undefined, initializerOf: (na
 }
 
 /**
+ * Question BO: the integer a bitwise operator or a shift over numeric
+ * constants computes, as JavaScript computes it, or null.
+ */
+type BitwiseConstantValue = (node: ParseNode) => bigint | null;
+/** Whether _node_ is a bitwise operator, a shift or a `~`: an operator a decimal, a rational and a `float128` do not have. */
+function isBitwiseConstantHead(node: ParseNode): boolean {
+  return node.type === 'ShiftExpression' || node.type === 'BitwiseANDExpression' || node.type === 'BitwiseXORExpression'
+    || node.type === 'BitwiseORExpression' || (node.type === 'UnaryExpression' && (node as { operator?: string }).operator === '~');
+}
+function integerAsRational(v: bigint | null): Rat | null {
+  return v === null ? null : { num: v, den: 1n };
+}
+
+/**
+ * Whether the binary float of _width_ bits has the value _num_/_den_ exactly,
+ * subnormals included.
+ */
+function binaryFloatHoldsExactly(num: bigint, den: bigint, width: 16 | 32 | 64 | 128): boolean {
+  if (num === 0n) return true;
+  if (den <= 0n || (den & (den - 1n)) !== 0n) return false;
+  const [precision, emin, emax] = ({ 16: [11, -14, 15], 32: [24, -126, 127], 64: [53, -1022, 1023], 128: [113, -16382, 16383] } as const)[width];
+  let m = num < 0n ? -num : num;
+  // num/den is m * 2**e.
+  let e = -(den.toString(2).length - 1);
+  while ((m & 1n) === 0n) {
+    m >>= 1n;
+    e += 1;
+  }
+  const bits = m.toString(2).length;
+  return bits <= precision && e + bits - 1 <= emax && e >= emin - (precision - 1);
+}
+
+/** The exact value of a finite Number, as a fraction whose denominator is a power of two. */
+function numberAsFraction(n: number): { num: bigint, den: bigint } | null {
+  if (!Number.isFinite(n)) return null;
+  if (n === 0) return { num: 0n, den: 1n };
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, n);
+  const bits = view.getBigUint64(0);
+  const sign = (bits >> 63n) === 1n ? -1n : 1n;
+  const biased = Number((bits >> 52n) & 0x7FFn);
+  const fraction = bits & 0xFFFFFFFFFFFFFn;
+  const mantissa = biased === 0 ? fraction : fraction | (1n << 52n);
+  const exponent = biased === 0 ? -1074 : biased - 1075;
+  return exponent >= 0 ? { num: sign * mantissa * (1n << BigInt(exponent)), den: 1n } : { num: sign * mantissa, den: 1n << BigInt(-exponent) };
+}
+
+/** The decimal _num_/_den_ is, where its denominator divides a power of ten. */
+function fractionAsDecimal(num: bigint, den: bigint): { significand: bigint, exponent: number } | null {
+  let n = num;
+  let d = den;
+  let exponent = 0;
+  while (d % 10n === 0n) {
+    d /= 10n;
+    exponent -= 1;
+  }
+  while (d % 2n === 0n) {
+    d /= 2n;
+    n *= 5n;
+    exponent -= 1;
+  }
+  while (d % 5n === 0n) {
+    d /= 5n;
+    n *= 2n;
+    exponent -= 1;
+  }
+  return d === 1n ? { significand: n, exponent } : null;
+}
+
+/**
+ * Question BN: the fraction a constant expression denotes, through the named
+ * constants it uses: `foldRationalConstant` with _initializerOf_ giving the
+ * closed initializer of a named numeric constant. `/` is the exact quotient,
+ * as a reader with no context to give reads it.
+ */
+function foldExactRational(node: ParseNode | null | undefined, initializerOf: (name: string) => ParseNode | null, depth = 0, bitwise?: BitwiseConstantValue): Rat | null {
+  if (!node || depth > 256) return null;
+  const fold = (n: ParseNode | undefined) => foldExactRational(n, initializerOf, depth + 1, bitwise);
+  const e = node as ParseNode & {
+    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode,
+  };
+  if (isBitwiseConstantHead(e)) return integerAsRational(bitwise ? bitwise(e) : null);
+  switch (e.type) {
+    case 'NumericLiteral':
+      return typeof (e as { value?: unknown }).value === 'number' ? foldRationalConstant(e) : null;
+    case 'IdentifierReference':
+      return typeof e.name === 'string' ? fold(initializerOf(e.name) ?? undefined) : null;
+    case 'ParenthesizedExpression':
+      return fold(e.Expression);
+    case 'UnaryExpression': {
+      const v = e.operator === '-' || e.operator === '+' ? fold(e.UnaryExpression) : null;
+      return v === null ? null : e.operator === '-' ? { num: -v.num, den: v.den } : v;
+    }
+    case 'AdditiveExpression': {
+      const l = fold(e.AdditiveExpression);
+      const r = l === null ? null : fold(e.MultiplicativeExpression);
+      if (l === null || r === null) return null;
+      return canonicalRational(e.operator === '+' ? l.num * r.den + r.num * l.den : l.num * r.den - r.num * l.den, l.den * r.den);
+    }
+    case 'MultiplicativeExpression': {
+      const l = fold(e.MultiplicativeExpression);
+      const r = l === null ? null : fold(e.ExponentiationExpression);
+      if (l === null || r === null) return null;
+      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
+      if (op === '*') return canonicalRational(l.num * r.num, l.den * r.den);
+      if (r.num === 0n) return null;
+      if (op === '/') return canonicalRational(l.num * r.den, l.den * r.num);
+      if (op !== '%') return null;
+      // The Number's remainder, read exactly: the dividend less the divisor
+      // times the quotient truncated, with the dividend's sign.
+      const quotient = (l.num * r.den) / (l.den * r.num);
+      return canonicalRational(l.num * r.den - quotient * r.num * l.den, l.den * r.den);
+    }
+    case 'ExponentiationExpression': {
+      const l = fold(e.UpdateExpression);
+      const r = l === null ? null : fold(e.ExponentiationExpression);
+      if (l === null || r === null || r.den !== 1n || r.num > 4096n || r.num < -4096n) return null;
+      if (r.num >= 0n) return canonicalRational(l.num ** r.num, l.den ** r.num);
+      return l.num === 0n ? null : canonicalRational(l.den ** -r.num, l.num ** -r.num);
+    }
+    default:
+      return null;
+  }
+}
+
+/**
  * The exact decimal value of a constant expression, read from the literals'
  * source digits - decimal.md: "a decimal literal is read from its source digits
  * directly, not routed through a binary float64". `+`, `-` and `*` are exact in
@@ -2752,13 +2921,16 @@ function canonicalRational(num: bigint, den: bigint): Rat | null {
  * is exactly where the two differ: division is not exact for a decimal and is
  * the whole point of a rational.
  */
-function foldRationalConstant(node: ParseNode): Rat | null {
-  const fold = (n: ParseNode) => foldRationalConstant(n);
+function foldRationalConstant(node: ParseNode, bitwise?: BitwiseConstantValue): Rat | null {
+  const fold = (n: ParseNode) => foldRationalConstant(n, bitwise);
   const e = node as ParseNode & {
     Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string,
     AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
     ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode, SourceText?: string,
   };
+  // A rational has no bitwise operator; one over constants is the integer
+  // JavaScript computes (Question BO).
+  if (isBitwiseConstantHead(e)) return integerAsRational(bitwise ? bitwise(e) : null);
   switch (e.type) {
     case 'NumericLiteral': {
       if (typeof e.SourceText !== 'string') {
@@ -2767,7 +2939,9 @@ function foldRationalConstant(node: ParseNode): Rat | null {
       // A rational literal is exact on its source digits, as a decimal one is:
       // `0.1` in a rational context is one tenth, not the double nearest it.
       const d = ParseDecimalDigits(e.SourceText.replace(/_/g, ''));
-      if (!d) {
+      // An exponent past a million is declined rather than written out
+      // (Question BM): the literal is judged at its type alone.
+      if (!d || Math.abs(d.exponent) > 1000000) {
         return null;
       }
       return d.exponent >= 0
@@ -2835,8 +3009,23 @@ function foldRationalConstant(node: ParseNode): Rat | null {
   }
 }
 
-function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => Dec | null): Dec | null {
-  const fold = (n: ParseNode) => foldDecimalConstant(n, resolveConst);
+/**
+ * With _width_, the fold answers only where it is what the type's own
+ * operators compute: where each literal, named constant and bitwise integer
+ * in it is a value of a decimal of that width as it is written, coefficient
+ * and exponent both (#sec-literalvalueintype), and each step's value is one
+ * of the type's. `12345678 + 1` at a `decimal32` folded to 12345679 and was
+ * rounded to 12345680, where the literal 12345678 is no `decimal32`.
+ */
+function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => Dec | null, bitwise?: BitwiseConstantValue, width?: 32 | 64 | 128): Dec | null {
+  const folded = foldDecimalStep(node, resolveConst, bitwise, width);
+  if (folded === null || width === undefined) return folded;
+  const parts = { significand: folded.sig, exponent: folded.exp };
+  const written = node.type === 'NumericLiteral' || node.type === 'IdentifierReference' || isBitwiseConstantHead(node);
+  return (written ? DecimalPartsRepresentable(parts, width) : DecimalValueRepresentable(parts, width)) ? folded : null;
+}
+function foldDecimalStep(node: ParseNode, resolveConst?: (name: string) => Dec | null, bitwise?: BitwiseConstantValue, width?: 32 | 64 | 128): Dec | null {
+  const fold = (n: ParseNode) => foldDecimalConstant(n, resolveConst, bitwise, width);
   const e = node as ParseNode & {
     Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
     AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
@@ -2846,6 +3035,12 @@ function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => D
     const exp = Math.min(a.exp, b.exp);
     return [a.sig * 10n ** BigInt(a.exp - exp), b.sig * 10n ** BigInt(b.exp - exp), exp];
   };
+  // A decimal has no bitwise operator; one over constants is the integer
+  // JavaScript computes, which a decimal holds exactly (Question BO).
+  if (isBitwiseConstantHead(e)) {
+    const v = bitwise ? bitwise(e) : null;
+    return v === null ? null : { sig: v, exp: 0 };
+  }
   switch (e.type) {
     case 'NumericLiteral': {
       if (typeof e.SourceText !== 'string') {
@@ -2871,7 +3066,10 @@ function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => D
     case 'AdditiveExpression': {
       const l = fold(e.AdditiveExpression!);
       const r = fold(e.MultiplicativeExpression!);
-      if (l === null || r === null) {
+      // Two exponents this far apart make a coefficient no decimal holds, and
+      // aligning them wrote it out (Question BM): `1e999999999 + 1` at a
+      // decimal crashed the host with "Maximum BigInt size exceeded".
+      if (l === null || r === null || Math.abs(l.exp - r.exp) > 20000) {
         return null;
       }
       const [a, b, exp] = align(l, r);
@@ -20803,18 +21001,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
           || frames[i].bindings.has(name) || frames[i].constLiterals.has(name) || frames[i].dynamicBindings) {
-        const d = frames[i].constDecimalValues.get(name);
-        if (d) {
-          return d;
-        }
-        const v = frames[i].constLiteralValues.get(name);
-        return v === undefined ? null : { sig: v, exp: 0 };
+        // Its exact decimal, which `recordNumericConstant` gives an integer
+        // too. The integer read at an integer position is not one: there `/`
+        // truncates, so `const K = 7 / 2; const q: decimal64 = K * 2` was 6.
+        return frames[i].constDecimalValues.get(name) ?? null;
       }
     }
     return null;
   };
 
-  const foldDecimal = (node: ParseNode): Dec | null => foldDecimalConstant(node, constDecimalValue);
+  const foldDecimal = (node: ParseNode): Dec | null => foldDecimalConstant(node, constDecimalValue, bitwiseConstantValue);
+  /**
+   * Question BK: whether a literal, a named constant or a constant expression
+   * is a value of the decimal, rational, binary float or complex type `t`,
+   * from the digits its fold writes (literalHeldByDigits); undefined where it
+   * does not fold exactly or `t` is another type.
+   */
+  const digitsHeldAt = (node: ParseNode, t: TypeRecord): boolean | undefined => {
+    const digits = foldDecimal(node);
+    if (!digits) return undefined;
+    // A literal is held as its digits write it, and a constant's value as any
+    // member of its cohort: `9999999 + 1` is the `decimal32` 1.000000E+7.
+    const width = exactOfLiteralText(node) ? undefined : decimalWidthOf(t.Kind === 'parameterized' ? t.Base : t);
+    if (width !== undefined) return DecimalValueRepresentable({ significand: digits.sig, exponent: digits.exp }, width);
+    const text = `${digits.sig < 0n ? -digits.sig : digits.sig}e${digits.exp}`;
+    const literal = { type: 'NumericLiteral', SourceText: text, value: Number(text) } as unknown as ParseNode;
+    return literalHeldByDigits(digits.sig < 0n ? { type: 'UnaryExpression', operator: '-', UnaryExpression: literal } as unknown as ParseNode : literal, t);
+  };
 
   /**
    * The checks an explicit conversion makes of its operand, in either spelling:
@@ -20996,7 +21209,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         deferredConstants.set(binding.node, Value(Number(exact)));
       }
     }
-    const decimal = foldDecimal(initializer);
+    // An integer the initializer denotes exactly is its decimal too, `/`
+    // answering only where it divides: `6 / 2` is 3, and `7 / 2` none.
+    const integer = foldExactInteger(initializer, constClosedInitializer);
+    const decimal = foldDecimal(initializer) ?? (integer === null ? null : { sig: integer, exp: 0 });
     if (decimal !== null) frame.constDecimalValues.set(name, decimal);
     // The initializer, CLOSED where it is declared: each name inside it that
     // refers to another numeric constant is replaced by that constant's closed
@@ -21496,6 +21712,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!node || depth > 256) return false;
     const e = node as unknown as Record<string, ParseNode | undefined> & { type: string, name?: string, operator?: string, Imaginary?: boolean };
     const of = (n: ParseNode | null | undefined) => computesInType(n, power, depth + 1);
+    // A bitwise operator or a shift is an integer here (Question BO).
+    if (isBitwiseConstantHead(node)) return bitwiseConstantValue(node) !== null;
     switch (e.type) {
       case 'NumericLiteral': return !e.Imaginary;
       case 'IdentifierReference': return typeof e.name === 'string' && of(constClosedInitializer(e.name));
@@ -21512,6 +21730,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!node || depth > 256) return;
     const e = node as unknown as Record<string, ParseNode | undefined> & { type: string };
     const into = (n: ParseNode | null | undefined) => typeConstantOperands(n, type, depth + 1);
+    // A bitwise operator or a shift is the integer JavaScript computes for it,
+    // which takes the type as a literal does (Question BO): `(6 | 1) / 2` at a
+    // `decimal64` is the decimal 7 divided by the decimal 2.
+    if (isBitwiseConstantHead(node)) {
+      const value = bitwiseConstantValue(node);
+      const width = decimalWidthOf(type);
+      if (value === null) return;
+      const rational = type.Kind === 'primitive' && type.Name === 'rational';
+      if ((width !== undefined && !DecimalPartsRepresentable({ significand: value, exponent: 0 }, width))
+          || (rational && !rationalFitsType(value, 1n, type))) {
+        reportType('rt-numeric-range', node, '$1 is not in the range of $2', Value(String(value)), Value(displayType(type)));
+      } else if (width !== undefined) {
+        journalSet(foldedDecimals, node, { sig: value, exp: 0, width, type });
+      } else if (rational) {
+        journalSet(foldedRationals, node, { num: value, den: 1n, type });
+      } else {
+        journalSet(foldedFloat128s, node, { value, type });
+      }
+      return;
+    }
     switch (e.type) {
       case 'NumericLiteral':
       case 'IdentifierReference':
@@ -21534,6 +21772,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const recordIntegerContextOperand = (node: ParseNode): void => {
     const value = foldExactInteger(node, constClosedInitializer);
     if (value !== null && !integerContextOperands.has(node)) journalSet(integerContextOperands, node, value);
+    // Question BN: and its exact decimal and fraction, for a decimal, a
+    // rational or a `float128` the operand meets when it runs.
+    if (!exactConstantOperands.has(node)) {
+      const decimal = foldDecimal(node);
+      const rational = foldExactRational(node, constClosedInitializer, 0, bitwiseConstantValue);
+      if (decimal !== null || rational !== null) journalSet(exactConstantOperands, node, { decimal, rational });
+    }
   };
   /** A numeric constant operand under its parentheses and sign: a use of a named constant, or arithmetic over constants. */
   const constantOperandCore = (operand: ParseNode): { core: ParseNode, negative: boolean } | null => {
@@ -21550,17 +21795,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const constant = (core.type === 'IdentifierReference' || isConstantArithmeticHead(core)) && isNumericConstantExpression(core);
     return constant ? { core, negative } : null;
   };
-  /** The type JavaScript's bitwise operators and shifts compute in, `int32`, for a constant at a type that has none. */
-  const int32ConstantType: TypeRecord = { Kind: 'primitive', Name: 'int', Arguments: [32] } as unknown as TypeRecord;
   /**
    * The parts of a numeric constant expression, through the constants it
    * names, for a judgment about which operators it uses.
    */
-  const constantParts = (node: ParseNode | null | undefined, visit: (part: ParseNode) => boolean, depth = 0): boolean => {
+  const constantParts = (node: ParseNode | null | undefined, visit: (part: ParseNode) => boolean, depth = 0, prune?: (part: ParseNode) => boolean): boolean => {
     if (!node || depth > 256) return false;
     if (visit(node)) return true;
+    if (prune?.(node)) return false;
     const e = node as unknown as Record<string, ParseNode | undefined> & { type: string, name?: string };
-    const of = (n: ParseNode | null | undefined) => constantParts(n, visit, depth + 1);
+    const of = (n: ParseNode | null | undefined) => constantParts(n, visit, depth + 1, prune);
     switch (e.type) {
       case 'IdentifierReference': return typeof e.name === 'string' && of(constClosedInitializer(e.name));
       case 'ParenthesizedExpression': return of(e.Expression);
@@ -21573,11 +21817,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       default: return false;
     }
   };
-  /** Whether a numeric constant expression uses a bitwise operator or a shift. */
-  const bitwiseConstantIn = (node: ParseNode): boolean => constantParts(node, (part) => part.type === 'ShiftExpression'
-    || part.type === 'BitwiseANDExpression' || part.type === 'BitwiseXORExpression' || part.type === 'BitwiseORExpression'
-    || (part.type === 'UnaryExpression' && (part as { operator?: string }).operator === '~'));
-  /** The power in a numeric constant expression whose exponent is no integer, or null. */
+  /**
+   * The power in a numeric constant expression whose exponent is no integer,
+   * or null. The operands of a bitwise operator or a shift are Numbers
+   * (Question BO), and are not searched.
+   */
   const fractionalPowerIn = (node: ParseNode): ParseNode | null => {
     let found: ParseNode | null = null;
     constantParts(node, (part) => {
@@ -21586,7 +21830,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (exponent === null || !Number.isFinite(exponent) || Number.isInteger(exponent)) return false;
       found = part;
       return true;
-    });
+    }, 0, isBitwiseConstantHead);
+    return found;
+  };
+  /**
+   * Question BQ: the remainder in a numeric constant expression, outside the
+   * operands of a bitwise operator or a shift, or null. A rational has no
+   * remainder (#table-family-operations), and a constant at one is computed
+   * by its operators: `const q: rational64 = 7 % 4` was 3, the Number's
+   * remainder, and `q * (7 % 4)` a TypeError when it ran, where `q % 4` is
+   * refused.
+   */
+  const remainderIn = (node: ParseNode): ParseNode | null => {
+    let found: ParseNode | null = null;
+    constantParts(node, (part) => {
+      if (part.type !== 'MultiplicativeExpression' || (part as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator !== '%') return false;
+      found = part;
+      return true;
+    }, 0, isBitwiseConstantHead);
     return found;
   };
   /** The Number a numeric constant expression evaluates to, where this reads every part of it. */
@@ -21640,6 +21901,123 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
   /**
+   * Question BO: the integer a bitwise operator or a shift over numeric
+   * constants computes. A decimal, a rational and a `float128` have none of
+   * these operators, so one in a constant at such a type is computed as
+   * JavaScript computes it, its operands having no contextual type, and its
+   * value is an integer the type holds exactly, taken as a literal is. The
+   * arithmetic around it is the type's: `(6 | 1) / 2` at a `decimal64` is 3.5.
+   * It was read in an `int32`, the whole expression with it, so the same
+   * constant was 3, `(6 | 1) * 0.1` the double 0.7000000000000001 and `-1 >>>
+   * 0` -1.
+   */
+  const bitwiseConstantValue = (node: ParseNode): bigint | null => {
+    if (!isBitwiseConstantHead(node) || !isNumericConstantExpression(node)) return null;
+    const value = numberOfConstant(node);
+    return value !== null && Number.isInteger(value) ? BigInt(value) : null;
+  };
+  /**
+   * Question BS: a numeric literal, or a numeric constant, at a union is
+   * adapted toward the member it fits (#sec-literal-propagation), by the order
+   * SelectUnionMember gives a value, and then takes that member as it would
+   * there alone. A member that holds the value it denotes exactly comes first,
+   * an integer member first for an integer, then the narrower; then a binary
+   * float that holds the Number it evaluates to, as the boundary reads one;
+   * then the first member it rounds into. The literal was left a Number for
+   * the boundary, which made `let d: decimal64 | null = 0.1` and `= 5`
+   * errors, gave a `float128 | null` and a `rational64 | null` the double's
+   * value, `3602879701896397/36028797018963968` for 0.1, a `uint64 | null`
+   * 9007199254740992 for `9007199254740993`, a `float32 | null` a literal
+   * rounded twice, and stored `1e30` at `rational64 | string` as the string
+   * "1e+30". A union with a `number` member is left as it was: the literal is
+   * a Number, and so of that member.
+   */
+  const adaptNumericToUnion = (node: ParseNode, union: Known): Known | undefined => {
+    if (!union || union.Kind !== 'union' || conversionOperands.has(node) || !isNumericConstantExpression(node)) return undefined;
+    if ((innermostLiteral(node) as { Imaginary?: boolean }).Imaginary) return undefined;
+    // In the canonical order, which the boundary reads, so the member chosen
+    // is the type's and not the spelling's (#sec-union-boundary-selection).
+    const canonical = CanonicalizeType(union as TypeRecord);
+    const members = (canonical.Kind === 'union' ? canonical.Members as TypeRecord[] : [canonical])
+      .filter((m) => m.Kind === 'primitive' && isNumericOperandName(m.Name));
+    if (members.length === 0 || members.some((m) => m.Kind === 'primitive' && m.Name === 'number')) return undefined;
+    const literalDigits = exactOfLiteralText(node);
+    const value = foldExactRational(node, constClosedInitializer, 0, bitwiseConstantValue);
+    const holds = (m: TypeRecord & { Kind: 'primitive' }): boolean => {
+      if (!value) return false;
+      if (m.Name === 'uint' || m.Name === 'int') return value.den === 1n && fitsNumericType(value.num, m.Name, m.Arguments);
+      if (m.Name === 'bigint') return value.den === 1n;
+      const width = decimalWidthOf(m);
+      if (width !== undefined) {
+        if (literalDigits) return literalDigits.special === undefined && DecimalPartsRepresentable(literalDigits, width);
+        const decimal = fractionAsDecimal(value.num, value.den);
+        return !!decimal && DecimalValueRepresentable(decimal, width);
+      }
+      if (m.Name === 'rational') return rationalFitsType(value.num, value.den, m);
+      const component = m.Name === 'complex' ? ((m.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : m;
+      const floatWidth = component.Kind === 'primitive' && component.Name === 'number' ? 64 : BinaryFloatWidthOf(component);
+      return floatWidth !== undefined && binaryFloatHoldsExactly(value.num, value.den, floatWidth);
+    };
+    const widthOf = (m: TypeRecord & { Kind: 'primitive' }): number => {
+      const size = m.Arguments[0];
+      if (m.Name === 'uint' || m.Name === 'int') return typeof size === 'number' ? size : 64;
+      if (m.Name === 'bigint') return Number.POSITIVE_INFINITY;
+      const width = decimalWidthOf(m);
+      if (width !== undefined) return width;
+      if (m.Name === 'rational') return typeof size === 'number' ? size : typeof size === 'object' ? Number.POSITIVE_INFINITY : 64;
+      if (m.Name === 'complex') return 2 * (BinaryFloatWidthOf((size as TypeRecord | undefined) ?? makePrimitive('number')) ?? 64);
+      return BinaryFloatWidthOf(m) ?? 64;
+    };
+    const integerMember = (m: TypeRecord & { Kind: 'primitive' }): boolean => m.Name === 'uint' || m.Name === 'int' || m.Name === 'bigint';
+    const order = (x: number, y: number): number => (x === y ? 0 : x < y ? -1 : 1);
+    const integral = value !== null && value.den === 1n;
+    const primitives = members as (TypeRecord & { Kind: 'primitive' })[];
+    const exact = primitives.filter(holds).sort((a, b) => (integral ? order(Number(integerMember(b)), Number(integerMember(a))) : 0)
+      || order(widthOf(a), widthOf(b))
+      || (a.Name === 'uint' && b.Name === 'int' ? -1 : a.Name === 'int' && b.Name === 'uint' ? 1 : 0));
+    // A binary float holding the Number exactly, as SelectUnionMember finds
+    // it at run time: `0.1` at `float32 | float64` is the `float64` one.
+    const evaluated = numberOfConstant(node);
+    const asFraction = evaluated === null ? null : numberAsFraction(evaluated);
+    const holdsNumber = (m: TypeRecord & { Kind: 'primitive' }): boolean => {
+      if (!asFraction || integerMember(m) || decimalWidthOf(m) !== undefined || m.Name === 'rational') return false;
+      const component = m.Name === 'complex' ? ((m.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : m;
+      const floatWidth = component.Kind === 'primitive' && component.Name === 'number' ? 64 : BinaryFloatWidthOf(component);
+      return floatWidth !== undefined && binaryFloatHoldsExactly(asFraction.num, asFraction.den, floatWidth);
+    };
+    exact.push(...primitives.filter((m) => !exact.includes(m) && holdsNumber(m)).sort((a, b) => order(widthOf(a), widthOf(b))));
+    // Past the members that hold the value, an integer holds none of it, and
+    // a binary float holds it rounded where it does not overflow.
+    const rounding = (m: TypeRecord & { Kind: 'primitive' }): boolean => {
+      if (integerMember(m)) return false;
+      const width = m.Name === 'float128' || m.Name === 'complex' || decimalWidthOf(m) !== undefined || m.Name === 'rational' ? undefined : BinaryFloatWidthOf(m);
+      if (width === undefined) return true;
+      return literalDigits ? !LiteralOverflowsBinaryFloat(node, width) : constantOverflowsFloat(node, m) === null;
+    };
+    let range = true;
+    for (const member of [...exact, ...primitives.filter((m) => !exact.includes(m) && rounding(m))]) {
+      let adapted: Known = null;
+      const admitted = speculate(() => {
+        const before = errors.length;
+        adapted = staticTypeIn(node, member);
+        // Taken where it is a value of the member, as it is at the member
+        // alone: a constant of Math is a Number there and is not.
+        const taken = !adapted || IsAssignable(adapted as TypeRecord, member) || literalFitsNumericType(adapted as TypeRecord, member);
+        if (errors.length === before && taken) return true;
+        if (errors.slice(before).some((e) => TypeDiagnosticOf(e)?.rule !== 'rt-numeric-range') || !taken) range = false;
+        errors.length = before;
+        return false;
+      });
+      if (admitted) return adapted ?? member;
+    }
+    // A literal no member takes is refused, as it is at a single type: it
+    // was "Infinity is not assignable" for `1e400`, named by its Number.
+    const shown = Value(LiteralOperandText(node).replace(/\s+/g, ' '));
+    if (range) reportType('rt-numeric-range', node, '$1 is not in the range of $2', shown, Value(displayType(union)));
+    else reportType('rt-assignability', node, '$1 is not assignable to $2', shown, Value(displayType(union)));
+    return union;
+  };
+  /**
    * Question BJ: a named constant or a constant expression beside a binary
    * float, or a complex over one, that the type rounds to an infinity: the
    * value refused, or null. A constant bound to a literal is that literal,
@@ -21671,7 +22049,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       negative = negative !== inner.negative;
     }
     if (exactOfLiteralText(core)) return LiteralOverflowsBinaryFloat(core, width) ? LiteralOperandText(core, negative) : null;
-    if (width !== 16 && width !== 32) return null;
+    if (width === 64 || width === 128) {
+      // At a binary64 or a binary128 the Number of an expression past its
+      // range is already the infinity, so the expression is folded exactly
+      // first, as an integer constant is: `x * (1e308 * 10)` beside a
+      // `float64` is 1e309, which it cannot hold, where `1 / 0` folds to
+      // nothing and keeps the infinity the type has.
+      const rational = foldRationalConstant(core);
+      if (!rational) return null;
+      const overflows = width === 64 ? !Number.isFinite(roundRationalToBinaryFloat(rational.num, rational.den, 64))
+        : Float128FromRational(rational.num, rational.den).cls === 'infinity';
+      const written = ((core as { sourceText?: string }).sourceText ?? '').replace(/\s+/g, ' ');
+      return overflows ? (negative ? `-(${written})` : written) : null;
+    }
     const value = numberOfConstant(core);
     if (value === null || !Number.isFinite(value)) return null;
     const rounded = width === 32 ? Math.fround(value) : (Math.abs(value) >= 65520 ? Infinity : value);
@@ -23234,6 +23624,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return contextual;
       }
     }
+    if (contextual && contextual.Kind === 'union') {
+      const adapted = adaptNumericToUnion(node, contextual);
+      if (adapted !== undefined) return adapted;
+    }
     // A numeric LITERAL at a `bigint` contextual position is read from its
     // SOURCE TEXT rather than from the double the lexer produced. The rule was
     // bounded at 2**53 and refused beyond it, which never corrupted but meant
@@ -23256,6 +23650,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const text = (node as ParseNode.NumericLiteral).SourceText;
       if (typeof text === 'string') {
         const digits = ParseDecimalDigits(text.replace(/_/g, ''));
+        // Question BM: a power of ten past every width a rational is written
+        // at, 2**65536, is no part of any of its values, and is refused without
+        // being written out: `const q: rational64 = 1e999999999` crashed the
+        // host with "Maximum BigInt size exceeded". A `rational.<bigint>` holds
+        // what fits in memory, to an exponent of a million.
+        const part = contextual.Arguments[0];
+        const enormous = !!digits && Math.abs(digits.exponent)
+          > (typeof part === 'object' && part !== null && (part as { Name?: string }).Name === 'bigint' ? 1000000 : 20000);
+        if (digits && enormous) {
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return contextual;
+        }
         if (digits) {
           journalSet(rationalLiterals, node, { sig: digits.significand, exp: digits.exponent, type: contextual });
           // #sec-literal-propagation: "a literal whose value that type cannot represent
@@ -23312,13 +23719,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const converted = host?.type === 'TypedConversionExpression'
           || (host?.type === 'CallExpression' && !!typeObjectTarget((host as ParseNode.CallExpression).CallExpression));
         const digits = converted ? null : ParseDecimalDigits(text.replace(/_/g, ''));
-        const [precision, low, high] = ({ 32: [7, -101, 90], 64: [16, -398, 369], 128: [34, -6176, 6111] } as const)[width];
-        if (digits) {
-          const coefficient = digits.significand < 0n ? -digits.significand : digits.significand;
-          if (coefficient >= 10n ** BigInt(precision) || digits.exponent < low || digits.exponent > high) {
-            const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
+        if (digits && !DecimalPartsRepresentable(digits, width)) {
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
         }
         return contextual;
       }
@@ -23340,7 +23743,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const signedWidth = signed ? decimalWidthOf(contextual as TypeRecord) : undefined;
     if (signed && signedWidth !== undefined) {
       const exact = exactOfLiteralText(node);
-      if (exact && exact.special === undefined && !DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, signedWidth) && !conversionOperands.has(node)) {
+      if (exact && exact.special === undefined && !DecimalPartsRepresentable(exact, signedWidth) && !conversionOperands.has(node)) {
         const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(LiteralOperandText(node)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
         return contextual;
@@ -23351,19 +23754,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // x: float64 | null = 1e309` was an infinity too. A union with any other
       // numeric member is left to the boundary, which judges the literal there.
       const union = contextual.Kind === 'union';
-      const widths: (64 | 128)[] = [];
+      const widths: (16 | 32 | 64 | 128)[] = [];
       let otherNumeric = false;
+      // A `float16` or a `float32` is judged at the boundary by the literal's
+      // Number, which shows the answer while it is finite; past a binary64 it
+      // is an infinity those types have, and `const x: float32 = 1e400` was
+      // one, so it is judged here then.
+      const inner = innermostLiteral(node) as { value?: unknown };
+      const numberOverflows = typeof inner.value === 'number' && !Number.isFinite(inner.value);
       for (const member of (contextual.Kind === 'union' ? contextual.Members as TypeRecord[] : [contextual as TypeRecord])) {
         const base = member.Kind === 'parameterized' ? member.Base : member;
         if (base.Kind !== 'primitive') continue;
         const component = base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
         const width = base.Name === 'number' ? undefined : BinaryFloatWidthOf(component);
-        if (width === 64 || width === 128) widths.push(width);
-        else if (isNumericOperandName(base.Name)) otherNumeric = true;
+        if (width === 64 || width === 128 || ((width === 16 || width === 32) && numberOverflows)) widths.push(width);
+        else if (width !== undefined || isNumericOperandName(base.Name)) otherNumeric = true;
       }
       // Alone, a `float128` reads a signed literal's digits from the literal
       // itself, and is judged there.
-      const judged = widths.filter((w) => union || w === 64 || !signed);
+      const judged = widths.filter((w) => union || w !== 128 || !signed);
       if (!otherNumeric && judged.length > 0 && judged.length === widths.length && judged.every((w) => LiteralOverflowsBinaryFloat(node, w))) {
         let operand: ParseNode = node;
         while (operand.parent?.type === 'ParenthesizedExpression' || (operand.parent?.type === 'UnaryExpression' && ['-', '+'].includes((operand.parent as { operator?: string }).operator ?? ''))) operand = operand.parent;
@@ -23377,17 +23786,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    // ...and a constant expression at a `float16` or a `float32`, or a complex
-    // over one, whose Number shows the answer there, as `const k: uint8 = 200 +
-    // 100` is refused: `const y: float32 = 1e38 * 10` was a RangeError when it
-    // ran. A conversion's operand rounds.
+    // ...and a constant expression at a binary float, or a complex over one,
+    // as `const k: uint8 = 200 + 100` is refused: `const y: float32 = 1e38 *
+    // 10` was a RangeError when it ran, and `const z: float64 = 1e308 * 10` an
+    // infinity. A conversion's operand rounds.
     if (contextual && !signed && node.type !== 'NumericLiteral' && node.type !== 'IdentifierReference' && isNumericConstantExpression(node)
         && !conversionOperands.has(node) && !(node.parent?.type === 'TypedConversionExpression'
           || (node.parent?.type === 'CallExpression' && !!typeObjectTarget((node.parent as ParseNode.CallExpression).CallExpression)))) {
       const base = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
       const component = base.Kind === 'primitive' && base.Name === 'complex' ? ((base.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number')) : base;
       const width = BinaryFloatWidthOf(component);
-      const refused = width === 16 || width === 32 ? constantOverflowsFloat(node, contextual as TypeRecord) : null;
+      const refused = width !== undefined ? constantOverflowsFloat(node, contextual as TypeRecord) : null;
       if (refused !== null) {
         const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(refused), Value(displayType(contextual))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
@@ -23560,18 +23969,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     // Question AO, AO1: a decimal has neither bitwise operators nor a power
-    // with a fractional exponent. A constant with a bitwise operator or a
-    // shift, every operand of which is an integer, is the integer JavaScript
-    // computes for it, in the 32-bit two's complement its operators use, and
-    // that integer is taken exactly: `d * (6 | 1)` is `d * 7`, as `const e:
-    // decimal64 = 6 | 1` is 7, where it was a TypeError beside a decimal. A
-    // power with a fractional exponent has no exact value, and the double's
-    // digits would enter the decimal silently, so it is refused in both
-    // positions; the program converts a Number explicitly, `(2 ** 0.5) :=
-    // decimal64`, as C# writes `(decimal)Math.Pow(2, 0.5)`.
-    // The same integer is taken exactly at a `float128` and at a rational,
-    // each of which holds every `int32`: `q * (6 | 1)` is `q * 7`, as `const q:
-    // float128 = 6 | 1` is 7, where it was a TypeError beside the operand. A
+    // with a fractional exponent. A bitwise operator or a shift in a constant
+    // is computed as JavaScript computes it, and its integer is taken exactly
+    // by the folds below (`bitwiseConstantValue`, Question BO): `d * (6 | 1)`
+    // is `d * 7`, as `const e: decimal64 = 6 | 1` is 7, and so at a `float128`
+    // and at a rational. A power with a fractional exponent has no exact
+    // value, and the double's digits would enter the decimal silently, so it
+    // is refused in both positions; the program converts a Number explicitly,
+    // `(2 ** 0.5) := decimal64`, as C# writes `(decimal)Math.Pow(2, 0.5)`. A
     // fractional power is refused at a rational as at a decimal.
     if (contextual && contextual.Kind === 'primitive'
         && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128' || contextual.Name === 'rational')
@@ -23586,28 +23991,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         reportType('rt-numeric-operator', fractional, '$1 with a fractional exponent is not defined for $2; convert a Number to it explicitly with :=', Value('**'), Value(displayType(contextual as TypeRecord)));
         return contextual;
       }
-      if (bitwiseConstantIn(node)) {
-        const integer = foldConstantAt(node, int32ConstantType);
-        if (integer !== null) {
-          if (width === undefined && contextual.Name === 'rational') {
-            if (!rationalFitsType(integer, 1n, contextual as TypeRecord)) {
-              reportType('rt-numeric-range', node, '$1 is not in the range of $2', Value(String(integer)), Value(displayType(contextual as TypeRecord)));
-              return contextual;
-            }
-            journalSet(foldedRationals, node, { num: integer, den: 1n, type: contextual as TypeRecord });
-            return contextual;
-          }
-          if (width === undefined) {
-            journalSet(foldedFloat128s, node, { value: integer, type: contextual as TypeRecord });
-            return contextual;
-          }
-          if (!DecimalPartsInRange({ significand: integer, exponent: 0 }, width)) {
-            reportType('rt-numeric-range', node, '$1 is not in the range of $2', Value(String(integer)), Value(displayType(contextual as TypeRecord)));
-            return contextual;
-          }
-          journalSet(foldedDecimals, node, { sig: integer, exp: 0, width, type: contextual as TypeRecord });
-          return contextual;
-        }
+      const remainder = contextual.Name === 'rational' ? remainderIn(node) : null;
+      if (remainder) {
+        reportType('rt-numeric-operator', remainder, '$1 is not defined for $2', Value('%'), Value(displayType(contextual as TypeRecord)));
+        return contextual;
       }
     }
     // ...and at a DECIMAL contextual type, on the source digits: decimal.md,
@@ -23624,12 +24011,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (contextual && contextual.Kind === 'primitive' && contextual.Name === 'rational'
         && isNumericConstantExpression(node)
         && node.type !== 'NumericLiteral') {
-      const rat = foldRationalConstant(node);
+      const rat = foldRationalConstant(node, bitwiseConstantValue);
       if (rat !== null) {
         journalSet(foldedRationals, node, { ...rat, type: contextual as TypeRecord });
         // A folded constant is a literal of the type as much as a bare one is.
         if (!rationalFitsType(rat.num, rat.den, contextual as TypeRecord)) {
-          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(`${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(rat.den === 1n ? String(rat.num) : `${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         return contextual;
@@ -23637,9 +24024,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (contextual && decimalWidthOf(contextual as TypeRecord) !== undefined && isNumericConstantExpression(node)
         && node.type !== 'NumericLiteral') {
-      const dec = foldDecimal(node);
+      const width = decimalWidthOf(contextual as TypeRecord)!;
+      // A conversion's operand is its exact value, which the conversion
+      // rounds (#sec-explicit-conversion), as a literal operand of one is.
+      const dec = foldDecimalConstant(node, constDecimalValue, bitwiseConstantValue, conversionOperands.has(node) ? undefined : width);
       if (dec !== null) {
-        journalSet(foldedDecimals, node, { ...dec, width: decimalWidthOf(contextual as TypeRecord)!, type: contextual as TypeRecord });
+        journalSet(foldedDecimals, node, { ...dec, width, type: contextual as TypeRecord });
         return contextual;
       }
     }
@@ -23653,8 +24043,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the double sum. Beside an operand nothing converts, so `d * (7 / 2)` was
     // a TypeError and `d === 7 / 2` *false* for a `d` that is 3.5. Here its
     // literals take the type, and the type's own operators compute it.
+    // Question BR: and at a rational where the exact fold declines, which it
+    // does for a zero divisor, a power past 4096 and a literal past every
+    // width: `const q: rational64 = 1e999999999 * 2` and `1 / 0` there were
+    // Numbers, refused as Infinity when they ran, `q * (1 / 0)` a TypeError,
+    // and `const r: rational.<bigint> = 2 ** 5000` Infinity, where 2**5000 is
+    // one of its values.
     if (contextual && contextual.Kind === 'primitive' && node.type !== 'NumericLiteral'
-        && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128')
+        && (decimalWidthOf(contextual as TypeRecord) !== undefined || contextual.Name === 'float128' || contextual.Name === 'rational')
         && isNumericConstantExpression(node)
         // A decimal's power is computed in the type where its exponent is an
         // integer; a conversion's operand with a fractional one is a Number.
@@ -27818,7 +28214,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (isWellKnownNumericConstant(inner) && !shadowedByProgram('Math')) return n;
           if (inner.type !== 'IdentifierReference') return null;
           const nm = inner.name;
-          return constExactValue(nm) !== null || constDecimalValue(nm) !== null ? n : null;
+          // And one neither fold reads, `const K = 6 | 1` or `const K = 2 **
+          // 0.5`, which is its initializer here as every such constant is
+          // (Question BO): beside a `decimal64` it was a Number the checker let
+          // through and the run time refused, beside an `int64` the `int32` the
+          // shift computes where `a + (1 << 31)` is 2**31, and a power the
+          // inlined spelling refuses ran.
+          return constExactValue(nm) !== null || constDecimalValue(nm) !== null || constClosedInitializer(nm) !== null ? n : null;
         };
         // The last expression of a comma is the operand (#sec-contextual-types,
         // "a comma expression passes its contextual type to its final operand"),
@@ -32158,6 +32560,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Equality admits both signs of zero. Without an exact constant,
             // retain the subject type rather than assert a Number refinement.
             if (!digits || digits.sig === 0n) return undefined;
+            // Question BK: a literal the type cannot hold is equal to none of
+            // its values, so the test can never succeed, as `x === 300` for a
+            // `uint8` cannot; `if (d === 1e400)` was refused as out of range,
+            // and over a `float128` it was a branch never taken.
+            if (digitsHeldAt(against, numericSource) === false) {
+              const sense = negated !== inverted;
+              return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: sense,
+                verdict: sense ? 'never-fails' : 'never-succeeds', display: exactOfLiteralText(against) ? LiteralOperandText(against) : `${digits.sig}e${digits.exp}` };
+            }
             const text = `${digits.sig}e${digits.exp}`;
             const literal = { type: 'NumericLiteral', SourceText: text, value: Number(text) } as ParseNode.NumericLiteral;
             const before = errors.length;
@@ -32166,6 +32577,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.length = before;
             if (value.Type !== 'normal') return undefined;
             lit = { ...lit, Base: numericSource, Value: value.Value };
+          }
+          // A `float64` holds the Number a literal it rounds to an infinity
+          // evaluates to, and not the literal (Question BJ).
+          if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
+              && numericSource.Name === 'float64' && digitsHeldAt(against, numericSource) === false) {
+            const sense = negated !== inverted;
+            return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: sense,
+              verdict: sense ? 'never-fails' : 'never-succeeds', display: exactOfLiteralText(against) ? LiteralOperandText(against) : displayType(lit as TypeRecord) };
           }
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
               && ['uint', 'int', 'float16', 'float32', 'float64'].includes(numericSource.Name)
@@ -45790,13 +46209,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const lit = literalOperand(produced)
           ?? (produced.type === 'IdentifierReference' && isNumericConstantExpression(produced) ? produced : null)
           ?? constantExpressionOperand(produced);
-        // Question BJ: a literal a `float128` or a complex rounds to an
-        // infinity is equal to none of its values (#sec-arithmetic-never-
-        // promotes), so an equality does not take it, and the literal keeps
-        // its own type; an ordered comparison refuses it, and one of a
+        // Questions BJ and BK: a literal or a constant the type cannot hold is
+        // equal to none of its values (#sec-arithmetic-never-promotes), so an
+        // equality does not take it, and it keeps its own type; `d === 1e400`
+        // for a `decimal64` was refused as out of range, where `k === 300` for
+        // a `uint8` is *false*. An ordered comparison refuses it, and one of a
         // complex, which has no order, is refused for that.
-        if (lit && (['==', '!=', '===', '!=='].includes(comparison ?? '') || name === 'complex') && (name === 'float128' || name === 'complex')
-            && literalOverflowsFloatAt(lit, base as TypeRecord)) continue;
+        if (lit && (['==', '!=', '===', '!=='].includes(comparison ?? '') || name === 'complex')
+            && digitsHeldAt(lit, base as TypeRecord) === false) continue;
         if (lit) staticTypeIn(innermostLiteral(lit), base!);
       }
     }
@@ -46584,7 +47004,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    if (!Array.isArray(node) && ['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression'].includes((node as ParseNode).type)
+    // And a bitwise operator or a shift, which an integer reads from its
+    // Number and a decimal, a rational and a `float128` from its record
+    // (Question BO).
+    if (!Array.isArray(node) && (['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression'].includes((node as ParseNode).type)
+        || isBitwiseConstantHead(node as ParseNode))
         && isNumericConstantExpression(node as ParseNode)) {
       recordIntegerContextOperand(node as ParseNode);
     }
@@ -47595,6 +48019,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(beside.refused));
                 continue;
               }
+              // And over a decimal, a rational, a binary float or a complex,
+              // by the exact value it folds to (Question BK): `case 1e400 * 1`
+              // over a `decimal64` took no case silently.
+              if (!peer && subject && subject.Kind !== 'union' && isNumericConstantExpression(label)
+                  && digitsHeldAt(label, subject as TypeRecord) === false) {
+                reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(LiteralOperandText(label)));
+                continue;
+              }
             }
             if (labelType && labelType.Kind === 'nominal'
                 && ['Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds']
@@ -47650,15 +48082,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A decimal discriminant holds the label at the exact value its
             // source text denotes, its exponent included (#sec-literalvalueintype),
             // so `case 1.0` over a `decimal128` is judged by that value.
-            const decimalWidth = subject && (subject as TypeRecord).Kind === 'primitive'
-              ? ({ decimal32: 32, decimal64: 64, decimal128: 128 } as Record<string, 32 | 64 | 128 | undefined>)[(subject as { Name?: string }).Name ?? ''] : undefined;
-            const exactLabel = decimalWidth !== undefined && label ? exactOfLiteralText(label) : undefined;
-            const decimalHolds = !!exactLabel && exactLabel.special === undefined
-              && DecimalPartsInRange({ significand: exactLabel.significand, exponent: exactLabel.exponent }, decimalWidth!);
-            if (labelType && numericLiteral && !decimalHolds
+            // Question BK: so does a rational, a binary float and a complex,
+            // and a label none of them holds can never succeed, as one an
+            // integer cannot hold: `case 1e30` over a `rational64` took no
+            // case silently, and a label is named by what it writes, where
+            // `case 1e400` over a `decimal64` was "the Infinity test".
+            const heldByDigits = label && numericLiteral && subject ? literalHeldByDigits(label, subject as TypeRecord) : undefined;
+            if (labelType && numericLiteral && heldByDigits !== true
                 && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration'
-                && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
-              reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord)));
+                && (heldByDigits === false || cannotHoldValue(subject as TypeRecord, labelType as TypeRecord))) {
+              const shown = label && exactOfLiteralText(label) ? LiteralOperandText(label) : displayType(labelType as TypeRecord);
+              reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(shown));
               continue;
             }
             // A string or boolean literal label is the `v === e` row too. One

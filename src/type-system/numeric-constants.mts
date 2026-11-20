@@ -49,6 +49,29 @@ export function IntegerContextOperandValue(node: object): bigint | undefined {
 }
 
 /**
+ * Question BN: the exact value a numeric constant operand - a use of a `const`
+ * bound to a constant expression, or arithmetic over constants - writes, for a
+ * decimal, a rational or a `float128` beside it whose type is seen only when
+ * the operand runs (`AdoptLiteralOperand`): the decimal its digits fold to,
+ * where `+`, `-`, `*` and a whole power fold it, keeping the cohort the
+ * checker gives it beside a decimal it knows; and the fraction it folds to,
+ * with `/` the exact quotient. #sec-arithmetic-never-promotes: "its value takes
+ * the type then, as a literal's does, or a RangeError is thrown where the type
+ * has no such value. That value is read exactly, as a literal's is". Either is
+ * null where the expression does not fold so.
+ */
+export interface ExactConstant {
+  readonly decimal: { readonly sig: bigint, readonly exp: number } | null;
+  readonly rational: { readonly num: bigint, readonly den: bigint } | null;
+}
+
+export const exactConstantOperands = new WeakMap<object, ExactConstant>();
+
+export function ExactConstantOperandValue(node: object): ExactConstant | undefined {
+  return exactConstantOperands.get(node);
+}
+
+/**
  * Question AN, AN1: the integer a literal or a constant operand writes, where the
  * checker saw it compared with an operand it knew to be of the `bigint` type, in
  * an equality or ordered comparison, a `case` label or the original

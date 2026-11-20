@@ -169,6 +169,44 @@ export function DecimalPartsInRange(parts: DecimalParts, width: 32 | 64 | 128): 
   return adjusted >= range.min && adjusted <= range.max;
 }
 
+/**
+ * #sec-literalvalueintype: whether a decimal of _width_ has the value with
+ * coefficient _parts_.significand and exponent _parts_.exponent, that quantum
+ * included: "If _c_ is outside the coefficient range of _t_, return
+ * ~unrepresentable~. If _q_ is outside the exponent range of _t_, return
+ * ~unrepresentable~." A literal's quantum is the digits it writes, and a
+ * constant's the value it folds to. `DecimalPartsInRange` asks only the
+ * adjusted exponent of a result already rounded, so a literal it was asked of
+ * was rounded instead of refused: `12345679` beside a `decimal32` known only
+ * at run time was 12345680.
+ */
+export function DecimalPartsRepresentable(parts: { readonly significand: bigint, readonly exponent: number }, width: 32 | 64 | 128): boolean {
+  const precision = DecimalPrecision(width);
+  const range = DecimalExponentRange(width);
+  const magnitude = parts.significand < 0n ? -parts.significand : parts.significand;
+  return magnitude < 10n ** BigInt(precision)
+    && parts.exponent >= range.min - (precision - 1) && parts.exponent <= range.max - (precision - 1);
+}
+
+/**
+ * Whether a decimal of _width_ has the value _parts_ denotes as any member of
+ * its cohort: a value a constant computes, which writes no quantum of its own.
+ * `9999999 + 1` is 10000000, eight digits as it is folded, and a `decimal32`
+ * holds it exactly as 1.000000E+7, which its own addition gives.
+ */
+export function DecimalValueRepresentable(parts: { readonly significand: bigint, readonly exponent: number }, width: 32 | 64 | 128): boolean {
+  if (parts.significand === 0n) {
+    return true;
+  }
+  const precision = DecimalPrecision(width);
+  const range = DecimalExponentRange(width);
+  const reduced = ReduceDecimal(parts.significand, parts.exponent);
+  const digits = digitCount(reduced.significand);
+  // The coefficient may gain zeros up to the precision, lowering the exponent.
+  return digits <= precision && reduced.exponent >= range.min - (precision - 1)
+    && reduced.exponent - (precision - digits) <= range.max - (precision - 1);
+}
+
 /** How many decimal digits a magnitude has. */
 function digitCount(v: bigint): number {
   const m = v < 0n ? -v : v;

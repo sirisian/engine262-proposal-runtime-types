@@ -1,5 +1,5 @@
 import { Q, X } from '../completion.mts';
-import { AdoptLiteralOperand, DecayEnumOperands } from '../type-system/arithmetic.mts';
+import { AdoptLiteralOperand, DecayEnumOperands, UnheldLiteralOperand } from '../type-system/arithmetic.mts';
 import { IsMaskReductionReceiver, vectorComparison } from '../type-system/vector-ops.mts';
 import { contextualTypeFor } from '../type-system/runtime.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
@@ -117,6 +117,15 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
     if (decayed) {
       lval = decayed.left;
       rval = decayed.right;
+    }
+    // Question BK: a literal the operand beside it cannot hold is equal to
+    // none of its values (#sec-arithmetic-never-promotes), loosely as
+    // strictly. Its Number is another value, and `d == 1e400` for a decimal
+    // infinity compared the Number's infinity with it and was *true*.
+    if (UnheldLiteralOperand(lval, rval, {
+      left: leftRead.literal, right: rightRead.literal, leftNode: leftRead.node, rightNode: rightRead.node,
+    })) {
+      return operator === '==' || operator === '===' ? Value.false : Value.true;
     }
     const adopted = AdoptLiteralOperand(lval, rval, {
       left: leftRead.literal,

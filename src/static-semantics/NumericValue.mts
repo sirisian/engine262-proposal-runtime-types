@@ -192,6 +192,12 @@ export function DeferredLiteralValue(deferred: DeferredLiteral, t: TypeRecord): 
  * largest finite one is infinite.
  */
 function RoundDecimalToBinaryFloat(significand: bigint, exponent: number, width: 16 | 32): number {
+  // A value hundreds of decades past either format is an infinity or a zero,
+  // without its power of ten being written out (Question BM): `float32(1e999999999)`
+  // crashed the host with "Maximum BigInt size exceeded".
+  const magnitude = (significand < 0n ? -significand : significand).toString().length + exponent;
+  if (significand !== 0n && magnitude > 400) return significand < 0n ? -Infinity : Infinity;
+  if (significand !== 0n && magnitude < -400) return significand < 0n ? -0 : 0;
   return exponent >= 0
     ? roundRationalToBinaryFloat(significand * 10n ** BigInt(exponent), 1n, width)
     : roundRationalToBinaryFloat(significand, 10n ** BigInt(-exponent), width);

@@ -62,7 +62,19 @@ test('so does a named constant or a constant expression it rounds to an infinity
     'const K = 1e39; function g(c: complex64) { return c * K; }',
     'const K = 1e309; function g(c: complex128) { return c * K; }',
     'const K = 1e309; function g(x: float64) { return x < K; }',
+    // At a binary64 or a binary128 the constant is folded exactly, its Number
+    // being the infinity already; `1 / 0` folds to nothing and is allowed.
+    'function g(x: float64) { return x * (1e308 * 10); }',
+    'function g(x: float64) { return x * 2 ** 1024; }',
+    'const K = 1e308 * 10; function g(x: float64) { return x * K; }',
+    'const z: float64 = -(1e308 * 10);',
+    'const q: float128 = 1e4932 * 10;',
+    'const c: complex128 = 1e308 * 10;',
+    'const x: float32 = 1e400;',
+    'const x: float32 | string = -1e400;',
   ]) expectStaticTypeError(source);
+  expectThrown('const z: float64 = -(1e308 * 10);', '"-(1e308 * 10)" is not in the range of "float64"');
+  expect(evaluated('function g(x: float64) { return x * (1 / 0); } String(g(1)) + String(g(1) * 2 ** 1023);')).toBe('InfinityInfinity');
   expectThrown('const K = 1e39; function g(x: float32) { return x * K; }', '"1e39" is not in the range of "float32"');
   expect(evaluated('const K = 3e38; function g(x: float32) { return x * K; } String(g(1));')).toBe(String(Math.fround(3e38)));
   expect(evaluated('const y: float32 = 2e38 + 1e38; String(y);')).toBe(String(Math.fround(3e38)));
@@ -110,4 +122,18 @@ test('a literal far past a float128\'s range is judged without its digits', () =
   expect(evaluated('const x: float128 = 1e-999999999; String(x);')).toBe('0');
   expectStaticTypeError('const x: float128 = 1e999999999;');
   expectThrownKind('float128.parse("1e999999999");', 'RangeError');
+});
+
+test('a literal with an exponent past every type is refused without its digits', () => {
+  // Question BM: a power of ten was written out first, and each of these
+  // crashed the host after about 17 seconds: "Maximum BigInt size exceeded".
+  for (const source of [
+    'const q: rational64 = 1e999999999;',
+    'const q: rational.<bigint> = 1e-999999999;',
+    'function g(q: rational64) { if (q < 1e999999999) return 1; return 0; }',
+    'const d: decimal64 = 1e999999999 + 1;',
+    'const x: float32 = 1e999999999;',
+  ]) expectStaticTypeError(source);
+  expect(evaluated('String(float32(1e999999999)) + String(1e-999999999 := float16);')).toBe('Infinity0');
+  expect(evaluated('const q: rational.<bigint> = 1e400; String(q === 1e400);')).toBe('true');
 });

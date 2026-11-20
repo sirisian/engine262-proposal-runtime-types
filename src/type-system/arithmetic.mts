@@ -1,18 +1,18 @@
 import { BooleanValue, NumberValue, TypedNumberValue, Value, BigIntValue, ObjectValue, isTypedNumber } from '../value.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { CreateDecimalValue, DecimalPartsInRange, isDecimalObject } from '../intrinsics/Decimal.mts';
+import { CreateDecimalValue, DecimalPartsRepresentable, DecimalValueRepresentable, isDecimalObject } from '../intrinsics/Decimal.mts';
 import { CreateRationalValue, isRationalObject } from '../intrinsics/Rational.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { Binary128ToFloat128, isFloat128Object } from '../intrinsics/Float128.mts';
-import { fromDecimal as Float128FromDecimal } from '../intrinsics/Float128Arithmetic.mts';
+import { fromDecimal as Float128FromDecimal, fromRational as Float128FromRational } from '../intrinsics/Float128Arithmetic.mts';
 import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
 import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType, RuntimeTypeOf } from './runtime.mts';
 import { exactOfLiteralText } from './exact-real.mts';
-import { BigIntComparisonOperandValue, IntegerContextOperandValue, ProducingOperand } from './numeric-constants.mts';
+import { BigIntComparisonOperandValue, ExactConstantOperandValue, IntegerContextOperandValue, ProducingOperand } from './numeric-constants.mts';
 import { AbruptCompletion, Throw, MetadataMismatchDescription, surroundingAgent, Z, type ThrowCompletion } from '#self';
 
 /**
@@ -592,12 +592,106 @@ export function LiteralOperandText(node: ParseNode, outerNegative = false): stri
     } else break;
   }
   const written = (n as { sourceText?: string }).sourceText ?? (n as { SourceText?: string }).SourceText ?? String((n as { value?: unknown }).value);
+  // An expression under a sign keeps its parentheses: `-(1e308 * 10)`.
+  if (negative && n.type !== 'NumericLiteral' && n.type !== 'IdentifierReference') return `-(${written})`;
   return `${negative ? '-' : ''}${written}`;
 }
 
 /** The binary float width of the component of a complex value. */
 function complexComponentWidth(peer: Value): 16 | 32 | 64 | 128 | undefined {
   return BinaryFloatWidthOf(((peer as { ComplexComponent?: TypeRecord }).ComplexComponent) ?? { Kind: 'primitive', Name: 'number', Arguments: [] } as unknown as TypeRecord);
+}
+
+/**
+ * Question BN: what a literal or a constant operand writes, exactly: a literal
+ * its digits, and a named constant or arithmetic over constants the decimal
+ * and the fraction the checker folded it to (`ExactConstantOperandValue`),
+ * under the operand's parentheses and sign. Undefined for any other operand.
+ */
+type OperandExact =
+  | { readonly kind: 'literal', readonly significand: bigint, readonly exponent: number }
+  | { readonly kind: 'constant', readonly decimal: { sig: bigint, exp: number } | null, readonly rational: { num: bigint, den: bigint } | null };
+
+function operandExact(node: ParseNode): OperandExact | undefined {
+  const exact = exactOfLiteralText(node);
+  if (exact) return exact.special === undefined ? { kind: 'literal', significand: exact.significand, exponent: exact.exponent } : undefined;
+  let n = node;
+  let negative = false;
+  for (let depth = 0; depth < 1024; depth += 1) {
+    if (n.type === 'ParenthesizedExpression') {
+      n = n.Expression;
+    } else if (n.type === 'CommaOperator') {
+      n = n.ExpressionList.at(-1)!;
+    } else if (n.type === 'UnaryExpression' && (n.operator === '-' || n.operator === '+')) {
+      if (n.operator === '-') negative = !negative;
+      n = n.UnaryExpression;
+    } else {
+      const produced = ProducingOperand(n);
+      if (produced === n) break;
+      n = produced;
+    }
+  }
+  const record = ExactConstantOperandValue(n);
+  if (!record) return undefined;
+  return {
+    kind: 'constant',
+    decimal: record.decimal && (negative ? { sig: -record.decimal.sig, exp: record.decimal.exp } : record.decimal),
+    rational: record.rational && (negative ? { num: -record.rational.num, den: record.rational.den } : record.rational),
+  };
+}
+
+/**
+ * Whether a decimal of _width_ holds the decimal an operand writes: a literal
+ * as its digits write it, its quantum included (#sec-literalvalueintype), and
+ * a constant's value as any member of its cohort.
+ */
+function operandDecimalHeld(exact: OperandExact, decimal: { significand: bigint, exponent: number }, width: 32 | 64 | 128): boolean {
+  return exact.kind === 'literal' ? DecimalPartsRepresentable(decimal, width) : DecimalValueRepresentable(decimal, width);
+}
+
+/** The decimal an operand writes, or null where it writes none, as a third. */
+function operandDecimal(exact: OperandExact): { significand: bigint, exponent: number } | null {
+  if (exact.kind === 'literal') return { significand: exact.significand, exponent: exact.exponent };
+  if (exact.decimal) return { significand: exact.decimal.sig, exponent: exact.decimal.exp };
+  if (!exact.rational) return null;
+  // A fraction is a decimal where its denominator divides a power of ten.
+  let { num, den } = exact.rational;
+  let exponent = 0;
+  while (den % 10n === 0n) {
+    den /= 10n;
+    exponent -= 1;
+  }
+  while (den % 2n === 0n) {
+    den /= 2n;
+    num *= 5n;
+    exponent -= 1;
+  }
+  while (den % 5n === 0n) {
+    den /= 5n;
+    num *= 2n;
+    exponent -= 1;
+  }
+  return den === 1n ? { significand: num, exponent } : null;
+}
+
+/** The fraction an operand writes, null where its digits pass every width a fraction is built at. */
+function operandFraction(exact: OperandExact): { num: bigint, den: bigint } | null {
+  if (exact.kind === 'constant') {
+    if (exact.rational) return exact.rational;
+    if (!exact.decimal || Math.abs(exact.decimal.exp) > 4096) return null;
+    return exact.decimal.exp >= 0 ? { num: exact.decimal.sig * 10n ** BigInt(exact.decimal.exp), den: 1n } : { num: exact.decimal.sig, den: 10n ** BigInt(-exact.decimal.exp) };
+  }
+  if (Math.abs(exact.exponent) > 4096) return null;
+  return exact.exponent >= 0 ? { num: exact.significand * 10n ** BigInt(exact.exponent), den: 1n } : { num: exact.significand, den: 10n ** BigInt(-exact.exponent) };
+}
+
+/** Whether an operand rounds to an infinity in the binary float of `width` bits; undefined where that is not known. */
+function operandOverflows(node: ParseNode, exact: OperandExact, width: 16 | 32 | 64 | 128): boolean | undefined {
+  if (exact.kind === 'literal') return LiteralOverflowsBinaryFloat(node, width);
+  const fraction = exact.rational;
+  if (!fraction) return undefined;
+  return width === 128 ? Float128FromRational(fraction.num < 0n ? -fraction.num : fraction.num, fraction.den).cls === 'infinity'
+    : !Number.isFinite(roundRationalToBinaryFloat(fraction.num, fraction.den, width));
 }
 
 /**
@@ -614,35 +708,32 @@ function complexComponentWidth(peer: Value): 16 | 32 | 64 | 128 | undefined {
 export function UnheldLiteralOperand(x: Value, y: Value, literals: { left: boolean, right: boolean, leftNode?: ParseNode, rightNode?: ParseNode }): { text: string, type: TypeRecord } | undefined {
   for (const [peer, other, written, node] of [[x, y, literals.right, literals.rightNode], [y, x, literals.left, literals.leftNode]] as const) {
     if (!written || !node || !(other instanceof NumberValue) || isTypedNumber(other)) continue;
-    if (!(isDecimalObject(peer) || isRationalObject(peer) || isFloat128Object(peer) || isComplexObject(peer)
-      || (peer instanceof TypedNumberValue && BinaryFloatWidthOf(UnderlyingOf(peer.TypeRecord as TypeRecord)) === 64))) continue;
-    const exact = exactOfLiteralText(node);
-    if (!exact || exact.special !== undefined) continue;
+    const floatWidth = peer instanceof TypedNumberValue ? BinaryFloatWidthOf(UnderlyingOf(peer.TypeRecord as TypeRecord)) : undefined;
+    // A `float16` and a `float32` refuse a value their Number shows they
+    // cannot hold where it is converted (TypedOperandType), which a Number past
+    // a binary64 does not show.
+    const narrowUnshown = (floatWidth === 16 || floatWidth === 32) && !Number.isFinite(other.numberValue()); // eslint-disable-line @engine262/mathematical-value -- the Number is read only to tell whether it is an infinity
+    if (!(isDecimalObject(peer) || isRationalObject(peer) || isFloat128Object(peer) || isComplexObject(peer) || floatWidth === 64 || narrowUnshown)) continue;
+    const exact = operandExact(node);
+    if (!exact) continue;
     let held: boolean | undefined;
     if (isDecimalObject(peer)) {
-      held = DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, peer.DecimalWidth);
+      const decimal = operandDecimal(exact);
+      held = !!decimal && operandDecimalHeld(exact, decimal, peer.DecimalWidth);
     } else if (isRationalObject(peer)) {
       const record = peer.TypeRecord as TypeRecord | undefined;
       const parts = record?.Kind === 'primitive' ? record.Arguments : [];
       // `rational.<bigint>` holds every value a literal writes.
       if (parts.length > 0 && typeof parts[0] === 'object' && (parts[0] as { Name?: string }).Name === 'bigint') continue;
-      if (Math.abs(exact.exponent) > 4096) {
-        held = false;
-      } else {
-        const realm = surroundingAgent.currentRealmRecord;
-        const fraction = exact.exponent >= 0
-          ? CreateRationalValue(exact.significand * 10n ** BigInt(exact.exponent), 1n, realm, peer.TypeRecord)
-          : CreateRationalValue(exact.significand, 10n ** BigInt(-exact.exponent), realm, peer.TypeRecord);
-        held = isRationalObject(fraction as Value);
-      }
+      const fraction = operandFraction(exact);
+      held = !!fraction && isRationalObject(CreateRationalValue(fraction.num, fraction.den, surroundingAgent.currentRealmRecord, peer.TypeRecord) as Value);
     } else {
-      const width = isFloat128Object(peer) ? 128
-        : isComplexObject(peer) ? complexComponentWidth(peer)
-          : peer instanceof TypedNumberValue && BinaryFloatWidthOf(UnderlyingOf(peer.TypeRecord as TypeRecord)) === 64 ? 64 : undefined;
-      const overflows = width === undefined ? undefined : LiteralOverflowsBinaryFloat(node, width);
+      const width = isFloat128Object(peer) ? 128 : isComplexObject(peer) ? complexComponentWidth(peer) : floatWidth;
+      const overflows = width === undefined ? undefined : operandOverflows(node, exact, width);
       held = overflows === undefined ? undefined : !overflows;
     }
-    if (held === false) return { text: LiteralOperandText(node), type: RuntimeTypeOf(peer) };
+    if (held !== false) continue;
+    return { text: LiteralOperandText(node).replace(/\s+/g, ' '), type: RuntimeTypeOf(peer) };
   }
   return undefined;
 }
@@ -672,9 +763,15 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
     if (!isDecimalObject(peer) || !(literalOnRight ? literals.right : literals.left) || !node) continue;
     const other = literalOnRight ? y : x;
     if (!(other instanceof NumberValue)) return undefined;
-    const exact = exactOfLiteralText(node);
-    if (!exact || exact.special !== undefined || !DecimalPartsInRange({ significand: exact.significand, exponent: exact.exponent }, peer.DecimalWidth)) return undefined;
-    const adopted = CreateDecimalValue(exact.significand, exact.exponent, peer.DecimalWidth, surroundingAgent.currentRealmRecord, (peer as { TypeRecord?: unknown }).TypeRecord);
+    // Question BN: and a named constant or arithmetic over constants at the
+    // decimal it folds to, as where the checker knew the decimal.
+    // Its coefficient and its exponent both, as #sec-literalvalueintype reads
+    // a literal: `12345679` has eight digits, which no `decimal32` holds, and
+    // was rounded to 12345680 beside one.
+    const exact = operandExact(node);
+    const decimal = exact ? operandDecimal(exact) : null;
+    if (!exact || !decimal || !operandDecimalHeld(exact, decimal, peer.DecimalWidth)) return undefined;
+    const adopted = CreateDecimalValue(decimal.significand, decimal.exponent, peer.DecimalWidth, surroundingAgent.currentRealmRecord, (peer as { TypeRecord?: unknown }).TypeRecord);
     return literalOnRight ? { left: x, right: adopted } : { left: adopted, right: y };
   }
   // Question BA: a rational, a `float128` and a complex peer take the literal
@@ -698,20 +795,26 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
       if (width !== undefined && LiteralOverflowsBinaryFloat(node, width)) return undefined;
       adopted = CreateComplexValue(other.numberValue(), 0, peer.ComplexComponent, realm, (peer as { ComplexTypeRecord?: unknown }).ComplexTypeRecord); // eslint-disable-line @engine262/mathematical-value -- the stored payload is the Number, as a complex literal's real part is
     } else {
-      const exact = exactOfLiteralText(node);
-      if (!exact || exact.special !== undefined) return undefined;
+      // Question BN: a named constant or arithmetic over constants too, at the
+      // fraction it folds to.
+      const exact = operandExact(node);
+      if (!exact) return undefined;
       if (isFloat128Object(peer)) {
         // Over the whole binary128 range, whose exponents pass 4096: a literal
         // past its largest value is equal to none of its values.
-        if (LiteralOverflowsBinaryFloat(node, 128)) return undefined;
-        adopted = Binary128ToFloat128(Float128FromDecimal(exact.significand, exact.exponent), realm);
+        if (operandOverflows(node, exact, 128) !== false) return undefined;
+        if (exact.kind === 'literal') {
+          adopted = Binary128ToFloat128(Float128FromDecimal(exact.significand, exact.exponent), realm);
+        } else {
+          const fraction = operandFraction(exact)!;
+          const magnitude = Float128FromRational(fraction.num < 0n ? -fraction.num : fraction.num, fraction.den);
+          adopted = Binary128ToFloat128(fraction.num < 0n ? { ...magnitude, sign: -1 } : magnitude, realm);
+        }
       } else {
-        if (Math.abs(exact.exponent) > 4096) return undefined;
-        const fraction = exact.exponent >= 0
-          ? CreateRationalValue(exact.significand * 10n ** BigInt(exact.exponent), 1n, realm, peer.TypeRecord)
-          : CreateRationalValue(exact.significand, 10n ** BigInt(-exact.exponent), realm, peer.TypeRecord);
-        if (!isRationalObject(fraction as Value)) return undefined;
-        adopted = fraction as Value;
+        const fraction = operandFraction(exact);
+        const built = fraction ? CreateRationalValue(fraction.num, fraction.den, realm, peer.TypeRecord) : undefined;
+        if (!built || !isRationalObject(built as Value)) return undefined;
+        adopted = built as Value;
       }
     }
     return literalOnRight ? { left: x, right: adopted } : { left: adopted, right: y };
