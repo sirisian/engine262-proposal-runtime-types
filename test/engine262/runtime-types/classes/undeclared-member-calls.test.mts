@@ -80,12 +80,13 @@ test('a union is judged at each of its classes', () => {
 });
 
 test('not judged where a member may exist that no declaration names', () => {
-  // A dynamic class, a class with no typed field, a base that is a call or a built-in, an `any`
-  // receiver, a key that is not known, a structural type, and the class object itself.
+  // A dynamic class, a class with no typed field, a base that is a call or a built-in whose
+  // members the library does not list, an `any` receiver, a key that is not known, a structural
+  // type, and the class object itself.
   expect(evaluated('dynamic class D { n: uint8 = 0; } const d = new D(); d.go = () => 3; String(d.go());')).toBe('3');
   expect(evaluated('class U { run() { return this.step(); } } class I extends U { step() { return 3; } } String(new I().run());')).toBe('3');
   expect(evaluated('const M = (B) => class extends B { hi() { return 1; } }; class Root { r: uint8 = 0; } class K extends M(Root) { k: uint8 = 0; } String(new K().hi());')).toBe('1');
-  expect(observeScript('class E extends Error { code: uint8 = 0; } const e = new E("m"); e.go();')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
+  expect(observeScript('class A extends Array { code: uint8 = 0; } const a = new A(); a.go();')).toMatchObject({ bodyEntered: true, errorClass: 'TypeError' });
   accepted(`${C}function f(c: any) { c.go(); }`);
   accepted(`${C}function f(c: Counter, k: string) { return c[k]; }`);
   accepted('interface I { a: uint8; } function f(x: I) { x.go(); }');
@@ -93,6 +94,12 @@ test('not judged where a member may exist that no declaration names', () => {
   expect(evaluated(`${C}Counter.make = () => 5; String(Counter.make());`)).toBe('5');
   // A class over an array has the members of an array, which no declaration lists.
   expect(evaluated('value class G extends [4].<uint8> { } const g = new G(); String(g.join(""));')).toBe('0000');
+});
+
+test('a built-in base the library lists contributes its members, and no others (Question AP, AP2)', () => {
+  // It was left to the call, which called *undefined* when it ran.
+  expect(observeScript('class E extends Error { code: uint8 = 0; } const e = new E("m"); e.go();')).toMatchObject(refused);
+  expect(evaluated('class E extends Error { code: uint8 = 0; } const e = new E("m"); e.toString();')).toBe('Error: m');
 });
 
 test('a super call of a member no base declares is the same call', () => {

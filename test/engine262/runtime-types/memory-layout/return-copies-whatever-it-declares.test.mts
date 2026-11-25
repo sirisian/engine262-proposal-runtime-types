@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, observeScript } from '../harness.mts';
 
 /**
  * #sec-value-type-copying: "Assigning a value of a value type, passing one as
@@ -49,5 +49,8 @@ test('an `any` override no longer gives a subclass the base\'s own field', () =>
   expect(evaluated(`${H} hh.at().x = 1; String(hh.p.x);`)).toBe('0');
   expect(evaluated(`${H} hh.q.x = 1; String(hh.p.x);`)).toBe('0');
   const S = `${P} class Shape { o: Point = new Point(); get origin(): Point { return this.o; } } class R extends Shape { get origin(): any { return this.o; } } `;
-  expect(evaluated(`${S} function nudge(s: Shape) { s.origin.x = 1; return String(s.o.x); } nudge(new R());`)).toBe('0');
+  // Typed as `Shape`, the store is refused by the getter's declaration
+  // (Question D, D6); through `any` it runs, and is to the copy.
+  expect(observeScript(`${S} function nudge(s: Shape) { s.origin.x = 1; return String(s.o.x); } nudge(new R());`).diagnostic).toMatchObject({ rule: 'rt-store-to-copy' });
+  expect(evaluated(`${S} function nudge(s: any) { s.origin.x = 1; return String(s.o.x); } nudge(new R());`)).toBe('0');
 });

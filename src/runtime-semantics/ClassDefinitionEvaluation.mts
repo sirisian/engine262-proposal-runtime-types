@@ -4,6 +4,7 @@ import { SetIntegrityLevel, TestIntegrityLevel, SealTypedInstance } from '../abs
 import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame, RetainTypeParameterEnvironment } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord, IsOfType } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
+import { ClassParticipatesInTypes } from '../type-system/class-participation.mts';
 import { displayType, typeParameterRecordsOf, parameterFromDeclaration, mentionsTypeParameter } from '../type-system/records.mts';
 import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
@@ -1568,6 +1569,16 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // TypeError.
       (F as { TypedClass?: boolean }).TypedClass = hasTypedInstanceField || isValue
         || (constructorParent as { TypedClass?: boolean } | undefined | null)?.TypedClass === true;
+      // Question BV, BV2: a class is called as a type is wherever it participates
+      // in the typed-source judgments (#sec-function-types), through its typed
+      // members, declared operators, type parameters, class modifiers or
+      // implemented interfaces, or through a base that does. A typed class
+      // participates through its typed field. A class written in JavaScript
+      // participates in nothing, and its call keeps ECMA-262's TypeError.
+      const classNode = (ClassTail as { parent?: ParseNode }).parent;
+      (F as { ConvertingCall?: boolean }).ConvertingCall = (F as { TypedClass?: boolean }).TypedClass === true
+        || (!!classNode && (classNode.type === 'ClassDeclaration' || classNode.type === 'ClassExpression') && ClassParticipatesInTypes(classNode))
+        || (constructorParent as { ConvertingCall?: boolean } | undefined | null)?.ConvertingCall === true;
       // proposal-runtime-types #sec-value-classes: a typed class that is not a value type
       // class is a REFERENCE TYPE, and so is a `sealed` or an `abstract` one, so its
       // instances have identity. [[SealInstances]] alone cannot say so - it is *true* for

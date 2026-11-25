@@ -53,15 +53,16 @@ function AdoptSameValueLiteral(a: Value, b: Value, nodes: ParseNode.Arguments): 
 }
 
 /**
- * The class a call converts its one argument to, where _func_ denotes a typed
- * class (#sec-typed-classes): a typed class constructor, a specialization of a
- * generic one, or a Type Object whose type is one of those (Question AI, AI1).
- * A generic class's own constructor is the family's, and denotes no class a
- * value can be converted to.
+ * The class a call converts its one argument to, where _func_ denotes a class
+ * called as a type is (#sec-explicit-conversion): a constructor of a class that
+ * participates in the typed-source judgments, a typed class among them
+ * (Question BV, BV2), a specialization of a generic one, or a Type Object whose
+ * type is one of those (Question AI, AI1). A generic class's own constructor is
+ * the family's, and denotes no class a value can be converted to.
  */
 function TypedClassConversionTarget(func: ObjectValue): TypeRecord | undefined {
   if ((func as { IsClassConstructor?: Value }).IsClassConstructor === Value.true) {
-    if ((func as { TypedClass?: boolean }).TypedClass !== true || GenericClassDeclarationOf(func) !== undefined) return undefined;
+    if ((func as { ConvertingCall?: boolean }).ConvertingCall !== true || GenericClassDeclarationOf(func) !== undefined) return undefined;
     const record = (func as { TypeRecord?: TypeRecord }).TypeRecord
       ?? (LookupClassType(func) as { TypeRecord?: TypeRecord } | undefined)?.TypeRecord;
     return record?.Kind === 'nominal' ? record : undefined;
@@ -69,7 +70,7 @@ function TypedClassConversionTarget(func: ObjectValue): TypeRecord | undefined {
   if (!isTypeObject(func)) return undefined;
   const record = (func as { TypeRecord?: TypeRecord }).TypeRecord;
   const ctor = record ? ClassRecordConstructor(record) : undefined;
-  if (!(ctor instanceof ObjectValue) || (ctor as { TypedClass?: boolean }).TypedClass !== true) return undefined;
+  if (!(ctor instanceof ObjectValue) || (ctor as { ConvertingCall?: boolean }).ConvertingCall !== true) return undefined;
   const applied = ((record as { Arguments?: readonly unknown[] }).Arguments ?? []).length > 0;
   return applied || GenericClassDeclarationOf(ctor) === undefined ? record : undefined;
 }

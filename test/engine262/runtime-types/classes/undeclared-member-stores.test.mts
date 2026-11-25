@@ -91,9 +91,15 @@ test('a class is left to the seal where a member may exist that no declaration n
   // ...and one with none has given it only what its fields declare.
   accepted('class B { dyn = 1; } class C extends B { x: uint8 = 0; } function f(c: C) { c.dyn = 2; }');
   expect(observeScript('class B { dyn = 1; } class C extends B { x: uint8 = 0; } function f(c: C) { c.zz = 2; }')).toMatchObject(refused);
-  // A `dynamic` base, a built-in base and a base that is a call are not read.
+  // A `dynamic` base, a built-in base whose members the library does not list and a base that
+  // is a call are not read.
   accepted('dynamic class B { v: uint8 = 0; } class C extends B { w: uint8 = 1; } function f(c: C) { c.nope = 1; }');
-  accepted("class PE extends Error { status: uint16 = 0; } function f(e: PE) { e.message = 'm'; e.statis = 1; }");
+  accepted('class PA extends Array { status: uint16 = 0; } function f(e: PA) { e.statis = 1; }');
+  // A built-in base the library lists is read: Error declares `message`, which an instance holds
+  // as its own only where its constructor was given one, and no `statis` (Question AP, AP2).
+  expect(observeScript('class PE extends Error { status: uint16 = 0; } function f(e: PE) { e.statis = 1; }')).toMatchObject(refused);
+  expect(observeScript("class PE extends Error { status: uint16 = 0; } function f(e: PE) { e.message = 'm'; }")).toMatchObject(refused);
+  accepted("class PE extends Error { status: uint16 = 0; message: string = ''; } function f(e: PE) { e.message = 'm'; e.status = 1; }");
   accepted('const M = (B) => class extends B { t: uint8 = 0; }; class Base { b: uint8 = 0; } class C extends M(Base) { x: uint8 = 0; } function f(c: C) { c.zz = 1; }');
   // The seal is still what refuses those when they run.
   expectThrown('"use strict"; dynamic class B { v: uint8 = 0; } class C extends B { w: uint8 = 1; } function f(c: C) { c.nope = 1; } f(new C());', 'Cannot set property');

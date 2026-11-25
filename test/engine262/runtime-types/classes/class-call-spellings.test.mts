@@ -51,10 +51,17 @@ test('a call on an alias of a class with no argument or several is refused befor
   expect(evaluated(`${B}String(B8(1).v);`)).toBe('1');
 });
 
-test('a class over a built-in with no typed field of its own is not a typed class', () => {
-  expectStaticTypeError('class E extends Error { m(): uint8 { return 1; } } E(1);');
-  expectStaticTypeError('class M extends Map { m(): uint8 { return 1; } } M(1);');
-  // With a typed field it is one, and the call converts.
+test('a class over a built-in that participates is called as a type is, and refuses what := refuses', () => {
+  // Annotated on a method, the class participates (Question BV, BV2), so `E(1)`
+  // is `1 := E`, which converts nothing to it and throws when it runs, as `:=`
+  // does. A built-in participates in nothing, so a class over one that
+  // participates in nothing keeps JavaScript's TypeError.
+  for (const declaration of ['class E extends Error { m(): uint8 { return 1; } }', 'class E extends Map { m(): uint8 { return 1; } }']) {
+    expect(evaluated(`${declaration} try { E(1); "converted"; } catch (e) { e.message; }`)).toBe('1 is not assignable to "E"');
+    expect(evaluated(`${declaration} try { (1 := E); "converted"; } catch (e) { e.message; }`)).toBe('1 is not assignable to "E"');
+  }
+  expect(evaluated('class E extends Error { } try { E(1); "converted"; } catch (e) { e.message; }')).toContain('cannot be invoked without new');
+  // With a typed field it is a typed class, and the call converts, as `:=` does.
   expect(evaluated('class E extends Error { code: uint8 = 0; } try { E({ code: 1 }); "converted"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 });
 

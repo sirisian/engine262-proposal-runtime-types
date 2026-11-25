@@ -35,6 +35,8 @@ import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
 import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
 import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
+import { ClassParticipatesInTypes, TypedInvocationSignature } from './class-participation.mts';
+import { LibraryInstanceMembersOf } from './library-members.mts';
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
@@ -3159,13 +3161,16 @@ function classHasOwnSealedStorage(t: TypeRecord): boolean {
 const OBJECT_PROTOTYPE_MEMBERS: ReadonlySet<string> = new Set(['constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable',
   'toLocaleString', 'toString', 'valueOf', '__proto__', '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__']);
 
-function sealedWithDeclaredMembers(t: TypeRecord): boolean {
+function sealedWithDeclaredMembers(t: TypeRecord, overLibrary = false): boolean {
   let sealed = false;
   const seen = new Set<TypeRecord>();
   let current: TypeRecord | undefined = t;
   while (current) {
     if (current.Kind !== 'nominal' || seen.has(current)) return false;
     seen.add(current);
+    // Question AP, AP2: a built-in base whose members the library lists
+    // (`LibraryInstanceMembersOf`) gives its instances those and no others.
+    if (current.LibraryName !== undefined) return overLibrary && sealed && LibraryInstanceMembersOf(current.LibraryName) !== undefined;
     const decl = current.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
     if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) return false;
     if (decl.ClassModifiers?.includes('dynamic')) return false;
@@ -9540,13 +9545,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (lhs?.type === 'MemberExpression') {
       noteStoreForCopyRule(lhs);
       const result = storeToResult(lhs);
+      // A member's result is named with the class that declares the member:
+      // the refusal is of that declaration (Question D, D6).
+      if (result?.kind === 'call' && result.member) {
+        reportType('rt-store-to-copy', expression, '$1 is a method of $2, which answers a copy of the value it returns, and nothing names this one, so the store is lost; bind the result, change it, and store it back',
+          Value(result.member.name), Value(classNameForMessages(result.member.owner)));
+        return;
+      }
       if (result?.kind === 'call') {
         reportType('rt-store-to-copy', expression, 'a call answers a copy of the value it returns, and nothing names this one, so the store is lost; bind the result, change it, and store it back');
         return;
       }
       if (result) {
-        reportType('rt-store-to-copy', expression, '$1 is a getter, which answers a copy of the value it returns, and nothing names this one, so the store is lost; bind the result, change it, and store it back',
-          Value((result.origin as ParseNode.MemberExpression).IdentifierName?.name ?? ''));
+        reportType('rt-store-to-copy', expression, '$1 is a getter of $2, which answers a copy of the value it returns, and nothing names this one, so the store is lost; bind the result, change it, and store it back',
+          Value(result.member?.name ?? (result.origin as ParseNode.MemberExpression).IdentifierName?.name ?? ''), Value(result.member ? classNameForMessages(result.member.owner) : ''));
         return;
       }
     }
@@ -9700,6 +9712,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       keys.forEach((key) => classesNotDeclaring(sealedReceiver, key, m).forEach((receiver) => {
         reportType('rt-undeclared-member', expression, '$1 is not a member of $2', typeof key === 'string' ? Value(key) : key, Value(displayType(receiver)));
       }));
+      if (!storesBeforeSeal(m)) {
+        for (const key of keys) {
+          const unreachable = typeof key === 'string' ? libraryMemberNotStorable(sealedReceiver, key) : null;
+          if (unreachable) {
+            reportType('rt-undeclared-member', expression, '$1 is not a writable own property of every $2, and an instance of $3 is sealed, so a store to it may fail; declare $1 as a field of $3 to store to it',
+              Value(key as string), Value(unreachable.base), Value(displayType(unreachable.receiver)));
+          }
+        }
+      }
     }
     if (constructorMayWrite(lhs)) return;
     if (lhs.PrivateIdentifier) {
@@ -11452,19 +11473,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * #sec-value-classes: along a value class chain a member keeps the kind it
-   * was first declared with. "Replacing an inherited field with an accessor of
-   * the same name, or the reverse, is a TypeError. A field occupies a slot in
-   * the base's memory layout and an accessor doesn't" (the README's accessors
-   * section). Accepted until now: the instance holds the base's field as an own
-   * property, which shadows the subclass's accessor on the prototype, so
-   * `get a()` over an inherited field `a` was never called; and a field over an
-   * inherited getter left the base's getter unreachable on a value of the
-   * subclass.
+   * #sec-class-member-kinds: a member keeps the kind it was first declared
+   * with along a class chain. "Replacing an inherited field with an accessor of
+   * the same name, or the reverse, is a TypeError" (the README's accessors
+   * section). Along a value class chain, "a field occupies a slot in the base's
+   * memory layout and an accessor doesn't". Along any chain the instance holds
+   * the base's field as an own property, which shadows the subclass's accessor
+   * on the prototype, so `get a()` over an inherited field `a` was never
+   * called; and a field over an inherited getter hid the base's getter on a
+   * value of the subclass, so what the base declares of the member did not hold
+   * of every value typed as the base. TypeScript refuses both (2610, 2611).
    *
    * Judged as an inherited field redeclaration is, where the checker sees the
-   * chain. A class held by reference is not judged here: there the rule is the
-   * open question of what a subclass may replace a getter with.
+   * chain (Question D, D6). A method is neither kind: a field over a method,
+   * which TypeScript accepts, and a method over a field are not this rule's.
    */
   const memberKindOf = (element: ParseNode): 'field' | 'accessor' | null => {
     if (element.type === 'FieldDefinition') return (element as { accessor?: boolean }).accessor ? 'accessor' : 'field';
@@ -11479,33 +11501,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const key = classElementKey(name);
     return typeof key === 'string' ? key : null;
   };
-  const checkValueMemberKinds = (cls: ParseNode): void => {
-    if (!nodeField<readonly string[] | null>(cls, 'ClassModifiers')?.includes('value')) return;
-    const inherited = new Map<string, { kind: 'field' | 'accessor', from: string }>();
+  /** A class's name in a message: its own, the name of the binding it initializes, or `(anonymous class)`. */
+  const classNameForMessages = (cls: ParseNode): string => {
+    const own = (cls as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+    if (own) return own;
+    let at: ParseNode | undefined = cls.parent as ParseNode | undefined;
+    while (at?.type === 'ParenthesizedExpression') at = at.parent as ParseNode | undefined;
+    const bound = at && (at.type === 'LexicalBinding' || at.type === 'VariableDeclaration')
+      ? (at as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name : undefined;
+    return bound ?? '(anonymous class)';
+  };
+  const checkMemberKinds = (cls: ParseNode): void => {
+    const valueChain = !!nodeField<readonly string[] | null>(cls, 'ClassModifiers')?.includes('value');
+    const inherited = new Map<string, { kind: 'field' | 'accessor', from: string, element: ParseNode }>();
     const seen = new Set<ParseNode>([cls]);
     for (let base = heritageClassOf(cls, true); base && !seen.has(base); base = heritageClassOf(base, true)) {
       seen.add(base);
-      const from = (base as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? 'its base';
+      const from = classNameForMessages(base);
       for (const element of classBodyOf(base)) {
         const name = publicMemberName(element);
         const kind = memberKindOf(element);
-        if (name !== null && kind !== null && !inherited.has(name)) inherited.set(name, { kind, from });
+        if (name !== null && kind !== null && !inherited.has(name)) inherited.set(name, { kind, from, element });
       }
     }
     if (inherited.size === 0) return;
-    const className = (cls as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? '(anonymous class)';
+    const className = classNameForMessages(cls);
     const reported = new Set<string>();
     for (const element of classBodyOf(cls)) {
       const name = publicMemberName(element);
       const kind = memberKindOf(element);
       const prior = name === null ? undefined : inherited.get(name);
       if (!prior || kind === null || kind === prior.kind || reported.has(name!)) continue;
+      // #sec-checked-code: a rule about a declaration this specification gives
+      // a type applies everywhere, and one about a declaration form of the
+      // pinned edition applies in checked code. A pair of which neither member
+      // is checked code is JavaScript, and is untouched.
+      if (!IsCheckedCode(element) && !IsCheckedCode(prior.element)) continue;
       reported.add(name!);
-      if (kind === 'accessor') {
+      if (valueChain && kind === 'accessor') {
         reportType('rt-inherited-contract', element, '$1 declares $2 an accessor, where $3 declares it a field; along a value class chain a member keeps its kind, since a field holds a slot of the layout and an accessor holds none',
           Value(className), Value(name!), Value(prior.from));
-      } else {
+      } else if (valueChain) {
         reportType('rt-inherited-contract', element, '$1 declares $2 a field, where $3 declares it an accessor; along a value class chain a member keeps its kind, since a field holds a slot of the layout and an accessor holds none',
+          Value(className), Value(name!), Value(prior.from));
+      } else if (kind === 'accessor') {
+        reportType('rt-inherited-contract', element, '$1 declares $2 an accessor, where $3 declares it a field; a member keeps its kind along a class chain, since the field is an own property of every instance and the accessor would never be reached',
+          Value(className), Value(name!), Value(prior.from));
+      } else {
+        reportType('rt-inherited-contract', element, '$1 declares $2 a field, where $3 declares it an accessor; a member keeps its kind along a class chain, since what $3 declares of a member holds for every value typed as $3',
           Value(className), Value(name!), Value(prior.from));
       }
     }
@@ -11514,7 +11557,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkInheritedFieldRedeclarations = (cls: ParseNode): void => {
     if (checkedFieldRedeclarations.has(cls)) return;
     checkedFieldRedeclarations.add(cls);
-    checkValueMemberKinds(cls);
+    classBases.set(cls, heritageClassOf(cls, true) ?? null);
+    checkMemberKinds(cls);
     const inherited = new Map<string, string>();
     const seen = new Set<ParseNode>([cls]);
     // A bounded origin serves: every subclass of a base keeps its fields.
@@ -19727,6 +19771,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const valueClassFieldTypes = new Map<ParseNode, ReadonlyMap<string, TypeRecord> | null>();
   const copyStoreRoots = new Map<ParseNode, TypeRecord>();
+  /** Question BW, BW2': the callee of each call, as a statement, of a method on a binding that holds a copy. */
+  const copyCallRoots = new Map<ParseNode, TypeRecord>();
   const nodeField = <T,>(node: ParseNode | undefined, key: string): T | undefined => (node as unknown as Record<string, T | undefined> | undefined)?.[key];
 
   /**
@@ -20240,6 +20286,291 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const held = copyTypeHeld(lookupDeclared((root as ParseNode.IdentifierReference).name));
     if (held) copyStoreRoots.set(target, held);
   };
+  /**
+   * Recorded where a call is checked: a call, as a statement, of a method named
+   * on a binding, `p.step()`, and the copy type the binding holds. Whether the
+   * method stores only to the value is decided with the rest of the rule.
+   */
+  const noteCallForCopyRule = (call: ParseNode.CallExpression): void => {
+    if (call.parent?.type !== 'ExpressionStatement') return;
+    const callee = patternExpression(call.CallExpression as ParseNode);
+    if (callee !== call.CallExpression || callee?.type !== 'MemberExpression' || !(callee as ParseNode.MemberExpression).IdentifierName) return;
+    const receiver = (callee as ParseNode.MemberExpression).MemberExpression as ParseNode;
+    if (receiver.type !== 'IdentifierReference') return;
+    const held = copyTypeHeld(lookupDeclared((receiver as ParseNode.IdentifierReference).name));
+    if (held && valueClassFieldsOf(held) !== null) copyCallRoots.set(callee, held);
+  };
+
+  /** The classes the program declares, in any scope. */
+  let programClassNodes: ParseNode[] | undefined;
+  const programClasses = (): readonly ParseNode[] => {
+    if (!programClassNodes) {
+      const found: ParseNode[] = [];
+      const pending: ParseNode[] = [root as ParseNode];
+      const seen = new Set<ParseNode>();
+      while (pending.length > 0) {
+        const node = pending.pop()!;
+        if (seen.has(node)) continue;
+        seen.add(node);
+        if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') found.push(node);
+        pending.push(...childNodesOf(node));
+      }
+      programClassNodes = found;
+    }
+    return programClassNodes;
+  };
+  /**
+   * The classes the program declares whose chain may reach _cls_: those whose
+   * chain the checker sees reach it, and those with a base it cannot see,
+   * which may be _cls_ when the program runs. A base is resolved where its
+   * class is walked, in its own scope, and recorded (`classBases`); a class
+   * not walked yet is resolved here. A built-in base reaches no class of the
+   * program's.
+   */
+  const classBases = new Map<ParseNode, ParseNode | null>();
+  const classesBelow = (cls: ParseNode): readonly ParseNode[] => programClasses().filter((candidate) => {
+    if (candidate === cls) return false;
+    const visited = new Set<ParseNode>([candidate]);
+    for (let at: ParseNode = candidate; ;) {
+      const base: ParseNode | null | undefined = classBases.has(at) ? classBases.get(at) : heritageClassOf(at, true);
+      if (!base) {
+        const heritage = nodeField<{ ClassHeritage?: unknown } | null>(at, 'ClassTail')?.ClassHeritage;
+        return !!heritage && !builtinClassHeritage(heritage);
+      }
+      if (base === cls) return true;
+      if (visited.has(base)) return false;
+      visited.add(base);
+      at = base;
+    }
+  });
+
+  /**
+   * Question BW, BW2': whether a call of the method _name_ on a value of the
+   * value class _type_ does nothing but store to that value: the method's
+   * body reads only its parameters, the bindings it declares and fields of
+   * `this`, stores only to fields of `this` and to those bindings, and calls
+   * only methods of the class that do the same, on every path. A call of one
+   * as a statement on a binding that holds a copy nothing reads afterwards has
+   * no effect at all, as a store to the copy has none.
+   *
+   * Any other step is an effect the call may have been made for, and the call
+   * is left alone: a store elsewhere, a call of another function, a `throw`, a
+   * loop, a read of a member that runs code (a getter, or an operator a class
+   * declares). So is a method a class below _type_ declares again, which may
+   * run in its place. An exception the body's own operators may raise, as an
+   * integer division by zero does, is not counted, as it is not for the same
+   * store written out (#sec-store-to-a-copy).
+   */
+  // By the receiver's type as well as the method, since a generic class's
+  // fields have the types its arguments give them.
+  const pureMethodVerdicts = new Map<TypeRecord, Map<ParseNode, 'stores' | 'reads' | false>>();
+  const callStoresOnlyToItsValue = (type: TypeRecord, name: string): boolean => {
+    const cls = programClassOf(type);
+    if (!cls || valueClassFieldsOf(type) === null) return false;
+    // A method that only reads makes a call that is not a store, and is not this rule's.
+    return pureMethodOf(type, cls, name, new Set()) === 'stores';
+  };
+  const pureMethodOf = (type: TypeRecord, cls: ParseNode, name: string, visiting: Set<ParseNode>): 'stores' | 'reads' | false => {
+    const member = declaredClassMember(cls, name, false);
+    if (member?.kind !== 'method' || member.node.type !== 'MethodDefinition') return false;
+    // The method a call selects is this one only where the chain declares no
+    // other overload of the name, and no class below declares the name again.
+    if (methodOverloadsOf(cls, name)?.length !== 1) return false;
+    if (classesBelow(cls).some((below) => classBodyOf(below).some((element) => instanceElementMayBeNamed(element, name)))) return false;
+    const method = member.node as ParseNode.MethodDefinition;
+    let verdicts = pureMethodVerdicts.get(type);
+    if (!verdicts) pureMethodVerdicts.set(type, verdicts = new Map());
+    if (verdicts.has(method)) return verdicts.get(method)!;
+    // A method that calls itself, directly or not, may not return.
+    if (visiting.has(method)) return false;
+    visiting.add(method);
+    const verdict = pureMethodBody(type, cls, method, visiting);
+    visiting.delete(method);
+    verdicts.set(method, verdict);
+    return verdict;
+  };
+  const pureMethodBody = (type: TypeRecord, cls: ParseNode, method: ParseNode.MethodDefinition, visiting: Set<ParseNode>): 'stores' | 'reads' | false => {
+    let stores = false;
+    if ((nodeField<readonly unknown[] | null>(method, 'Decorators') ?? []).length > 0) return false;
+    const parameters = method.UniqueFormalParameters ?? [];
+    // A parameter is a name the call binds: not a pattern, which reads what it
+    // destructures, not `ref`, which names the caller's storage, and with no
+    // default, which is code of its own.
+    if (!parameters.every((parameter) => parameter.type === 'SingleNameBinding' && !parameter.Initializer && !nodeField<boolean>(parameter, 'Ref'))) return false;
+    // What a read gives, where it is one: its declared type, `null` where that
+    // is not known, and `undefined` where the expression is not a read of this
+    // kind. Types are read from declarations, since the walk's scopes are gone.
+    type Read = { type: Known } | undefined;
+    const primitiveRead: Read = { type: makePrimitive('number') };
+    const isPrimitive = (read: Read): boolean => !!read?.type && (read.type.Kind === 'literal'
+      || (read.type.Kind === 'primitive' && !['object', 'function', 'any', 'symbol'].includes((read.type as { Name?: string }).Name ?? '')));
+    const locals = new Map<ParseNode, Read>();
+    const own = (reference: ParseNode.IdentifierReference): Read => {
+      const declaration = ResolveBindingDeclaration(reference, reference.name);
+      if (!declaration || !['parameter', 'const', 'let'].includes(declaration.kind)) return undefined;
+      let inside = false;
+      for (let at: ParseNode | undefined = declaration.node; at; at = at.parent as ParseNode | undefined) {
+        if (at === method) {
+          inside = true;
+          break;
+        }
+        if (CAPTURING.test(at.type)) return undefined;
+      }
+      if (!inside) return undefined;
+      if (declaration.kind === 'parameter') {
+        const parameter = parameters.find((candidate) => (candidate as ParseNode.SingleNameBinding).BindingIdentifier.name === reference.name);
+        const annotation = parameter ? nodeField<ParseNode.TypeAnnotation | null>(parameter, 'TypeAnnotation') : null;
+        return { type: annotation ? resolveType(annotation.Type) : null };
+      }
+      return locals.get(declaration.node) ?? { type: null };
+    };
+    // A path into the value's storage, from `this` or from a binding of the method's own.
+    const storagePath = (node: ParseNode): Read => {
+      const steps: ParseNode.MemberExpression[] = [];
+      let at: ParseNode = node;
+      while (at.type === 'MemberExpression') {
+        steps.unshift(at as ParseNode.MemberExpression);
+        at = (at as ParseNode.MemberExpression).MemberExpression as ParseNode;
+      }
+      let reached: TypeRecord | 'length' | null;
+      if (at.type === 'ThisExpression') {
+        if (steps.length === 0) return undefined;
+        reached = type;
+      } else if (at.type === 'IdentifierReference') {
+        const read = own(at as ParseNode.IdentifierReference);
+        if (!read || steps.length === 0) return read;
+        reached = read.type as TypeRecord | null;
+      } else {
+        return undefined;
+      }
+      for (const step of steps) {
+        if (!reached || reached === 'length' || step.PrivateIdentifier || (step.Expression && !pureRead(step.Expression))) return undefined;
+        // The fields of a value class a parameter is of are read here first.
+        valueClassFieldsOf(reached);
+        reached = stepIntoCopy(reached, step);
+      }
+      return reached === null ? undefined : reached === 'length' ? primitiveRead : { type: reached };
+    };
+    const rootIsThis = (target: ParseNode): boolean => {
+      let at = target;
+      while (at.type === 'MemberExpression') at = (at as ParseNode.MemberExpression).MemberExpression as ParseNode;
+      return at.type === 'ThisExpression';
+    };
+    const pureCall = (call: ParseNode): Read => {
+      const callee = patternExpression((call as ParseNode.CallExpression).CallExpression as ParseNode);
+      if (callee?.type !== 'MemberExpression' || !(callee as ParseNode.MemberExpression).IdentifierName
+        || ((callee as ParseNode.MemberExpression).MemberExpression as ParseNode).type !== 'ThisExpression') return undefined;
+      const args = (call as ParseNode.CallExpression).Arguments ?? [];
+      const name = (callee as ParseNode.MemberExpression).IdentifierName!.name;
+      if (!args.every((argument) => argument.type !== 'AssignmentRestElement' && argument.type !== 'NamedArgument' && pureRead(argument))) return undefined;
+      const verdict = pureMethodOf(type, cls, name, visiting);
+      if (!verdict) return undefined;
+      if (verdict === 'stores') stores = true;
+      const declared = declaredClassMember(cls, name, false);
+      const annotation = declared ? nodeField<ParseNode.TypeAnnotation | null>(declared.node, 'TypeAnnotation') : null;
+      return { type: annotation ? resolveType(annotation.Type) : null };
+    };
+    const pureRead = (node: ParseNode | null | undefined): Read => {
+      if (!node) return undefined;
+      switch (node.type) {
+        case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral': case 'NullLiteral':
+          return { type: { Kind: 'literal', Base: makePrimitive('number'), Value: Value(0) } as TypeRecord };
+        case 'IdentifierReference':
+          if ((node as ParseNode.IdentifierReference).name === 'undefined' && !ResolveBindingDeclaration(node, 'undefined')) return { type: makePrimitive('undefined') };
+          return own(node as ParseNode.IdentifierReference);
+        case 'ParenthesizedExpression':
+          return pureRead((node as unknown as { Expression: ParseNode }).Expression);
+        case 'MemberExpression':
+          return storagePath(node);
+        case 'CallExpression':
+          return pureCall(node);
+        case 'UnaryExpression': {
+          const operator = nodeField<string>(node, 'operator') ?? '';
+          const operand = pureRead(nodeField<ParseNode>(node, 'UnaryExpression'));
+          if (!operand || !['-', '+', '!', '~', 'typeof', 'void'].includes(operator)) return undefined;
+          return operator === 'typeof' || operator === 'void' || isPrimitive(operand) ? primitiveRead : undefined;
+        }
+        case 'ConditionalExpression': {
+          const c = node as ParseNode.ConditionalExpression;
+          const [a, b] = [pureRead(c.AssignmentExpression_a), pureRead(c.AssignmentExpression_b)];
+          return pureRead(c.ShortCircuitExpression) && a && b ? (isPrimitive(a) && isPrimitive(b) ? primitiveRead : { type: null }) : undefined;
+        }
+        case 'AdditiveExpression': case 'MultiplicativeExpression': case 'ExponentiationExpression': case 'ShiftExpression':
+        case 'BitwiseANDExpression': case 'BitwiseXORExpression': case 'BitwiseORExpression': case 'EqualityExpression':
+        case 'RelationalExpression': case 'LogicalANDExpression': case 'LogicalORExpression': case 'CoalesceExpression': {
+          if (node.type === 'RelationalExpression' && ['in', 'instanceof'].includes(nodeField<string>(node, 'operator') ?? '')) return undefined;
+          const operands = childNodesOf(node).map(pureRead);
+          if (operands.length !== 2 || operands.some((operand) => !operand)) return undefined;
+          // An operator on values of a primitive type runs no code of the program's.
+          const logical = node.type === 'LogicalANDExpression' || node.type === 'LogicalORExpression' || node.type === 'CoalesceExpression';
+          if (logical) return operands.every(isPrimitive) ? primitiveRead : { type: null };
+          return operands.every(isPrimitive) ? primitiveRead : undefined;
+        }
+        default:
+          return undefined;
+      }
+    };
+    const pureStore = (target: ParseNode | undefined): Read => {
+      if (!target) return undefined;
+      if (target.type === 'IdentifierReference') {
+        const declaration = ResolveBindingDeclaration(target, (target as ParseNode.IdentifierReference).name);
+        return declaration?.kind === 'let' ? own(target as ParseNode.IdentifierReference) : undefined;
+      }
+      return target.type === 'MemberExpression' && rootIsThis(target) ? storagePath(target) : undefined;
+    };
+    const pureEffect = (node: ParseNode): boolean => {
+      if (node.type === 'AssignmentExpression') {
+        const assignment = node as ParseNode.AssignmentExpression;
+        const written = patternExpression(assignment.LeftHandSideExpression as ParseNode);
+        const target = pureStore(written);
+        const value = pureRead(assignment.AssignmentExpression);
+        if (!target || !value) return false;
+        if (written?.type === 'MemberExpression') stores = true;
+        // A compound operator reads the target and combines as its operator does.
+        return assignment.AssignmentOperator === '=' || (isPrimitive(target) && isPrimitive(value));
+      }
+      if (node.type === 'UpdateExpression') {
+        const written = patternExpression((nodeField<ParseNode>(node, 'LeftHandSideExpression') ?? nodeField<ParseNode>(node, 'UnaryExpression'))!);
+        const target = pureStore(written);
+        if (written?.type === 'MemberExpression') stores = true;
+        return isPrimitive(target);
+      }
+      return pureRead(node) !== undefined;
+    };
+    const pureStatement = (statement: ParseNode): boolean => {
+      switch (statement.type) {
+        case 'EmptyStatement':
+          return true;
+        case 'ExpressionStatement':
+          return pureEffect(nodeField<ParseNode>(statement, 'Expression')!);
+        case 'Block':
+          return (nodeField<readonly ParseNode[]>(statement, 'StatementList') ?? []).every(pureStatement);
+        case 'IfStatement': {
+          const branch = statement as ParseNode.IfStatement;
+          return !!pureRead(branch.Expression) && pureStatement(branch.Statement_a) && (!branch.Statement_b || pureStatement(branch.Statement_b));
+        }
+        case 'ReturnStatement': {
+          const value = nodeField<ParseNode | null>(statement, 'Expression');
+          return !value || !!pureRead(value);
+        }
+        case 'LexicalDeclaration':
+          return (nodeField<readonly ParseNode[]>(statement, 'BindingList') ?? []).every((binding) => {
+            if (binding.type !== 'LexicalBinding' || !nodeField<unknown>(binding, 'BindingIdentifier') || nodeField<boolean>(binding, 'Ref')) return false;
+            const initializer = nodeField<ParseNode | null>(binding, 'Initializer');
+            const annotation = nodeField<ParseNode.TypeAnnotation | null>(binding, 'TypeAnnotation');
+            const read = initializer ? pureRead(initializer) : { type: null };
+            if (!read) return false;
+            locals.set(binding, annotation ? { type: resolveType(annotation.Type) } : read);
+            return true;
+          });
+        default:
+          return false;
+      }
+    };
+    const body = nodeField<readonly ParseNode[] | null>(method.FunctionBody as ParseNode, 'FunctionStatementList') ?? [];
+    if (!body.every(pureStatement)) return false;
+    return stores ? 'stores' : 'reads';
+  };
 
   /**
    * The copy type a binding holds: its type where that is one, and the one
@@ -20330,10 +20661,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * reference class may be of a subclass that does (which a store reaches),
    * and so may `this` and a name narrowed to the class; none is judged.
    */
-  const declaredClassMember = (cls: ParseNode, name: string, wantStatic: boolean): { kind: 'field' | 'getter' | 'method', type: Known, node: ParseNode } | null => {
+  const declaredClassMember = (cls: ParseNode, name: string, wantStatic: boolean): { kind: 'field' | 'getter' | 'method', type: Known, node: ParseNode, owner: ParseNode } | null => {
     for (let at: ParseNode | undefined = cls; at;) {
       if ((nodeField<readonly unknown[] | null>(at, 'Decorators') ?? []).length > 0) return null;
-      let found: { kind: 'field' | 'getter' | 'method', type: Known, node: ParseNode } | null = null;
+      let found: { kind: 'field' | 'getter' | 'method', type: Known, node: ParseNode, owner: ParseNode } | null = null;
       for (const element of classBodyOf(at)) {
         if (!!(element as { static?: boolean }).static !== wantStatic) continue;
         const elementName = nodeField<ParseNode.ClassElementName>(element, 'ClassElementName');
@@ -20345,12 +20676,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if ((nodeField<readonly unknown[] | null>(element, 'Decorators') ?? []).length > 0) return null;
         if (element.type === 'FieldDefinition') {
           const annotation = nodeField<ParseNode.TypeAnnotation | null>(element, 'TypeAnnotation');
-          return nodeField<boolean>(element, 'accessor') ? null : { kind: 'field', type: annotation ? resolveType(annotation.Type) : null, node: element };
+          return nodeField<boolean>(element, 'accessor') ? null : { kind: 'field', type: annotation ? resolveType(annotation.Type) : null, node: element, owner: at };
         }
         if (element.type !== 'MethodDefinition') return null;
         const method = element as ParseNode.MethodDefinition;
         if (method.PropertySetParameterList) continue;
-        found = { kind: method.UniqueFormalParameters ? 'method' : 'getter', type: null, node: element };
+        found = { kind: method.UniqueFormalParameters ? 'method' : 'getter', type: null, node: element, owner: at };
       }
       if (found) return found;
       const base: ParseNode | undefined = heritageClassOf(at);
@@ -20430,8 +20761,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
-  /** Whether this call, or this read of a getter, is certain to answer a copy made by a function of the program's. */
-  const answersItsOwnCopy = (origin: ParseNode): 'call' | 'getter' | null => {
+  /**
+   * Whether this call, or this read of a getter, is certain to answer a copy
+   * made by a function of the program's, and the class that declares the
+   * member, where the function is a member's.
+   *
+   * Question D, D6: a method or a getter is judged by the class that declares
+   * it, held by reference or a value: along every chain the checker sees, no
+   * subclass replaces a getter with a field (#sec-class-member-kinds), and a
+   * method or a getter that overrides keeps its result's contract, which is a
+   * copy. A class held by reference was not judged, since a subclass could
+   * declare the member a field, which a store would reach.
+   */
+  const answersItsOwnCopy = (origin: ParseNode): { kind: 'call' | 'getter', member?: { name: string, owner: ParseNode } } | null => {
     if (hasDirectEval) return null;
     const wanted = origin.type === 'CallExpression' ? 'method' : 'getter';
     const selection = origin.type === 'CallExpression'
@@ -20442,33 +20784,102 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (assignedNames.has(name) || assignedGlobalProperties.has(name)) return null;
       const declaration = ResolveBindingDeclaration(selection, name);
       if (declaration?.kind === 'function') {
-        return declaration.node.type === 'FunctionDeclaration' && !answersALocation(declaration.node) ? 'call' : null;
+        return declaration.node.type === 'FunctionDeclaration' && !answersALocation(declaration.node) ? { kind: 'call' } : null;
       }
       const written = declaration?.kind === 'const' ? patternExpression(declaration.initializer ?? undefined) : undefined;
-      return written && (written.type === 'ArrowFunction' || written.type === 'FunctionExpression') && !answersALocation(written) ? 'call' : null;
+      return written && (written.type === 'ArrowFunction' || written.type === 'FunctionExpression') && !answersALocation(written) ? { kind: 'call' } : null;
     }
     if (selection.type !== 'MemberExpression' || !(selection as ParseNode.MemberExpression).IdentifierName) return null;
     const member = selection as ParseNode.MemberExpression;
     const name = member.IdentifierName!.name;
     const receiver = patternExpression(member.MemberExpression as ParseNode);
     if (!receiver) return null;
+    const answer = (selected: ReturnType<typeof declaredClassMember>) => (selected?.kind === wanted && !answersALocation(selected.node)
+      ? { kind: wanted === 'method' ? 'call' as const : 'getter' as const, member: { name, owner: selected.owner } } : null);
     if (receiver.type === 'IdentifierReference') {
       const className = (receiver as ParseNode.IdentifierReference).name;
       const declaration = ResolveBindingDeclaration(receiver, className);
       if (declaration?.kind === 'class') {
-        const selected = assignedNames.has(className) ? null : declaredClassMember(declaration.node, name, true);
-        return selected?.kind === wanted && !answersALocation(selected.node) ? (wanted === 'method' ? 'call' : 'getter') : null;
+        return answer(assignedNames.has(className) ? null : declaredClassMember(declaration.node, name, true));
       }
     }
     const receiverType = declaredTypeOf(receiver);
     const cls = programClassOf(receiverType);
-    if (!cls || valueClassFieldsOf(receiverType) === null) return null;
+    if (!cls) return null;
+    // A value class's instances are values of the class or of a subclass that
+    // declares no storage, and so no field. A class held by reference is
+    // judged where its instances are sealed with every member declared, so no
+    // own property can be given to one over the member; a subclass the checker
+    // sees keeps a getter a getter (#sec-class-member-kinds).
+    if (valueClassFieldsOf(receiverType) === null && !sealedWithDeclaredMembers(receiverType!, true)) return null;
+    // An own property a built-in base's constructor gives an instance hides a member of that name.
+    if (libraryOwnNames(receiverType).has(name)) return null;
     const selected = declaredClassMember(cls, name, false);
-    return selected?.kind === wanted && !answersALocation(selected.node) ? (wanted === 'method' ? 'call' : 'getter') : null;
+    if (!selected) return null;
+    // Every overload the chain declares may be the one a call selects, so
+    // each answers a copy or the call is not judged.
+    if (selected.kind === 'method' && (methodOverloadsOf(cls, name) ?? [selected.node]).some(answersALocation)) return null;
+    if (memberMayBeReplaced(cls, name, selected.kind)) return null;
+    return answer(selected);
   };
+  /**
+   * Whether a class element may be the public instance member _name_: it is
+   * named so, or by a computed key the checker cannot read.
+   */
+  const instanceElementMayBeNamed = (element: ParseNode, name: string): boolean => {
+    if ((element as { static?: boolean }).static) return false;
+    const elementName = nodeField<ParseNode.ClassElementName>(element, 'ClassElementName');
+    if (!elementName || elementName.type === 'PrivateIdentifier') return false;
+    const key = classElementKey(elementName);
+    return key === undefined || key === name;
+  };
+  /**
+   * The instance methods named _name_ that _cls_ and the classes of its chain
+   * declare, its overloads, or null where the chain is not all seen or a
+   * computed key in it may be the name.
+   */
+  const methodOverloadsOf = (cls: ParseNode, name: string): ParseNode[] | null => {
+    const found: ParseNode[] = [];
+    for (let at: ParseNode | undefined = cls; at;) {
+      for (const element of classBodyOf(at)) {
+        if (!instanceElementMayBeNamed(element, name)) continue;
+        if (publicMemberName(element) !== name) return null;
+        if (element.type === 'MethodDefinition' && (element as ParseNode.MethodDefinition).UniqueFormalParameters) found.push(element);
+      }
+      const base: ParseNode | undefined = heritageClassOf(at);
+      if (nodeField<{ ClassHeritage?: unknown } | null>(at, 'ClassTail')?.ClassHeritage && !base) return null;
+      at = base;
+    }
+    return found;
+  };
+  /**
+   * Question D, D6: whether a class the checker sees below _cls_ declares
+   * _name_, which the chain of _cls_ declares a method or a getter of _kind_,
+   * as something a read or a call of which may answer a location, so that a
+   * store through the result may land. For a method: a field or a getter whose
+   * type is not a function type, or that has no type, and a method, an
+   * override or an added overload, that answers a location. A field typed as
+   * a function keeps the method's contract, since a function that answers
+   * `ref` is not assignable to one that answers a value. For a getter: any
+   * member but a getter that answers a copy, since a field over the getter is
+   * refused (#sec-class-member-kinds) and an override keeps its contract,
+   * where the checker sees them. A computed key the checker cannot read may be
+   * the name, and is judged as the member it may be.
+   */
+  const memberMayBeReplaced = (cls: ParseNode, name: string, kind: 'field' | 'getter' | 'method'): boolean => classesBelow(cls).some((below) => classBodyOf(below).some((element) => {
+    if (!instanceElementMayBeNamed(element, name)) return false;
+    const method = element.type === 'MethodDefinition' ? element as ParseNode.MethodDefinition : undefined;
+    if (method?.PropertySetParameterList) return false;
+    if (kind === 'getter') return !method || !!method.UniqueFormalParameters || answersALocation(element);
+    if (method?.UniqueFormalParameters) return answersALocation(element);
+    if (element.type !== 'FieldDefinition' && !method) return false;
+    const annotation = nodeField<ParseNode.TypeAnnotation | null>(element, 'TypeAnnotation');
+    const declared = annotation ? resolveType(annotation.Type) : null;
+    return declared?.Kind !== 'function';
+  }));
 
   /** The call or getter read whose result a store's target lies within, where each step from it is into inline storage. */
-  const storeToResult = (target: ParseNode.MemberExpression): { origin: ParseNode, kind: 'call' | 'getter' } | null => {
+  const storeToResult = (target: ParseNode.MemberExpression): { origin: ParseNode, kind: 'call' | 'getter', member?: { name: string, owner: ParseNode } } | null => {
     const path: ParseNode.MemberExpression[] = [];
     let current: ParseNode = target;
     for (;;) {
@@ -20476,15 +20887,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       path.unshift(current as ParseNode.MemberExpression);
       const base = patternExpression((current as ParseNode.MemberExpression).MemberExpression as ParseNode);
       if (!base || (base.type !== 'CallExpression' && base.type !== 'MemberExpression')) return null;
-      const kind = answersItsOwnCopy(base);
-      if (kind) {
+      const answered = answersItsOwnCopy(base);
+      if (answered) {
         let reached: Known | 'length' = staticType(base);
         if (!reached || !holdsCopyType(reached)) return null;
         for (const step of path) {
           reached = stepIntoCopy(reached as TypeRecord, step);
           if (!reached || reached === 'length') return null;
         }
-        return { origin: base, kind };
+        return { origin: base, ...answered };
       }
       if (base.type !== 'MemberExpression') return null;
       current = base;
@@ -20492,9 +20903,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const checkStoresToCopies = (): void => {
-    if (copyStoreRoots.size === 0 || hasDirectEval) return;
+    if ((copyStoreRoots.size === 0 && copyCallRoots.size === 0) || hasDirectEval) return;
     const judged = new Set<ParseNode>();
-    for (const [target, rootType] of copyStoreRoots) {
+    for (const [target, rootType] of [...copyStoreRoots, ...copyCallRoots]) {
       let reference: ParseNode = target;
       while (reference.type === 'MemberExpression') reference = (reference as ParseNode.MemberExpression).MemberExpression as ParseNode;
       const name = (reference as ParseNode.IdentifierReference).name;
@@ -20597,7 +21008,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (let at = node.parent; at && at !== scope; at = at.parent) if (LOOPS.test(at.type)) loops.push(at);
         return loops;
       };
-      const stores: { node: ParseNode, end: number, loops: ParseNode[] }[] = [];
+      const stores: { node: ParseNode, end: number, loops: ParseNode[], call?: boolean }[] = [];
       const reads: { start: number, loops: ParseNode[] }[] = [];
       let whole = true;
       for (const use of uses) {
@@ -20610,6 +21021,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const user = top.parent;
         if (whole && path.length === 0 && asksOnlyPresence(use)) continue;
+        // Question BW, BW2': a call, as a statement, of a method that does
+        // nothing but store to the value is a store to the copy.
+        if (whole && path.length === 1 && user?.type === 'CallExpression' && (user as ParseNode.CallExpression).CallExpression === top && copyCallRoots.has(top)) {
+          if (!callStoresOnlyToItsValue(rootType, (top as ParseNode.MemberExpression).IdentifierName!.name)) {
+            whole = false;
+            break;
+          }
+          // The method reads the value before it stores to it, so a store before the call is read.
+          reads.push({ start: user.location.startIndex, loops: loopsOf(user) });
+          stores.push({ node: user, end: user.location.endIndex, loops: loopsOf(user), call: true });
+          continue;
+        }
         let reached: TypeRecord | 'length' | null = path.length > 0 ? rootType : null;
         for (const member of path) reached = reached && typeof reached !== 'string' ? stepIntoCopy(reached, member) : null;
         const plainStore = !!user && ((user.type === 'AssignmentExpression' && (user as ParseNode.AssignmentExpression).LeftHandSideExpression === top)
@@ -20634,6 +21057,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       stores.sort((a, b) => a.end - b.end);
       const lost = stores.find((store) => !reads.some((read) => read.start >= store.end || read.loops.some((loop) => store.loops.includes(loop))));
       if (!lost) continue;
+      if (lost.call && kind === 'parameter') {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy of the argument and nothing reads it after this call, which only stores to it, so the call is lost; declare the parameter `ref`, or take a `Span`, to change the caller\'s value', Value(name));
+      } else if (lost.call && kind === 'element') {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy of the element and nothing reads it after this call, which only stores to it, so the call is lost; iterate with `const ref` to change the element', Value(name));
+      } else if (lost.call && kind === 'member') {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy of the member the pattern reads and nothing reads it after this call, which only stores to it, so the call is lost; call the method through the original\'s path', Value(name));
+      } else if (lost.call) {
+        reportType('rt-store-to-copy', lost.node, '$1 is a copy and nothing reads it after this call, which only stores to it, so the call is lost; call the method through the original\'s path, or bind it with `const ref`', Value(name));
+      }
+      if (lost.call) continue;
       if (kind === 'parameter') {
         reportType('rt-store-to-copy', lost.node, '$1 is a copy of the argument and nothing reads it after this store, so the store is lost; declare the parameter `ref`, or take a `Span`, to store to the caller\'s value', Value(name));
       } else if (kind === 'element') {
@@ -22250,6 +22683,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const under = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
     const base = under?.Kind === 'parameterized' ? under.Base : under;
     return isIntegerValueType(base) ? base as TypeRecord : null;
+  };
+  /**
+   * Question O, O1: a compile-time numeric constant that is not a literal,
+   * read in a test as the literal of its value (#sec-narrowing). It is a
+   * constant expression or a name of one, so `x === 200 + 100` is the test
+   * `x === 300` is, as `case 200 + 100` already was, and a named constant is
+   * read as if it were written in place. Its value is the one the comparison
+   * takes it at when it runs: beside an integer, the integer it folds to there
+   * (`z === 7 / 2` is `z === 3`, `recordIntegerContextBeside`), and elsewhere
+   * the Number it evaluates to, which a binary float rounds as it rounds a
+   * literal's. _refused_ is the value an integer type cannot hold. A literal
+   * has its own reading and is null here, as is a constant beside a `bigint`,
+   * which `bigIntOperandValue` reads. A decimal, a rational, a complex and a
+   * `float128` read a constant's digits, and a caller that judges one of those
+   * takes the digits rather than this Number.
+   *
+   * The Number was read where the integer was meant: `if (x < 511 / 2)` over
+   * a `uint8` was refused as a test that can never fail, by 255.5, and the
+   * comparison it guards is `x < 255`, which fails for 255.
+   */
+  const constantTestValue = (node: ParseNode, subject: Known): { refused: string } | { value: number } | null => {
+    const constant = constantOperandCore(node);
+    if (!constant || constant.core.type === 'NumericLiteral') return null;
+    const peer = subject ? integerPeerOf(subject) : null;
+    if (peer && (peer as { Name?: string }).Name === 'bigint') return null;
+    if (peer) {
+      const beside = constantBesideInteger(node, peer);
+      if (beside && 'refused' in beside) return beside;
+      if (beside) {
+        const signed = constant.negative ? -beside.value : beside.value;
+        return signed >= -(2n ** 53n) && signed <= 2n ** 53n ? { value: Number(signed) } : null;
+      }
+    }
+    const number = numberOfConstant(constant.core);
+    return number === null ? null : { value: constant.negative ? -number : number };
   };
   /**
    * Beside an operand of an integer type, each numeric constant operand
@@ -24671,18 +25139,88 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
+   * Question AP, AP2: the built-in a class type's chain ends at, and the
+   * members it gives an instance (`LibraryInstanceMembersOf`), where the
+   * library lists it; null otherwise.
+   */
+  const libraryBaseOf = (type: Known): { name: string, members: NonNullable<ReturnType<typeof LibraryInstanceMembersOf>> } | null => {
+    const seen = new Set<object>();
+    for (let at: Known = type; at?.Kind === 'nominal' && !seen.has(at); at = (at as { Base?: Known }).Base ?? null) {
+      seen.add(at);
+      if (at.LibraryName !== undefined) {
+        const members = LibraryInstanceMembersOf(at.LibraryName);
+        return members ? { name: at.LibraryName, members } : null;
+      }
+    }
+    return null;
+  };
+  /** The own properties a built-in at the end of the chain of _type_ gives an instance, every one or some. */
+  const libraryOwnNames = (type: Known): ReadonlySet<string> => libraryBaseOf(type)?.members.own ?? new Set();
+  /**
+   * Question AP, AP2: the built-in members of a sealed class over a built-in
+   * that a store cannot reach on every instance: a member no instance holds
+   * as its own writable property, or one an instance holds only where its
+   * constructor was given it. `e.name = "E"` and `e.message = "m"` for a typed
+   * subclass of `Error` fail when they run on an instance made with no
+   * message, so they are refused; a field the class declares is storage of
+   * every instance, and is how a program that stores to one says so.
+   */
+  const libraryMemberNotStorable = (receiver: Known, named: string): { receiver: TypeRecord, base: string } | null => {
+    if (receiver?.Kind === 'union') {
+      for (const arm of receiver.Members) {
+        const found = libraryMemberNotStorable(arm, named);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver, true)) return null;
+    const seen = new Set<object>();
+    for (let at: Known = receiver; at?.Kind === 'nominal' && !seen.has(at); at = (at as { Base?: Known }).Base ?? null) {
+      seen.add(at);
+      if (at.LibraryName !== undefined) {
+        const library = LibraryInstanceMembersOf(at.LibraryName);
+        return library && library.members.has(named) && !library.storable.has(named) && !library.unjudged.has(named)
+          ? { receiver: receiver as TypeRecord, base: at.LibraryName } : null;
+      }
+      const declaration = at.Declaration as ParseNode.ClassDeclaration | undefined;
+      if ((declaration?.ClassTail?.ClassBody ?? []).some((element) => classElementKey((element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName) === named)) return null;
+    }
+    return null;
+  };
+  /**
+   * A store through `this` in a constructor or a field initializer of a
+   * class, which runs before the instance is sealed and may give it an own
+   * property its base's constructor gave it none of.
+   */
+  const storesBeforeSeal = (member: ParseNode.MemberExpression): boolean => {
+    if (patternExpression(member.MemberExpression as ParseNode)?.type !== 'ThisExpression') return false;
+    for (let at: ParseNode | undefined = member.parent as ParseNode | undefined; at; at = at.parent as ParseNode | undefined) {
+      if (at.type === 'ArrowFunction' || at.type === 'AsyncArrowFunction') continue;
+      if (at.type === 'FieldDefinition') return !(at as { static?: boolean }).static;
+      if (at.type === 'MethodDefinition') return classElementKey((at as ParseNode.MethodDefinition).ClassElementName) === 'constructor';
+      if (FUNCTION_LIKE.test(at.type) || at.type === 'ClassStaticBlock') return false;
+    }
+    return false;
+  };
+  /**
    * #sec-typed-storage: the classes among the arms of _receiver_ whose instances are sealed with
    * every member they have declared (`sealedWithDeclaredMembers`), and that do not declare
    * _named_: not as a field, a method or an accessor of the class or of a base. An index
-   * operator answers for every key, so a class that declares one is not among them.
+   * operator answers for every key, so a class that declares one is not among them. A
+   * built-in base the library lists declares what it lists (Question AP, AP2).
    */
   const classesNotDeclaring = (receiver: Known, named: string | SymbolValue, access?: ParseNode.MemberExpression): TypeRecord[] => {
     if (receiver?.Kind === 'union') return receiver.Members.flatMap((arm) => classesNotDeclaring(arm, named, access));
-    if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver) || (access && indexAccess(access, receiver))) return [];
+    if (receiver?.Kind !== 'nominal' || !sealedWithDeclaredMembers(receiver, true) || (access && indexAccess(access, receiver))) return [];
     const sealedStructure = structureOf(receiver);
     const declaresName = (type: Known, seen = new Set<object>()): boolean => {
       if (type?.Kind !== 'nominal' || seen.has(type)) return false;
       seen.add(type);
+      // A built-in base declares what the library lists of it, and a Symbol-keyed member is not judged there.
+      if (type.LibraryName !== undefined) {
+        const library = LibraryInstanceMembersOf(type.LibraryName);
+        return !!library && (typeof named !== 'string' || library.members.has(named));
+      }
       const declaration = type.Declaration as ParseNode.ClassDeclaration | undefined;
       return (declaration?.ClassTail?.ClassBody ?? []).some((element) => {
         const key = (element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName;
@@ -30913,13 +31451,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return rangeIntervalMisses(pattern, positionType as TypeRecord);
   };
 
-  const singleNumericDomain = (type: TypeRecord): TypeRecord | null => {
+  /** The distinct numeric types whose values are Numbers among the members of _type_, a literal member read at its base. */
+  const numericDomainsOf = (type: TypeRecord): TypeRecord[] => {
     const domains: TypeRecord[] = [];
     for (const member of type.Kind === 'union' ? type.Members : [type]) {
       const base = member.Kind === 'literal' ? member.Base : member;
       if (base && typeofTagOfType(base) === 'number' && !domains.some((other) => SameType(other, base))) domains.push(base);
     }
+    return domains;
+  };
+  const singleNumericDomain = (type: TypeRecord): TypeRecord | null => {
+    const domains = numericDomainsOf(type);
     return domains.length === 1 ? domains[0] : null;
+  };
+  /**
+   * A Number literal _lit_, written as _against_, read at each of several
+   * numeric types (#sec-literal-propagation): the union of its value at each
+   * type that holds it, null where none does, and undefined where one of them
+   * reads a literal from its digits, a decimal, a rational, a complex or a
+   * `float128`, which this does not.
+   */
+  const literalAtNumericDomains = (lit: TypeRecord, against: ParseNode, domains: readonly TypeRecord[]): TypeRecord | null | undefined => {
+    const held: TypeRecord[] = [];
+    for (const domain of domains) {
+      const d = eraseMetadata(domain);
+      if (d.Kind !== 'primitive') return undefined;
+      if (d.Name === 'number') {
+        held.push(lit);
+        continue;
+      }
+      if (!['uint', 'int', 'float16', 'float32', 'float64'].includes(d.Name)) return undefined;
+      // A `float64` holds the Number a literal it rounds to an infinity
+      // evaluates to, and not the literal (Question BJ).
+      if (d.Name === 'float64' && digitsHeldAt(against, d) === false) continue;
+      if (literalFitsNumericType(lit, d)) {
+        held.push({ ...lit, Base: d, Value: new TypedNumberValue(R((lit as { Value: NumberValue }).Value), d as never) } as TypeRecord);
+      }
+    }
+    return held.length === 0 ? null : held.length === 1 ? held[0] : CanonicalizeType({ Kind: 'union', Members: held });
   };
 
   const patternBranches = (s: TypeRecord, p: ParseNode.MatchPattern | null): {
@@ -32143,6 +32712,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } as NarrowingFact;
   };
   const constantNumber = (node: ParseNode, against: Known = null): number | null => {
+    // Question O, O1: compared with an operand of a known type, a constant
+    // that is not a literal is the value the comparison reads, and a named
+    // constant is its value as if written in place.
+    if (against) {
+      const read = constantTestValue(node, against);
+      if (read && 'value' in read) return read.value;
+    }
     let core = unparenthesized(node) ?? node;
     let sign = 1;
     if (core.type === 'UnaryExpression' && (core as unknown as { operator?: string }).operator === '-') {
@@ -32717,8 +33293,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // discriminant rule runs.
         const name = subjectOf(subject);
         // Two literals compared with each other are a constant expression, not
-        // a test of a value.
-        if (name === null || (name === NON_PATH && isLiteralOperand(subject))) {
+        // a test of a value, and so are two constants (Question O, O1).
+        if (name === null || (name === NON_PATH && (isLiteralOperand(subject) || constantOperandCore(subject)))) {
           continue;
         }
         if (subject.type === 'MemberExpression') {
@@ -32751,10 +33327,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (against as unknown as { operator?: string }).operator === '+')
           && (against as unknown as { UnaryExpression?: { type?: string } }).UnaryExpression?.type === 'NumericLiteral';
         const named = singleValueOperandType(against, (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject));
-        if (signedLiteral || named) {
-          let lit: Known = named ?? staticType(against);
-          const source = (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject);
+        const source = (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject);
+        // Question O, O1: a constant expression, or a name of one, is the
+        // literal of its value here, as it is as a `case` label: `x === 200 +
+        // 100` over a `uint8` is the test `x === 300` is, and can never
+        // succeed. It was taken for no literal at all, so the `if` missed what
+        // the `case` refused, and a named constant missed what its value
+        // written in place was refused for.
+        const constant = signedLiteral || named ? null : constantTestValue(against, source);
+        if (constant && 'refused' in constant) {
+          // Equal to none of the type's values, as a literal the type cannot
+          // hold is (#sec-literal-propagation). Under `==` that literal is not
+          // judged, and neither is the constant.
+          if (!loose) {
+            const sense = negated !== inverted;
+            return { name, type: { Kind: 'literal', Base: makePrimitive('number'), Value: Value(Number(constant.refused)) } as TypeRecord,
+              subjectType: staticType(subject), negated: sense, verdict: sense ? 'never-fails' : 'never-succeeds', display: constant.refused };
+          }
+        } else if (signedLiteral || named || constant) {
+          let lit: Known = named ?? (constant ? { Kind: 'literal', Base: makePrimitive('number'), Value: Value(constant.value) } as TypeRecord : staticType(against));
           const numericSource = source ? eraseMetadata(singleNumericDomain(source) ?? source) : null;
+          // A literal beside a union of several numeric types takes the type
+          // of the value it is compared with when the comparison runs
+          // (#sec-literal-propagation), so it is read at each of them: `x ===
+          // 5` for an `x` of `uint8 | uint16` tests for the `uint8` 5 and the
+          // `uint16` 5, and `x === 300` for the `uint16` 300. It was read as the
+          // Number 5, which no member is, and every such test was refused as
+          // one that can never succeed, while it succeeds when it runs.
+          const domains = lit?.Kind === 'literal' && lit.Value instanceof NumberValue && source && source.Kind !== 'any' ? numericDomainsOf(source) : [];
+          if (domains.length > 1) {
+            const read = literalAtNumericDomains(lit as TypeRecord, against, domains);
+            // A member whose literal is read from its digits, a decimal or
+            // another, is not read here, and the test is left as it was before
+            // any member was known.
+            if (read === undefined) return undefined;
+            if (read === null) {
+              const sense = negated !== inverted;
+              return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: sense,
+                verdict: sense ? 'never-fails' : 'never-succeeds', display: constant ? LiteralOperandText(against) : displayType(lit as TypeRecord) };
+            }
+            lit = read;
+          }
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
               && (numericSource.Name.startsWith('decimal') || ['rational', 'complex', 'float128'].includes(numericSource.Name))) {
             // #sec-literal-propagation: equality reads the source digits in the
@@ -32770,7 +33383,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (digitsHeldAt(against, numericSource) === false) {
               const sense = negated !== inverted;
               return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: sense,
-                verdict: sense ? 'never-fails' : 'never-succeeds', display: exactOfLiteralText(against) ? LiteralOperandText(against) : `${digits.sig}e${digits.exp}` };
+                verdict: sense ? 'never-fails' : 'never-succeeds', display: exactOfLiteralText(against) || constant ? LiteralOperandText(against) : `${digits.sig}e${digits.exp}` };
             }
             const text = `${digits.sig}e${digits.exp}`;
             const literal = { type: 'NumericLiteral', SourceText: text, value: Number(text) } as ParseNode.NumericLiteral;
@@ -32782,12 +33395,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             lit = { ...lit, Base: numericSource, Value: value.Value };
           }
           // A `float64` holds the Number a literal it rounds to an infinity
-          // evaluates to, and not the literal (Question BJ).
+          // evaluates to, and not the literal (Question BJ). A constant is
+          // judged by its digits at every binary float, as a `case` label is,
+          // and named by what it writes.
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
-              && numericSource.Name === 'float64' && digitsHeldAt(against, numericSource) === false) {
+              && (numericSource.Name === 'float64' || (constant && ['float16', 'float32'].includes(numericSource.Name)))
+              && digitsHeldAt(against, numericSource) === false) {
             const sense = negated !== inverted;
             return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: sense,
-              verdict: sense ? 'never-fails' : 'never-succeeds', display: exactOfLiteralText(against) ? LiteralOperandText(against) : displayType(lit as TypeRecord) };
+              verdict: sense ? 'never-fails' : 'never-succeeds', display: exactOfLiteralText(against) || constant ? LiteralOperandText(against) : displayType(lit as TypeRecord) };
           }
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
               && ['uint', 'int', 'float16', 'float32', 'float64'].includes(numericSource.Name)
@@ -41428,20 +42044,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * Question AI, AI1: every spelling of the class converts as its name does: a
    * value alias, a type alias, an application of a generic class and an alias
    * of one, and an optional call (`classConversionCall`).
+   *
+   * Question BV, BV2: and a class is called as a type is wherever its call
+   * without `new` is refused, which is wherever it participates through its
+   * typed members, declared operators, type parameters, class modifiers or
+   * implemented interfaces (#sec-function-types), its own or a base's, a typed
+   * field among them. `interface I { } class C implements I { } C({})` was
+   * refused as a call of a typed class constructor without `new`, while
+   * `({} := C)` converted.
    */
   const conversionClassVerdict = (declaration: ParseNode, applied = false): 'typed' | 'untyped' | 'unknown' => {
     if (!applied && (declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length) return 'untyped';
     const seen = new Set<ParseNode>();
     for (let at: ParseNode | undefined = declaration; at && !seen.has(at); at = heritageClassOf(at)) {
       seen.add(at);
-      if (((at as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('value')) return 'typed';
-      if (classBodyOf(at).some((e) => e.type === 'FieldDefinition' && !(e as { static?: boolean }).static
-        && (e as { TypeAnnotation?: unknown }).TypeAnnotation)) return 'typed';
+      if ((at.type === 'ClassDeclaration' || at.type === 'ClassExpression') && ClassParticipatesInTypes(at)) return 'typed';
       const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
-      // A built-in constructor is never a typed class, so a class over one is
-      // typed only by a field of its own: `E(1)` for `class E extends Error {
-      // m(): uint8 { ... } }` converts nothing, and is refused as a call on
-      // any class that is not typed is. It was left to the run time.
+      // A built-in constructor participates in nothing, so a class over one
+      // converts only where it participates itself: `E(1)` for `class E
+      // extends Error { }` converts nothing, and is refused as a call on any
+      // other class is.
       if (heritage && !heritageClassOf(at)) return builtinClassHeritage(heritage) ? 'untyped' : 'unknown';
     }
     return 'untyped';
@@ -45191,23 +45813,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const typedInvocationSignature = (node: ParseNode): boolean => {
-    const signature = node as unknown as {
-      TypeAnnotation?: unknown, TypeParameters?: unknown,
-      FormalParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[], ArrowParameters?: readonly ParseNode[],
-    };
-    const annotatedParameter = (parameter: ParseNode): boolean => {
-      if ((parameter as { TypeAnnotation?: unknown, Ref?: boolean }).TypeAnnotation
-        || (parameter as { Ref?: boolean }).Ref) return true;
-      return Object.entries(parameter).some(([key, value]) => {
-        if (['parent', 'location', 'sourceText', 'Initializer'].includes(key)) return false;
-        return (Array.isArray(value) ? value : [value]).some((child) => child && typeof child === 'object'
-          && 'type' in child && annotatedParameter(child as ParseNode));
-      });
-    };
-    return !!signature.TypeAnnotation || !!signature.TypeParameters
-      || (signature.FormalParameters ?? signature.UniqueFormalParameters ?? signature.ArrowParameters ?? []).some(annotatedParameter);
-  };
+  const typedInvocationSignature = (node: ParseNode): boolean => TypedInvocationSignature(node);
 
   type InvocationFact = {
     callable: boolean, constructible: boolean, typed: boolean,
@@ -45295,9 +45901,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type === 'ObjectLiteral') return { callable: false, constructible: false, typed: false, ordinaryObject: true };
     if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') {
       if (node.Decorators?.length) return null;
-      const typed = !!node.TypeParameters || !!node.ClassModifiers?.length || !!node.ClassTail.ImplementsClause?.length
-        || (node.ClassTail.ClassBody ?? []).some((member) => member.type === 'OperatorDefinition'
-          || typedInvocationSignature(member));
+      const typed = ClassParticipatesInTypes(node);
       return { callable: false, constructible: true, typed, classTargets: [{ declaration: node }],
         abstractClass: node.ClassModifiers?.includes('abstract') ? node.BindingIdentifier?.name ?? '(anonymous class)' : undefined };
     }
@@ -48230,6 +48834,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(LiteralOperandText(label)));
                 continue;
               }
+              // Question O, O1: and one the integer type holds is the literal
+              // of the value it folds to there, as the `v === e` row reads it,
+              // so `case 100 + 100` after `case 200` is a label whose value an
+              // earlier label tested.
+              const read = peer ? constantTestValue(label, subject as Known) : null;
+              if (read && 'value' in read) labelType = { Kind: 'literal', Base: makePrimitive('number'), Value: Value(read.value) } as TypeRecord;
             }
             if (labelType && labelType.Kind === 'nominal'
                 && ['Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds']
@@ -48957,6 +49567,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const callee = callableForm(staticType(c.CallExpression));
         checkCallReceiver(c.CallExpression, callee);
         checkUndeclaredMemberCall(c.CallExpression, n as ParseNode);
+        noteCallForCopyRule(n as ParseNode.CallExpression);
         // Type-object calls share lexical resolution with result inference.
         const conversionTarget = callee?.Kind === 'function' ? undefined : typeObjectTarget(c.CallExpression) ?? undefined;
         vectorCallType(n as ParseNode.CallExpression, true);

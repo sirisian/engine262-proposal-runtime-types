@@ -112,9 +112,12 @@ test('a readonly member of an interface is judged through that view', () => {
 test('a member that is not a readonly field is not this rule\'s', () => {
   expect(evaluated(`${A}value class H { p: A; } const h: H = new H(); h.p.a = 3; String(h.p.a);`)).toBe('3');
   // A getter with no setter is not storage: a store through one is a store to
-  // a result (#sec-store-to-a-copy), and in a reference class a subclass may
-  // declare the member a field, which the store reaches.
-  expect(evaluated('value class Point { x: int32; y: int32; } class Shape { o: Point; get origin(): Point { return this.o; } } class Sprite extends Shape { origin: Point; } function nudge(shape: Shape) { shape.origin.x = 1; } const a: Shape = new Shape(); const b: Shape = new Sprite(); nudge(a); nudge(b); String(a.origin.x) + String(b.origin.x);')).toBe('01');
+  // a result (#sec-store-to-a-copy), refused by the getter's declaration, and
+  // no subclass may declare the member a field (Question D, D6).
+  expect(observeScript('value class Point { x: int32; y: int32; } class Shape { o: Point; get origin(): Point { return this.o; } } function nudge(shape: Shape) { shape.origin.x = 1; }').diagnostic)
+    .toMatchObject({ rule: 'rt-store-to-copy' });
+  expect(observeScript('value class Point { x: int32; y: int32; } class Shape { o: Point; get origin(): Point { return this.o; } } class Sprite extends Shape { origin: Point; }').diagnostic)
+    .toMatchObject({ rule: 'rt-inherited-contract' });
   // An accessor field is not judged.
   expect(evaluated(`${A}value class H { accessor p: A; } const h: H = new H(); h.p.a = 4; String(h.p.a);`)).toBe('4');
 });

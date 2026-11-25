@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, observeScript } from '../harness.mts';
+import { evaluated, expectThrown, observeScript } from '../harness.mts';
 
 /**
  * #sec-store-to-a-copy. Binding, passing and iterating copy a value type class,
@@ -55,10 +55,56 @@ test('each thing the writer may have meant has a spelling, and is accepted', () 
 test('a copy that is used is the program\'s own, and is untouched', () => {
   expect(evaluated(`${P}function f(p: P): float32 { p.x = 1; return p.x; } String(f(new P()));`)).toBe('1');
   expect(evaluated('function f(p: [2].<uint8>): [2].<uint8> { p[0] = 9; return p; } const a: [2].<uint8> = [1, 2]; String(f(a)[0]) + String(a[0]);')).toBe('91');
-  expect(evaluated(`${P}function f(p: P): void { p.x = 1; p.step(); } f(new P()); 'ok';`)).toBe('ok');
+  // A call of a method that reads what it stores is a read of it.
+  expect(evaluated(`${P}function f(p: P): float32 { p.x = 1; p.step(); return p.x; } String(f(new P()));`)).toBe('2');
   expect(evaluated(`${P}function g(q: P): float32 { return q.x; } function f(p: P): float32 { p.x = 4; return g(p); } String(f(new P()));`)).toBe('4');
   // A read in a later turn of a loop follows the store.
   expect(evaluated('function f(c: [2].<uint8>): uint8 { let t: uint8 = 0; for (let i: uint8 = 0; i < 2; i += 1) { t += c[0]; c[0] = 5; } return t; } const a: [2].<uint8> = [1, 2]; String(f(a));')).toBe('6');
+});
+
+/**
+ * Question BW, BW2': a call, as a statement, of a method of the value class
+ * that does nothing but store to the value - its body reads its parameters,
+ * its own bindings and fields of `this`, and stores to fields of `this`,
+ * directly or through other such methods, on every path - is a store to the
+ * copy. Nothing reads the copy afterwards, so the call has no effect at all.
+ */
+const M = 'value class M { n: uint8 = 0; m: uint8 = 0; bump(): void { this.n = this.n + 1; } set(a: uint8, b: uint8): void { if (a > b) { this.n = a; } else { this.m = b; } } '
+  + 'twice(): void { this.bump(); this.bump(); } swap(): void { const t = this.n; this.n = this.m; this.m = t; } total(): uint8 { return this.n + this.m; } '
+  + 'logs(): void { console.log(this.n); this.n = 1; } fails(): void { throw new Error("no"); } loops(): void { for (let i: uint8 = 0; i < 2; i += 1) this.n += 1; } '
+  + 'elsewhere(o: { v: uint8 }): void { o.v = this.n; } } const ms: [2].<M>; ';
+test('a call of a method that only stores to the value, on a copy nothing reads after it, is refused', () => {
+  lost(`${M}function f() { const p = ms[0]; p.bump(); }`);
+  lost(`${M}function f() { const p = ms[0]; p.set(1, 2); }`);
+  lost(`${M}function f() { const p = ms[0]; p.twice(); }`);
+  lost(`${M}function f() { const p = ms[0]; p.swap(); }`);
+  lost(`${M}function f(p: M) { p.bump(); }`);
+  lost(`${M}function f() { for (const p of ms) p.bump(); }`);
+  // A store the call then reads is read, and the call is the store that is lost.
+  lost(`${M}function f() { const p = ms[0]; p.n = 3; p.bump(); }`);
+  lost(`${P}function f(p: P): void { p.x = 1; p.step(); }`);
+  expectThrown(`${M}function f() { const p = ms[0]; p.bump(); }`, 'is a copy and nothing reads it after this call, which only stores to it, so the call is lost');
+});
+
+test('a call that may do more than store to the value, or whose value is read, is the program\'s own', () => {
+  // A call made for another effect: output, a throw, a loop that may not end, a store elsewhere.
+  for (const call of ['p.logs()', 'p.fails()', 'p.loops()', 'p.elsewhere({ v: 0 })']) {
+    expect(evaluated(`${M}function f() { const p = ms[0]; ${call}; } 'ok';`), call).toBe('ok');
+  }
+  // A method that only reads is not a store.
+  expect(evaluated(`${M}function f() { const p = ms[0]; p.total(); } 'ok';`)).toBe('ok');
+  // The copy is read afterwards, stored back, or is not a copy.
+  expect(evaluated(`${M}function f(): uint8 { const p = ms[0]; p.bump(); return p.n; } String(f());`)).toBe('1');
+  expect(evaluated(`${M}function f() { const p = ms[0]; p.bump(); ms[0] = p; } f(); String(ms[0].n);`)).toBe('1');
+  expect(evaluated(`${M}function f(ref p: M) { p.bump(); } f(ref ms[0]); String(ms[0].n);`)).toBe('1');
+  expect(evaluated(`${M}function f() { ms[0].bump(); } f(); String(ms[0].n);`)).toBe('1');
+  expect(evaluated(`${M}function f() { const p = new M(); p.bump(); } f(); 'ok';`)).toBe('ok');
+  // A subclass may declare the method again, and run its own.
+  expect(evaluated(`${M}value class N extends M { bump(): void { console.log(this.n); } } function f() { const p = ms[0]; p.bump(); } 'ok';`)).toBe('ok');
+  // An overload may be the one the call selects, whichever is declared last.
+  for (const body of ['step(): void { this.x += 1; } step(n: uint8): void { console.log(n); }', 'step(n: uint8): void { console.log(n); } step(): void { this.x += 1; }']) {
+    expect(evaluated(`value class O { x: uint8 = 0; ${body} } function g(os: [].<O>) { const p = os[0]; p.step(1); } 'ok';`), body).toBe('ok');
+  }
 });
 
 test('a binding that is not a copy is not judged', () => {
@@ -167,16 +213,43 @@ test('a result that is not a copy is not judged', () => {
   expect(evaluated(`${P}value class B { p: P; } const b: B = new B(); b.p.x = 4; String(b.p.x);`)).toBe('4');
 });
 
+/**
+ * Question D, D6: a getter or a method of a class held by reference is judged
+ * by the class that declares it, as one of a value class is. Along every chain
+ * the checker sees a field cannot replace an inherited accessor
+ * (member-kinds.test.mts), and an override keeps its result's contract, so
+ * what the class declares holds for every value typed as the class. Its
+ * instances are sealed with every member declared, so none is given an own
+ * property over the member.
+ */
+test('a store to the result of a method or a getter of a class held by reference is refused', () => {
+  lost(`${P}class B { p: P; get inner(): P { return this.p; } } const b: B = new B(); b.inner.x = 4;`);
+  lost(`${P}class B { p: P; at(): P { return this.p; } } const b: B = new B(); b.at().x = 4;`);
+  lost(`${P}class B { p: P; get inner(): P { return this.p; } } function f(b: B) { b.inner.x = 4; }`);
+  lost(`${P}class B { p: P; get inner(): P { return this.p; } } class H { b: B = new B(); } const h: H = new H(); h.b.inner.x = 4;`);
+  // An override keeps the contract, so the base's declaration answers for it.
+  lost(`${P}class B { p: P; at(): P { return this.p; } } class D extends B { at(): P { return this.p; } } const b: B = new D(); b.at().x = 4;`);
+  lost(`${P}class B { p: P; at(): P { return this.p; } } class D extends B { at: () => P = () => this.p; } const b: B = new D(); b.at().x = 4;`);
+  // The refusal names the declaration.
+  expect(observeScript(`${P}class Shape { o: P; get origin(): P { return this.o; } } function nudge(s: Shape) { s.origin.x = 1; }`).diagnostic)
+    .toMatchObject({ rule: 'rt-store-to-copy' });
+});
+
 test('a result whose function is not certain is not judged', () => {
-  // A subclass of a reference class may declare the member a field, which a store reaches.
-  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } class C extends B { inner: P; } const c: B = new C(); c.inner.x = 4; String(c.inner.x);`)).toBe('4');
-  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } const b: B = new B(); b.inner.x = 4; String(b.p.x);`)).toBe('0');
-  // `this` may be of a subclass too. Along a value class chain a field may not
-  // replace an inherited getter (value-member-kinds.test.mts), so these are
-  // classes held by reference.
-  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } poke(): void { this.inner.x = 4; } } class C extends B { inner: P; } const c: C = new C(); c.poke(); String(c.inner.x);`)).toBe('4');
-  // A name narrowed to the class may hold a subclass's value.
-  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } class C extends B { inner: P; } function f(v: B | C): string { if (v instanceof B) { v.inner.x = 4; } return String(v.inner.x); } f(new C());`)).toBe('4');
+  // A class whose instances are not sealed may be given an own property over the getter, which a store reaches.
+  expect(evaluated(`${P}class B { get inner(): P { return new P(); } } const b: B = new B(); const q = new P(); Object.defineProperty(b, "inner", { value: q }); b.inner.x = 4; String(q.x);`)).toBe('4');
+  expect(evaluated(`${P}dynamic class B { p: P; get inner(): P { return this.p; } } const b: B = new B(); b.inner.x = 4; String(b.p.x);`)).toBe('0');
+  // A field declared `any` may replace the method with a function that answers a location.
+  expect(evaluated(`${P}class B { p: P; at(): P { return this.p; } } class D extends B { at: any = function (): ref P { return ref this.p; }; } const b: B = new D(); b.at().x = 4; String(b.p.x);`)).toBe('4');
+  // An overload that answers a location may be the one a call selects, whichever is declared last.
+  for (const body of ['get(i: uint8): ref P { return ref this.p; } get(): P { return this.p; }', 'get(): P { return this.p; } get(i: uint8): ref P { return ref this.p; }']) {
+    expect(evaluated(`${P}class B { p: P; ${body} } function f(b: B): float32 { b.get(0).x = 4; return b.p.x; } String(f(new B()));`), body).toBe('4');
+  }
+  // A key the checker cannot read may be the member's name, and a field of it replaces the getter.
+  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } function key(): string { return "inner"; } class D extends B { [key()]: P; } function f(b: B): float32 { b.inner.x = 4; return b.inner.x; } String(f(new D()));`)).toBe('4');
+  // `this` and a name narrowed to the class are not receivers of the rule.
+  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } poke(): void { this.inner.x = 4; } } const b: B = new B(); b.poke(); String(b.p.x);`)).toBe('0');
+  expect(evaluated(`${P}class B { p: P; get inner(): P { return this.p; } } function f(v: B | undefined): string { if (v !== undefined) { v.inner.x = 4; } return "ok"; } f(new B());`)).toBe('ok');
   // A function that was assigned to, and one declared at the top level of a script.
   expect(evaluated(`${PS}{ function pick(i: uint8): P { return ps[i]; } pick = () => ps[0]; pick(0).x = 4; } String(ps[0].x);`)).toBe('0');
   expect(evaluated(`${PS}function pick(i: uint8): P { return ps[i]; } pick(0).x = 1; String(ps[0].x);`)).toBe('0');

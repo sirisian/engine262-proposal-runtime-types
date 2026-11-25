@@ -92,12 +92,14 @@ test('a call with no argument or several is still refused, and says what convert
   expect(outcome(`${V} V\`a\`;`)).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
 });
 
-test('a class that is not typed, or is generic, keeps the call refused', () => {
-  // An untyped class keeps JavaScript's TypeError.
+test('a class written in JavaScript, or a generic class\'s own name, keeps the call refused', () => {
+  // A class that uses none of the proposal's syntax keeps JavaScript's TypeError.
   expectThrownKind('class C { } C(1);', 'TypeError');
-  // A class annotated only on a method or a static field is not typed.
-  expect(outcome('class C { m(): uint8 { return 1; } } C(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
-  expect(outcome('class S { static n: uint8 = 0; } S(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });
+  // A class annotated only on a method or a static field is called as a type is
+  // (Question BV, BV2), so `C(1)` is `1 := C`, which it declares no conversion
+  // for: `class-call-participation.test.mts`.
+  expect(outcome('class C { m(): uint8 { return 1; } } C(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-explicit-conversion' });
+  expect(outcome('class S { static n: uint8 = 0; } S(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-explicit-conversion' });
   // A generic class's constructor is the family's. An application of it names one class, and a
   // call on it converts (Question AI, AI1), here through the constructor as `1 := Box.<uint8>` does.
   expect(outcome('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } Box(1);')).toMatchObject({ bodyEntered: false, rule: 'rt-declared-call' });

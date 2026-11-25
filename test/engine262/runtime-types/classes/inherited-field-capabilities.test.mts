@@ -22,8 +22,12 @@ test("accepts override method field good", () => {
   expect(ok("class B{m():uint8{return 1;}} class D extends B{m:()=>uint8=()=>1;} let b:B=new D();String(b.m());")).toBe(true);
 });
 
-test("accepts override getter field good", () => {
-  expect(ok("class B{get x():uint8{return 1;}} class D extends B{x:uint8=2;} let b:B=new D();String(b.x);")).toBe(true);
+// Question D, D6: a field may not replace an inherited accessor, whatever its
+// type, as the README's accessors section says and TypeScript refuses (2610):
+// a value typed as the base is read through what the base declares. These
+// three were accepted where the field's type fitted (2026-09-28).
+test("rejects override getter field of the getter's type", () => {
+  expectStaticTypeError("class B{get x():uint8{return 1;}} class D extends B{x:uint8=2;} let b:B=new D();String(b.x);");
 });
 
 test("accepts override method untyped good", () => {
@@ -38,8 +42,8 @@ test("inherited setter bad", () => {
   expectStaticTypeError("class B{set x(v:uint8){}}class D extends B{x:string='s';}");
 });
 
-test("inherited setter good", () => {
-  expect(ok("class B{set x(v:uint8){}}class D extends B{x:uint8=1;}")).toBe(true);
+test("rejects override setter field of the setter's type", () => {
+  expectStaticTypeError("class B{set x(v:uint8){}}class D extends B{x:uint8=1;}");
 });
 
 test("inherited setter readonly", () => {
@@ -54,8 +58,8 @@ test("inherited generic bad", () => {
   expectThrownKind("class B<T:type>{m():T{throw 1;}}class D<T:type> extends B.<T>{m:string='s';}new D.<uint8>();", 'TypeError');
 });
 
-test("inherited generic good", () => {
-  expect(ok("class B<T:type>{get x():T{throw 1;}}class D<T:type> extends B.<T>{x:T;constructor(x:T){super();this.x=x;}}new D.<uint8>(1);")).toBe(true);
+test("rejects override generic getter field", () => {
+  expectStaticTypeError("class B<T:type>{get x():T{throw 1;}}class D<T:type> extends B.<T>{x:T;constructor(x:T){super();this.x=x;}}new D.<uint8>(1);");
 });
 
 test("inherited own field precedence", () => {

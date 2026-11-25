@@ -36,11 +36,15 @@ test('a callee may be an alias, an applied primitive, or a generic application',
   expect(evaluated('type A<T: type> = T; String(Number(A.<uint32>(1)));')).toBe('1');
 });
 
-test('a class that is not typed is not a conversion callee', () => {
+test('a class written in JavaScript is not a conversion callee', () => {
+  // A class that uses none of the proposal's syntax keeps the refusal.
+  expectThrown('class C { constructor(a) {} } C(1);', 'cannot be invoked without');
   // Annotated only on its constructor's parameter, the class is not typed
-  // (#sec-typed-classes), so its call keeps the refusal. A call on a typed class
-  // with one argument is the conversion (class-call-conversion.test.mts).
-  expectThrown('class C { constructor(a: uint32) {} } C(1);', 'cannot be invoked without');
+  // (#sec-typed-classes), and it participates in the typed-source judgments
+  // (#sec-function-types), so it is called as a type is (Question BV, BV2): the
+  // call converts through its constructor, as `1 := C` does
+  // (class-call-participation.test.mts).
+  expect(evaluated('class C { a: number; constructor(a: uint32) { this.a = Number(a); } } String(C(1).a);')).toBe('1');
 });
 
 test('the runtime still rejects a bad conversion source', () => {
