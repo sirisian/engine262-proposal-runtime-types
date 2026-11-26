@@ -151,8 +151,10 @@ test('an implementation must have a signature the declaration accepts', () => {
   const G = 'abstract class G { m(): uint8; } ';
   expect(errorMessage(`${G} class L extends G { m(): string { return "s"; } }`))
     .toMatch(/signature the declaration does not accept|changes the return type/);
+  // An arm with other parameter types is an overload beside the abstract one,
+  // which it leaves unimplemented (Question BX).
   expect(errorMessage(`${G} class N extends G { m(a: uint8): uint8 { return a; } }`))
-    .toMatch(/signature the declaration does not accept|changes the return type/);
+    .toMatch(/does not implement it/);
   // `uint8` is NOT a narrower `number` in this design: the numeric families are
   // mutually unrelated, no boundary admits the value, and the override that is
   // accepted today produces a result every `number` position rejects. This case

@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { SymbolValue } from '../value.mts';
-import { generatorDeclaredType, mentionsTypeParameter, type Known } from './records.mts';
+import { generatorDeclaredType, mentionsTypeParameter, type Known, type SignatureRecord, type TypeRecord } from './records.mts';
 import { IsSubtype, IsAssignable, SameType } from './relations.mts';
 
 export type MemberKind = 'method' | 'get' | 'set' | 'field';
@@ -39,27 +39,76 @@ export function addMemberContract(members: MemberContract[], member: MemberContr
   else members.push(member);
 }
 
-/** The chain is nearest first; unknown types defer signature compatibility. */
+/** The function type of one signature, without the self `this` a class gives it. */
+function armType(signature: SignatureRecord): TypeRecord {
+  return { Kind: 'function', Signatures: [{ ...signature, ThisType: undefined }] } as unknown as TypeRecord;
+}
+
+/** #sec-typed-classes: one arm overrides another by its parameter types alone. */
+function sameParameterTypes(a: { Parameters: readonly { Type?: Known }[] }, b: { Parameters: readonly { Type?: Known }[] }): boolean {
+  return a.Parameters.length === b.Parameters.length
+    && a.Parameters.every((p, i) => (!p.Type || !b.Parameters[i]!.Type ? !p.Type && !b.Parameters[i]!.Type : SameType(p.Type, b.Parameters[i]!.Type)));
+}
+
+/**
+ * The chain is nearest first; unknown types defer signature compatibility.
+ *
+ * #sec-abstract-classes with README "Methods and Inheritance" (Question BX):
+ * an abstract method's obligation is one per arm. An own arm with an abstract
+ * arm's parameter types overrides it, and is refused where it does not accept
+ * what the abstract arm accepts. An arm with other parameter types is an
+ * overload beside it, not an implementation of it. A class not declared
+ * `abstract` must discharge every abstract arm with a compatible arm declared
+ * below it, a compatible full signature; an unannotated method declares
+ * nothing, and discharges every arm of its name.
+ */
 export function abstractMemberViolation(chain: readonly (readonly MemberContract[])[], isAbstract: boolean): { kind: 'missing' | 'signature', key: string | SymbolValue } | null {
   const own = chain[0] ?? [];
   for (const member of own) {
     if (member.kind === 'field') continue;
     const inherited = chain.slice(1).flat().find((prior) => prior.key === member.key && prior.static === member.static && prior.kind === member.kind);
-    if (inherited?.abstract && member.type && inherited.type && !IsSubtype(member.type, inherited.type, [])) {
+    if (!inherited?.abstract || !member.type || !inherited.type) continue;
+    if (member.kind === 'method' && member.type.Kind === 'function' && inherited.type.Kind === 'function') {
+      for (const arm of member.type.Signatures) {
+        for (const obligation of inherited.type.Signatures) {
+          if (sameParameterTypes(arm, obligation) && !IsSubtype(armType(arm), armType(obligation), [])) return { kind: 'signature', key: member.key };
+        }
+      }
+    } else if (!IsSubtype(member.type, inherited.type, [])) {
       return { kind: 'signature', key: member.key };
     }
   }
   if (isAbstract) return null;
-  for (const obligation of chain.flat()) {
-    if (!obligation.abstract) continue;
-    if (chain.some((level) => level.some((member) => member.kind === 'field'
-      && member.key === obligation.key && member.static === obligation.static))) return { kind: 'missing', key: obligation.key };
-    for (const level of chain) {
-      const declarations = level.filter((member) => member.key === obligation.key && member.static === obligation.static);
-      if (declarations.length === 0) continue;
-      const implementation = declarations.find((member) => member.kind === obligation.kind);
-      if (!implementation || implementation.abstract) return { kind: 'missing', key: obligation.key };
-      break;
+  for (const [index, level] of chain.entries()) {
+    for (const obligation of level) {
+      if (!obligation.abstract) continue;
+      if (chain.some((members) => members.some((member) => member.kind === 'field'
+        && member.key === obligation.key && member.static === obligation.static))) return { kind: 'missing', key: obligation.key };
+      // The nearest declaration of the name decides its kind, and an abstract
+      // redeclaration nearer than this one governs in its place.
+      const nearer = chain.slice(0, index);
+      if (nearer.some((members) => members.some((member) => member.abstract && member.key === obligation.key
+        && member.static === obligation.static && member.kind === obligation.kind))) continue;
+      let decided = false;
+      for (const members of nearer) {
+        const declarations = members.filter((member) => member.key === obligation.key && member.static === obligation.static);
+        if (declarations.length === 0) continue;
+        if (!declarations.some((member) => member.kind === obligation.kind)) return { kind: 'missing', key: obligation.key };
+        decided = true;
+        break;
+      }
+      if (!decided) return { kind: 'missing', key: obligation.key };
+      const implementations = nearer.flat().filter((member) => member.key === obligation.key && member.static === obligation.static
+        && member.kind === obligation.kind && !member.abstract);
+      if (obligation.kind !== 'method' || obligation.type?.Kind !== 'function') {
+        if (implementations.length === 0) return { kind: 'missing', key: obligation.key };
+        continue;
+      }
+      for (const required of obligation.type.Signatures) {
+        const discharged = implementations.some((member) => !member.type || member.type.Kind !== 'function'
+          || member.type.Signatures.some((arm) => sameParameterTypes(arm, required) || IsSubtype(armType(arm), armType(required), [])));
+        if (!discharged) return { kind: 'missing', key: obligation.key };
+      }
     }
   }
   return null;

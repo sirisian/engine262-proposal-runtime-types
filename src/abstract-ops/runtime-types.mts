@@ -38,7 +38,7 @@ import { CreateRationalValue, isRationalObject, ToRational } from '../intrinsics
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, TypeParameterBindingsFor, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { containsComputedType } from '../type-system/runtime.mts';
-import { TakeBodyContext } from '../type-system/runtime.mts';
+import { TakeBodyContext, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import { ClassFamilyOf, GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
@@ -68,7 +68,7 @@ import {
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   GetIterator, GetIteratorFromMethod, GetMethod, type IteratorRecord,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
-  IsComposite, CompositeFromShape, GetThisEnvironment } from '#self';
+  IsComposite, CompositeFromShape, GetThisEnvironment, DefinePropertyOrThrow } from '#self';
 import { AcquireInheritedStorage, CheckInheritedDefinitions, CheckInheritedArrayAcquisition } from '#self';
 import { AcquireNominalPrototype, RefreshNominalRestDependencies } from '#self';
 
@@ -6807,6 +6807,15 @@ interface OverloadSlots {
   OverloadSignatures?: readonly OverloadSignature[];
   OverloadFunctions?: readonly Value[];
   OverloadContext?: DeclaringContext;
+  /**
+   * README "Methods and Inheritance": the home object and key of a method
+   * that adds its arms to the set its base declares, whose inherited arms
+   * are read through the home object's prototype chain at each call, as
+   * `super` reads them (MergeInheritedOverloads).
+   */
+  InheritedFrom?: { readonly Home: ObjectValue, readonly Key: import('../value.mts').PropertyKeyValue };
+  /** The inherited method last read for InheritedFrom, with its signatures. */
+  InheritedCache?: { readonly Method: Value, readonly Signatures: readonly OverloadSignature[] };
 }
 
 /**
@@ -6939,7 +6948,16 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     // position had pushed, so `f(1);` as a statement inside `function g():
     // string` selected by `string`.
     const callContext = TakeBodyContext();
-    const signatures = Q(yield* SignaturesOf(overloaded));
+    const signatures = Q(yield* DispatchSignaturesOf(overloaded));
+    // A method made a set with its base's arms whose own arm overrides every
+    // one the base has when it is called is that one function, and is called
+    // as it is alone, with the call's position handed on: a missing argument
+    // binds *undefined* as it does in any call, where resolution would not
+    // count the function among those that take the arguments.
+    if (slots.InheritedFrom !== undefined && functions.length === 1 && signatures.length === 1) {
+      SetPendingCalleeContext(callContext);
+      return yield* Call(functions[0]!, context.thisValue, args as Value[]);
+    }
     const resolution = Q(yield* resolveOverloadChecked(signatures, args, callContext, NamedCallItemsOf(args)));
     if (resolution.Kind === 'none') {
       return Throw.TypeError('no overload of $1 matches these arguments', name);
@@ -6961,6 +6979,239 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
   slots.OverloadFunctions = functions;
   slots.OverloadContext = declaring;
   return overloaded;
+}
+
+/**
+ * README "Methods and Inheritance", #sec-typed-classes: "A derived class adds
+ * its signatures to the set inherited from the base rather than hiding them,
+ * so overload resolution on a derived instance considers both, and `super`
+ * restricts resolution to the base's set." A method whose parameter types
+ * are an inherited arm's overrides that arm; any other arm is an overload.
+ *
+ * The run time hid the base's set: `B.prototype.f` held `B`'s arms alone, so
+ * a call that the checker typed against `A`'s `f(a: uint8)` ran `B`'s
+ * `f(a: string)` on a converted argument, or threw where no conversion
+ * applied. A class's own arms were merged in DefineMethodProperty, and the
+ * chain's were not, on the ground that an override replaces; an override
+ * replaces one arm, which is what the parameter types decide.
+ *
+ * The method _home_'s prototype chain holds for _key_, where it is one a
+ * program declares: an ordinary function or an overload set, found as a data
+ * property along the chain's ordinary objects, as `super` would find it. A
+ * built-in's method answers *undefined*: it is one function rather than a
+ * declared set, and a subclass that declares `toString` or `then` replaces
+ * it as in JavaScript. So do an accessor and a Proxy in the chain, since
+ * reading through either would run code. And so does an enumerable property:
+ * a class defines its methods as properties that are not, and its fields as
+ * properties that are, so a static field that holds a function masks what it
+ * masks rather than being a set, as a field is to the checker.
+ */
+export function InheritedMethodOf(home: ObjectValue, key: import('../value.mts').PropertyKeyValue): Value | undefined {
+  let at = (home as unknown as { Prototype?: Value }).Prototype;
+  for (let depth = 0; at instanceof ObjectValue && depth < 100000; depth += 1) {
+    if ('ProxyHandler' in at) return undefined;
+    const property = at.properties.get(key);
+    if (property) {
+      if (property.Getter !== undefined || property.Setter !== undefined) return undefined;
+      if (property.Enumerable === Value.true) return undefined;
+      const value = property.Value;
+      if (value === undefined || !IsCallable(value)) return undefined;
+      const declared = (value as unknown as OverloadSlots).OverloadFunctions !== undefined
+        || !!(value as { ECMAScriptCode?: unknown }).ECMAScriptCode;
+      return declared ? value : undefined;
+    }
+    at = (at as unknown as { Prototype?: Value }).Prototype;
+  }
+  return undefined;
+}
+
+/** The functions a method value dispatches over: an overload set's, or the one. */
+function MethodArmsOf(method: Value): readonly Value[] {
+  return (method as unknown as OverloadSlots).OverloadFunctions ?? [method];
+}
+
+/**
+ * The arms of the set a method value is: its own, and where a class made it a
+ * set with its base's, the arms of the base's method it reads, as
+ * DispatchSignaturesOf follows them. An arm one of them overrides by its
+ * resolved types is among them still; it is only told apart at the call.
+ */
+function SetArmsOf(method: Value): readonly Value[] {
+  const arms = [...MethodArmsOf(method)];
+  const seen = new Set<Value>([method]);
+  let at = method;
+  for (let from = (at as unknown as OverloadSlots).InheritedFrom; from !== undefined; from = (at as unknown as OverloadSlots).InheritedFrom) {
+    const next = InheritedMethodOf(from.Home, from.Key);
+    if (next === undefined || seen.has(next) || MethodArmsOf(next).some(IsCaseArm)) break;
+    seen.add(next);
+    arms.push(...MethodArmsOf(next));
+    at = next;
+  }
+  return arms;
+}
+
+/**
+ * Whether _fn_ is a specialized case or a bodyless owner. A group holding one
+ * selects through its owners (#sec-callable-overload-contracts) rather than by
+ * ranking its arms, so it is not made a set with a base's arms, and a base's
+ * is not made one with a subclass's: a method of the name replaces it, or it
+ * replaces one, as in JavaScript.
+ */
+function IsCaseArm(fn: Value): boolean {
+  return SpecializedCaseDeferral(fn) !== undefined;
+}
+
+/**
+ * Whether _fn_ writes a signature: a parameter or a return annotation. An
+ * unannotated method declares none, and is JavaScript's override of every
+ * arm of its name, as the checker reads it (classMemberWalk's [[Untyped]]).
+ */
+function DeclaresSignature(fn: Value): boolean {
+  const annotated = fn as AnnotatedFunction;
+  if (!annotated.ECMAScriptCode) return false;
+  return !!returnAnnotationOf(annotated)
+    || ((annotated.FormalParameters as readonly ParseNode[] | undefined) ?? []).some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
+}
+
+/**
+ * Whether two functions' written parameter lists are one signature as
+ * written: as many parameters, each annotated with the same text or neither.
+ * Read without resolving a type, since a class is defined before a type it
+ * names may be; an arm this misses is told apart at the call by
+ * DispatchSignaturesOf, which compares the resolved types.
+ */
+function SameWrittenParameters(a: Value, b: Value): boolean {
+  const pa = ((a as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
+  const pb = ((b as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
+  if (pa.length !== pb.length) return false;
+  return pa.every((p, i) => {
+    const x = (p as { TypeAnnotation?: ParseNode | null }).TypeAnnotation;
+    const y = (pb[i] as { TypeAnnotation?: ParseNode | null }).TypeAnnotation;
+    if (!x || !y) return !x && !y;
+    const tx = sourceTextOf(x);
+    return tx !== undefined && tx === sourceTextOf(y);
+  });
+}
+
+/** #sec-typed-classes: one arm overrides another by parameter types alone. */
+function SameParameterTypes(a: OverloadSignature, b: OverloadSignature): boolean {
+  return a.Parameters.length === b.Parameters.length
+    && a.Parameters.every((p, i) => SameType(p.Type ?? anyType, b.Parameters[i]!.Type ?? anyType));
+}
+
+/**
+ * The signature of one function that is not an overload set, resolved where
+ * it was written: its own environment names the types its annotations do.
+ */
+function* LoneSignatureOf(fn: Value): PlainEvaluator<OverloadSignature> {
+  const f = fn as unknown as { Environment?: unknown, Realm?: unknown, ScriptOrModule?: unknown, PrivateEnvironment?: unknown };
+  const context = new ExecutionContext();
+  context.Function = Value.null;
+  context.Realm = f.Realm as never;
+  context.ScriptOrModule = f.ScriptOrModule as never;
+  context.LexicalEnvironment = f.Environment as never;
+  context.VariableEnvironment = f.Environment as never;
+  context.PrivateEnvironment = f.PrivateEnvironment as never;
+  surroundingAgent.executionContextStack.push(context);
+  try {
+    return Q(yield* OverloadSignatureOf(fn));
+  } finally {
+    surroundingAgent.executionContextStack.pop(context);
+  }
+}
+
+/**
+ * The signatures a call of _overloaded_ resolves among: its own, those _only_
+ * selects where it is given, as SignaturesOf reads them, and for a method that
+ * adds to its base's set, the base's current arms it does not override, each
+ * resolved where its function was written. The base's method is read at the
+ * call, as `super` reads it, and its signatures are kept for as long as the
+ * chain holds the same method.
+ */
+export function* DispatchSignaturesOf(overloaded: Value, only?: (fn: Value) => boolean): PlainEvaluator<readonly OverloadSignature[]> {
+  const own = Q(yield* SignaturesOf(overloaded, only));
+  const slots = overloaded as unknown as OverloadSlots;
+  if (!slots.InheritedFrom) return own;
+  const inherited = InheritedMethodOf(slots.InheritedFrom.Home, slots.InheritedFrom.Key);
+  if (inherited === undefined || MethodArmsOf(inherited).some(IsCaseArm)) return own;
+  let signatures: readonly OverloadSignature[];
+  if ((inherited as unknown as OverloadSlots).InheritedFrom !== undefined) {
+    // A set its own class made with its base's reads that base at the call
+    // too, so what it has is not kept here.
+    signatures = Q(yield* DispatchSignaturesOf(inherited));
+  } else if (slots.InheritedCache?.Method === inherited) {
+    signatures = slots.InheritedCache.Signatures;
+  } else {
+    if ((inherited as unknown as OverloadSlots).OverloadFunctions !== undefined) {
+      signatures = Q(yield* SignaturesOf(inherited));
+    } else {
+      const lone = Q(yield* LoneSignatureOf(inherited));
+      signatures = [lone];
+    }
+    slots.InheritedCache = { Method: inherited, Signatures: signatures };
+  }
+  const kept = signatures.filter((signature) => !own.some((mine) => SameParameterTypes(mine, signature)));
+  return kept.length === 0 ? own : [...own, ...kept];
+}
+
+/**
+ * Whether the method _key_ of the prototype of _ctor_ is a set that
+ * MergeInheritedOverloads made with its base's arms. Read from the
+ * properties themselves, so no getter or Proxy trap runs: a class's
+ * `prototype` is a data property its definition made.
+ */
+export function MergesInheritedArms(ctor: Value, key: string | SymbolValue): boolean {
+  const proto = (ctor as unknown as { properties?: Map<unknown, { Value?: Value }> }).properties?.get(Value('prototype'))?.Value;
+  if (!(proto instanceof ObjectValue) || 'ProxyHandler' in proto) return false;
+  const method = proto.properties.get(typeof key === 'string' ? Value(key) : key)?.Value;
+  return method !== undefined && (method as unknown as OverloadSlots).InheritedFrom !== undefined;
+}
+
+/**
+ * README "Methods and Inheritance": each method _home_ declares, a class's
+ * prototype or the class itself for its statics, that writes a signature and
+ * whose name its base declares as a method, becomes a set of its own arms
+ * and the base's arms it does not override. Run once the class's methods are
+ * defined and before any of its static elements run, so a static block sees
+ * the set the class declares.
+ *
+ * A method every inherited arm of which an own arm restates as written stays
+ * the function it is, since it overrides them all. One the checker would
+ * judge the same way through an alias is told apart at the call.
+ */
+export function* MergeInheritedOverloads(home: ObjectValue): PlainEvaluator<void> {
+  for (const [key, property] of [...home.properties]) {
+    if (!(key instanceof JSStringValue) && !(key instanceof SymbolValue)) continue;
+    if (key instanceof JSStringValue && key.stringValue() === 'constructor') continue;
+    if (property.Getter !== undefined || property.Setter !== undefined) continue;
+    const value = property.Value;
+    if (value === undefined || !IsCallable(value)) continue;
+    const own = MethodArmsOf(value);
+    if (!own.every((arm) => (arm as { HomeObject?: Value }).HomeObject === home)) continue;
+    if (!own.some(DeclaresSignature)) continue;
+    const inherited = InheritedMethodOf(home, key);
+    if (inherited === undefined) continue;
+    if (own.some(IsCaseArm) || MethodArmsOf(inherited).some(IsCaseArm)) continue;
+    // Every arm of the inherited set, its own base's among them.
+    const inheritedArms = SetArmsOf(inherited);
+    if (inheritedArms.every((arm) => own.some((mine) => SameWrittenParameters(mine, arm)))) continue;
+    const name = key instanceof JSStringValue ? key : Value(String(key.Description instanceof JSStringValue ? key.Description.stringValue() : ''));
+    const merged = Q(yield* MakeOverloadedFunction(name as JSStringValue, own));
+    (merged as unknown as OverloadSlots).InheritedFrom = { Home: home, Key: key };
+    // #sec-overload-resolution: an overloaded name's `length` is the smallest
+    // parameter count among its signatures, the inherited arms among them.
+    let length = Infinity;
+    for (const arm of [...own, ...inheritedArms]) {
+      const shape = Q(yield* OverloadSignatureOf(arm, false));
+      length = Math.min(length, minimumArity(shape.Parameters));
+    }
+    Q(yield* DefinePropertyOrThrow(merged as ObjectValue, Value('length'), Descriptor({
+      Value: Value(Number.isFinite(length) ? length : 0), Writable: Value.false, Enumerable: Value.false, Configurable: Value.true,
+    })));
+    Q(yield* DefinePropertyOrThrow(home, key, Descriptor({
+      Value: merged, Writable: property.Writable, Enumerable: property.Enumerable, Configurable: property.Configurable,
+    })));
+  }
 }
 
 /**
@@ -7035,7 +7286,7 @@ export function* CallDecorator(fn: Value, written: readonly Value[], context: Va
   const declared = (fn as unknown as OverloadSlots).OverloadFunctions !== undefined;
   let signatures: readonly OverloadSignature[];
   if (declared) {
-    signatures = Q(yield* SignaturesOf(fn));
+    signatures = Q(yield* DispatchSignaturesOf(fn));
   } else {
     signatures = [Q(yield* OverloadSignatureOf(fn))];
   }

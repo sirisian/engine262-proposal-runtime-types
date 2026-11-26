@@ -53,3 +53,12 @@ test('an interface matcher uses the same computed signature as a class matcher',
 test('a Script-level class read in a Script-level function leaves its matcher contract to run time', () => {
   expect(evaluated('class E { static [Symbol.customMatcher](v: any): [uint8] { return [1]; } } function f() { return 1 is E(); } "accepted";')).toBe('accepted');
 });
+
+test('an extractor calls its head\'s matcher, not the head, whatever makes the class typed', () => {
+  // A class that participates in types is called as a conversion, `C(x)`
+  // for `x := C`; the matcher call the extractor makes was read as one, so
+  // its tuple went unchecked. A typed field made a class typed before Round 8,
+  // and a typed static method has since.
+  expectStaticTypeError('{ class E { v: uint8 = 0; static [Symbol.customMatcher](v: any): [uint8] { return [1]; } } function f() { return 1 is E(); } }');
+  expect(evaluated('{ class E { v: uint8 = 0; static [Symbol.customMatcher](v: any): [uint8] { return [1]; } } String(match(1) { when E(let x): x; default: 0; }); }')).toBe('1');
+});

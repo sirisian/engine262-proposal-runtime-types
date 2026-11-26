@@ -6,7 +6,7 @@ import { TypeNodeToTypeRecord, IsOfType } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { ClassParticipatesInTypes } from '../type-system/class-participation.mts';
 import { displayType, typeParameterRecordsOf, parameterFromDeclaration, mentionsTypeParameter } from '../type-system/records.mts';
-import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '../abstract-ops/runtime-types.mts';
+import { CallDecorator, OpenDecorationContext, CloseDecorationContext, MergeInheritedOverloads } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
@@ -1102,6 +1102,10 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         }
       }
     }
+    if (surroundingAgent.feature('runtime-types')) {
+      Q(yield* MergeInheritedOverloads(proto));
+      Q(yield* MergeInheritedOverloads(F));
+    }
     F.Elements = instanceElements;
     F.Initializers = instanceMethodExtraInitializers;
     // TODO(decorator): spec bug?
@@ -1479,6 +1483,15 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // i. Append element to staticElements.
         staticElements.push(field);
       }
+    }
+    // README "Methods and Inheritance": a method that adds arms to the set its
+    // base declares becomes the set of both, once the class's methods are all
+    // defined and while the class scope is the running one, which is where
+    // its own arms' annotations are resolved; and before a static element can
+    // call one.
+    if (surroundingAgent.feature('runtime-types')) {
+      Q(yield* MergeInheritedOverloads(proto));
+      Q(yield* MergeInheritedOverloads(F));
     }
     // 26. Set the running execution context's LexicalEnvironment to env.
     surroundingAgent.runningExecutionContext.LexicalEnvironment = env;

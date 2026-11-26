@@ -2,7 +2,7 @@ import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { AnnotatedFunction } from '../abstract-ops/runtime-types.mts';
-import { SignaturesOf } from '../abstract-ops/runtime-types.mts';
+import { DispatchSignaturesOf } from '../abstract-ops/runtime-types.mts';
 import { ThreadCluster } from '../host-defined/thread-cluster.mts';
 import {
   AbortReasonOf, IsAborted, isAbortSignal, OnAbort, type AbortSignalObject,
@@ -113,10 +113,11 @@ function* FirstParameterTypes(func: FunctionObject): PlainEvaluator<TypeRecord[]
   const types: TypeRecord[] = [];
   // An overloaded function's signatures are resolved on first use, so they are
   // read through SignaturesOf rather than off the slot - #sec-classifythreadarguments
-  // runs before any call has forced them.
+  // runs before any call has forced them. A method that adds to its base's set
+  // has the base's arms it keeps as well, the ones a call resolves among.
   const overloaded = (func as unknown as { OverloadFunctions?: readonly Value[] }).OverloadFunctions !== undefined;
   if (overloaded) {
-    const declared = Q(yield* SignaturesOf(func));
+    const declared = Q(yield* DispatchSignaturesOf(func));
     for (const signature of declared) {
       const first = signature.Parameters[0];
       if (first !== undefined && first.Type.Kind !== 'parameter') {

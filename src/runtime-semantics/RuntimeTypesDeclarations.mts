@@ -33,7 +33,7 @@ import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../i
 import { add as float128Add, finite as float128Finite } from '../intrinsics/Float128Arithmetic.mts';
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
 import type { Arguments, ReferenceRecord } from '../value.mts';
-import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
+import { ClaimEnumerator, MergesInheritedArms } from '../abstract-ops/runtime-types.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { IsAssignable, IsSubtype, SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
@@ -2695,9 +2695,22 @@ function* declaredClassEvidence(node: ParseNode.ClassDeclaration | ParseNode.Cla
     if (baseNode.type !== 'ClassDeclaration' && baseNode.type !== 'ClassExpression') return own;
     const inherited = Q(yield* declaredClassEvidence(baseNode, baseCtor, undefined, seen));
     // Own storage outranks prototype declarations, including inherited fields.
+    // An own method the class made a set with its base's arms (README "Methods
+    // and Inheritance") is evidence of its own arms and the inherited ones it
+    // does not override, the arms DispatchSignaturesOf resolves a call among.
     const merged = new Map(inherited.Properties.map((property) => [property.key, property]));
     for (const property of own.Properties) {
-      if (!inherited.Fields.includes(property.key) || own.Fields.includes(property.key)) merged.set(property.key, property);
+      if (inherited.Fields.includes(property.key) && !own.Fields.includes(property.key)) continue;
+      const from = merged.get(property.key);
+      if (from?.type?.Kind === 'function' && property.type?.Kind === 'function' && !own.Fields.includes(property.key)
+        && MergesInheritedArms(ctor, property.key)) {
+        const mine = property.type.Signatures;
+        const kept = from.type.Signatures.filter((signature) => !mine.some((arm) => arm.Parameters.length === signature.Parameters.length
+          && arm.Parameters.every((p, i) => SameType(p.Type ?? anyType, signature.Parameters[i]!.Type ?? anyType))));
+        merged.set(property.key, kept.length === 0 ? property : { ...property, type: { ...property.type, Signatures: [...mine, ...kept] } });
+      } else {
+        merged.set(property.key, property);
+      }
     }
     return { ...own, Properties: [...merged.values()], Fields: [...new Set([...inherited.Fields, ...own.Fields])],
       Operators: new Map([...inherited.Operators, ...own.Operators]) };

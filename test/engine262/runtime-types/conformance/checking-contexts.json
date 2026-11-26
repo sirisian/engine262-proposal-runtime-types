@@ -525,6 +525,14 @@
       "name": "optional invocation typed constructor",
       "source": "function unused(){class C{constructor(x:uint8){}}C?.(1);}",
       "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional invocation typed constructor without an argument",
+      "source": "function unused(){class C{constructor(x:uint8){}}C?.();}",
+      "expected": {
         "completion": "throw",
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
@@ -539,7 +547,7 @@
           },
           "unit": {
             "start": 0,
-            "end": 57,
+            "end": 56,
             "nodeType": "FunctionDeclaration"
           }
         }

@@ -364,9 +364,10 @@ test('a subclass instance carries what it inherits', () => {
   // later in the list.
   expectStatic('value class A { x: uint8 = 1; } value class B extends A {} value class C extends B {} function nc(c: C) { c.x = 300; }');
   expectStatic('function nc(b: B) { b.x = 300; } class B extends A { } value class A { x: uint8 = 1; }');
-  // An OVERRIDE wins over what it overrides, which is again what the prototype
-  // chain does.
-  expect(evaluated('class A { m(v: uint8) {} } class B extends A { m(v: string) {} } function nc(b: B) { b.m("s"); } "ok";')).toBe('ok');
+  // A method with other parameter types ADDS an overload to the inherited set
+  // rather than hiding it (README "Methods and Inheritance", Question BX), so
+  // `b.m(7)` takes the base's arm, and a value neither arm accepts is refused.
+  expect(evaluated('class A { m(v: uint8) {} } class B extends A { m(v: string) {} } function nc(b: B) { b.m("s"); b.m(7); } "ok";')).toBe('ok');
   expectStatic('class A { m(v: uint8) {} } class B extends A { m(v: string) {} } function nc(b: B) { b.m(300); }');
   // A heritage clause that is not a class name leaves the base unknown, which
   // contributes nothing rather than guessing; and a heritage CYCLE must not

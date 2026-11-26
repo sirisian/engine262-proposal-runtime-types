@@ -11684,9 +11684,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? (baseObject as unknown as { Properties: readonly { key: string }[] }).Properties
       : null;
     // An OVERRIDE wins, which is what the prototype chain does at run time - the
-    // same rule and the same order the instance merge uses.
+    // same rule and the same order the instance merge uses. An own method
+    // keeps the inherited arms it does not override (Question BX), and is
+    // judged against them.
+    const staticArms = withInheritedArms(Properties as never as readonly { key: string | SymbolValue, type: TypeRecord }[],
+      ownMethodKeys(node, true, acc.methods, acc.fieldProperties), baseProperties as never, origin?.declaration, true);
+    staticArms.forEach((property, index) => {
+      const own = Properties[index] as unknown as { key: string | SymbolValue, type: TypeRecord };
+      if (property === own || own.type?.Kind !== 'function' || property.type?.Kind !== 'function') return;
+      checkInheritedArms(node, own.key, own.type.Signatures, property.type.Signatures.slice(own.type.Signatures.length));
+    });
     const merged = baseProperties
-      ? [...baseProperties.filter((p) => !Properties.some((own) => own.key === p.key)), ...Properties]
+      ? [...baseProperties.filter((p) => !Properties.some((own) => own.key === p.key)), ...staticArms]
       : Properties;
     const built = merged.length > 0
       ? ({ Kind: 'object', Properties: merged, IndexSignatures: [], Base: baseObject } as unknown as Known)
@@ -11881,6 +11890,182 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     choices.forEach((c, i) => c.slice(1, 8).forEach((m) => candidates.push(first.map((f, j) => (j === i ? m : f)))));
     const signatures = [{ Parameters: pa, Function: Value.undefined }, { Parameters: pb, Function: Value.undefined }];
     return candidates.some((args) => resolveOverloadByTypes(signatures as never, args).Kind === 'ambiguous');
+  };
+
+  /**
+   * README "Methods and Inheritance", #sec-typed-classes: "A derived class
+   * adds its signatures to the set inherited from the base rather than hiding
+   * them, so overload resolution on a derived instance considers both." An
+   * arm whose parameter types are an inherited arm's overrides that arm; any
+   * other arm is an overload (Question BX).
+   *
+   * The checker hid the base's set: a class's own member replaced the
+   * inherited member of its name, so the README's own sample was refused, and
+   * the run time did the same, so a call typed against the base ran the
+   * derived body on a converted argument or threw.
+   *
+   * Whether the nearest declaration of _key_ at or above _cls_ is a method a
+   * class of the program declares. A built-in's method is one function rather
+   * than a declared set, which a subclass replaces as in JavaScript, and a
+   * field or an accessor has no arms to add to.
+   */
+  const declaresInheritedMethod = (cls: ParseNode | undefined, key: string | SymbolValue, isStatic: boolean): boolean => {
+    const seen = new Set<ParseNode>();
+    for (let at = cls; at && !seen.has(at); at = heritageClassOf(at)) {
+      seen.add(at);
+      for (const element of classBodyOf(at)) {
+        if (!!(element as { static?: boolean }).static !== isStatic) continue;
+        const elementName = (element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName;
+        if (!elementName || elementName.type === 'PrivateIdentifier' || classElementKey(elementName) !== key) continue;
+        return memberKind(element) === 'method' && !declaresCaseGroup(at, key, isStatic);
+      }
+    }
+    return false;
+  };
+
+  /**
+   * Whether the arms _cls_ declares for _key_ on one side are a group with a
+   * specialized case or a bodyless owner. Such a group selects through its
+   * owners (#sec-callable-overload-contracts) rather than by ranking its arms,
+   * so it neither adds to its base's set nor has a subclass's arms added to
+   * it: a method of the name replaces it, or it replaces one, as in
+   * JavaScript. MergeInheritedOverloads leaves it as the run time's.
+   */
+  const declaresCaseGroup = (cls: ParseNode, key: string | SymbolValue, isStatic: boolean): boolean => classBodyOf(cls).some((element) => {
+    if (!!(element as { static?: boolean }).static !== isStatic) return false;
+    const elementName = (element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName;
+    if (!elementName || elementName.type === 'PrivateIdentifier' || classElementKey(elementName) !== key) return false;
+    const list = (element as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.ListKind;
+    return list === 'specialization' || list === 'mixed' || !!(element as { BodylessOwner?: boolean }).BodylessOwner;
+  });
+
+  /** #sec-typed-classes: one arm overrides another by its parameter types alone. */
+  const sameParameterTypes = (x: SignatureRecord, y: SignatureRecord): boolean => x.Parameters.length === y.Parameters.length
+    && (x.Parameters as readonly ParameterRecord[]).every((p, i) => sameConstructParameter(p.Type ?? null, (y.Parameters as readonly ParameterRecord[])[i]?.Type ?? null));
+
+  /** A signature as a function type of its own, without the self `this` its class gives it. */
+  const armType = (signature: SignatureRecord): TypeRecord => ({ Kind: 'function', Signatures: [{ ...signature, ThisType: undefined }] } as unknown as TypeRecord);
+
+  /**
+   * The arms of an inherited method that a class keeps beside its own _own_:
+   * each inherited arm that no own arm overrides by parameter types, and, for
+   * an abstract arm, that no own arm discharges by accepting what it accepts
+   * (#sec-abstract-classes: an implementation needs "a compatible full
+   * signature"). None where every own arm is unannotated: an unannotated
+   * method declares no signature to add, and is JavaScript's override of
+   * every arm of its name, as it already "says nothing" to the override
+   * checks. A class written in JavaScript that extends a typed one keeps the
+   * meaning of its override.
+   */
+  const keptInheritedArms = (own: readonly SignatureRecord[], inherited: readonly SignatureRecord[]): SignatureRecord[] => {
+    if (own.length > 0 && own.every((signature) => (signature as { Untyped?: boolean }).Untyped)) return [];
+    return inherited.filter((signature) => !own.some((mine) => sameParameterTypes(mine, signature))
+      && !(signatureDeclarations.get(signature)?.type === 'AbstractMethodDefinition'
+        && own.some((mine) => !(mine as { Untyped?: boolean }).Untyped && IsSubtype(armType(mine), armType(signature), []))));
+  };
+
+  /**
+   * _properties_, a class's own members, with each method's inherited arms
+   * added, where the class's base is _base_, a class of the program, and its
+   * inherited members are _inherited_. _methodKeys_ names the own members that
+   * are methods: a field or an accessor of a name replaces what it masks.
+   */
+  const withInheritedArms = <P extends { key: string | SymbolValue, type: TypeRecord }>(properties: readonly P[], methodKeys: ReadonlySet<string | SymbolValue>,
+    inherited: readonly { key: unknown, type?: TypeRecord | null }[] | null, base: ParseNode | undefined, isStatic: boolean): P[] => {
+    if (!base || !inherited) return [...properties];
+    return properties.map((property) => {
+      if (!methodKeys.has(property.key) || property.type?.Kind !== 'function') return property;
+      const from = inherited.find((candidate) => candidate.key === property.key);
+      if (from?.type?.Kind !== 'function' || !declaresInheritedMethod(base, property.key, isStatic)) return property;
+      const kept = keptInheritedArms(property.type.Signatures, from.type.Signatures);
+      if (kept.length === 0) return property;
+      return { ...property, type: { ...property.type, Signatures: [...property.type.Signatures, ...kept] } as TypeRecord };
+    });
+  };
+
+  /**
+   * The keys of the own methods of _cls_ on one side that may keep inherited
+   * arms: abstract ones among them, and no group with a specialized case.
+   */
+  const ownMethodKeys = (cls: ParseNode, isStatic: boolean, methods: ReadonlyMap<string | SymbolValue, unknown>, fields: ReadonlyMap<string | SymbolValue, unknown>): Set<string | SymbolValue> => {
+    const keys = new Set(methods.keys());
+    for (const element of classBodyOf(cls)) {
+      if (element.type !== 'AbstractMethodDefinition' || element.Accessor || !!(element as { static?: boolean }).static !== isStatic) continue;
+      const key = classElementKey(element.ClassElementName);
+      if (key !== undefined && element.ClassElementName?.type !== 'PrivateIdentifier') keys.add(key);
+    }
+    for (const key of fields.keys()) keys.delete(key);
+    for (const key of [...keys]) if (declaresCaseGroup(cls, key, isStatic)) keys.delete(key);
+    return keys;
+  };
+
+  /**
+   * Question BX: the declaration rules a set that spans a class chain needs,
+   * judged between each own arm of _property_ and each inherited arm _kept_
+   * beside it, at the class _cls_.
+   *
+   * Two arms that are ambiguous for some argument list are a type error, as
+   * they are in one declaration scope (#sec-overload-resolution). And the run
+   * time selects an arm by the arguments' values, not by the signature the
+   * checker chose, so where it may choose one of the two arms over the other
+   * for arguments both accept, the one it chooses must return a subtype of
+   * the other's return: otherwise a call typed against the base receives a
+   * value of another type. This is "an override may narrow a return but not
+   * change it" for the part of the domain the arms share; Castagna's calculus
+   * for overloaded functions with late binding and Fortress's Return Type
+   * Rule state it so. A witness is an argument list of the types one arm
+   * declares, or of types both admit at each position.
+   */
+  const checkInheritedArms = (cls: ParseNode, key: string | SymbolValue, own: readonly SignatureRecord[], kept: readonly SignatureRecord[]): void => {
+    const plain = (signature: SignatureRecord) => !(signature as { Untyped?: boolean }).Untyped && !(signature.TypeParameters?.length)
+      && !(signature.Parameters as readonly ParameterRecord[]).some((p) => !p.Type || p.Type.Kind === 'any' || mentionsTypeParameter(p.Type));
+    const membersOf = (t: TypeRecord): readonly TypeRecord[] => (t.Kind === 'union' ? (t as { Members: readonly TypeRecord[] }).Members : [t]);
+    const name = typeof key === 'string' ? Value(key) : key;
+    for (const mine of own) {
+      if (!plain(mine)) continue;
+      for (const theirs of kept) {
+        if (!plain(theirs)) continue;
+        const a = mine.Parameters as readonly ParameterRecord[];
+        const b = theirs.Parameters as readonly ParameterRecord[];
+        const witnesses: TypeRecord[][] = [];
+        for (const params of [a, b]) {
+          const fixed = params.filter((p) => !p.Rest);
+          const required = fixed.filter((p) => !p.Optional).length;
+          for (let count = required; count <= fixed.length; count += 1) witnesses.push(fixed.slice(0, count).map((p) => p.Type));
+        }
+        const count = Math.min(a.length, b.length);
+        if (!a.some((p) => p.Rest) && !b.some((p) => p.Rest)) {
+          const shared: TypeRecord[] = [];
+          for (let i = 0; i < count; i += 1) {
+            const common = [...membersOf(a[i]!.Type).filter((m) => IsAssignable(m, b[i]!.Type)), ...membersOf(b[i]!.Type).filter((m) => IsAssignable(m, a[i]!.Type))];
+            if (common.length === 0) break;
+            shared.push(common[0]!);
+          }
+          if (shared.length === count) witnesses.push(shared);
+        }
+        const left = { Parameters: a, Function: Value.undefined };
+        const right = { Parameters: b, Function: Value.undefined };
+        for (const witness of witnesses) {
+          if (resolveOverloadByTypes([left] as never, witness).Kind !== 'resolved' || resolveOverloadByTypes([right] as never, witness).Kind !== 'resolved') continue;
+          const chosen = resolveOverloadByTypes([left, right] as never, witness);
+          if (chosen.Kind === 'ambiguous') {
+            reportType('rt-overload-declaration', cls, '$1 declares an overload of $2 that is ambiguous with an inherited one for some argument list', Value(classNameForDiagnostics(cls) ?? 'the class'), name);
+            return;
+          }
+          if (chosen.Kind !== 'resolved') continue;
+          const winner = chosen.Signature === (left as never) ? mine : theirs;
+          const loser = winner === mine ? theirs : mine;
+          const won = winner.Return ?? winner.InferredReturn;
+          const lost = loser.Return ?? loser.InferredReturn;
+          if (!won || !lost || won.Kind === 'any' || lost.Kind === 'any' || mentionsTypeParameter(won) || mentionsTypeParameter(lost) || IsSubtype(won, lost, [])) continue;
+          reportType('rt-inherited-contract', cls, winner === mine
+            ? '$1 declares an overload of $2 that a call selects in place of an inherited one for the arguments both accept, so it may narrow the inherited return type $3 but not change it to $4'
+            : '$1 declares an overload of $2 that an inherited one is selected in place of for the arguments both accept, so its return type $4 must admit the inherited $3',
+          Value(classNameForDiagnostics(cls) ?? 'the class'), name, Value(displayType(winner === mine ? lost : won)), Value(displayType(winner === mine ? won : lost)));
+          return;
+        }
+      }
+    }
   };
 
   const validateOverloadDeclaration = (name: string, existing: readonly DeclaredOverload[], signature: DeclaredOverload): void => {
@@ -13296,13 +13481,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (inherited && index >= 0) Properties[index] = inherited;
       }
     }
-    const effectiveDeclaredProperties = [...Properties];
+    // Question BX: each own method keeps the inherited arms it does not
+    // override, where the base is a class of the program.
+    const instanceMethodKeys = ownMethodKeys(n, false, acc.methods, acc.fieldProperties);
+    const inheritedMembers = baseStructure?.Kind === 'object' ? baseStructure.Properties : null;
+    const withArms = withInheritedArms(Properties, instanceMethodKeys, inheritedMembers, origin?.declaration, false);
+    const effectiveDeclaredProperties = [...withArms];
     const receiver: TypeRecord = {
       Kind: 'nominal', Declaration: n,
       Arguments: ((n as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [])
         .map((parameter) => ({ Kind: 'parameter', Name: parameter.BindingIdentifier.name } as TypeRecord)),
       Structure: { Kind: 'object', Properties: baseStructure?.Kind === 'object'
-        ? [...baseStructure.Properties.filter((property) => !Properties.some((own) => own.key === property.key)), ...Properties]
+        ? [...baseStructure.Properties.filter((property) => !Properties.some((own) => own.key === property.key)), ...withArms]
         : Properties, IndexSignatures: [] },
       Base: base ?? undefined,
       UnresolvedHeritage: heritage && !base && bareHeritage?.type !== 'NullLiteral' ? true : undefined,
@@ -13687,8 +13877,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // Question BX: an own method with inherited arms beside it is judged
+    // against them, and published with them. The members an implemented
+    // interface added after `withArms` was taken follow it, as they did.
+    withArms.forEach((property, index) => {
+      const own = Properties[index]!;
+      if (property === own || own.type?.Kind !== 'function' || property.type?.Kind !== 'function') return;
+      checkInheritedArms(n, own.key, own.type.Signatures, property.type.Signatures.slice(own.type.Signatures.length));
+    });
     const merged = baseStructure && baseStructure.Kind === 'object'
-      ? [...baseStructure.Properties.filter((p) => !Properties.some((own) => own.key === p.key)), ...Properties]
+      ? [...baseStructure.Properties.filter((p) => !Properties.some((own) => own.key === p.key)), ...withArms, ...Properties.slice(withArms.length)]
       : Properties;
     // #sec-typed-classes, overriding: a method whose parameter types match an
     // inherited signature's OVERRIDES it, and an override may narrow the return
@@ -22595,6 +22793,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       });
       if (admitted) return adapted ?? member;
     }
+    // A literal type among the members that is the value takes it as it is:
+    // `-1` at `uint64 | -1` is the `-1` member, which no numeric member above
+    // holds. It was refused as "not in the range of uint64 | -1".
+    if (value && (canonical.Kind === 'union' ? canonical.Members as readonly TypeRecord[] : [canonical]).some((m) => m.Kind === 'literal'
+      && m.Value instanceof NumberValue && Number.isFinite(R(m.Value)) && Number.isInteger(R(m.Value)) && value.den === 1n
+      && BigInt(R(m.Value)) === value.num)) return undefined;
     // A literal no member takes is refused, as it is at a single type: it
     // was "Infinity is not assignable" for `1e400`, named by its Number.
     const shown = Value(LiteralOperandText(node).replace(/\s+/g, ' '));
@@ -24742,6 +24946,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     expressionViewTypes.set(view, type);
     return view;
   };
+  // The callee views of an extractor's matcher call (#sec-match-patterns): the
+  // call is of the head's `Symbol.customMatcher`, so a class head is not the
+  // callee of a conversion (Question AE) however it participates in types.
+  const matcherCallees = new WeakSet<object>();
 
   // Retain creation syntax and typed leaves from the producing position.
   // Replaying contextual literal checks must not look names up in a consumer
@@ -37785,13 +37993,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         let result: Known = null;
         if (matcher?.Kind === 'function') {
-          const call = { type: 'CallExpression', CallExpression: typedExpressionView(pattern.Head, matcher),
+          // The call is of the head's matcher, not of the head: a class head
+          // that participates in types is not the conversion `subject := E`.
+          const matcherCallee = (node: ParseNode, type: Known): ParseNode => {
+            const view = typedExpressionView(node, type);
+            matcherCallees.add(view);
+            return view;
+          };
+          const call = { type: 'CallExpression', CallExpression: matcherCallee(pattern.Head, matcher),
             Arguments: [typedExpressionView(pattern.Head, positionType ?? null)] } as unknown as ParseNode.CallExpression;
           checkCallArguments(call, matcher, pattern);
           const selected = checkedCallSignatures.get(call);
           if (selected) {
             const callee = { type: 'ParenthesizedExpression', Expression: pattern.Head } as ParseNode.ParenthesizedExpression;
-            result = staticType({ ...call, CallExpression: typedExpressionView(callee, { Kind: 'function', Signatures: [selected] }) } as ParseNode.CallExpression);
+            result = staticType({ ...call, CallExpression: matcherCallee(callee, { Kind: 'function', Signatures: [selected] }) } as ParseNode.CallExpression);
           }
         }
         const candidates = (result?.Kind === 'union' ? result.Members : result ? [result] : [])
@@ -42097,7 +42312,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const classConversionTarget = (call: ParseNode, fact?: InvocationFact | null): TypeRecord | 'deferred' | undefined => {
     const callee = classConversionCallee(call);
-    if (!callee) return undefined;
+    if (!callee || matcherCallees.has(callee)) return undefined;
     // A type alias names its class as an annotation does (Question AI, AI1).
     // An optional chain's callee is a typed view of the expression it wraps.
     let node = patternExpression(callee);

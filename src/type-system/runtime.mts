@@ -34,7 +34,7 @@ import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryG
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { CopyValueClassInstance, ValueAggregateOf } from '../abstract-ops/testing-comparison.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, functionTypeParameters, AdoptedTypeParametersOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, DispatchSignaturesOf, functionTypeParameters, AdoptedTypeParametersOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { skipDebugger } from '../evaluator.mts';
@@ -3489,8 +3489,10 @@ function deriveSignatureType(value: ObjectValue, application?: Map<string, TypeR
     const isCase = (fn: unknown) => listOf(fn) === 'specialization' || listOf(fn) === 'mixed';
     const members = (F.OverloadFunctions ?? []) as readonly unknown[];
     const ownerContract = members.some(isCase) && members.some((fn) => listOf(fn) === 'parameters');
+    // A method that adds to its base's set has the base's arms it keeps as
+    // well as its own (README "Methods and Inheritance").
     const outcome = overloaded
-      ? skipDebugger(SignaturesOf(value, ownerContract ? (fn) => !isCase(fn) : undefined))
+      ? skipDebugger(DispatchSignaturesOf(value, ownerContract ? (fn) => !isCase(fn) : undefined))
       : skipDebugger((function* one(): PlainEvaluator<readonly OverloadSignature[]> {
         return [Q(yield* OverloadSignatureOf(value, hasCode, { computedAsAny: true, applicationBindings: application }))];
       }()));
